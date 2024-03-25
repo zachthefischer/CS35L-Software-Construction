@@ -1,0 +1,93 @@
+Zach Fischer - notes.txt
+
+************************* Exercise 2.1 *******************************
+(* (expt 2 (- 607 1)) (- (expt 2 607) 1))
+141053783706712069063207958086063189881486743514715667838838675999954867742652380114104193329037690251561950568709829327164087724366370087116731268159313652487450652439805877296207297446723295166658228846926807786652870188920867879451478364569313922060370695064736073572378695176473055266826253284886383715072974324463835300053138429460296575143368065570759537328128
+
+Use Emacs to determine how many bits it would take to represent this number in base-2 notation (not counting any sign bit), by writing a Lisp expression that yields the number of bits as an integer.
+(setq a (* (expt 2 (- 607 1)) (- (expt 2 607) 1)))
+(+ (logb a) 1)
+= 1213
+//Logb rounds down, so add 1
+1213 bits needed.
+
+M-: (* (expt 2 (- 607 1)) (- (expt 2 607) 1))
+141053783706712069063207958086063189881486743514715667838838675999954867742652380114104193329037690251561950568709829327164087724366370087116731268159313652487450652439805877296207297446723295166658228846926807786652870188920867879451478364569313922060370695064736073572378695176473055266826253284886383715072974324463835300053138429460296575143368065570759537328128 (#o177777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, #x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)
+
+
+******ASK How are we supposed to relate to the C-h b output, when C-h b output is just a list of keybindings and their title*************
+Look for two keybindings: C-h k and M-SPC. C-h k stands for “Type Control-h, then ‘k’.” M-SPC is “Meta Space”; on good keyboards you can get this by holding down Alt while hitting the space bar, but you may need to type “Esc” and then follow by hitting the space bar. We will examine these two keybindings in more detail.
+C-h k   describe-key
+M-SPC   cycle-spacing
+
+
+Type C-h k C-h k and describe what happens and why. (This should relate to the C-h b output mentioned previously.)
+C-h k C-h k runs the function (describe-key) and passes in C-h k (which corresponds to describe-key) as an argument. Gives a page documentation of what the C-h k command does (runs the command describe-key), which is what the C-h b output said it would run. This is similar to C-h b because it gives information about what a certain command does - C-h b just gives way less info about way more commands.
+
+
+Type C-h k M-SPC and describe what happens and why. (This should also relate.)
+C-h k M-SPC runs the function (describe-key) and passes in M-SPC (which corresponds to the cycle-spacing command) as an argument. It gives page of documentation about M-SPC, including a description, its keybindings, optional arguments, and link to source code. This command manipulates whitespace around a point. When called multiple times, it performs  ‘cycle-spacing-actions’ repeatedly.
+
+
+Try out M-SPC on some sample text with a lot of white space, to see how it works.
+Deletes every whitespace between the two words that the cursor is between, except for one. If there is no whitespace between the two words, it will separate them.
+
+
+Found in simple.el
+—> M-SPC “cycle-spacing” is found within the more general function “just-one-space”
+(just-one-space t).
+M-: (just-one-space 4) leaves 4 spaces between words instead of 1.
+M-x just-one-space      leaves 1 space between words
+—> apparently it can also be run by M-x j-o
+
+
+************************* Exercise 2.2 Scripting in Emacs *******************************
+
+************************* Homework: Python Scripting *******************************
+What happens when this script is invoked on an empty file like /dev/null, and why?
+python2 randline.py /dev/null
+—> Produces a “list index out of range” runtime error. The seq sequence is empty (because /dev/null is empty), so running seq[int(self.random() * len(seq))] raises an index error.
+
+python3 randline.py /dev/null
+—> Produces an “Invalid syntax” compiler error because the syntax for IOError exception checks changes from python2 to python3. The code is written in Python2, so the compiler throws an error when it reaches the wrong syntax for IOError … .
+
+
+What happens when your shuf.py script is invoked with Python 2 rather than Python 3, and why?
+I get the same output for both.
+I’m using Python 2.7.18 and Python 3.12.1. Both support argparse, though earlier versions of Python2 do not. I don’t use IOException like randlines.py, because things were only printed if they existed.
+
+Can you measure the performance difference?
+time /usr/bin/python3 shuf.py < /usr/share/unicode/ucd/BidiTest.txt > /dev/null
+user    0m0.980s        sys     0m0.056s        sum = 1.036
+user    0m1.010s        sys     0m0.055s        sum = 1.065
+user    0m0.962s        sys     0m0.056s        sum = .982
+Python 3.6.8 Median = 1.036s
+
+time /usr/local/cs/bin/python3 shuf.py < /usr/share/unicode/ucd/BidiTest.txt > /dev/null
+user    0m0.817s        sys     0m0.036s        sum = .853
+user    0m0.822s        sys     0m0.046s        sum = .868
+user    0m0.821s        sys     0m0.036s        sum = .857
+Python 3.12.1 Median = .857s
+
+time shuf < /usr/share/unicode/ucd/BidiTest.txt > /dev/null
+user    0m0.058s        sys     0m0.010s        sum = .068
+user    0m0.055s        sys     0m0.011s        sum = .066
+user    0m0.062s        sys     0m0.013s        sum = .075
+Coreutils Median = .068s
+
+CPU: Intel(R) Xeon(R) Silver 4116 CPU @ 2.10GHz
+* Architecture:        x86_64
+* CPU op-mode(s):      32-bit, 64-bit
+Operating system version:
+* Version 8.5 (Ootpa)
+
+
+
+Notes – in the submit file I saw
+“notes.txt, a text file answering questions (e.g., why structural pattern matching made no sense for your Python program), and containing any other notes or comments that you’d like us to see.”
+I don’t see that question anywhere in the spec and my TA said it was just an example question and we don’t need to answer.
+
+I get an error when I interrupt -r, TA (jiaxiang) said it was ok
+
+
+
