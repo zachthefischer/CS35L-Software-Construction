@@ -1,0 +1,131 @@
+From ff546ebb59d3a393e43d1ec7c97a08b5972a65ee Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 31 Oct 2023 09:16:12 +0100
+Subject: [PATCH 2325/2871] builtin/show-ref: convert pattern to a local
+ variable
+
+The `pattern` variable is a global variable that tracks either the
+reference names (not patterns!) for the `--verify` mode or the patterns
+for the non-verify mode. This is a bit confusing due to the slightly
+different meanings.
+
+Convert the variable to be local. While this does not yet fix the double
+meaning of the variable, this change allows us to address it in a
+subsequent patch more easily by explicitly splitting up the different
+subcommands of git-show-ref(1).
+
+Note that we introduce a `struct show_ref_data` to pass the patterns to
+`show_ref()`. While this is overengineered now, we will extend this
+structure in a subsequent patch.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/show-ref.c | 46 ++++++++++++++++++++++++++++------------------
+ 1 file changed, 28 insertions(+), 18 deletions(-)
+
+diff --git a/builtin/show-ref.c b/builtin/show-ref.c
+index 5110814f79..7efab14b96 100644
+--- a/builtin/show-ref.c
++++ b/builtin/show-ref.c
+@@ -20,7 +20,6 @@ static const char * const show_ref_usage[] = {
+ 
+ static int deref_tags, show_head, tags_only, heads_only, found_match, verify,
+ 	   quiet, hash_only, abbrev, exclude_arg;
+-static const char **pattern;
+ static const char *exclude_existing_arg;
+ 
+ static void show_one(const char *refname, const struct object_id *oid)
+@@ -50,15 +49,21 @@ static void show_one(const char *refname, const struct object_id *oid)
+ 	}
+ }
+ 
++struct show_ref_data {
++	const char **patterns;
++};
++
+ static int show_ref(const char *refname, const struct object_id *oid,
+-		    int flag UNUSED, void *cbdata UNUSED)
++		    int flag UNUSED, void *cbdata)
+ {
++	struct show_ref_data *data = cbdata;
++
+ 	if (show_head && !strcmp(refname, "HEAD"))
+ 		goto match;
+ 
+-	if (pattern) {
++	if (data->patterns) {
+ 		int reflen = strlen(refname);
+-		const char **p = pattern, *m;
++		const char **p = data->patterns, *m;
+ 		while ((m = *p++) != NULL) {
+ 			int len = strlen(m);
+ 			if (len > reflen)
+@@ -180,6 +185,9 @@ static const struct option show_ref_options[] = {
+ 
+ int cmd_show_ref(int argc, const char **argv, const char *prefix)
+ {
++	struct show_ref_data show_ref_data = {0};
++	const char **patterns;
++
+ 	git_config(git_default_config, NULL);
+ 
+ 	argc = parse_options(argc, argv, prefix, show_ref_options,
+@@ -188,38 +196,40 @@ int cmd_show_ref(int argc, const char **argv, const char *prefix)
+ 	if (exclude_arg)
+ 		return exclude_existing(exclude_existing_arg);
+ 
+-	pattern = argv;
+-	if (!*pattern)
+-		pattern = NULL;
++	patterns = argv;
++	if (!*patterns)
++		patterns = NULL;
+ 
+ 	if (verify) {
+-		if (!pattern)
++		if (!patterns)
+ 			die("--verify requires a reference");
+-		while (*pattern) {
++		while (*patterns) {
+ 			struct object_id oid;
+ 
+-			if ((starts_with(*pattern, "refs/") || !strcmp(*pattern, "HEAD")) &&
+-			    !read_ref(*pattern, &oid)) {
+-				show_one(*pattern, &oid);
++			if ((starts_with(*patterns, "refs/") || !strcmp(*patterns, "HEAD")) &&
++			    !read_ref(*patterns, &oid)) {
++				show_one(*patterns, &oid);
+ 			}
+ 			else if (!quiet)
+-				die("'%s' - not a valid ref", *pattern);
++				die("'%s' - not a valid ref", *patterns);
+ 			else
+ 				return 1;
+-			pattern++;
++			patterns++;
+ 		}
+ 		return 0;
+ 	}
+ 
++	show_ref_data.patterns = patterns;
++
+ 	if (show_head)
+-		head_ref(show_ref, NULL);
++		head_ref(show_ref, &show_ref_data);
+ 	if (heads_only || tags_only) {
+ 		if (heads_only)
+-			for_each_fullref_in("refs/heads/", show_ref, NULL);
++			for_each_fullref_in("refs/heads/", show_ref, &show_ref_data);
+ 		if (tags_only)
+-			for_each_fullref_in("refs/tags/", show_ref, NULL);
++			for_each_fullref_in("refs/tags/", show_ref, &show_ref_data);
+ 	} else {
+-		for_each_ref(show_ref, NULL);
++		for_each_ref(show_ref, &show_ref_data);
+ 	}
+ 	if (!found_match) {
+ 		if (verify && !quiet)
+-- 
+2.39.3 (Apple Git-145)
+

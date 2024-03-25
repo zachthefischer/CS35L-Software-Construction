@@ -1,0 +1,56 @@
+From ce41759ed5edac9d30a73640b4fdd155c9f9fee0 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:18 -0500
+Subject: [PATCH 0932/2871] run-command: mark error routine parameters as
+ unused
+
+After forking but before exec-ing a command, we install special
+error/warn/die handlers in the child. These ignore the error messages
+they get, since the idea is that they shouldn't be called in the first
+place.
+
+Arguably they could pass along that error message _in addition_ to
+saying "error() should not be called in a child", but since the whole
+point is to avoid any conflicts on stdio/malloc locks, etc, we're better
+to just keep these simple. Seeing them trigger is effectively a bug, and
+the developer is probably better off grabbing a stack trace.
+
+But we do want to mark the functions so that -Wunused-parameter doesn't
+complain.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ run-command.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/run-command.c b/run-command.c
+index 6bd16acb06..ba617655b2 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -341,19 +341,19 @@ static void child_close_pair(int fd[2])
+ 	child_close(fd[1]);
+ }
+ 
+-static void child_error_fn(const char *err, va_list params)
++static void child_error_fn(const char *err UNUSED, va_list params UNUSED)
+ {
+ 	const char msg[] = "error() should not be called in child\n";
+ 	xwrite(2, msg, sizeof(msg) - 1);
+ }
+ 
+-static void child_warn_fn(const char *err, va_list params)
++static void child_warn_fn(const char *err UNUSED, va_list params UNUSED)
+ {
+ 	const char msg[] = "warn() should not be called in child\n";
+ 	xwrite(2, msg, sizeof(msg) - 1);
+ }
+ 
+-static void NORETURN child_die_fn(const char *err, va_list params)
++static void NORETURN child_die_fn(const char *err UNUSED, va_list params UNUSED)
+ {
+ 	const char msg[] = "die() should not be called in child\n";
+ 	xwrite(2, msg, sizeof(msg) - 1);
+-- 
+2.39.3 (Apple Git-145)
+

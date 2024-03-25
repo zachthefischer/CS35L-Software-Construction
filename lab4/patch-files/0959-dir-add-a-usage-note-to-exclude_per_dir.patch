@@ -1,0 +1,40 @@
+From 59e009bf15cefd89105c3e162776ccf10f4e68f1 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Mon, 27 Feb 2023 15:28:11 +0000
+Subject: [PATCH 0959/2871] dir: add a usage note to exclude_per_dir
+
+As evidenced by the fix a couple commits ago, places in the code using
+exclude_per_dir are likely buggy and should be adapted to call
+setup_standard_excludes() instead.  Unfortunately, the usage of
+exclude_per_dir has been hardcoded into the arguments ls-files accepts,
+so we cannot actually remove it.  Add a note that it is deprecated and
+no other callers should use it directly.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ dir.h | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/dir.h b/dir.h
+index 33fd848fc8..2196e12630 100644
+--- a/dir.h
++++ b/dir.h
+@@ -295,8 +295,12 @@ struct dir_struct {
+ 	struct untracked_cache *untracked;
+ 
+ 	/**
+-	 * The name of the file to be read in each directory for excluded files
+-	 * (typically `.gitignore`).
++	 * Deprecated: ls-files is the only allowed caller; all other callers
++	 * should leave this as NULL; it pre-dated the
++	 * setup_standard_excludes() mechanism that replaces this.
++	 *
++	 * This field tracks the name of the file to be read in each directory
++	 * for excluded files (typically `.gitignore`).
+ 	 */
+ 	const char *exclude_per_dir;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

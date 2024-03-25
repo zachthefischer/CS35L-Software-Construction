@@ -1,0 +1,58 @@
+From 256a94ef6c8c0c94f9629a1ffe893577ccef8efd Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 4 Sep 2023 06:21:26 +0000
+Subject: [PATCH 2065/2871] var: avoid a segmentation fault when `HOME` is
+ unset
+
+The code introduced in 576a37fccbf (var: add attributes files locations,
+2023-06-27) paid careful attention to use `xstrdup()` for pointers known
+never to be `NULL`, and `xstrdup_or_null()` otherwise.
+
+One spot was missed, though: `git_attr_global_file()` can return `NULL`,
+when the `HOME` variable is not set (and neither `XDG_CONFIG_HOME`), a
+scenario not too uncommon in certain server scenarios.
+
+Fix this, and add a test case to avoid future regressions.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Acked-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/var.c      | 2 +-
+ t/t0007-git-var.sh | 9 +++++++++
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/var.c b/builtin/var.c
+index ef45710a20..05ba69e47b 100644
+--- a/builtin/var.c
++++ b/builtin/var.c
+@@ -64,7 +64,7 @@ static char *git_attr_val_system(int ident_flag UNUSED)
+ 
+ static char *git_attr_val_global(int ident_flag UNUSED)
+ {
+-	char *file = xstrdup(git_attr_global_file());
++	char *file = xstrdup_or_null(git_attr_global_file());
+ 	if (file) {
+ 		normalize_path_copy(file, file);
+ 		return file;
+diff --git a/t/t0007-git-var.sh b/t/t0007-git-var.sh
+index 8cb597f99c..ff4fd9348c 100755
+--- a/t/t0007-git-var.sh
++++ b/t/t0007-git-var.sh
+@@ -268,4 +268,13 @@ test_expect_success 'listing and asking for variables are exclusive' '
+ 	test_must_fail git var -l GIT_COMMITTER_IDENT
+ '
+ 
++test_expect_success '`git var -l` works even without HOME' '
++	(
++		XDG_CONFIG_HOME= &&
++		export XDG_CONFIG_HOME &&
++		unset HOME &&
++		git var -l
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,65 @@
+From 253eeaf7a2bc93285b55e2be8aa15f27cd11858e Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 3 Dec 2023 05:57:02 +0000
+Subject: [PATCH 2484/2871] completion: fix logic for determining whether cone
+ mode is active
+
+_git_sparse_checkout() was checking whether we were in cone mode by
+checking whether either:
+
+    A) core.sparseCheckoutCone was "true"
+    B) "--cone" was specified on the command line
+
+This code has 2 bugs I didn't catch in my review at the time
+
+    1) core.sparseCheckout must be "true" for core.sparseCheckoutCone to
+       be relevant (which matters since "git sparse-checkout disable"
+       only unsets core.sparseCheckout, not core.sparseCheckoutCone)
+    2) The presence of "--no-cone" should override any config setting
+
+Further, I forgot to update this logic as part of 2d95707a02
+("sparse-checkout: make --cone the default", 2022-04-22) for the new
+default.
+
+Update the code for the new default and make it be more careful in
+determining whether to complete based on cone mode or non-cone mode.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index b866170171..7aa66c19ed 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -3097,6 +3097,7 @@ _git_sparse_checkout ()
+ {
+ 	local subcommands="list init set disable add reapply"
+ 	local subcommand="$(__git_find_on_cmdline "$subcommands")"
++	local using_cone=true
+ 	if [ -z "$subcommand" ]; then
+ 		__gitcomp "$subcommands"
+ 		return
+@@ -3107,8 +3108,15 @@ _git_sparse_checkout ()
+ 		__gitcomp_builtin sparse-checkout_$subcommand "" "--"
+ 		;;
+ 	set,*|add,*)
+-		if [ "$(__git config core.sparseCheckoutCone)" == "true" ] ||
+-		[ -n "$(__git_find_on_cmdline --cone)" ]; then
++		if [[ "$(__git config core.sparseCheckout)" == "true" &&
++		      "$(__git config core.sparseCheckoutCone)" == "false" &&
++		      -z "$(__git_find_on_cmdline --cone)" ]]; then
++			using_cone=false
++		fi
++		if [[ -n "$(__git_find_on_cmdline --no-cone)" ]]; then
++			using_cone=false
++		fi
++		if [[ "$using_cone" == "true" ]]; then
+ 			__gitcomp_directories
+ 		fi
+ 	esac
+-- 
+2.39.3 (Apple Git-145)
+

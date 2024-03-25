@@ -1,0 +1,82 @@
+From 68cbb20e737218bcd067bb5b5be658378095d0ed Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 19 Jul 2023 09:32:36 -0700
+Subject: [PATCH 1835/2871] show-branch: reject --[no-](topo|date)-order
+
+"git show-branch --no-topo-order" behaved exactly the same way as
+"git show-branch --topo-order" did, which was nonsense.  This was
+because we choose between topo- and date- by setting a variable to
+either REV_SORT_IN_GRAPH_ORDER or REV_SORT_BY_COMMIT_DATE with
+OPT_SET_INT() and REV_SORT_IN_GRAPH_ORDER happens to be 0.  The
+OPT_SET_INT() macro assigns 0 to the target variable in respose to
+the negated form of its option.
+
+"--no-date-order" by luck behaves identically to "--topo-order"
+exactly for the same reason, and it sort-of makes sense right now,
+but the "sort-of makes sense" will quickly break down once we add a
+third way to sort.  Not-A may be B when there are only two choices
+between A and B, but once your choices become among A, B, and C,
+not-A does not mean B.
+
+Just mark these two ordering options to reject negation, and add a
+test, which was missing.  "git show-branch --no-reflog" is also
+unnegatable, so throw in a test for that while we are at it.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/show-branch.c  | 14 +++++++-------
+ t/t3202-show-branch.sh |  9 +++++++++
+ 2 files changed, 16 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/show-branch.c b/builtin/show-branch.c
+index 67f3ef0639..b574afb7c3 100644
+--- a/builtin/show-branch.c
++++ b/builtin/show-branch.c
+@@ -667,17 +667,17 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
+ 			 N_("show possible merge bases")),
+ 		OPT_BOOL(0, "independent", &independent,
+ 			    N_("show refs unreachable from any other ref")),
+-		OPT_SET_INT(0, "topo-order", &sort_order,
+-			    N_("show commits in topological order"),
+-			    REV_SORT_IN_GRAPH_ORDER),
++		OPT_SET_INT_F(0, "topo-order", &sort_order,
++			      N_("show commits in topological order"),
++			      REV_SORT_IN_GRAPH_ORDER, PARSE_OPT_NONEG),
+ 		OPT_BOOL(0, "topics", &topics,
+ 			 N_("show only commits not on the first branch")),
+ 		OPT_SET_INT(0, "sparse", &sparse,
+ 			    N_("show merges reachable from only one tip"), 1),
+-		OPT_SET_INT(0, "date-order", &sort_order,
+-			    N_("topologically sort, maintaining date order "
+-			       "where possible"),
+-			    REV_SORT_BY_COMMIT_DATE),
++		OPT_SET_INT_F(0, "date-order", &sort_order,
++			      N_("topologically sort, maintaining date order "
++				 "where possible"),
++			      REV_SORT_BY_COMMIT_DATE, PARSE_OPT_NONEG),
+ 		OPT_CALLBACK_F('g', "reflog", &reflog_base, N_("<n>[,<base>]"),
+ 			    N_("show <n> most recent ref-log entries starting at "
+ 			       "base"),
+diff --git a/t/t3202-show-branch.sh b/t/t3202-show-branch.sh
+index ca7c44f0f7..b17f388f56 100755
+--- a/t/t3202-show-branch.sh
++++ b/t/t3202-show-branch.sh
+@@ -213,6 +213,15 @@ done <<\EOF
+ --reflog --current
+ EOF
+ 
++# unnegatable options
++for opt in topo-order date-order reflog
++do
++	test_expect_success "show-branch --no-$opt (should fail)" '
++		test_must_fail git show-branch --no-$opt 2>err &&
++		grep "unknown option .no-$opt." err
++	'
++done
++
+ test_expect_success 'error descriptions on non-existent branch' '
+ 	cat >expect <<-EOF &&
+ 	error: No branch named '\''non-existent'\'.'
+-- 
+2.39.3 (Apple Git-145)
+

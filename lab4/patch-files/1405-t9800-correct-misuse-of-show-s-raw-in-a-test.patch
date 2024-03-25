@@ -1,0 +1,36 @@
+From b7cf25c8f486b3b9a99b2bbe68f158bc24f87b1c Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Sat, 6 May 2023 14:29:55 -0700
+Subject: [PATCH 1405/2871] t9800: correct misuse of 'show -s --raw' in a test
+
+There is $(git show -s --raw --pretty=format:%at HEAD) in this test
+that is meant to grab the author time of the commit.  We used to
+have a bug in the command line option parser of the diff family of
+commands, where "show -s --raw" was identical to "show -s".
+
+With the "-s" bug fixed, "show -s --raw" would mean the same thing
+as "show --raw", i.e. show the output from the diff machinery in the
+"raw" format.  And this test will start failing, so fix it before
+that happens.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9800-git-p4-basic.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t9800-git-p4-basic.sh b/t/t9800-git-p4-basic.sh
+index dc88d0e064..a4b3cb9492 100755
+--- a/t/t9800-git-p4-basic.sh
++++ b/t/t9800-git-p4-basic.sh
+@@ -330,7 +330,7 @@ test_expect_success 'initial import time from top change time' '
+ 	test_when_finished cleanup_git &&
+ 	(
+ 		cd "$git" &&
+-		gittime=$(git show -s --raw --pretty=format:%at HEAD) &&
++		gittime=$(git show -s --pretty=format:%at HEAD) &&
+ 		echo $p4time $gittime &&
+ 		test $p4time = $gittime
+ 	)
+-- 
+2.39.3 (Apple Git-145)
+

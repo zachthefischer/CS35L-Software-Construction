@@ -1,0 +1,57 @@
+From 7e360bc6267e4741b75d30ec19a7461ed869a244 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 7 Jul 2023 15:04:56 -0700
+Subject: [PATCH 1735/2871] t6135: attr magic with path pattern
+
+The test coverage on attribute magic combined with path pattern
+was a bit thin.  Let's add a few and make sure "(attr:X)sub" and
+"(attr:X)sub/" behave the same.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6135-pathspec-with-attrs.sh | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/t/t6135-pathspec-with-attrs.sh b/t/t6135-pathspec-with-attrs.sh
+index 457cc167c7..f63774094f 100755
+--- a/t/t6135-pathspec-with-attrs.sh
++++ b/t/t6135-pathspec-with-attrs.sh
+@@ -78,7 +78,17 @@ test_expect_success 'check specific set attr' '
+ 	test_cmp expect actual
+ '
+ 
+-test_expect_success 'check specific set attr (2)' '
++test_expect_success 'check set attr with pathspec pattern' '
++	echo sub/fileSetLabel >expect &&
++
++	git ls-files ":(attr:label)sub" >actual &&
++	test_cmp expect actual &&
++
++	git ls-files ":(attr:label)sub/" >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'check specific set attr in tree-ish' '
+ 	cat <<-\EOF >expect &&
+ 	HEAD:fileSetLabel
+ 	HEAD:sub/fileSetLabel
+@@ -87,6 +97,16 @@ test_expect_success 'check specific set attr (2)' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'check specific set attr with pathspec pattern in tree-ish' '
++	echo HEAD:sub/fileSetLabel >expect &&
++
++	git grep -l content HEAD ":(attr:label)sub" >actual &&
++	test_cmp expect actual &&
++
++	git grep -l content HEAD ":(attr:label)sub/" >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'check specific unset attr' '
+ 	cat <<-\EOF >expect &&
+ 	fileUnsetLabel
+-- 
+2.39.3 (Apple Git-145)
+

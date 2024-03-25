@@ -1,0 +1,89 @@
+From 1dc4f1ef0d2528f405d71850d73d80ff1a571abd Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Oct 2022 18:01:52 -0400
+Subject: [PATCH 0146/2871] midx.c: consider annotated tags during bitmap
+ selection
+
+When generating a multi-pack bitmap without a `--refs-snapshot` (e.g.,
+by running `git multi-pack-index write --bitmap` directly), we determine
+the set of bitmap-able commits by enumerating each reference, and adding
+the referrent as the tip of a reachability traversal when it appears
+somewhere in the MIDX. (Any commit we encounter during the reachability
+traversal then becomes a candidate for bitmap selection).
+
+But we incorrectly avoid peeling the object at the tip of each
+reference. So if we see some reference that points at an annotated tag
+(which in turn points through zero or more additional annotated tags at
+a commit), that we will not add it as a tip for the reachability
+traversal. This means that if some commit C is only referenced through
+one or more annotated tag(s), then C won't become a bitmap candidate.
+
+Correct this by peeling the reference tips as we enumerate them to
+ensure that we consider commits which are the targets of annotated tags,
+in addition to commits which are referenced directly.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c                        |  4 ++++
+ t/t5326-multi-pack-bitmaps.sh | 24 ++++++++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/midx.c b/midx.c
+index ea24e30b6e..a8d2111e96 100644
+--- a/midx.c
++++ b/midx.c
+@@ -980,6 +980,7 @@ static int add_ref_to_pending(const char *refname,
+ 			      int flag, void *cb_data)
+ {
+ 	struct rev_info *revs = (struct rev_info*)cb_data;
++	struct object_id peeled;
+ 	struct object *object;
+ 
+ 	if ((flag & REF_ISSYMREF) && (flag & REF_ISBROKEN)) {
+@@ -987,6 +988,9 @@ static int add_ref_to_pending(const char *refname,
+ 		return 0;
+ 	}
+ 
++	if (!peel_iterated_oid(oid, &peeled))
++		oid = &peeled;
++
+ 	object = parse_object_or_die(oid, refname);
+ 	if (object->type != OBJ_COMMIT)
+ 		return 0;
+diff --git a/t/t5326-multi-pack-bitmaps.sh b/t/t5326-multi-pack-bitmaps.sh
+index ad6eea5fa0..0882cbb6e4 100755
+--- a/t/t5326-multi-pack-bitmaps.sh
++++ b/t/t5326-multi-pack-bitmaps.sh
+@@ -410,4 +410,28 @@ test_expect_success 'preferred pack change with existing MIDX bitmap' '
+ 	)
+ '
+ 
++test_expect_success 'tagged commits are selected for bitmapping' '
++	rm -fr repo &&
++	git init repo &&
++	test_when_finished "rm -fr repo" &&
++	(
++		cd repo &&
++
++		test_commit --annotate base &&
++		git repack -d &&
++
++		# Remove refs/heads/main which points at the commit directly,
++		# leaving only a reference to the annotated tag.
++		git branch -M main &&
++		git checkout base &&
++		git branch -d main &&
++
++		git multi-pack-index write --bitmap &&
++
++		git rev-parse HEAD >want &&
++		test-tool bitmap list-commits >actual &&
++		grep $(cat want) actual
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

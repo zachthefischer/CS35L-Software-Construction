@@ -1,0 +1,33 @@
+From c48af99a3e516efd0873b9e8c1f1feda453e3cf1 Mon Sep 17 00:00:00 2001
+From: Beat Bolli <dev+git@drbeat.li>
+Date: Thu, 20 Jul 2023 01:24:43 +0200
+Subject: [PATCH 1834/2871] trace2: fix a comment
+
+When the trace2 counter mechanism was added in 81071626ba (trace2: add
+global counter mechanism, 2022-10-24), the name of the file where new
+counters are added was misspelled in a comment.
+
+Use the correct file name.
+
+Signed-off-by: Beat Bolli <dev+git@drbeat.li>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trace2.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/trace2.h b/trace2.h
+index 4ced30c0db..85f1b866b6 100644
+--- a/trace2.h
++++ b/trace2.h
+@@ -540,7 +540,7 @@ void trace2_timer_stop(enum trace2_timer_id tid);
+  * elsewhere as array indexes).
+  *
+  * Any values added to this enum be also be added to the
+- * `tr2_counter_metadata[]` in `trace2/tr2_tr2_ctr.c`.
++ * `tr2_counter_metadata[]` in `trace2/tr2_ctr.c`.
+  */
+ enum trace2_counter_id {
+ 	/*
+-- 
+2.39.3 (Apple Git-145)
+

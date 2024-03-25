@@ -1,0 +1,58 @@
+From 9a09ed322908b1a022a2948802f1ad4588223320 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Fri, 7 Apr 2023 18:18:29 -0600
+Subject: [PATCH 1209/2871] doc: simplify man version
+
+The hacks to add version information to the man pages comes from 2007
+7ef195ba3e (Documentation: Add version information to man pages,
+2007-03-25). In that code we passed three fields to DocBook Stylesheets:
+`source`, `version`, and `manual`, however, all the stylesheets do is
+join the strings `source` and `version` [1].
+
+Their own documentation explains that in pracice the source is just a
+combination of two fields [2]:
+
+  In practice, there are many pages that simply have a version number in
+  the "source" field.
+
+Splitting that information might have seemed more proper in 2007, but it
+not achieve anything in practice.
+
+Asciidoctor had support for this information in their manpage backend
+since day 1: v1.5.3 (2015), but it didn't include the version. In the
+docbook5 backend they did in v1.5.7 (2018), but again: no version.
+
+There is no need for us to demand that that they add support for the
+version field when in reality all that is going to happen is that both
+fields are going to be joined.
+
+Let's do that ourselves so we can forget about all our hacks for this
+and so it works for both asciidoc.py, and docbook5 and manpage backends
+of asciidoctor.
+
+[1] https://github.com/docbook/xslt10-stylesheets/blob/master/xsl/common/refentry.xsl#L545
+[2] https://docbook.sourceforge.net/release/xsl/current/doc/common/template.get.refentry.source.html
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/Makefile | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/Documentation/Makefile b/Documentation/Makefile
+index d47acb2e25..d098c9795d 100644
+--- a/Documentation/Makefile
++++ b/Documentation/Makefile
+@@ -150,8 +150,7 @@ ASCIIDOC_HTML = xhtml11
+ ASCIIDOC_DOCBOOK = docbook
+ ASCIIDOC_CONF = -f asciidoc.conf
+ ASCIIDOC_COMMON = $(ASCIIDOC) $(ASCIIDOC_EXTRA) $(ASCIIDOC_CONF) \
+-		-amanversion=$(GIT_VERSION) \
+-		-amanmanual='Git Manual' -amansource='Git'
++		-amanmanual='Git Manual' -amansource='Git $(GIT_VERSION)'
+ ASCIIDOC_DEPS = asciidoc.conf GIT-ASCIIDOCFLAGS
+ TXT_TO_HTML = $(ASCIIDOC_COMMON) -b $(ASCIIDOC_HTML)
+ TXT_TO_XML = $(ASCIIDOC_COMMON) -b $(ASCIIDOC_DOCBOOK)
+-- 
+2.39.3 (Apple Git-145)
+

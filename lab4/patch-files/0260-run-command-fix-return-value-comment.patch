@@ -1,0 +1,45 @@
+From 53c4be3fd82208bde63c6f38556089428c4e5be5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 30 Oct 2022 12:45:13 +0100
+Subject: [PATCH 0260/2871] run-command: fix return value comment
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+483bbd4e4c (run-command: introduce child_process_init(), 2014-08-19) and
+2d71608ec0 (run-command: factor out child_process_clear(), 2015-10-24)
+added help texts about child_process_init() and child_process_clear()
+without updating the immediately following documentation of return codes
+that only applied to the preexisting functions.
+
+4c4066d95d (run-command: move doc to run-command.h, 2019-11-17) started
+to list the functions explicitly that this paragraph applies to, but
+still wrongly included child_process_init() and child_process_clear().
+Remove their names from that list.
+
+Suggested-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ run-command.h | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/run-command.h b/run-command.h
+index 0e85e5846a..61073fc589 100644
+--- a/run-command.h
++++ b/run-command.h
+@@ -150,9 +150,8 @@ struct child_process {
+ }
+ 
+ /**
+- * The functions: child_process_init, start_command, finish_command,
+- * run_command, run_command_v_opt, run_command_v_opt_cd_env, child_process_clear
+- * do the following:
++ * The functions: start_command, finish_command, run_command,
++ * run_command_v_opt, run_command_v_opt_cd_env do the following:
+  *
+  * - If a system call failed, errno is set and -1 is returned. A diagnostic
+  *   is printed.
+-- 
+2.39.3 (Apple Git-145)
+

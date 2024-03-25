@@ -1,0 +1,44 @@
+From 7abb43cbc84c874b118e9cf22cd80d346dda171d Mon Sep 17 00:00:00 2001
+From: Jonathan Tan <jonathantanmy@google.com>
+Date: Mon, 12 Dec 2022 14:46:30 -0800
+Subject: [PATCH 0539/2871] http-fetch: invoke trace2_cmd_name()
+
+ee4512ed48 ("trace2: create new combined trace facility", 2019-02-
+22) introduced trace2_cmd_name() and taught both the Git built-ins and
+some non-built-ins to use it. However, http-fetch was not one of them
+(perhaps due to its low usage at the time).
+
+Teach http-fetch to invoke this function. After this patch, this
+function will be invoked right after argument parsing, just like in
+remote-curl.c.
+
+Signed-off-by: Jonathan Tan <jonathantanmy@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http-fetch.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/http-fetch.c b/http-fetch.c
+index 31bc5c7767..258fec2068 100644
+--- a/http-fetch.c
++++ b/http-fetch.c
+@@ -5,6 +5,7 @@
+ #include "walker.h"
+ #include "strvec.h"
+ #include "urlmatch.h"
++#include "trace2.h"
+ 
+ static const char http_fetch_usage[] = "git http-fetch "
+ "[-c] [-t] [-a] [-v] [--recover] [-w ref] [--stdin | --packfile=hash | commit-id] url";
+@@ -137,6 +138,8 @@ int cmd_main(int argc, const char **argv)
+ 	if (nongit)
+ 		die(_("not a git repository"));
+ 
++	trace2_cmd_name("http-fetch");
++
+ 	git_config(git_default_config, NULL);
+ 
+ 	if (packfile) {
+-- 
+2.39.3 (Apple Git-145)
+

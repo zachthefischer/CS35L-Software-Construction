@@ -1,0 +1,38 @@
+From ca76cca3a6e85311b1518d4e585b28b8177570bc Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 25 Sep 2023 11:20:33 +0000
+Subject: [PATCH 2391/2871] artifacts-tar: when including `.dll` files, don't
+ forget the unit-tests
+
+As of recent, Git also builds executables in `t/unit-tests/`. For
+technical reasons, when building with CMake and Visual C, the
+dependencies (".dll files") need to be copied there, too, otherwise
+running the executable will fail "due to missing dependencies".
+
+The CMake definition already contains the directives to copy those
+`.dll` files, but we also need to adjust the `artifacts-tar` rule in
+the `Makefile` accordingly to let the `vs-test` job in the CI runs
+pass successfully.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 18c13f06c0..e15c34e506 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3597,7 +3597,7 @@ rpm::
+ .PHONY: rpm
+ 
+ ifneq ($(INCLUDE_DLLS_IN_ARTIFACTS),)
+-OTHER_PROGRAMS += $(shell echo *.dll t/helper/*.dll)
++OTHER_PROGRAMS += $(shell echo *.dll t/helper/*.dll t/unit-tests/bin/*.dll)
+ endif
+ 
+ artifacts-tar:: $(ALL_COMMANDS_TO_INSTALL) $(SCRIPT_LIB) $(OTHER_PROGRAMS) \
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,61 @@
+From 96db17352d8821ceb99dd9e1c19bd74d680effb7 Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Fri, 20 Oct 2023 11:36:54 +0200
+Subject: [PATCH 2301/2871] rebase: move parse_opt_keep_empty() down
+
+This moves it right next to parse_opt_empty(), which is a much more
+logical place. As a side effect, this removes the need for a forward
+declaration of imply_merge().
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 25 ++++++++++++-------------
+ 1 file changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index ae360b576a..261a9a61fc 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -376,19 +376,6 @@ static int run_sequencer_rebase(struct rebase_options *opts)
+ 	return ret;
+ }
+ 
+-static void imply_merge(struct rebase_options *opts, const char *option);
+-static int parse_opt_keep_empty(const struct option *opt, const char *arg,
+-				int unset)
+-{
+-	struct rebase_options *opts = opt->value;
+-
+-	BUG_ON_OPT_ARG(arg);
+-
+-	imply_merge(opts, unset ? "--no-keep-empty" : "--keep-empty");
+-	opts->keep_empty = !unset;
+-	return 0;
+-}
+-
+ static int is_merge(struct rebase_options *opts)
+ {
+ 	return opts->type == REBASE_MERGE;
+@@ -982,6 +969,18 @@ static enum empty_type parse_empty_value(const char *value)
+ 	die(_("unrecognized empty type '%s'; valid values are \"drop\", \"keep\", and \"ask\"."), value);
+ }
+ 
++static int parse_opt_keep_empty(const struct option *opt, const char *arg,
++				int unset)
++{
++	struct rebase_options *opts = opt->value;
++
++	BUG_ON_OPT_ARG(arg);
++
++	imply_merge(opts, unset ? "--no-keep-empty" : "--keep-empty");
++	opts->keep_empty = !unset;
++	return 0;
++}
++
+ static int parse_opt_empty(const struct option *opt, const char *arg, int unset)
+ {
+ 	struct rebase_options *options = opt->value;
+-- 
+2.39.3 (Apple Git-145)
+

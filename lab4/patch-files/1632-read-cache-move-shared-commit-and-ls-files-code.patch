@@ -1,0 +1,314 @@
+From 1a40e7be6cb7dda07d23d8beb84622e63d1aa42c Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:45 +0000
+Subject: [PATCH 1632/2871] read-cache: move shared commit and ls-files code
+
+The function overlay_tree_on_index(), plus associated helper functions,
+were defined in builtin/ls-files.c, but also shared with
+builtin/commit.c.  Move these shared functions to read-cache.c.
+
+Diff best viewed with `--color-moved`.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-files.c | 137 ---------------------------------------------
+ read-cache.c       | 137 +++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 137 insertions(+), 137 deletions(-)
+
+diff --git a/builtin/ls-files.c b/builtin/ls-files.c
+index 72012c0f0f..eb7cce4e6e 100644
+--- a/builtin/ls-files.c
++++ b/builtin/ls-files.c
+@@ -543,143 +543,6 @@ static int get_common_prefix_len(const char *common_prefix)
+ 	return common_prefix_len;
+ }
+ 
+-static int read_one_entry_opt(struct index_state *istate,
+-			      const struct object_id *oid,
+-			      struct strbuf *base,
+-			      const char *pathname,
+-			      unsigned mode, int opt)
+-{
+-	int len;
+-	struct cache_entry *ce;
+-
+-	if (S_ISDIR(mode))
+-		return READ_TREE_RECURSIVE;
+-
+-	len = strlen(pathname);
+-	ce = make_empty_cache_entry(istate, base->len + len);
+-
+-	ce->ce_mode = create_ce_mode(mode);
+-	ce->ce_flags = create_ce_flags(1);
+-	ce->ce_namelen = base->len + len;
+-	memcpy(ce->name, base->buf, base->len);
+-	memcpy(ce->name + base->len, pathname, len+1);
+-	oidcpy(&ce->oid, oid);
+-	return add_index_entry(istate, ce, opt);
+-}
+-
+-static int read_one_entry(const struct object_id *oid, struct strbuf *base,
+-			  const char *pathname, unsigned mode,
+-			  void *context)
+-{
+-	struct index_state *istate = context;
+-	return read_one_entry_opt(istate, oid, base, pathname,
+-				  mode,
+-				  ADD_CACHE_OK_TO_ADD|ADD_CACHE_SKIP_DFCHECK);
+-}
+-
+-/*
+- * This is used when the caller knows there is no existing entries at
+- * the stage that will conflict with the entry being added.
+- */
+-static int read_one_entry_quick(const struct object_id *oid, struct strbuf *base,
+-				const char *pathname, unsigned mode,
+-				void *context)
+-{
+-	struct index_state *istate = context;
+-	return read_one_entry_opt(istate, oid, base, pathname,
+-				  mode, ADD_CACHE_JUST_APPEND);
+-}
+-
+-/*
+- * Read the tree specified with --with-tree option
+- * (typically, HEAD) into stage #1 and then
+- * squash them down to stage #0.  This is used for
+- * --error-unmatch to list and check the path patterns
+- * that were given from the command line.  We are not
+- * going to write this index out.
+- */
+-void overlay_tree_on_index(struct index_state *istate,
+-			   const char *tree_name, const char *prefix)
+-{
+-	struct tree *tree;
+-	struct object_id oid;
+-	struct pathspec pathspec;
+-	struct cache_entry *last_stage0 = NULL;
+-	int i;
+-	read_tree_fn_t fn = NULL;
+-	int err;
+-
+-	if (repo_get_oid(the_repository, tree_name, &oid))
+-		die("tree-ish %s not found.", tree_name);
+-	tree = parse_tree_indirect(&oid);
+-	if (!tree)
+-		die("bad tree-ish %s", tree_name);
+-
+-	/* Hoist the unmerged entries up to stage #3 to make room */
+-	/* TODO: audit for interaction with sparse-index. */
+-	ensure_full_index(istate);
+-	for (i = 0; i < istate->cache_nr; i++) {
+-		struct cache_entry *ce = istate->cache[i];
+-		if (!ce_stage(ce))
+-			continue;
+-		ce->ce_flags |= CE_STAGEMASK;
+-	}
+-
+-	if (prefix) {
+-		static const char *(matchbuf[1]);
+-		matchbuf[0] = NULL;
+-		parse_pathspec(&pathspec, PATHSPEC_ALL_MAGIC,
+-			       PATHSPEC_PREFER_CWD, prefix, matchbuf);
+-	} else
+-		memset(&pathspec, 0, sizeof(pathspec));
+-
+-	/*
+-	 * See if we have cache entry at the stage.  If so,
+-	 * do it the original slow way, otherwise, append and then
+-	 * sort at the end.
+-	 */
+-	for (i = 0; !fn && i < istate->cache_nr; i++) {
+-		const struct cache_entry *ce = istate->cache[i];
+-		if (ce_stage(ce) == 1)
+-			fn = read_one_entry;
+-	}
+-
+-	if (!fn)
+-		fn = read_one_entry_quick;
+-	err = read_tree(the_repository, tree, &pathspec, fn, istate);
+-	clear_pathspec(&pathspec);
+-	if (err)
+-		die("unable to read tree entries %s", tree_name);
+-
+-	/*
+-	 * Sort the cache entry -- we need to nuke the cache tree, though.
+-	 */
+-	if (fn == read_one_entry_quick) {
+-		cache_tree_free(&istate->cache_tree);
+-		QSORT(istate->cache, istate->cache_nr, cmp_cache_name_compare);
+-	}
+-
+-	for (i = 0; i < istate->cache_nr; i++) {
+-		struct cache_entry *ce = istate->cache[i];
+-		switch (ce_stage(ce)) {
+-		case 0:
+-			last_stage0 = ce;
+-			/* fallthru */
+-		default:
+-			continue;
+-		case 1:
+-			/*
+-			 * If there is stage #0 entry for this, we do not
+-			 * need to show it.  We use CE_UPDATE bit to mark
+-			 * such an entry.
+-			 */
+-			if (last_stage0 &&
+-			    !strcmp(last_stage0->name, ce->name))
+-				ce->ce_flags |= CE_UPDATE;
+-		}
+-	}
+-}
+-
+ static const char * const ls_files_usage[] = {
+ 	N_("git ls-files [<options>] [<file>...]"),
+ 	NULL
+diff --git a/read-cache.c b/read-cache.c
+index f4c31a68c8..c0df4586c9 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -3806,3 +3806,140 @@ void prefetch_cache_entries(const struct index_state *istate,
+ 				   to_fetch.oid, to_fetch.nr);
+ 	oid_array_clear(&to_fetch);
+ }
++
++static int read_one_entry_opt(struct index_state *istate,
++			      const struct object_id *oid,
++			      struct strbuf *base,
++			      const char *pathname,
++			      unsigned mode, int opt)
++{
++	int len;
++	struct cache_entry *ce;
++
++	if (S_ISDIR(mode))
++		return READ_TREE_RECURSIVE;
++
++	len = strlen(pathname);
++	ce = make_empty_cache_entry(istate, base->len + len);
++
++	ce->ce_mode = create_ce_mode(mode);
++	ce->ce_flags = create_ce_flags(1);
++	ce->ce_namelen = base->len + len;
++	memcpy(ce->name, base->buf, base->len);
++	memcpy(ce->name + base->len, pathname, len+1);
++	oidcpy(&ce->oid, oid);
++	return add_index_entry(istate, ce, opt);
++}
++
++static int read_one_entry(const struct object_id *oid, struct strbuf *base,
++			  const char *pathname, unsigned mode,
++			  void *context)
++{
++	struct index_state *istate = context;
++	return read_one_entry_opt(istate, oid, base, pathname,
++				  mode,
++				  ADD_CACHE_OK_TO_ADD|ADD_CACHE_SKIP_DFCHECK);
++}
++
++/*
++ * This is used when the caller knows there is no existing entries at
++ * the stage that will conflict with the entry being added.
++ */
++static int read_one_entry_quick(const struct object_id *oid, struct strbuf *base,
++				const char *pathname, unsigned mode,
++				void *context)
++{
++	struct index_state *istate = context;
++	return read_one_entry_opt(istate, oid, base, pathname,
++				  mode, ADD_CACHE_JUST_APPEND);
++}
++
++/*
++ * Read the tree specified with --with-tree option
++ * (typically, HEAD) into stage #1 and then
++ * squash them down to stage #0.  This is used for
++ * --error-unmatch to list and check the path patterns
++ * that were given from the command line.  We are not
++ * going to write this index out.
++ */
++void overlay_tree_on_index(struct index_state *istate,
++			   const char *tree_name, const char *prefix)
++{
++	struct tree *tree;
++	struct object_id oid;
++	struct pathspec pathspec;
++	struct cache_entry *last_stage0 = NULL;
++	int i;
++	read_tree_fn_t fn = NULL;
++	int err;
++
++	if (repo_get_oid(the_repository, tree_name, &oid))
++		die("tree-ish %s not found.", tree_name);
++	tree = parse_tree_indirect(&oid);
++	if (!tree)
++		die("bad tree-ish %s", tree_name);
++
++	/* Hoist the unmerged entries up to stage #3 to make room */
++	/* TODO: audit for interaction with sparse-index. */
++	ensure_full_index(istate);
++	for (i = 0; i < istate->cache_nr; i++) {
++		struct cache_entry *ce = istate->cache[i];
++		if (!ce_stage(ce))
++			continue;
++		ce->ce_flags |= CE_STAGEMASK;
++	}
++
++	if (prefix) {
++		static const char *(matchbuf[1]);
++		matchbuf[0] = NULL;
++		parse_pathspec(&pathspec, PATHSPEC_ALL_MAGIC,
++			       PATHSPEC_PREFER_CWD, prefix, matchbuf);
++	} else
++		memset(&pathspec, 0, sizeof(pathspec));
++
++	/*
++	 * See if we have cache entry at the stage.  If so,
++	 * do it the original slow way, otherwise, append and then
++	 * sort at the end.
++	 */
++	for (i = 0; !fn && i < istate->cache_nr; i++) {
++		const struct cache_entry *ce = istate->cache[i];
++		if (ce_stage(ce) == 1)
++			fn = read_one_entry;
++	}
++
++	if (!fn)
++		fn = read_one_entry_quick;
++	err = read_tree(the_repository, tree, &pathspec, fn, istate);
++	clear_pathspec(&pathspec);
++	if (err)
++		die("unable to read tree entries %s", tree_name);
++
++	/*
++	 * Sort the cache entry -- we need to nuke the cache tree, though.
++	 */
++	if (fn == read_one_entry_quick) {
++		cache_tree_free(&istate->cache_tree);
++		QSORT(istate->cache, istate->cache_nr, cmp_cache_name_compare);
++	}
++
++	for (i = 0; i < istate->cache_nr; i++) {
++		struct cache_entry *ce = istate->cache[i];
++		switch (ce_stage(ce)) {
++		case 0:
++			last_stage0 = ce;
++			/* fallthru */
++		default:
++			continue;
++		case 1:
++			/*
++			 * If there is stage #0 entry for this, we do not
++			 * need to show it.  We use CE_UPDATE bit to mark
++			 * such an entry.
++			 */
++			if (last_stage0 &&
++			    !strcmp(last_stage0->name, ce->name))
++				ce->ce_flags |= CE_UPDATE;
++		}
++	}
++}
+-- 
+2.39.3 (Apple Git-145)
+

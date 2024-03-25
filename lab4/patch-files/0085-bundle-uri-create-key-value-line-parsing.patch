@@ -1,0 +1,92 @@
+From 9424e373fd2136aa7f5cec23c8cafc272996ecd6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Wed, 12 Oct 2022 12:52:31 +0000
+Subject: [PATCH 0085/2871] bundle-uri: create "key=value" line parsing
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When advertising a bundle list over Git's protocol v2, we will use
+packet lines. Each line will be of the form "key=value" representing a
+bundle list. Connect the API necessary for Git's transport to the
+key-value pair parsing created in the previous change.
+
+We are not currently implementing this protocol v2 functionality, but
+instead preparing to expose this parsing to be unit-testable.
+
+Co-authored-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c | 27 ++++++++++++++++++++++++++-
+ bundle-uri.h | 12 ++++++++++++
+ 2 files changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 0bc59dd9c3..372e6fac5c 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -71,7 +71,6 @@ int for_all_bundles_in_list(struct bundle_list *list,
+  * Returns 0 if the key-value pair is understood. Returns -1 if the key
+  * is not understood or the value is malformed.
+  */
+-MAYBE_UNUSED
+ static int bundle_list_update(const char *key, const char *value,
+ 			      struct bundle_list *list)
+ {
+@@ -306,3 +305,29 @@ int fetch_bundle_uri(struct repository *r, const char *uri)
+ 	free(filename);
+ 	return result;
+ }
++
++/**
++ * General API for {transport,connect}.c etc.
++ */
++int bundle_uri_parse_line(struct bundle_list *list, const char *line)
++{
++	int result;
++	const char *equals;
++	struct strbuf key = STRBUF_INIT;
++
++	if (!strlen(line))
++		return error(_("bundle-uri: got an empty line"));
++
++	equals = strchr(line, '=');
++
++	if (!equals)
++		return error(_("bundle-uri: line is not of the form 'key=value'"));
++	if (line == equals || !*(equals + 1))
++		return error(_("bundle-uri: line has empty key or value"));
++
++	strbuf_add(&key, line, equals - line);
++	result = bundle_list_update(key.buf, equals + 1, list);
++	strbuf_release(&key);
++
++	return result;
++}
+diff --git a/bundle-uri.h b/bundle-uri.h
+index ff7e3fd3fb..9058346192 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -67,4 +67,16 @@ int for_all_bundles_in_list(struct bundle_list *list,
+  */
+ int fetch_bundle_uri(struct repository *r, const char *uri);
+ 
++/**
++ * General API for {transport,connect}.c etc.
++ */
++
++/**
++ * Parse a "key=value" packet line from the bundle-uri verb.
++ *
++ * Returns 0 on success and non-zero on error.
++ */
++int bundle_uri_parse_line(struct bundle_list *list,
++			  const char *line);
++
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

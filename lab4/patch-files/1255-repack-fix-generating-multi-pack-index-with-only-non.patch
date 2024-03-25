@@ -1,0 +1,87 @@
+From 51861340f8d7f76a99e0d7265f4417b0a9a6871c Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 14 Apr 2023 08:01:40 +0200
+Subject: [PATCH 1255/2871] repack: fix generating multi-pack-index with only
+ non-local packs
+
+When writing the multi-pack-index with geometric repacking we will add
+all packfiles to the index that are part of the geometric sequence. This
+can potentially also include packfiles borrowed from an alternate object
+directory. But given that a multi-pack-index can only ever include packs
+that are part of the main object database this does not make much sense
+whatsoever.
+
+In the edge case where all packfiles are contained in the alternate
+object database and the local repository has none itself this bug can
+cause us to invoke git-multi-pack-index(1) with only non-local packfiles
+that it ultimately cannot find. This causes it to return an error and
+thus causes the geometric repack to fail.
+
+Fix the code to skip non-local packfiles.
+
+Co-authored-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c            | 11 +++++++++++
+ t/t7703-repack-geometric.sh | 23 +++++++++++++++++++++++
+ 2 files changed, 34 insertions(+)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 63585ad046..a591a4ddd6 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -570,6 +570,17 @@ static void midx_included_packs(struct string_list *include,
+ 		for (i = geometry->split; i < geometry->pack_nr; i++) {
+ 			struct packed_git *p = geometry->pack[i];
+ 
++			/*
++			 * The multi-pack index never refers to packfiles part
++			 * of an alternate object database, so we skip these.
++			 * While git-multi-pack-index(1) would silently ignore
++			 * them anyway, this allows us to skip executing the
++			 * command completely when we have only non-local
++			 * packfiles.
++			 */
++			if (!p->pack_local)
++				continue;
++
+ 			strbuf_addstr(&buf, pack_basename(p));
+ 			strbuf_strip_suffix(&buf, ".pack");
+ 			strbuf_addstr(&buf, ".idx");
+diff --git a/t/t7703-repack-geometric.sh b/t/t7703-repack-geometric.sh
+index 4abc7d4c55..9dd002437f 100755
+--- a/t/t7703-repack-geometric.sh
++++ b/t/t7703-repack-geometric.sh
+@@ -313,4 +313,27 @@ test_expect_success '--geometric --write-midx with packfiles in main and alterna
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success '--geometric --with-midx with no local objects' '
++	test_when_finished "rm -fr shared member" &&
++
++	# Create a repository with a single packfile that acts as alternate
++	# object database.
++	git init shared &&
++	test_commit -C shared "shared-objects" &&
++	git -C shared repack -ad &&
++
++	# Create a second repository linked to the first one and perform a
++	# geometric repack on it.
++	git clone --shared shared member &&
++	git -C member repack --geometric 2 --write-midx 2>err &&
++	test_must_be_empty err &&
++
++	# Assert that we wrote neither a new packfile nor a multi-pack-index.
++	# We should not have a packfile because the single packfile in the
++	# alternate object database does not invalidate the geometric sequence.
++	# And we should not have a multi-pack-index because these only index
++	# local packfiles, and there are none.
++	test_dir_is_empty member/$packdir
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

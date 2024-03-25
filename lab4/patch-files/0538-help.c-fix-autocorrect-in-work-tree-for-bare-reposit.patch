@@ -1,0 +1,73 @@
+From 0918d0888767d42a7232b110f5ec510945256b7e Mon Sep 17 00:00:00 2001
+From: Simon Gerber <gesimu@gmail.com>
+Date: Sat, 29 Oct 2022 19:56:14 +0000
+Subject: [PATCH 0538/2871] help.c: fix autocorrect in work tree for bare
+ repository
+
+Currently, auto correction doesn't work reliably for commands which must
+run in a work tree (e.g. `git status`) in Git work trees which are
+created from a bare repository.
+
+As far as I'm able to determine, this has been broken since commit
+659fef199f (help: use early config when autocorrecting aliases,
+2017-06-14), where the call to `git_config()` in `help_unknown_cmd()`
+was replaced with a call to `read_early_config()`. From what I can tell,
+the actual cause for the unexpected error is that we call
+`git_default_config()` in the `git_unknown_cmd_config` callback instead
+of simply returning `0` for config entries which we aren't interested
+in.
+
+Calling `git_default_config()` in this callback to `read_early_config()`
+seems like a bad idea since those calls will initialize a bunch of state
+in `environment.c` (among other things `is_bare_repository_cfg`) before
+we've properly detected that we're running in a work tree.
+
+All other callbacks provided to `read_early_config()` appear to only
+extract their configurations while simply returning `0` for all other
+config keys.
+
+This commit changes the `git_unknown_cmd_config` callback to not call
+`git_default_config()`. Instead we also simply return `0` for config
+keys which we're not interested in.
+
+Additionally the commit adds a new test case covering `help.autocorrect`
+in a work tree created from a bare clone.
+
+Signed-off-by: Simon Gerber <gesimu@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ help.c                      | 2 +-
+ t/t9003-help-autocorrect.sh | 6 ++++++
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/help.c b/help.c
+index f1e090a442..812af4cdea 100644
+--- a/help.c
++++ b/help.c
+@@ -563,7 +563,7 @@ static int git_unknown_cmd_config(const char *var, const char *value, void *cb)
+ 	if (skip_prefix(var, "alias.", &p))
+ 		add_cmdname(&aliases, p, strlen(p));
+ 
+-	return git_default_config(var, value, cb);
++	return 0;
+ }
+ 
+ static int levenshtein_compare(const void *p1, const void *p2)
+diff --git a/t/t9003-help-autocorrect.sh b/t/t9003-help-autocorrect.sh
+index f00deaf381..f5b6b4f746 100755
+--- a/t/t9003-help-autocorrect.sh
++++ b/t/t9003-help-autocorrect.sh
+@@ -60,4 +60,10 @@ test_expect_success 'autocorrect can be declined altogether' '
+ 	test_line_count = 1 actual
+ '
+ 
++test_expect_success 'autocorrect works in work tree created from bare repo' '
++	git clone --bare . bare.git &&
++	git -C bare.git worktree add ../worktree &&
++	git -C worktree -c help.autocorrect=immediate stauts
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

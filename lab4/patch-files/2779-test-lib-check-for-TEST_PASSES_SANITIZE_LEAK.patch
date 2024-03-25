@@ -1,0 +1,56 @@
+From 92e209be78a18e1b36bd0f07d9b99e1790df407c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 29 Jan 2024 22:08:38 +0100
+Subject: [PATCH 2779/2871] test-lib: check for TEST_PASSES_SANITIZE_LEAK
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+TEST_PASSES_SANITIZE_LEAK must be set before sourcing test-lib.sh, as we
+say in t/README:
+
+   GIT_TEST_PASSING_SANITIZE_LEAK=true skips those tests that haven't
+   declared themselves as leak-free by setting
+   "TEST_PASSES_SANITIZE_LEAK=true" before sourcing "test-lib.sh". This
+   test mode is used by the "linux-leaks" CI target.
+
+   GIT_TEST_PASSING_SANITIZE_LEAK=check checks that our
+   "TEST_PASSES_SANITIZE_LEAK=true" markings are current. Rather than
+   skipping those tests that haven't set "TEST_PASSES_SANITIZE_LEAK=true"
+   before sourcing "test-lib.sh" this mode runs them with
+   "--invert-exit-code". This is used to check that there's a one-to-one
+   mapping between "TEST_PASSES_SANITIZE_LEAK=true" and those tests that
+   pass under "SANITIZE=leak". This is especially useful when testing a
+   series that fixes various memory leaks with "git rebase -x".
+
+In a recent commit we fixed a test where it was set after sourcing
+test-lib.sh, leading to confusing results.
+
+To prevent future oversights, let's add a simple check to ensure the
+value for TEST_PASSES_SANITIZE_LEAK remains unchanged at test_done().
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib.sh | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index fc93aa57e6..042f557a6f 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -1297,6 +1297,11 @@ test_done () {
+ 		EOF
+ 	fi
+ 
++	if test -z "$passes_sanitize_leak" && test_bool_env TEST_PASSES_SANITIZE_LEAK false
++	then
++		BAIL_OUT "Please, set TEST_PASSES_SANITIZE_LEAK before sourcing test-lib.sh"
++	fi
++
+ 	if test "$test_fixed" != 0
+ 	then
+ 		say_color error "# $test_fixed known breakage(s) vanished; please update test(s)"
+-- 
+2.39.3 (Apple Git-145)
+

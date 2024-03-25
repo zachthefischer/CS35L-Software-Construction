@@ -1,0 +1,179 @@
+From 8dcb49021e0134a1be1f533596e2bcf8313dea33 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:38:56 +0200
+Subject: [PATCH 1893/2871] t1502: move optionspec help output to a file
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+"git rev-parse --parseopt" shows the short help with its description of
+all recognized options twice: When called with -h or --help, and after
+reporting an unknown option.  Move the one for optionspec into a file
+and use it in two tests to deduplicate that part.
+
+"git rev-parse --parseopt -- --h" wraps the help text in "cat <<\EOF"
+and "EOF".  Keep that part in the file to use it as is in the test that
+needs it and simply remove it in the other one using sed.
+
+Disable whitespace checking for the file using an attribute, as we need
+to keep its spaces intact and wouldn't want a stray --whitespace=fix
+turn them into tabs.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1502-rev-parse-parseopt.sh | 79 ++++-------------------------------
+ t/t1502/.gitattributes        |  1 +
+ t/t1502/optionspec.help       | 34 +++++++++++++++
+ 3 files changed, 42 insertions(+), 72 deletions(-)
+ create mode 100644 t/t1502/.gitattributes
+ create mode 100755 t/t1502/optionspec.help
+
+diff --git a/t/t1502-rev-parse-parseopt.sh b/t/t1502-rev-parse-parseopt.sh
+index 0cdc6eb8b3..813ee5872f 100755
+--- a/t/t1502-rev-parse-parseopt.sh
++++ b/t/t1502-rev-parse-parseopt.sh
+@@ -58,44 +58,8 @@ EOF
+ '
+ 
+ test_expect_success 'test --parseopt help output' '
+-	sed -e "s/^|//" >expect <<\END_EXPECT &&
+-|cat <<\EOF
+-|usage: some-command [options] <args>...
+-|
+-|    some-command does foo and bar!
+-|
+-|    -h, --help            show the help
+-|    --foo                 some nifty option --foo
+-|    --bar ...             some cool option --bar with an argument
+-|    -b, --baz             a short and long option
+-|
+-|An option group Header
+-|    -C[...]               option C with an optional argument
+-|    -d, --data[=...]      short and long option with an optional argument
+-|
+-|Argument hints
+-|    -B <arg>              short option required argument
+-|    --bar2 <arg>          long option required argument
+-|    -e, --fuz <with-space>
+-|                          short and long option required argument
+-|    -s[<some>]            short option optional argument
+-|    --long[=<data>]       long option optional argument
+-|    -g, --fluf[=<path>]   short and long option optional argument
+-|    --longest <very-long-argument-hint>
+-|                          a very long argument hint
+-|    --pair <key=value>    with an equals sign in the hint
+-|    --aswitch             help te=t contains? fl*g characters!`
+-|    --bswitch <hint>      hint has trailing tab character
+-|    --cswitch             switch has trailing tab character
+-|    --short-hint <a>      with a one symbol hint
+-|
+-|Extras
+-|    --extra1              line above used to cause a segfault but no longer does
+-|
+-|EOF
+-END_EXPECT
+ 	test_expect_code 129 git rev-parse --parseopt -- -h > output < optionspec &&
+-	test_cmp expect output
++	test_cmp "$TEST_DIRECTORY/t1502/optionspec.help" output
+ '
+ 
+ test_expect_success 'test --parseopt help output no switches' '
+@@ -140,41 +104,12 @@ END_EXPECT
+ '
+ 
+ test_expect_success 'test --parseopt invalid switch help output' '
+-	sed -e "s/^|//" >expect <<\END_EXPECT &&
+-|error: unknown option `does-not-exist'\''
+-|usage: some-command [options] <args>...
+-|
+-|    some-command does foo and bar!
+-|
+-|    -h, --help            show the help
+-|    --foo                 some nifty option --foo
+-|    --bar ...             some cool option --bar with an argument
+-|    -b, --baz             a short and long option
+-|
+-|An option group Header
+-|    -C[...]               option C with an optional argument
+-|    -d, --data[=...]      short and long option with an optional argument
+-|
+-|Argument hints
+-|    -B <arg>              short option required argument
+-|    --bar2 <arg>          long option required argument
+-|    -e, --fuz <with-space>
+-|                          short and long option required argument
+-|    -s[<some>]            short option optional argument
+-|    --long[=<data>]       long option optional argument
+-|    -g, --fluf[=<path>]   short and long option optional argument
+-|    --longest <very-long-argument-hint>
+-|                          a very long argument hint
+-|    --pair <key=value>    with an equals sign in the hint
+-|    --aswitch             help te=t contains? fl*g characters!`
+-|    --bswitch <hint>      hint has trailing tab character
+-|    --cswitch             switch has trailing tab character
+-|    --short-hint <a>      with a one symbol hint
+-|
+-|Extras
+-|    --extra1              line above used to cause a segfault but no longer does
+-|
+-END_EXPECT
++	{
++		cat <<-\EOF &&
++		error: unknown option `does-not-exist'\''
++		EOF
++		sed -e 1d -e \$d <"$TEST_DIRECTORY/t1502/optionspec.help"
++	} >expect &&
+ 	test_expect_code 129 git rev-parse --parseopt -- --does-not-exist 1>/dev/null 2>output < optionspec &&
+ 	test_cmp expect output
+ '
+diff --git a/t/t1502/.gitattributes b/t/t1502/.gitattributes
+new file mode 100644
+index 0000000000..562b12e16e
+--- /dev/null
++++ b/t/t1502/.gitattributes
+@@ -0,0 +1 @@
++* -whitespace
+diff --git a/t/t1502/optionspec.help b/t/t1502/optionspec.help
+new file mode 100755
+index 0000000000..844eac6704
+--- /dev/null
++++ b/t/t1502/optionspec.help
+@@ -0,0 +1,34 @@
++cat <<\EOF
++usage: some-command [options] <args>...
++
++    some-command does foo and bar!
++
++    -h, --help            show the help
++    --foo                 some nifty option --foo
++    --bar ...             some cool option --bar with an argument
++    -b, --baz             a short and long option
++
++An option group Header
++    -C[...]               option C with an optional argument
++    -d, --data[=...]      short and long option with an optional argument
++
++Argument hints
++    -B <arg>              short option required argument
++    --bar2 <arg>          long option required argument
++    -e, --fuz <with-space>
++                          short and long option required argument
++    -s[<some>]            short option optional argument
++    --long[=<data>]       long option optional argument
++    -g, --fluf[=<path>]   short and long option optional argument
++    --longest <very-long-argument-hint>
++                          a very long argument hint
++    --pair <key=value>    with an equals sign in the hint
++    --aswitch             help te=t contains? fl*g characters!`
++    --bswitch <hint>      hint has trailing tab character
++    --cswitch             switch has trailing tab character
++    --short-hint <a>      with a one symbol hint
++
++Extras
++    --extra1              line above used to cause a segfault but no longer does
++
++EOF
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,85 @@
+From d43b99322bd0ca4a371901bcf6705f1282143a2b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 7 Jan 2023 08:26:44 -0500
+Subject: [PATCH 0638/2871] convert trivial uses of strncmp() to skip_prefix()
+
+As with the previous patch, using skip_prefix() is more readable and
+less error-prone than a raw strncmp(), because it avoids a
+manually-computed length. These cases differ from the previous patch
+that uses starts_with() because they care about the value after the
+matched prefix.
+
+We can convert these to use skip_prefix() by introducing an extra
+variable to hold the out-pointer.
+
+Note in the case in ws.c that to get rid of the magic number "9"
+completely, we also switch out "len" for recomputing the pointer
+difference. These are equivalent because "len" is always "ep - string".
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/remote-ext.c | 6 ++++--
+ ws.c                 | 7 ++++---
+ 2 files changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/remote-ext.c b/builtin/remote-ext.c
+index fd3538d4f0..ee338bf440 100644
+--- a/builtin/remote-ext.c
++++ b/builtin/remote-ext.c
+@@ -169,6 +169,8 @@ static int command_loop(const char *child)
+ 
+ 	while (1) {
+ 		size_t i;
++		const char *arg;
++
+ 		if (!fgets(buffer, MAXCOMMAND - 1, stdin)) {
+ 			if (ferror(stdin))
+ 				die("Command input error");
+@@ -182,10 +184,10 @@ static int command_loop(const char *child)
+ 		if (!strcmp(buffer, "capabilities")) {
+ 			printf("*connect\n\n");
+ 			fflush(stdout);
+-		} else if (!strncmp(buffer, "connect ", 8)) {
++		} else if (skip_prefix(buffer, "connect ", &arg)) {
+ 			printf("\n");
+ 			fflush(stdout);
+-			return run_child(child, buffer + 8);
++			return run_child(child, arg);
+ 		} else {
+ 			fprintf(stderr, "Bad command");
+ 			return 1;
+diff --git a/ws.c b/ws.c
+index 46a77bcad6..903bfcd53e 100644
+--- a/ws.c
++++ b/ws.c
+@@ -29,6 +29,7 @@ unsigned parse_whitespace_rule(const char *string)
+ 		int i;
+ 		size_t len;
+ 		const char *ep;
++		const char *arg;
+ 		int negated = 0;
+ 
+ 		string = string + strspn(string, ", \t\n\r");
+@@ -52,15 +53,15 @@ unsigned parse_whitespace_rule(const char *string)
+ 				rule |= whitespace_rule_names[i].rule_bits;
+ 			break;
+ 		}
+-		if (strncmp(string, "tabwidth=", 9) == 0) {
+-			unsigned tabwidth = atoi(string + 9);
++		if (skip_prefix(string, "tabwidth=", &arg)) {
++			unsigned tabwidth = atoi(arg);
+ 			if (0 < tabwidth && tabwidth < 0100) {
+ 				rule &= ~WS_TAB_WIDTH_MASK;
+ 				rule |= tabwidth;
+ 			}
+ 			else
+ 				warning("tabwidth %.*s out of range",
+-					(int)(len - 9), string + 9);
++					(int)(ep - arg), arg);
+ 		}
+ 		string = ep;
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

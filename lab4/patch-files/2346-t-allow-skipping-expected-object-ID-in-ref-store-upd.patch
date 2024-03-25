@@ -1,0 +1,52 @@
+From 9ddd5b883b0221d80392a914eb621ea680476e75 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 2 Nov 2023 09:46:41 +0100
+Subject: [PATCH 2346/2871] t: allow skipping expected object ID in `ref-store
+ update-ref`
+
+We require the caller to pass both the old and new expected object ID to
+our `test-tool ref-store update-ref` helper. When trying to update a
+symbolic reference though it's impossible to specify the expected object
+ID, which means that the test would instead have to force-update the
+reference. This is currently impossible though.
+
+Update the helper to optionally skip verification of the old object ID
+in case the test passes in an empty old object ID as input.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-ref-store.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/t/helper/test-ref-store.c b/t/helper/test-ref-store.c
+index 48552e6a9e..702ec1f128 100644
+--- a/t/helper/test-ref-store.c
++++ b/t/helper/test-ref-store.c
+@@ -298,16 +298,19 @@ static int cmd_update_ref(struct ref_store *refs, const char **argv)
+ 	const char *new_sha1_buf = notnull(*argv++, "new-sha1");
+ 	const char *old_sha1_buf = notnull(*argv++, "old-sha1");
+ 	unsigned int flags = arg_flags(*argv++, "flags", transaction_flags);
+-	struct object_id old_oid;
++	struct object_id old_oid, *old_oid_ptr = NULL;
+ 	struct object_id new_oid;
+ 
+-	if (get_oid_hex(old_sha1_buf, &old_oid))
+-		die("cannot parse %s as %s", old_sha1_buf, the_hash_algo->name);
++	if (*old_sha1_buf) {
++		if (get_oid_hex(old_sha1_buf, &old_oid))
++			die("cannot parse %s as %s", old_sha1_buf, the_hash_algo->name);
++		old_oid_ptr = &old_oid;
++	}
+ 	if (get_oid_hex(new_sha1_buf, &new_oid))
+ 		die("cannot parse %s as %s", new_sha1_buf, the_hash_algo->name);
+ 
+ 	return refs_update_ref(refs, msg, refname,
+-			       &new_oid, &old_oid,
++			       &new_oid, old_oid_ptr,
+ 			       flags, UPDATE_REFS_DIE_ON_ERR);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

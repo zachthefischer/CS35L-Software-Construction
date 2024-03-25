@@ -1,0 +1,82 @@
+From 2f36339fa8622ee1cba957e8d0ef15719c697de3 Mon Sep 17 00:00:00 2001
+From: Kousik Sanagavarapu <five231003@gmail.com>
+Date: Sun, 4 Jun 2023 23:52:46 +0530
+Subject: [PATCH 1549/2871] t/lib-gpg: introduce new prereq GPG2
+
+GnuPG v2.0.0 released in 2006, which according to its release notes
+
+	https://gnupg.org/download/release_notes.html
+
+is the "First stable version of GnuPG integrating OpenPGP and S/MIME".
+
+Use this version or its successors for tests that will fail for
+versions less than v2.0.0 because of the difference in the output on
+stderr between the versions (v2.* vs v0.* or v2.* vs v1.*). Skip if
+the GPG version detected is less than v2.0.0.
+
+Do not, however, remove the existing prereq GPG yet since a lot of tests
+still work with the prereq GPG (that is even with versions v0.* or v1.*)
+and some systems still use these versions.
+
+Mentored-by: Christian Couder <christian.couder@gmail.com>
+Mentored-by: Hariom Verma <hariom18599@gmail.com>
+Signed-off-by: Kousik Sanagavarapu <five231003@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-gpg.sh             | 21 +++++++++++++++++++++
+ t/t7510-signed-commit.sh |  7 +++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/t/lib-gpg.sh b/t/lib-gpg.sh
+index 114785586a..d219a09362 100644
+--- a/t/lib-gpg.sh
++++ b/t/lib-gpg.sh
+@@ -51,6 +51,27 @@ test_lazy_prereq GPG '
+ 	esac
+ '
+ 
++test_lazy_prereq GPG2 '
++	gpg_version=$(gpg --version 2>&1)
++	test $? != 127 || exit 1
++
++	case "$gpg_version" in
++	"gpg (GnuPG) "[01].*)
++		say "This test requires a GPG version >= v2.0.0"
++		exit 1
++		;;
++	*)
++		(gpgconf --kill all || : ) &&
++		gpg --homedir "${GNUPGHOME}" --import \
++			"$TEST_DIRECTORY"/lib-gpg/keyring.gpg &&
++		gpg --homedir "${GNUPGHOME}" --import-ownertrust \
++			"$TEST_DIRECTORY"/lib-gpg/ownertrust &&
++		gpg --homedir "${GNUPGHOME}" </dev/null >/dev/null \
++			--sign -u committer@example.com
++		;;
++	esac
++'
++
+ test_lazy_prereq GPGSM '
+ 	test_have_prereq GPG &&
+ 	# Available key info:
+diff --git a/t/t7510-signed-commit.sh b/t/t7510-signed-commit.sh
+index ccbc416402..0d2dd29fe6 100755
+--- a/t/t7510-signed-commit.sh
++++ b/t/t7510-signed-commit.sh
+@@ -218,6 +218,13 @@ test_expect_success GPG 'amending already signed commit' '
+ 	! grep "BAD signature from" actual
+ '
+ 
++test_expect_success GPG2 'bare signature' '
++	git verify-commit fifth-signed 2>expect &&
++	echo >>expect &&
++	git log -1 --format="%GG" fifth-signed >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success GPG 'show good signature with custom format' '
+ 	cat >expect <<-\EOF &&
+ 	G
+-- 
+2.39.3 (Apple Git-145)
+

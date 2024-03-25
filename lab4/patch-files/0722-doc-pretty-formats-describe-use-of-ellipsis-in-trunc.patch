@@ -1,0 +1,40 @@
+From b5cd634d7a30074452c5aa3b0ce66ce794c4d565 Mon Sep 17 00:00:00 2001
+From: Philip Oakley <philipoakley@iee.email>
+Date: Thu, 19 Jan 2023 18:18:26 +0000
+Subject: [PATCH 0722/2871] doc: pretty-formats describe use of ellipsis in
+ truncation
+
+Commit a7f01c6b4d (pretty: support truncating in %>, %< and %><,
+2013-04-19) added the use of ellipsis when truncating placeholder
+values.
+
+Show our 'two dot' ellipsis, and examples for the left, middle and
+right truncation to avoid any confusion as to which end of the string
+is adjusted. (cf justification and sub-string).
+
+Signed-off-by: Philip Oakley <philipoakley@iee.email>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/pretty-formats.txt | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/pretty-formats.txt b/Documentation/pretty-formats.txt
+index cbca60a196..e51f1e54e1 100644
+--- a/Documentation/pretty-formats.txt
++++ b/Documentation/pretty-formats.txt
+@@ -149,9 +149,9 @@ The placeholders are:
+ '%<( <N> [,trunc|ltrunc|mtrunc])':: make the next placeholder take at
+ 				  least N column widths, padding spaces on
+ 				  the right if necessary.  Optionally
+-				  truncate at the beginning (ltrunc),
+-				  the middle (mtrunc) or the end
+-				  (trunc) if the output is longer than
++				  truncate (with ellipsis '..') at the left (ltrunc) `..ft`,
++				  the middle (mtrunc) `mi..le`, or the end
++				  (trunc) `rig..`, if the output is longer than
+ 				  N columns.
+ 				  Note 1: that truncating
+ 				  only works correctly with N >= 2.
+-- 
+2.39.3 (Apple Git-145)
+

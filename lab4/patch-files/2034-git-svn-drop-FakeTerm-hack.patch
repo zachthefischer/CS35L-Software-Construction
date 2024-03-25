@@ -1,0 +1,58 @@
+From aa4b83dd5e8e709f173027fc0fbbedbaf7c43d12 Mon Sep 17 00:00:00 2001
+From: Wesley Schwengle <wesleys@opperschaap.net>
+Date: Wed, 30 Aug 2023 15:32:08 -0700
+Subject: [PATCH 2034/2871] git-svn: drop FakeTerm hack
+
+Drop the FakeTerm hack, just like dfd46bae (send-email: drop
+FakeTerm hack, 2023-08-08) did, for exactly the same reason.
+
+It has been obsolete in git-svn since 30d45f798d (git-svn: delay term
+initialization, 2014-09-14). Note that unlike send-email, we already
+make sure to load Term::ReadLine only once. So this is just a cleanup,
+and not fixing any bug.
+
+Signed-off-by: Wesley Schwengle <wesleys@opperschaap.net>
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-svn.perl | 20 ++------------------
+ 1 file changed, 2 insertions(+), 18 deletions(-)
+
+diff --git a/git-svn.perl b/git-svn.perl
+index be987e316f..4e8878f035 100755
+--- a/git-svn.perl
++++ b/git-svn.perl
+@@ -297,28 +297,12 @@ sub _req_svn {
+ 		{} ],
+ );
+ 
+-package FakeTerm;
+-sub new {
+-	my ($class, $reason) = @_;
+-	return bless \$reason, shift;
+-}
+-sub readline {
+-	my $self = shift;
+-	die "Cannot use readline on FakeTerm: $$self";
+-}
+-package main;
+-
+ my $term;
+ sub term_init {
+-	$term = eval {
+-		require Term::ReadLine;
+-		$ENV{"GIT_SVN_NOTTY"}
++	require Term::ReadLine;
++	$term = $ENV{"GIT_SVN_NOTTY"}
+ 			? new Term::ReadLine 'git-svn', \*STDIN, \*STDOUT
+ 			: new Term::ReadLine 'git-svn';
+-	};
+-	if ($@) {
+-		$term = new FakeTerm "$@: going non-interactive";
+-	}
+ }
+ 
+ my $cmd;
+-- 
+2.39.3 (Apple Git-145)
+

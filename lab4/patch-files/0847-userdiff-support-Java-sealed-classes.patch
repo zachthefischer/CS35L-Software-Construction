@@ -1,0 +1,137 @@
+From 93d52ed050f5613897b73e75961df5c589d63a4b Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Wed, 8 Feb 2023 00:42:59 +0100
+Subject: [PATCH 0847/2871] userdiff: support Java sealed classes
+
+A new kind of class was added in Java 17 -- sealed classes.[1]  This
+feature includes several new keywords that may appear in a declaration
+of a class.  New modifiers before name of the class: "sealed" and
+"non-sealed", and a clause after name of the class marked by keyword
+"permits".
+
+The current set of regular expressions in userdiff.c already allows the
+modifier "sealed" and the "permits" clause, but not the modifier
+"non-sealed", which is the first hyphenated keyword in Java.[2]  Allow
+hyphen in the words that precede the name of type to match the
+"non-sealed" modifier.
+
+In new input file "java-sealed" for the test t4018-diff-funcname.sh, use
+a Java code comment for the marker "RIGHT".  This workaround is needed,
+because the name of the sealed class appears on the line of code that
+has the "ChangeMe" marker.
+
+[1] Detailed description in "JEP 409: Sealed Classes"
+    https://openjdk.org/jeps/409
+[2] "JEP draft: Keyword Management for the Java Language"
+    https://openjdk.org/jeps/8223002
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Reviewed-by: Johannes Sixt <j6t@kdbg.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4018/java-non-sealed                                | 8 ++++++++
+ t/t4018/java-sealed                                    | 7 +++++++
+ t/t4018/java-sealed-permits                            | 6 ++++++
+ t/t4018/java-sealed-type-parameters                    | 6 ++++++
+ t/t4018/java-sealed-type-parameters-implements-permits | 6 ++++++
+ t/t4018/java-sealed-type-parameters-permits            | 6 ++++++
+ userdiff.c                                             | 2 +-
+ 7 files changed, 40 insertions(+), 1 deletion(-)
+ create mode 100644 t/t4018/java-non-sealed
+ create mode 100644 t/t4018/java-sealed
+ create mode 100644 t/t4018/java-sealed-permits
+ create mode 100644 t/t4018/java-sealed-type-parameters
+ create mode 100644 t/t4018/java-sealed-type-parameters-implements-permits
+ create mode 100644 t/t4018/java-sealed-type-parameters-permits
+
+diff --git a/t/t4018/java-non-sealed b/t/t4018/java-non-sealed
+new file mode 100644
+index 0000000000..069087c1c6
+--- /dev/null
++++ b/t/t4018/java-non-sealed
+@@ -0,0 +1,8 @@
++public abstract sealed class SealedClass {
++    public static non-sealed class RIGHT extends SealedClass {
++        static int ONE;
++        static int TWO;
++        static int THREE;
++        private int ChangeMe;
++    }
++}
+diff --git a/t/t4018/java-sealed b/t/t4018/java-sealed
+new file mode 100644
+index 0000000000..785fbc62bc
+--- /dev/null
++++ b/t/t4018/java-sealed
+@@ -0,0 +1,7 @@
++public abstract sealed class Sealed { // RIGHT
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    public final class ChangeMe extends Sealed {
++    }
++}
+diff --git a/t/t4018/java-sealed-permits b/t/t4018/java-sealed-permits
+new file mode 100644
+index 0000000000..18dd4894cf
+--- /dev/null
++++ b/t/t4018/java-sealed-permits
+@@ -0,0 +1,6 @@
++public abstract sealed class RIGHT permits PermittedA, PermittedB {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    private int ChangeMe;
++}
+diff --git a/t/t4018/java-sealed-type-parameters b/t/t4018/java-sealed-type-parameters
+new file mode 100644
+index 0000000000..e6530c47c3
+--- /dev/null
++++ b/t/t4018/java-sealed-type-parameters
+@@ -0,0 +1,6 @@
++public abstract sealed class RIGHT<A, B> {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    private int ChangeMe;
++}
+diff --git a/t/t4018/java-sealed-type-parameters-implements-permits b/t/t4018/java-sealed-type-parameters-implements-permits
+new file mode 100644
+index 0000000000..bd6e6d3582
+--- /dev/null
++++ b/t/t4018/java-sealed-type-parameters-implements-permits
+@@ -0,0 +1,6 @@
++public abstract sealed class RIGHT<A, B> implements List<A> permits PermittedA, PermittedB {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    private int ChangeMe;
++}
+diff --git a/t/t4018/java-sealed-type-parameters-permits b/t/t4018/java-sealed-type-parameters-permits
+new file mode 100644
+index 0000000000..25a0da6442
+--- /dev/null
++++ b/t/t4018/java-sealed-type-parameters-permits
+@@ -0,0 +1,6 @@
++public abstract sealed class RIGHT<A, B> permits PermittedA, PermittedB {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    private int ChangeMe;
++}
+diff --git a/userdiff.c b/userdiff.c
+index 37ac98e177..94cca1a2a8 100644
+--- a/userdiff.c
++++ b/userdiff.c
+@@ -171,7 +171,7 @@ PATTERNS("html",
+ PATTERNS("java",
+ 	 "!^[ \t]*(catch|do|for|if|instanceof|new|return|switch|throw|while)\n"
+ 	 /* Class, enum, interface, and record declarations */
+-	 "^[ \t]*(([a-z]+[ \t]+)*(class|enum|interface|record)[ \t]+.*)$\n"
++	 "^[ \t]*(([a-z-]+[ \t]+)*(class|enum|interface|record)[ \t]+.*)$\n"
+ 	 /* Method definitions; note that constructor signatures are not */
+ 	 /* matched because they are indistinguishable from method calls. */
+ 	 "^[ \t]*(([A-Za-z_<>&][][?&<>.,A-Za-z_0-9]*[ \t]+)+[A-Za-z_][A-Za-z_0-9]*[ \t]*\\([^;]*)$",
+-- 
+2.39.3 (Apple Git-145)
+

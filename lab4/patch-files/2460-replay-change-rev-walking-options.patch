@@ -1,0 +1,100 @@
+From 8259e4154f46de5b3443a3ff7b1cc4441ec6b7df Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:35 +0100
+Subject: [PATCH 2460/2871] replay: change rev walking options
+
+Let's force the rev walking options we need after calling
+setup_revisions() instead of before.
+
+This might override some user supplied rev walking command line options
+though. So let's detect that and warn users by:
+
+  a) setting the desired values, before setup_revisions(),
+  b) checking after setup_revisions() whether these values differ from
+     the desired values,
+  c) if so throwing a warning and setting the desired values again.
+
+We want the command to work from older commits to newer ones by default.
+Also we don't want history simplification, as we want to deal with all
+the commits in the affected range.
+
+Helped-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/replay.c | 48 +++++++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 41 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/replay.c b/builtin/replay.c
+index d039467cd4..2f664218be 100644
+--- a/builtin/replay.c
++++ b/builtin/replay.c
+@@ -173,22 +173,56 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 
+ 	repo_init_revisions(the_repository, &revs, prefix);
+ 
+-	revs.verbose_header = 1;
+-	revs.max_parents = 1;
+-	revs.cherry_mark = 1;
+-	revs.limited = 1;
++	strvec_pushl(&rev_walk_args, "", argv[2], "--not", argv[1], NULL);
++
++	/*
++	 * Set desired values for rev walking options here. If they
++	 * are changed by some user specified option in setup_revisions()
++	 * below, we will detect that below and then warn.
++	 *
++	 * TODO: In the future we might want to either die(), or allow
++	 * some options changing these values if we think they could
++	 * be useful.
++	 */
+ 	revs.reverse = 1;
+-	revs.right_only = 1;
+ 	revs.sort_order = REV_SORT_IN_GRAPH_ORDER;
+ 	revs.topo_order = 1;
+-
+-	strvec_pushl(&rev_walk_args, "", argv[2], "--not", argv[1], NULL);
++	revs.simplify_history = 0;
+ 
+ 	if (setup_revisions(rev_walk_args.nr, rev_walk_args.v, &revs, NULL) > 1) {
+ 		ret = error(_("unhandled options"));
+ 		goto cleanup;
+ 	}
+ 
++	/*
++	 * Detect and warn if we override some user specified rev
++	 * walking options.
++	 */
++	if (revs.reverse != 1) {
++		warning(_("some rev walking options will be overridden as "
++			  "'%s' bit in 'struct rev_info' will be forced"),
++			"reverse");
++		revs.reverse = 1;
++	}
++	if (revs.sort_order != REV_SORT_IN_GRAPH_ORDER) {
++		warning(_("some rev walking options will be overridden as "
++			  "'%s' bit in 'struct rev_info' will be forced"),
++			"sort_order");
++		revs.sort_order = REV_SORT_IN_GRAPH_ORDER;
++	}
++	if (revs.topo_order != 1) {
++		warning(_("some rev walking options will be overridden as "
++			  "'%s' bit in 'struct rev_info' will be forced"),
++			"topo_order");
++		revs.topo_order = 1;
++	}
++	if (revs.simplify_history != 0) {
++		warning(_("some rev walking options will be overridden as "
++			  "'%s' bit in 'struct rev_info' will be forced"),
++			"simplify_history");
++		revs.simplify_history = 0;
++	}
++
+ 	strvec_clear(&rev_walk_args);
+ 
+ 	if (prepare_revision_walk(&revs) < 0) {
+-- 
+2.39.3 (Apple Git-145)
+

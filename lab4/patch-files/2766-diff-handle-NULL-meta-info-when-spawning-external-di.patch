@@ -1,0 +1,98 @@
+From 85a9a63c9268b18b24f25f6a14d6ae9966c3566d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sun, 28 Jan 2024 20:57:08 -0500
+Subject: [PATCH 2766/2871] diff: handle NULL meta-info when spawning external
+ diff
+
+Running this:
+
+  $ touch foo bar
+  $ chmod +x foo
+  $ git -c diff.external=echo diff --ext-diff --no-index foo bar
+
+results in a segfault. The issue is that run_diff_cmd() passes a NULL
+"xfrm_msg" variable to run_external_diff(), which feeds it to
+strvec_push(), causing the segfault. The bug dates back to 82fbf269b9
+(run_external_diff: use an argv_array for the command line, 2014-04-19),
+though it mostly only ever worked accidentally.  Before then, we just
+stuck the NULL pointer into a "const char **" array, so our NULL ended
+up acting as an extra end-of-argv sentinel (which was OK, because it was
+the last thing in the array).
+
+Curiously, though, this is only a problem with --no-index. We set up
+xfrm_msg by calling fill_metainfo(). This result may be empty, or may
+have text like "index 1234..5678\n", "rename from foo\nrename from
+bar\n", etc. In run_external_diff(), we only look at xfrm_msg if the
+"other" variable is not NULL. That variable is set when the paths of the
+two sides of the diff pair aren't the same (in which case the
+destination path becomes "other"). So normally it would kick in only for
+a rename, in which case xfrm_msg should not be NULL (it would have the
+rename information in it).
+
+But with a "--no-index" of two blobs, we of course have two different
+pathnames, and thus end up with a non-NULL "other" filename (which is
+always just a repeat of the file2-name), but possibly a NULL xfrm_msg.
+
+So how to fix it? I have a feeling that --no-index always passing
+"other" to the external diff command is probably a bug. There was no
+rename, and the name is always redundant with existing information we
+pass (and this may even cause us to pass a useless "xfrm_msg" that
+contains an "index 1234..5678" line). So one option would be to change
+that behavior. We don't seem to have ever documented the "other" or
+"xfrm_msg" parameters for external diffs.
+
+But I'm not sure what fallout we might have from changing that behavior
+now. So this patch takes the less-risky option, and simply teaches
+run_external_diff() to avoid passing xfrm_msg when it's NULL. That makes
+it agnostic to whether "other" and "xfrm_msg" always come as a pair. It
+fixes the segfault now, and if we want to change the --no-index "other"
+behavior on top, it will handle that, too.
+
+Reported-by: Wilfred Hughes <me@wilfred.me.uk>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                   |  3 ++-
+ t/t4053-diff-no-index.sh | 12 ++++++++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/diff.c b/diff.c
+index 2c602df10a..6e066d64a5 100644
+--- a/diff.c
++++ b/diff.c
+@@ -4369,7 +4369,8 @@ static void run_external_diff(const char *pgm,
+ 		add_external_diff_name(o->repo, &cmd.args, two);
+ 		if (other) {
+ 			strvec_push(&cmd.args, other);
+-			strvec_push(&cmd.args, xfrm_msg);
++			if (xfrm_msg)
++				strvec_push(&cmd.args, xfrm_msg);
+ 		}
+ 	}
+ 
+diff --git a/t/t4053-diff-no-index.sh b/t/t4053-diff-no-index.sh
+index 5ce345d309..651ec77660 100755
+--- a/t/t4053-diff-no-index.sh
++++ b/t/t4053-diff-no-index.sh
+@@ -205,6 +205,18 @@ test_expect_success POSIXPERM,SYMLINKS 'diff --no-index normalizes: mode not lik
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success POSIXPERM 'external diff with mode-only change' '
++	echo content >not-executable &&
++	echo content >executable &&
++	chmod +x executable &&
++	echo executable executable $(test_oid zero) 100755 \
++		not-executable $(test_oid zero) 100644 not-executable \
++		>expect &&
++	test_expect_code 1 git -c diff.external=echo diff \
++		--no-index executable not-executable >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success "diff --no-index treats '-' as stdin" '
+ 	cat >expect <<-EOF &&
+ 	diff --git a/- b/a/1
+-- 
+2.39.3 (Apple Git-145)
+

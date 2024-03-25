@@ -1,0 +1,98 @@
+From 26d4c51d36a1f4f9463eb694758474243d7877e6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 28 Oct 2023 13:58:41 +0200
+Subject: [PATCH 2316/2871] reflog: fix expire --single-worktree
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+33d7bdd645 (builtin/reflog.c: use parse-options api for expire, delete
+subcommands, 2022-01-06) broke the option --single-worktree of git
+reflog expire and added a non-printable short flag for it, presumably by
+accident.  While before it set the variable "all_worktrees" to 0, now it
+sets it to 1, its default value.  --no-single-worktree is required now
+to set it to 0.
+
+Fix it by replacing the variable with one that has the opposite meaning,
+to avoid the negation and its potential for confusion.  The new variable
+"single_worktree" directly captures whether --single-worktree was given.
+
+Also remove the unprintable short flag SOH (start of heading) because it
+is undocumented, hard to use and is likely to have been added by mistake
+in connection with the negation bug above.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/reflog.c  |  6 +++---
+ t/t1410-reflog.sh | 23 +++++++++++++++++++++++
+ 2 files changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/reflog.c b/builtin/reflog.c
+index df63a5892e..21337292f5 100644
+--- a/builtin/reflog.c
++++ b/builtin/reflog.c
+@@ -243,7 +243,7 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
+ {
+ 	struct cmd_reflog_expire_cb cmd = { 0 };
+ 	timestamp_t now = time(NULL);
+-	int i, status, do_all, all_worktrees = 1;
++	int i, status, do_all, single_worktree = 0;
+ 	unsigned int flags = 0;
+ 	int verbose = 0;
+ 	reflog_expiry_should_prune_fn *should_prune_fn = should_expire_reflog_ent;
+@@ -268,7 +268,7 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
+ 		OPT_BOOL(0, "stale-fix", &cmd.stalefix,
+ 			 N_("prune any reflog entries that point to broken commits")),
+ 		OPT_BOOL(0, "all", &do_all, N_("process the reflogs of all references")),
+-		OPT_BOOL(1, "single-worktree", &all_worktrees,
++		OPT_BOOL(0, "single-worktree", &single_worktree,
+ 			 N_("limits processing to reflogs from the current worktree only")),
+ 		OPT_END()
+ 	};
+@@ -318,7 +318,7 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
+ 
+ 		worktrees = get_worktrees();
+ 		for (p = worktrees; *p; p++) {
+-			if (!all_worktrees && !(*p)->is_current)
++			if (single_worktree && !(*p)->is_current)
+ 				continue;
+ 			collected.worktree = *p;
+ 			refs_for_each_reflog(get_worktree_ref_store(*p),
+diff --git a/t/t1410-reflog.sh b/t/t1410-reflog.sh
+index 6c45965b1e..09e7f3cdac 100755
+--- a/t/t1410-reflog.sh
++++ b/t/t1410-reflog.sh
+@@ -446,6 +446,29 @@ test_expect_success 'expire with multiple worktrees' '
+ 	)
+ '
+ 
++test_expect_success 'expire one of multiple worktrees' '
++	git init main-wt2 &&
++	(
++		cd main-wt2 &&
++		test_tick &&
++		test_commit foo &&
++		git worktree add link-wt &&
++		test_tick &&
++		test_commit -C link-wt foobar &&
++		test_tick &&
++		test-tool ref-store worktree:link-wt for-each-reflog-ent HEAD \
++			>expect-link-wt &&
++		git reflog expire --verbose --all --expire=$test_tick \
++			--single-worktree &&
++		test-tool ref-store worktree:main for-each-reflog-ent HEAD \
++			>actual-main &&
++		test-tool ref-store worktree:link-wt for-each-reflog-ent HEAD \
++			>actual-link-wt &&
++		test_must_be_empty actual-main &&
++		test_cmp expect-link-wt actual-link-wt
++	)
++'
++
+ test_expect_success REFFILES 'empty reflog' '
+ 	test_when_finished "rm -rf empty" &&
+ 	git init empty &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,102 @@
+From 4433bd24e4acd015af9d05832c65bd6e3b097df2 Mon Sep 17 00:00:00 2001
+From: ZheNing Hu <adlternative@gmail.com>
+Date: Wed, 11 Jan 2023 13:14:20 +0000
+Subject: [PATCH 0696/2871] scalar: show progress if stderr refers to a
+ terminal
+
+Sometimes when users use scalar to download a monorepo with a long
+commit history, they want to check the progress bar to know how long
+they still need to wait during the fetch process, but scalar
+suppresses this output by default.
+
+So let's check whether scalar stderr refer to a terminal, if so,
+show progress, otherwise disable it.
+
+Signed-off-by: ZheNing Hu <adlternative@gmail.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ scalar.c                | 10 +++++++---
+ t/t9211-scalar-clone.sh | 26 ++++++++++++++++++++++++++
+ 2 files changed, 33 insertions(+), 3 deletions(-)
+
+diff --git a/scalar.c b/scalar.c
+index 6c52243cdf..e5cc554c53 100644
+--- a/scalar.c
++++ b/scalar.c
+@@ -404,7 +404,7 @@ void load_builtin_commands(const char *prefix, struct cmdnames *cmds)
+ static int cmd_clone(int argc, const char **argv)
+ {
+ 	const char *branch = NULL;
+-	int full_clone = 0, single_branch = 0;
++	int full_clone = 0, single_branch = 0, show_progress = isatty(2);
+ 	struct option clone_options[] = {
+ 		OPT_STRING('b', "branch", &branch, N_("<branch>"),
+ 			   N_("branch to checkout after clone")),
+@@ -499,7 +499,9 @@ static int cmd_clone(int argc, const char **argv)
+ 	if (set_recommended_config(0))
+ 		return error(_("could not configure '%s'"), dir);
+ 
+-	if ((res = run_git("fetch", "--quiet", "origin", NULL))) {
++	if ((res = run_git("fetch", "--quiet",
++				show_progress ? "--progress" : "--no-progress",
++				"origin", NULL))) {
+ 		warning(_("partial clone failed; attempting full clone"));
+ 
+ 		if (set_config("remote.origin.promisor") ||
+@@ -508,7 +510,9 @@ static int cmd_clone(int argc, const char **argv)
+ 			goto cleanup;
+ 		}
+ 
+-		if ((res = run_git("fetch", "--quiet", "origin", NULL)))
++		if ((res = run_git("fetch", "--quiet",
++					show_progress ? "--progress" : "--no-progress",
++					"origin", NULL)))
+ 			goto cleanup;
+ 	}
+ 
+diff --git a/t/t9211-scalar-clone.sh b/t/t9211-scalar-clone.sh
+index dd33d87e9b..02d32fb6ed 100755
+--- a/t/t9211-scalar-clone.sh
++++ b/t/t9211-scalar-clone.sh
+@@ -3,6 +3,7 @@
+ test_description='test the `scalar clone` subcommand'
+ 
+ . ./test-lib.sh
++. "${TEST_DIRECTORY}/lib-terminal.sh"
+ 
+ GIT_TEST_MAINT_SCHEDULER="crontab:test-tool crontab cron.txt,launchctl:true,schtasks:true"
+ export GIT_TEST_MAINT_SCHEDULER
+@@ -148,4 +149,29 @@ test_expect_success '--no-single-branch clones all branches' '
+ 	cleanup_clone $enlistment
+ '
+ 
++test_expect_success TTY 'progress with tty' '
++	enlistment=progress1 &&
++
++	test_config -C to-clone uploadpack.allowfilter true &&
++	test_config -C to-clone uploadpack.allowanysha1inwant true &&
++
++	test_terminal env GIT_PROGRESS_DELAY=0 \
++		scalar clone "file://$(pwd)/to-clone" "$enlistment" 2>stderr &&
++	grep "Enumerating objects" stderr >actual &&
++	test_line_count = 2 actual &&
++	cleanup_clone $enlistment
++'
++
++test_expect_success 'progress without tty' '
++	enlistment=progress2 &&
++
++	test_config -C to-clone uploadpack.allowfilter true &&
++	test_config -C to-clone uploadpack.allowanysha1inwant true &&
++
++	GIT_PROGRESS_DELAY=0 scalar clone "file://$(pwd)/to-clone" "$enlistment" 2>stderr &&
++	! grep "Enumerating objects" stderr &&
++	! grep "Updating files" stderr &&
++	cleanup_clone $enlistment
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

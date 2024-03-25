@@ -1,0 +1,45 @@
+From a2634646eba81923b66fa752535e24969be2fa82 Mon Sep 17 00:00:00 2001
+From: Sotir Danailov <sndanailov@wired4ever.net>
+Date: Wed, 12 Oct 2022 17:06:19 +0200
+Subject: [PATCH 0094/2871] docs: git-send-email: difference between ssl and
+ tls smtp-encryption
+
+New explanation for the difference between these values.
+It's hard to understand what they do based only on the names.
+New description of used default ports.
+
+Signed-off-by: Sotir Danailov <sndanailov@wired4ever.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-send-email.txt | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-send-email.txt b/Documentation/git-send-email.txt
+index 3290043053..765b2df853 100644
+--- a/Documentation/git-send-email.txt
++++ b/Documentation/git-send-email.txt
+@@ -178,9 +178,18 @@ Sending
+ 	for `sendmail` in `/usr/sbin`, `/usr/lib` and $PATH.
+ 
+ --smtp-encryption=<encryption>::
+-	Specify the encryption to use, either 'ssl' or 'tls'.  Any other
+-	value reverts to plain SMTP.  Default is the value of
+-	`sendemail.smtpEncryption`.
++	Specify in what way encrypting begins for the SMTP connection.
++	Valid values are 'ssl' and 'tls'. Any other value reverts to plain
++	(unencrypted) SMTP, which defaults to port 25.
++	Despite the names, both values will use the same newer version of TLS,
++	but for historic reasons have these names. 'ssl' refers to "implicit"
++	encryption (sometimes called SMTPS), that uses port 465 by default.
++	'tls' refers to "explicit" encryption (often known as STARTTLS),
++	that uses port 25 by default. Other ports might be used by the SMTP
++	server, which are not the default. Commonly found alternative port for
++	'tls' and unencrypted is 587. You need to check your provider's
++	documentation or your server configuration to make sure
++	for your own case. Default is the value of `sendemail.smtpEncryption`.
+ 
+ --smtp-domain=<FQDN>::
+ 	Specifies the Fully Qualified Domain Name (FQDN) used in the
+-- 
+2.39.3 (Apple Git-145)
+

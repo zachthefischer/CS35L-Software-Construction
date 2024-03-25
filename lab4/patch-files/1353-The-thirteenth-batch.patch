@@ -1,0 +1,44 @@
+From 2807bd2c10606e590886543afe4e4f208dddd489 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 25 Apr 2023 13:17:56 -0700
+Subject: [PATCH 1353/2871] The thirteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.41.0.txt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.41.0.txt b/Documentation/RelNotes/2.41.0.txt
+index abbaff3095..63345b9595 100644
+--- a/Documentation/RelNotes/2.41.0.txt
++++ b/Documentation/RelNotes/2.41.0.txt
+@@ -69,6 +69,10 @@ UI, Workflows & Features
+    learns "--omit-empty" to hide refs that whose formatting result
+    becomes an empty string from the output.
+ 
++ * The sendemail-validate validate hook learned to pass the total
++   number of input files and where in the sequence each invocation is
++   via environment variables.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -240,6 +244,15 @@ Fixes since v2.40
+    paths outside the current directory.
+    (merge 92b1dd1b9e rs/archive-from-subdirectory-fixes later to maint).
+ 
++ * The code to parse capability list for v0 on-wire protocol fell into
++   an infinite loop when a capability appears multiple times, which
++   has been corrected.
++
++ * Geometric repacking ("git repack --geometric=<n>") in a repository
++   that borrows from an alternate object database had various corner
++   case bugs, which have been corrected.
++   (merge d85cd18777 ps/fix-geom-repack-with-alternates later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge f7111175df as/doc-markup-fix later to maint).
+    (merge 90ff7c9898 fc/test-aggregation-clean-up later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

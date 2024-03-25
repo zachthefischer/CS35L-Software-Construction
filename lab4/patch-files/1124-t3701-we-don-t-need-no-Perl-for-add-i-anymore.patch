@@ -1,0 +1,33 @@
+From 3457b50e8c08a95167d5ddd0dcc8386eabb52553 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 27 Mar 2023 06:36:36 +0000
+Subject: [PATCH 1124/2871] t3701: we don't need no Perl for `add -i` anymore
+
+This should have been removed in `ab/retire-scripted-add-p` but wasn't.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3701-add-interactive.sh | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/t/t3701-add-interactive.sh b/t/t3701-add-interactive.sh
+index 3a99837d9b..ac43333619 100755
+--- a/t/t3701-add-interactive.sh
++++ b/t/t3701-add-interactive.sh
+@@ -7,12 +7,6 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-terminal.sh
+ 
+-if test_have_prereq !PERL
+-then
+-	skip_all='skipping add -i (scripted) tests, perl not available'
+-	test_done
+-fi
+-
+ diff_cmp () {
+ 	for x
+ 	do
+-- 
+2.39.3 (Apple Git-145)
+

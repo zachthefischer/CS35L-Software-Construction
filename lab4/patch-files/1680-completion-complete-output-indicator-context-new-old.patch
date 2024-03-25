@@ -1,0 +1,29 @@
+From b5c3edc17ea10f0946ca0876028b077ef51509c3 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:42 +0000
+Subject: [PATCH 1680/2871] completion: complete
+ --output-indicator-{context,new,old}
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index a34432796b..a69421cd74 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1759,7 +1759,8 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--patch --no-patch --cc --combined-all-paths
+ 			--anchored= --compact-summary --ignore-matching-lines=
+ 			--irreversible-delete --line-prefix --no-stat
+-			--output=
++			--output= --output-indicator-context=
++			--output-indicator-new= --output-indicator-old=
+ "
+ 
+ # Options for diff/difftool
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,152 @@
+From ed3789f2f0ab8b8d5e325e47f0caf02b6bd9edfc Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 31 Jul 2023 15:44:08 -0700
+Subject: [PATCH 1877/2871] checkout/restore: add basic tests for --merge
+
+Even though "checkout --merge -- paths" had some tests, we never
+made sure it worked to recreate the conflicted state _after_ the
+resolution was recorded in the index.  Also "restore --merge" did
+not even have any tests.
+
+Currently these commands use the unmerge_marked_index() interface
+that cannot handle paths that have been resolved as removal, and
+tests for that case are marked with test_expect_failure; these
+should eventually be fixed, but not in this patch.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2070-restore.sh | 64 ++++++++++++++++++++++++++++++++++++++++++++++
+ t/t7201-co.sh      | 42 ++++++++++++++++++++++++++++++
+ 2 files changed, 106 insertions(+)
+
+diff --git a/t/t2070-restore.sh b/t/t2070-restore.sh
+index fd775807e7..d97ecc2483 100755
+--- a/t/t2070-restore.sh
++++ b/t/t2070-restore.sh
+@@ -137,6 +137,70 @@ test_expect_success 'restore --staged invalidates cache tree for deletions' '
+ 	test_must_fail git rev-parse HEAD:new1
+ '
+ 
++test_expect_success 'restore --merge to unresolve' '
++	O=$(echo original | git hash-object -w --stdin) &&
++	A=$(echo ourside | git hash-object -w --stdin) &&
++	B=$(echo theirside | git hash-object -w --stdin) &&
++	{
++		echo "100644 $O 1	file" &&
++		echo "100644 $A 2	file" &&
++		echo "100644 $B 3	file"
++	} | git update-index --index-info &&
++	echo nothing >file &&
++	git restore --worktree --merge file &&
++	cat >expect <<-\EOF &&
++	<<<<<<< ours
++	ourside
++	=======
++	theirside
++	>>>>>>> theirs
++	EOF
++	test_cmp expect file
++'
++
++test_expect_success 'restore --merge to unresolve after (mistaken) resolution' '
++	O=$(echo original | git hash-object -w --stdin) &&
++	A=$(echo ourside | git hash-object -w --stdin) &&
++	B=$(echo theirside | git hash-object -w --stdin) &&
++	{
++		echo "100644 $O 1	file" &&
++		echo "100644 $A 2	file" &&
++		echo "100644 $B 3	file"
++	} | git update-index --index-info &&
++	echo nothing >file &&
++	git add file &&
++	git restore --worktree --merge file &&
++	cat >expect <<-\EOF &&
++	<<<<<<< ours
++	ourside
++	=======
++	theirside
++	>>>>>>> theirs
++	EOF
++	test_cmp expect file
++'
++
++test_expect_failure 'restore --merge to unresolve after (mistaken) resolution' '
++	O=$(echo original | git hash-object -w --stdin) &&
++	A=$(echo ourside | git hash-object -w --stdin) &&
++	B=$(echo theirside | git hash-object -w --stdin) &&
++	{
++		echo "100644 $O 1	file" &&
++		echo "100644 $A 2	file" &&
++		echo "100644 $B 3	file"
++	} | git update-index --index-info &&
++	git rm -f file &&
++	git restore --worktree --merge file &&
++	cat >expect <<-\EOF &&
++	<<<<<<< ours
++	ourside
++	=======
++	theirside
++	>>>>>>> theirs
++	EOF
++	test_cmp expect file
++'
++
+ test_expect_success 'restore with merge options are incompatible with certain options' '
+ 	for opts in \
+ 		"--staged --ours" \
+diff --git a/t/t7201-co.sh b/t/t7201-co.sh
+index 23d4dadbcc..4b07a26c14 100755
+--- a/t/t7201-co.sh
++++ b/t/t7201-co.sh
+@@ -522,6 +522,48 @@ test_expect_success 'checkout with --merge' '
+ 	test_cmp merged file
+ '
+ 
++test_expect_success 'checkout -m works after (mistaken) resolution' '
++	setup_conflicting_index &&
++	echo "none of the above" >sample &&
++	cat sample >fild &&
++	cat sample >file &&
++	cat sample >filf &&
++	# resolve to something
++	git add file &&
++	git checkout --merge -- fild file filf &&
++	{
++		echo "<<<<<<< ours" &&
++		echo ourside &&
++		echo "=======" &&
++		echo theirside &&
++		echo ">>>>>>> theirs"
++	} >merged &&
++	test_cmp expect fild &&
++	test_cmp expect filf &&
++	test_cmp merged file
++'
++
++test_expect_failure 'checkout -m works after (mistaken) resolution to remove' '
++	setup_conflicting_index &&
++	echo "none of the above" >sample &&
++	cat sample >fild &&
++	cat sample >file &&
++	cat sample >filf &&
++	# resolve to remove
++	git rm file &&
++	git checkout --merge -- fild file filf &&
++	{
++		echo "<<<<<<< ours" &&
++		echo ourside &&
++		echo "=======" &&
++		echo theirside &&
++		echo ">>>>>>> theirs"
++	} >merged &&
++	test_cmp expect fild &&
++	test_cmp expect filf &&
++	test_cmp merged file
++'
++
+ test_expect_success 'checkout with --merge, in diff3 -m style' '
+ 	git config merge.conflictstyle diff3 &&
+ 	setup_conflicting_index &&
+-- 
+2.39.3 (Apple Git-145)
+

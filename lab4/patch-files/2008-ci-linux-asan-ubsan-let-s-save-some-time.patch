@@ -1,0 +1,62 @@
+From 6ba913629f51f5fa9f78030fe47e38d5b02e3a88 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 29 Aug 2023 20:47:28 +0000
+Subject: [PATCH 2008/2871] ci(linux-asan-ubsan): let's save some time
+
+Every once in a while, the `git-p4` tests flake for reasons outside of
+our control. It typically fails with "Connection refused" e.g. here:
+https://github.com/git/git/actions/runs/5969707156/job/16196057724
+
+	[...]
+	+ git p4 clone --dest=/home/runner/work/git/git/t/trash directory.t9807-git-p4-submit/git //depot
+	  Initialized empty Git repository in /home/runner/work/git/git/t/trash directory.t9807-git-p4-submit/git/.git/
+	  Perforce client error:
+		Connect to server failed; check $P4PORT.
+		TCP connect to localhost:9807 failed.
+		connect: 127.0.0.1:9807: Connection refused
+	  failure accessing depot: could not run p4
+	  Importing from //depot into /home/runner/work/git/git/t/trash directory.t9807-git-p4-submit/git
+	 [...]
+
+This happens in other jobs, too, but in the `linux-asan-ubsan` job it
+hurts the most because that job often takes over a full hour to run,
+therefore re-running a failed `linux-asan-ubsan` job is _very_ costly.
+
+The purpose of the `linux-asan-ubsan` job is to exercise the C code of
+Git, anyway, and any part of Git's source code that the `git-p4` tests
+run and that would benefit from the attention of ASAN/UBSAN are run
+better in other tests anyway, as debugging C code run via Python scripts
+can get a bit hairy.
+
+In fact, it is not even just `git-p4` that is the problem (even if it
+flakes often enough to be problematic in the CI builds), but really the
+part about Python scripts. So let's just skip any Python parts of the
+tests from being run in that job.
+
+For good measure, also skip the Subversion tests because debugging C
+code run via Perl scripts is as much fun as debugging C code run via
+Python scripts. And it will reduce the time this very expensive job
+takes, which is a big benefit.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 369d462f13..6fbb5bade1 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -280,6 +280,8 @@ linux-leaks)
+ 	;;
+ linux-asan-ubsan)
+ 	export SANITIZE=address,undefined
++	export NO_SVN_TESTS=LetsSaveSomeTime
++	MAKEFLAGS="$MAKEFLAGS NO_PYTHON=YepBecauseP4FlakesTooOften"
+ 	;;
+ esac
+ 
+-- 
+2.39.3 (Apple Git-145)
+

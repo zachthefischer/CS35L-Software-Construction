@@ -1,0 +1,55 @@
+From c970681f50dac66ea9ffada47711591320174864 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Sat, 20 May 2023 16:13:50 +0000
+Subject: [PATCH 1514/2871] t7111-reset-table: modernize test format
+
+Some tests still use the old format with four spaces indentation.
+Standardize the tests to the new format with tab indentation.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7111-reset-table.sh | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/t/t7111-reset-table.sh b/t/t7111-reset-table.sh
+index 78f25c1c7e..01b7c3503c 100755
+--- a/t/t7111-reset-table.sh
++++ b/t/t7111-reset-table.sh
+@@ -10,9 +10,9 @@ TEST_PASSES_SANITIZE_LEAK=true
+ 
+ 
+ test_expect_success 'creating initial commits' '
+-    test_commit E file1 &&
+-    test_commit D file1 &&
+-    test_commit C file1
++	test_commit E file1 &&
++	test_commit D file1 &&
++	test_commit C file1
+ '
+ 
+ while read W1 I1 H1 T opt W2 I2 H2
+@@ -74,13 +74,13 @@ B C C C keep   B C C
+ EOF
+ 
+ test_expect_success 'setting up branches to test with unmerged entries' '
+-    git reset --hard C &&
+-    git branch branch1 &&
+-    git branch branch2 &&
+-    git checkout branch1 &&
+-    test_commit B1 file1 &&
+-    git checkout branch2 &&
+-    test_commit B file1
++	git reset --hard C &&
++	git branch branch1 &&
++	git branch branch2 &&
++	git checkout branch1 &&
++	test_commit B1 file1 &&
++	git checkout branch2 &&
++	test_commit B file1
+ '
+ 
+ while read W1 I1 H1 T opt W2 I2 H2
+-- 
+2.39.3 (Apple Git-145)
+

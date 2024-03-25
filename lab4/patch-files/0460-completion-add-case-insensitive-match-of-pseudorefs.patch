@@ -1,0 +1,104 @@
+From 9de31f7bd25029eb6e2292ede6df3a646f261de4 Mon Sep 17 00:00:00 2001
+From: Alison Winters <alisonatwork@outlook.com>
+Date: Mon, 21 Nov 2022 00:26:59 +0000
+Subject: [PATCH 0460/2871] completion: add case-insensitive match of
+ pseudorefs
+
+When GIT_COMPLETION_IGNORE_CASE is set, also allow lowercase completion
+text like "head" to match uppercase HEAD and other pseudorefs.
+
+Signed-off-by: Alison Winters <alisonatwork@outlook.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 14 +++++++++++---
+ t/t9902-completion.sh                  | 15 +++++++++++++++
+ 2 files changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 7dcf4b6356..dc95c34cc8 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -722,6 +722,7 @@ __git_refs ()
+ 	local format refs
+ 	local pfx="${3-}" cur_="${4-$cur}" sfx="${5-}"
+ 	local match="${4-}"
++	local umatch="${4-}"
+ 	local fer_pfx="${pfx//\%/%%}" # "escape" for-each-ref format specifiers
+ 
+ 	__git_find_repo_path
+@@ -745,12 +746,19 @@ __git_refs ()
+ 		fi
+ 	fi
+ 
++	if test "${GIT_COMPLETION_IGNORE_CASE:+1}" = "1"
++	then
++		# uppercase with tr instead of ${match,^^} for bash 3.2 compatibility
++		umatch=$(echo "$match" | tr a-z A-Z 2>/dev/null || echo "$match")
++	fi
++
+ 	if [ "$list_refs_from" = path ]; then
+ 		if [[ "$cur_" == ^* ]]; then
+ 			pfx="$pfx^"
+ 			fer_pfx="$fer_pfx^"
+ 			cur_=${cur_#^}
+ 			match=${match#^}
++			umatch=${umatch#^}
+ 		fi
+ 		case "$cur_" in
+ 		refs|refs/*)
+@@ -761,7 +769,7 @@ __git_refs ()
+ 		*)
+ 			for i in HEAD FETCH_HEAD ORIG_HEAD MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD; do
+ 				case "$i" in
+-				$match*)
++				$match*|$umatch*)
+ 					if [ -e "$dir/$i" ]; then
+ 						echo "$pfx$i$sfx"
+ 					fi
+@@ -795,7 +803,7 @@ __git_refs ()
+ 	*)
+ 		if [ "$list_refs_from" = remote ]; then
+ 			case "HEAD" in
+-			$match*)	echo "${pfx}HEAD$sfx" ;;
++			$match*|$umatch*)	echo "${pfx}HEAD$sfx" ;;
+ 			esac
+ 			__git for-each-ref --format="$fer_pfx%(refname:strip=3)$sfx" \
+ 				${GIT_COMPLETION_IGNORE_CASE+--ignore-case} \
+@@ -804,7 +812,7 @@ __git_refs ()
+ 		else
+ 			local query_symref
+ 			case "HEAD" in
+-			$match*)	query_symref="HEAD" ;;
++			$match*|$umatch*)	query_symref="HEAD" ;;
+ 			esac
+ 			__git ls-remote "$remote" $query_symref \
+ 				"refs/tags/$match*" "refs/heads/$match*" \
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index d89d0a93a2..d6c0478d98 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -2270,6 +2270,21 @@ test_expect_success 'checkout matches case insensitively with GIT_COMPLETION_IGN
+ 	)
+ '
+ 
++test_expect_success 'checkout completes pseudo refs' '
++	test_completion "git checkout H" <<-\EOF
++	HEAD Z
++	EOF
++'
++
++test_expect_success 'checkout completes pseudo refs case insensitively with GIT_COMPLETION_IGNORE_CASE' '
++	(
++		GIT_COMPLETION_IGNORE_CASE=1 &&
++		test_completion "git checkout h" <<-\EOF
++		HEAD Z
++		EOF
++	)
++'
++
+ test_expect_success 'git -C <path> checkout uses the right repo' '
+ 	test_completion "git -C subdir -C subsubdir -C .. -C ../otherrepo checkout b" <<-\EOF
+ 	branch-in-other Z
+-- 
+2.39.3 (Apple Git-145)
+

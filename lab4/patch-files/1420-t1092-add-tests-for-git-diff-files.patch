@@ -1,0 +1,78 @@
+From 0aba1a989c7c577dc1b0b096a12615b7a6747c54 Mon Sep 17 00:00:00 2001
+From: Shuqi Liang <cheskaqiqi@gmail.com>
+Date: Tue, 9 May 2023 15:42:40 -0400
+Subject: [PATCH 1420/2871] t1092: add tests for `git diff-files`
+
+Before integrating the 'git diff-files' builtin with the sparse index
+feature, add tests to t1092-sparse-checkout-compatibility.sh to ensure
+it currently works with sparse-checkout and will still work with sparse
+index after that integration.
+
+When adding tests against a sparse-checkout definition, we test two
+modes: all changes are within the sparse-checkout cone and some changes
+are outside the sparse-checkout cone.
+
+In order to have staged changes outside of the sparse-checkout cone,
+make a directory called 'folder1' and copy `a` into 'folder1/a'.
+'folder1/a' is identical to `a` in the base commit. These make
+'folder1/a' in the index, while leaving it outside of the
+sparse-checkout definition. Change content inside 'folder1/a' in order
+to test 'folder1/a' being present on-disk with modifications.
+
+Signed-off-by: Shuqi Liang <cheskaqiqi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1092-sparse-checkout-compatibility.sh | 39 ++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index 0c784813f1..b06b522030 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -2108,4 +2108,43 @@ test_expect_success 'sparse-index is not expanded: write-tree' '
+ 	ensure_not_expanded write-tree
+ '
+ 
++test_expect_success 'diff-files with pathspec inside sparse definition' '
++	init_repos &&
++
++	write_script edit-contents <<-\EOF &&
++	echo text >>"$1"
++	EOF
++
++	run_on_all ../edit-contents deep/a &&
++
++	test_all_match git diff-files &&
++
++	test_all_match git diff-files -- deep/a &&
++
++	# test wildcard
++	test_all_match git diff-files -- "deep/*"
++'
++
++test_expect_success 'diff-files with pathspec outside sparse definition' '
++	init_repos &&
++
++	test_sparse_match git diff-files -- folder2/a &&
++
++	write_script edit-contents <<-\EOF &&
++	echo text >>"$1"
++	EOF
++
++	# The directory "folder1" is outside the cone of interest
++	# and will not exist in the sparse checkout repositories.
++	# Create it as needed, add file "folder1/a" there with
++	# contents that is different from the staged version.
++	run_on_all mkdir -p folder1 &&
++	run_on_all cp a folder1/a &&
++
++	run_on_all ../edit-contents folder1/a &&
++	test_all_match git diff-files &&
++	test_all_match git diff-files -- folder1/a &&
++	test_all_match git diff-files -- "folder*/a"
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

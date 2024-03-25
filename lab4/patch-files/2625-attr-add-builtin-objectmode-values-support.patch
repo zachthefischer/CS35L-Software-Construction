@@ -1,0 +1,335 @@
+From 2232a88ab6bfbe41faf73f85912937e20bf8b4ee Mon Sep 17 00:00:00 2001
+From: Joanna Wang <jojwang@google.com>
+Date: Thu, 16 Nov 2023 05:44:37 +0000
+Subject: [PATCH 2625/2871] attr: add builtin objectmode values support
+
+Gives all paths builtin objectmode values based on the paths' modes
+(one of 100644, 100755, 120000, 040000, 160000). Users may use
+this feature to filter by file types. For example a pathspec such as
+':(attr:builtin_objectmode=160000)' could filter for submodules without
+needing to have `builtin_objectmode=160000` to be set in .gitattributes
+for every submodule path.
+
+These values are also reflected in `git check-attr` results.
+If the git_attr_direction is set to GIT_ATTR_INDEX or GIT_ATTR_CHECKIN
+and a path is not found in the index, the value will be unspecified.
+
+This patch also reserves the builtin_* attribute namespace for objectmode
+and any future builtin attributes. Any user defined attributes using this
+reserved namespace will result in a warning. This is a breaking change for
+any existing builtin_* attributes.
+Pathspecs with some builtin_* attribute name (excluding builtin_objectmode)
+will behave like any attribute where there are no user specified values.
+
+Signed-off-by: Joanna Wang <jojwang@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitattributes.txt | 15 ++++++
+ attr.c                          | 95 +++++++++++++++++++++++++++++++--
+ neue                            |  0
+ t/t0003-attributes.sh           | 76 ++++++++++++++++++++++++++
+ t/t6135-pathspec-with-attrs.sh  | 27 ++++++++++
+ 5 files changed, 210 insertions(+), 3 deletions(-)
+ create mode 100644 neue
+
+diff --git a/Documentation/gitattributes.txt b/Documentation/gitattributes.txt
+index 8c1793c148..201bdf5edb 100644
+--- a/Documentation/gitattributes.txt
++++ b/Documentation/gitattributes.txt
+@@ -100,6 +100,21 @@ for a path to `Unspecified` state.  This can be done by listing
+ the name of the attribute prefixed with an exclamation point `!`.
+ 
+ 
++RESERVED BUILTIN_* ATTRIBUTES
++-----------------------------
++
++builtin_* is a reserved namespace for builtin attribute values. Any
++user defined attributes under this namespace will be ignored and
++trigger a warning.
++
++`builtin_objectmode`
++~~~~~~~~~~~~~~~~~~~~
++This attribute is for filtering files by their file bit modes (40000,
++120000, 160000, 100755, 100644). e.g. ':(attr:builtin_objectmode=160000)'.
++You may also check these values with `git check-attr builtin_objectmode -- <file>`.
++If the object is not in the index `git check-attr --cached` will return unspecified.
++
++
+ EFFECTS
+ -------
+ 
+diff --git a/attr.c b/attr.c
+index e62876dfd3..679e42258c 100644
+--- a/attr.c
++++ b/attr.c
+@@ -17,6 +17,7 @@
+ #include "utf8.h"
+ #include "quote.h"
+ #include "read-cache-ll.h"
++#include "refs.h"
+ #include "revision.h"
+ #include "object-store-ll.h"
+ #include "setup.h"
+@@ -183,6 +184,15 @@ static void all_attrs_init(struct attr_hashmap *map, struct attr_check *check)
+ 	}
+ }
+ 
++/*
++ * Atribute name cannot begin with "builtin_" which
++ * is a reserved namespace for built in attributes values.
++ */
++static int attr_name_reserved(const char *name)
++{
++	return starts_with(name, "builtin_");
++}
++
+ static int attr_name_valid(const char *name, size_t namelen)
+ {
+ 	/*
+@@ -315,7 +325,7 @@ static const char *parse_attr(const char *src, int lineno, const char *cp,
+ 			cp++;
+ 			len--;
+ 		}
+-		if (!attr_name_valid(cp, len)) {
++		if (!attr_name_valid(cp, len) || attr_name_reserved(cp)) {
+ 			report_invalid_attr(cp, len, src, lineno);
+ 			return NULL;
+ 		}
+@@ -379,7 +389,7 @@ static struct match_attr *parse_attr_line(const char *line, const char *src,
+ 		name += strlen(ATTRIBUTE_MACRO_PREFIX);
+ 		name += strspn(name, blank);
+ 		namelen = strcspn(name, blank);
+-		if (!attr_name_valid(name, namelen)) {
++		if (!attr_name_valid(name, namelen) || attr_name_reserved(name)) {
+ 			report_invalid_attr(name, namelen, src, lineno);
+ 			goto fail_return;
+ 		}
+@@ -1240,6 +1250,85 @@ static struct object_id *default_attr_source(void)
+ 	return &attr_source;
+ }
+ 
++static const char *interned_mode_string(unsigned int mode)
++{
++	static struct {
++		unsigned int val;
++		char str[7];
++	} mode_string[] = {
++		{ .val = 0040000 },
++		{ .val = 0100644 },
++		{ .val = 0100755 },
++		{ .val = 0120000 },
++		{ .val = 0160000 },
++	};
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(mode_string); i++) {
++		if (mode_string[i].val != mode)
++			continue;
++		if (!*mode_string[i].str)
++			snprintf(mode_string[i].str, sizeof(mode_string[i].str),
++				 "%06o", mode);
++		return mode_string[i].str;
++	}
++	BUG("Unsupported mode 0%o", mode);
++}
++
++static const char *builtin_object_mode_attr(struct index_state *istate, const char *path)
++{
++	unsigned int mode;
++
++	if (direction == GIT_ATTR_CHECKIN) {
++		struct object_id oid;
++		struct stat st;
++		if (lstat(path, &st))
++			die_errno(_("unable to stat '%s'"), path);
++		mode = canon_mode(st.st_mode);
++		if (S_ISDIR(mode)) {
++			/*
++			 *`path` is either a directory or it is a submodule,
++			 * in which case it is already indexed as submodule
++			 * or it does not exist in the index yet and we need to
++			 * check if we can resolve to a ref.
++			*/
++			int pos = index_name_pos(istate, path, strlen(path));
++			if (pos >= 0) {
++				 if (S_ISGITLINK(istate->cache[pos]->ce_mode))
++					 mode = istate->cache[pos]->ce_mode;
++			} else if (resolve_gitlink_ref(path, "HEAD", &oid) == 0) {
++				mode = S_IFGITLINK;
++			}
++		}
++	} else {
++		/*
++		 * For GIT_ATTR_CHECKOUT and GIT_ATTR_INDEX we only check
++		 * for mode in the index.
++		 */
++		int pos = index_name_pos(istate, path, strlen(path));
++		if (pos >= 0)
++			mode = istate->cache[pos]->ce_mode;
++		else
++			return ATTR__UNSET;
++	}
++
++	return interned_mode_string(mode);
++}
++
++
++static const char *compute_builtin_attr(struct index_state *istate,
++					  const char *path,
++					  const struct git_attr *attr) {
++	static const struct git_attr *object_mode_attr;
++
++	if (!object_mode_attr)
++		object_mode_attr = git_attr("builtin_objectmode");
++
++	if (attr == object_mode_attr)
++		return builtin_object_mode_attr(istate, path);
++	return ATTR__UNSET;
++}
++
+ void git_check_attr(struct index_state *istate,
+ 		    const char *path,
+ 		    struct attr_check *check)
+@@ -1253,7 +1342,7 @@ void git_check_attr(struct index_state *istate,
+ 		unsigned int n = check->items[i].attr->attr_nr;
+ 		const char *value = check->all_attrs[n].value;
+ 		if (value == ATTR__UNKNOWN)
+-			value = ATTR__UNSET;
++			value = compute_builtin_attr(istate, path, check->all_attrs[n].attr);
+ 		check->items[i].value = value;
+ 	}
+ }
+diff --git a/neue b/neue
+new file mode 100644
+index 0000000000..e69de29bb2
+diff --git a/t/t0003-attributes.sh b/t/t0003-attributes.sh
+index aee2298f01..774b52c298 100755
+--- a/t/t0003-attributes.sh
++++ b/t/t0003-attributes.sh
+@@ -19,6 +19,20 @@ attr_check () {
+ 	test_must_be_empty err
+ }
+ 
++attr_check_object_mode_basic () {
++	path="$1" &&
++	expect="$2" &&
++	check_opts="$3" &&
++	git check-attr $check_opts builtin_objectmode -- "$path" >actual 2>err &&
++	echo "$path: builtin_objectmode: $expect" >expect &&
++	test_cmp expect actual
++}
++
++attr_check_object_mode () {
++	attr_check_object_mode_basic "$@" &&
++	test_must_be_empty err
++}
++
+ attr_check_quote () {
+ 	path="$1" quoted_path="$2" expect="$3" &&
+ 
+@@ -558,4 +572,66 @@ test_expect_success EXPENSIVE 'large attributes file ignored in index' '
+ 	test_cmp expect err
+ '
+ 
++test_expect_success 'builtin object mode attributes work (dir and regular paths)' '
++	>normal &&
++	attr_check_object_mode normal 100644 &&
++	mkdir dir &&
++	attr_check_object_mode dir 040000
++'
++
++test_expect_success POSIXPERM 'builtin object mode attributes work (executable)' '
++	>exec &&
++	chmod +x exec &&
++	attr_check_object_mode exec 100755
++'
++
++test_expect_success SYMLINKS 'builtin object mode attributes work (symlinks)' '
++	ln -s to_sym sym &&
++	attr_check_object_mode sym 120000
++'
++
++test_expect_success 'native object mode attributes work with --cached' '
++	>normal &&
++	git add normal &&
++	empty_blob=$(git rev-parse :normal) &&
++	git update-index --index-info <<-EOF &&
++	100755 $empty_blob 0	exec
++	120000 $empty_blob 0	symlink
++	EOF
++	attr_check_object_mode normal 100644 --cached &&
++	attr_check_object_mode exec 100755 --cached &&
++	attr_check_object_mode symlink 120000 --cached
++'
++
++test_expect_success 'check object mode attributes work for submodules' '
++	mkdir sub &&
++	(
++		cd sub &&
++		git init &&
++		mv .git .real &&
++		echo "gitdir: .real" >.git &&
++		test_commit first
++	) &&
++	attr_check_object_mode sub 160000 &&
++	attr_check_object_mode sub unspecified --cached &&
++	git add sub &&
++	attr_check_object_mode sub 160000 --cached
++'
++
++test_expect_success 'we do not allow user defined builtin_* attributes' '
++	echo "foo* builtin_foo" >.gitattributes &&
++	git add .gitattributes 2>actual &&
++	echo "builtin_foo is not a valid attribute name: .gitattributes:1" >expect &&
++	test_cmp expect actual
++'
++
++test_expect_success 'user defined builtin_objectmode values are ignored' '
++	echo "foo* builtin_objectmode=12345" >.gitattributes &&
++	git add .gitattributes &&
++	>foo_1 &&
++	attr_check_object_mode_basic foo_1 100644 &&
++	echo "builtin_objectmode is not a valid attribute name: .gitattributes:1" >expect &&
++	test_cmp expect err
++'
++
+ test_done
+diff --git a/t/t6135-pathspec-with-attrs.sh b/t/t6135-pathspec-with-attrs.sh
+index a9c1e4e0ec..f6403ebbda 100755
+--- a/t/t6135-pathspec-with-attrs.sh
++++ b/t/t6135-pathspec-with-attrs.sh
+@@ -295,4 +295,31 @@ test_expect_success 'reading from .gitattributes in a subdirectory (3)' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success POSIXPERM 'pathspec with builtin_objectmode attr can be used' '
++	>mode_exec_file_1 &&
++
++	git status -s ":(attr:builtin_objectmode=100644)mode_exec_*" >actual &&
++	echo ?? mode_exec_file_1 >expect &&
++	test_cmp expect actual &&
++
++	git add mode_exec_file_1 &&
++	chmod +x mode_exec_file_1 &&
++	git status -s ":(attr:builtin_objectmode=100755)mode_exec_*" >actual &&
++	echo AM mode_exec_file_1 >expect &&
++	test_cmp expect actual
++'
++
++test_expect_success POSIXPERM 'builtin_objectmode attr can be excluded' '
++	>mode_1_regular &&
++	>mode_1_exec  &&
++	chmod +x mode_1_exec &&
++	git status -s ":(exclude,attr:builtin_objectmode=100644)" "mode_1_*" >actual &&
++	echo ?? mode_1_exec >expect &&
++	test_cmp expect actual &&
++
++	git status -s ":(exclude,attr:builtin_objectmode=100755)" "mode_1_*" >actual &&
++	echo ?? mode_1_regular >expect &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,53 @@
+From 2be1506a788a24e87ba4b53a1654c9ff40402750 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:38:43 -0500
+Subject: [PATCH 0929/2871] http-backend: mark unused parameters in virtual
+ functions
+
+The http-backend dispatches requests via a table of virtual functions.
+Some of the functions ignore their "arg" parameter, because it's
+implicit in the function (e.g., get_info_refs knows that it is
+dispatched only for a request to "/info/refs").
+
+Mark these unused parameters to silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http-backend.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/http-backend.c b/http-backend.c
+index fc3ab97c0f..db963e64d7 100644
+--- a/http-backend.c
++++ b/http-backend.c
+@@ -524,7 +524,7 @@ static int show_text_ref(const char *name, const struct object_id *oid,
+ 	return 0;
+ }
+ 
+-static void get_info_refs(struct strbuf *hdr, char *arg)
++static void get_info_refs(struct strbuf *hdr, char *arg UNUSED)
+ {
+ 	const char *service_name = get_parameter("service");
+ 	struct strbuf buf = STRBUF_INIT;
+@@ -578,7 +578,7 @@ static int show_head_ref(const char *refname, const struct object_id *oid,
+ 	return 0;
+ }
+ 
+-static void get_head(struct strbuf *hdr, char *arg)
++static void get_head(struct strbuf *hdr, char *arg UNUSED)
+ {
+ 	struct strbuf buf = STRBUF_INIT;
+ 
+@@ -588,7 +588,7 @@ static void get_head(struct strbuf *hdr, char *arg)
+ 	strbuf_release(&buf);
+ }
+ 
+-static void get_info_packs(struct strbuf *hdr, char *arg)
++static void get_info_packs(struct strbuf *hdr, char *arg UNUSED)
+ {
+ 	size_t objdirlen = strlen(get_object_directory());
+ 	struct strbuf buf = STRBUF_INIT;
+-- 
+2.39.3 (Apple Git-145)
+

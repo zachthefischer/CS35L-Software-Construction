@@ -1,0 +1,76 @@
+From 8fc184c0eb8de0bbcd5ad9c36326fa3856560fc4 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sat, 18 Mar 2023 16:46:40 +0100
+Subject: [PATCH 1045/2871] t1005: assert output of ls-files
+
+Test 'reset should work' in t1005-read-tree-reset.sh compares two files
+"expect" and "actual" to assert the expected output of "git ls-files".
+Several other tests in the same file also create files "expect" and
+"actual", but don't use them in assertions.
+
+Assert output of "git ls-files" in t1005-read-tree-reset.sh to improve
+test coverage.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1005-read-tree-reset.sh | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/t/t1005-read-tree-reset.sh b/t/t1005-read-tree-reset.sh
+index 12e30d77d0..26be4a2b5a 100755
+--- a/t/t1005-read-tree-reset.sh
++++ b/t/t1005-read-tree-reset.sh
+@@ -41,7 +41,8 @@ test_expect_success 'reset should remove remnants from a failed merge' '
+ 	git ls-files -s &&
+ 	read_tree_u_must_succeed --reset -u HEAD &&
+ 	git ls-files -s >actual &&
+-	! test -f old
++	! test -f old &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'two-way reset should remove remnants too' '
+@@ -56,7 +57,8 @@ test_expect_success 'two-way reset should remove remnants too' '
+ 	git ls-files -s &&
+ 	read_tree_u_must_succeed --reset -u HEAD HEAD &&
+ 	git ls-files -s >actual &&
+-	! test -f old
++	! test -f old &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'Porcelain reset should remove remnants too' '
+@@ -71,7 +73,8 @@ test_expect_success 'Porcelain reset should remove remnants too' '
+ 	git ls-files -s &&
+ 	git reset --hard &&
+ 	git ls-files -s >actual &&
+-	! test -f old
++	! test -f old &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'Porcelain checkout -f should remove remnants too' '
+@@ -86,7 +89,8 @@ test_expect_success 'Porcelain checkout -f should remove remnants too' '
+ 	git ls-files -s &&
+ 	git checkout -f &&
+ 	git ls-files -s >actual &&
+-	! test -f old
++	! test -f old &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'Porcelain checkout -f HEAD should remove remnants too' '
+@@ -101,7 +105,8 @@ test_expect_success 'Porcelain checkout -f HEAD should remove remnants too' '
+ 	git ls-files -s &&
+ 	git checkout -f HEAD &&
+ 	git ls-files -s >actual &&
+-	! test -f old
++	! test -f old &&
++	test_cmp expect actual
+ '
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

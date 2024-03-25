@@ -1,0 +1,40 @@
+From 5eeb9aa2086edc95f4f2c9cc844f60535f0a5ca4 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 17 Nov 2022 06:46:39 +0100
+Subject: [PATCH 0393/2871] refs: fix memory leak when parsing hideRefs config
+
+When parsing the hideRefs configuration, we first duplicate the config
+value so that we can modify it. We then subsequently append it to the
+`hide_refs` string list, which is initialized with `strdup_strings`
+enabled. As a consequence we again reallocate the string, but never
+free the first duplicate and thus have a memory leak.
+
+While we never clean up the static `hide_refs` variable anyway, this is
+no excuse to make the leak worse by leaking every value twice. We are
+also about to change the way this variable will be handled so that we do
+indeed start to clean it up. So let's fix the memory leak by using the
+`string_list_append_nodup()` so that we pass ownership of the allocated
+string to `hide_refs`.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ refs.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/refs.c b/refs.c
+index 1491ae937e..a4ab264d74 100644
+--- a/refs.c
++++ b/refs.c
+@@ -1435,7 +1435,7 @@ int parse_hide_refs_config(const char *var, const char *value, const char *secti
+ 			CALLOC_ARRAY(hide_refs, 1);
+ 			hide_refs->strdup_strings = 1;
+ 		}
+-		string_list_append(hide_refs, ref);
++		string_list_append_nodup(hide_refs, ref);
+ 	}
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

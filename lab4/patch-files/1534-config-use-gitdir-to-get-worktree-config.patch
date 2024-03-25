@@ -1,0 +1,166 @@
+From 847d0027d277f5748e9073aed8deb8b81af32ee7 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Fri, 26 May 2023 01:32:58 +0000
+Subject: [PATCH 1534/2871] config: use gitdir to get worktree config
+
+Update 'do_git_config_sequence()' to read the worktree config from
+'config.worktree' in 'opts->git_dir' rather than the gitdir of
+'the_repository'.
+
+The worktree config is loaded from the path returned by
+'git_pathdup("config.worktree")', the 'config.worktree' relative to the
+gitdir of 'the_repository'. If loading the config for a submodule, this path
+is incorrect, since 'the_repository' is the superproject. 'opts->git_dir' is
+the gitdir of the submodule being configured, so the config file in that
+location should be read instead.
+
+To ensure the use of 'opts->git_dir' is safe, require that 'opts->git_dir'
+is set if-and-only-if 'opts->commondir' is set (rather than "only-if" as it
+is now). In all current usage of 'config_options', these values are set
+together, so the stricter check does not change any behavior.
+
+Finally, add tests to 't3007-ls-files-recurse-submodules.sh' to verify the
+corrected config is loaded. Use 'ls-files' to test this because, unlike some
+other '--recurse-submodules' commands, 'ls-files' parses the config of the
+submodule in the same process as the superproject (via 'show_submodule()' ->
+'repo_read_index()' -> 'prepare_repo_settings()'). As a result,
+'the_repository' points to the config of the superproject but the
+commondir/gitdir in the config sequence will be that of the submodule,
+providing the exact scenario needed to verify this patch.
+
+The first test ('--recurse-submodules parses submodule repo config') checks
+that the submodule's *repo* config is read when running 'ls-files' on the
+superproject; this confirms already-working behavior, serving as a reference
+for how worktree config parsing should behave. The second test
+('--recurse-submodules parses submodule worktree config') tests the same
+scenario as the previous but instead using the *worktree* config,
+demonstrating the corrected behavior. The 'test_config' helper is extended
+for this case so that it properly applies the '--worktree' option to the
+configure/unconfigure operations it performs.
+
+Note that, although the submodule worktree config is now parsed instead of
+the superproject's, 'extensions.worktreeConfig' in the superproject still
+controls whether or not the worktree config is enabled at all in the
+submodule. This will be fixed in a later patch.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c                               | 28 +++++++++++++++++---------
+ t/t3007-ls-files-recurse-submodules.sh | 18 +++++++++++++++++
+ t/test-lib-functions.sh                | 13 ++++++++++--
+ 3 files changed, 48 insertions(+), 11 deletions(-)
+
+diff --git a/config.c b/config.c
+index b79baf83e3..a93f7bfa3a 100644
+--- a/config.c
++++ b/config.c
+@@ -2200,14 +2200,24 @@ static int do_git_config_sequence(struct config_reader *reader,
+ 	char *xdg_config = NULL;
+ 	char *user_config = NULL;
+ 	char *repo_config;
++	char *worktree_config;
+ 	enum config_scope prev_parsing_scope = reader->parsing_scope;
+ 
+-	if (opts->commondir)
++	/*
++	 * Ensure that either:
++	 * - the git_dir and commondir are both set, or
++	 * - the git_dir and commondir are both NULL
++	 */
++	if (!opts->git_dir != !opts->commondir)
++		BUG("only one of commondir and git_dir is non-NULL");
++
++	if (opts->commondir) {
+ 		repo_config = mkpathdup("%s/config", opts->commondir);
+-	else if (opts->git_dir)
+-		BUG("git_dir without commondir");
+-	else
++		worktree_config = mkpathdup("%s/config.worktree", opts->git_dir);
++	} else {
+ 		repo_config = NULL;
++		worktree_config = NULL;
++	}
+ 
+ 	config_reader_set_scope(reader, CONFIG_SCOPE_SYSTEM);
+ 	if (git_config_system() && system_config &&
+@@ -2230,11 +2240,10 @@ static int do_git_config_sequence(struct config_reader *reader,
+ 		ret += git_config_from_file(fn, repo_config, data);
+ 
+ 	config_reader_set_scope(reader, CONFIG_SCOPE_WORKTREE);
+-	if (!opts->ignore_worktree && repository_format_worktree_config) {
+-		char *path = git_pathdup("config.worktree");
+-		if (!access_or_die(path, R_OK, 0))
+-			ret += git_config_from_file(fn, path, data);
+-		free(path);
++	if (!opts->ignore_worktree && worktree_config &&
++	    repository_format_worktree_config &&
++	    !access_or_die(worktree_config, R_OK, 0)) {
++		ret += git_config_from_file(fn, worktree_config, data);
+ 	}
+ 
+ 	config_reader_set_scope(reader, CONFIG_SCOPE_COMMAND);
+@@ -2246,6 +2255,7 @@ static int do_git_config_sequence(struct config_reader *reader,
+ 	free(xdg_config);
+ 	free(user_config);
+ 	free(repo_config);
++	free(worktree_config);
+ 	return ret;
+ }
+ 
+diff --git a/t/t3007-ls-files-recurse-submodules.sh b/t/t3007-ls-files-recurse-submodules.sh
+index dd7770e85d..a3e2675142 100755
+--- a/t/t3007-ls-files-recurse-submodules.sh
++++ b/t/t3007-ls-files-recurse-submodules.sh
+@@ -299,6 +299,24 @@ test_expect_success '--recurse-submodules does not support --error-unmatch' '
+ 	test_i18ngrep "does not support --error-unmatch" actual
+ '
+ 
++test_expect_success '--recurse-submodules parses submodule repo config' '
++	test_config -C submodule index.sparse "invalid non-boolean value" &&
++	test_must_fail git ls-files --recurse-submodules 2>err &&
++	grep "bad boolean config value" err
++'
++
++test_expect_success '--recurse-submodules parses submodule worktree config' '
++	test_config -C submodule extensions.worktreeConfig true &&
++	test_config -C submodule --worktree index.sparse "invalid non-boolean value" &&
++
++	# NEEDSWORK: the extensions.worktreeConfig is set globally based on
++	# superproject, so we need to enable it in the superproject.
++	test_config extensions.worktreeConfig true &&
++
++	test_must_fail git ls-files --recurse-submodules 2>err &&
++	grep "bad boolean config value" err
++'
++
+ test_incompatible_with_recurse_submodules () {
+ 	test_expect_success "--recurse-submodules and $1 are incompatible" "
+ 		test_must_fail git ls-files --recurse-submodules $1 2>actual &&
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 6e19ebc922..b3864e22e9 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -542,8 +542,17 @@ test_config () {
+ 		config_dir=$1
+ 		shift
+ 	fi
+-	test_when_finished "test_unconfig ${config_dir:+-C '$config_dir'} '$1'" &&
+-	git ${config_dir:+-C "$config_dir"} config "$@"
++
++	# If --worktree is provided, use it to configure/unconfigure
++	is_worktree=
++	if test "$1" = --worktree
++	then
++		is_worktree=1
++		shift
++	fi
++
++	test_when_finished "test_unconfig ${config_dir:+-C '$config_dir'} ${is_worktree:+--worktree} '$1'" &&
++	git ${config_dir:+-C "$config_dir"} config ${is_worktree:+--worktree} "$@"
+ }
+ 
+ test_config_global () {
+-- 
+2.39.3 (Apple Git-145)
+

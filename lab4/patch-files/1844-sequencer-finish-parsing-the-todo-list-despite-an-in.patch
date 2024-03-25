@@ -1,0 +1,86 @@
+From 9645a087c2e848b8f48d03a3ae3222c5d5aa8261 Mon Sep 17 00:00:00 2001
+From: Alex Henrie <alexhenrie24@gmail.com>
+Date: Sat, 22 Jul 2023 15:28:25 -0600
+Subject: [PATCH 1844/2871] sequencer: finish parsing the todo list despite an
+ invalid first line
+
+Before the todo list is edited it is rewritten to shorten the OIDs of
+the commits being picked and to append advice about editing the list.
+The exact advice depends on whether the todo list is being edited for
+the first time or not. After the todo list has been edited it is
+rewritten to lengthen the OIDs of the commits being picked and to remove
+the advice. If the edited list cannot be parsed then this last step is
+skipped.
+
+Prior to db81e50724 (rebase-interactive: use todo_list_write_to_file()
+in edit_todo_list(), 2019-03-05) if the existing todo list could not be
+parsed then the initial rewrite was skipped as well. This had the
+unfortunate consequence that if the list could not be parsed after the
+initial edit the advice given to the user was wrong when they re-edited
+the list. This change relied on todo_list_parse_insn_buffer() returning
+the whole todo list even when it cannot be parsed. Unfortunately if the
+list starts with a "fixup" command then it will be truncated and the
+remaining lines are lost. Fix this by continuing to parse after an
+initial "fixup" commit as we do when we see any other invalid line.
+
+Signed-off-by: Alex Henrie <alexhenrie24@gmail.com>
+[jc: removed an apparently unneeded subshell around the test body]
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c                   |  2 +-
+ t/t3404-rebase-interactive.sh | 26 ++++++++++++++++++++++++++
+ 2 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index 1c96a75b1e..8e1a3746f4 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -2680,7 +2680,7 @@ int todo_list_parse_insn_buffer(struct repository *r, char *buf,
+ 		if (fixup_okay)
+ 			; /* do nothing */
+ 		else if (is_fixup(item->command))
+-			return error(_("cannot '%s' without a previous commit"),
++			res = error(_("cannot '%s' without a previous commit"),
+ 				command_to_string(item->command));
+ 		else if (!is_noop(item->command))
+ 			fixup_okay = 1;
+diff --git a/t/t3404-rebase-interactive.sh b/t/t3404-rebase-interactive.sh
+index ff0afad63e..96a56aafbe 100755
+--- a/t/t3404-rebase-interactive.sh
++++ b/t/t3404-rebase-interactive.sh
+@@ -1596,6 +1596,32 @@ test_expect_success 'static check of bad command' '
+ 	test C = $(git cat-file commit HEAD^ | sed -ne \$p)
+ '
+ 
++test_expect_success 'the first command cannot be a fixup' '
++	rebase_setup_and_clean fixup-first &&
++
++	cat >orig <<-EOF &&
++	fixup $(git log -1 --format="%h %s" B)
++	pick $(git log -1 --format="%h %s" C)
++	EOF
++
++	(
++		set_replace_editor orig &&
++		test_must_fail git rebase -i A 2>actual
++	) &&
++	grep "cannot .fixup. without a previous commit" actual &&
++	grep "You can fix this with .git rebase --edit-todo.." actual &&
++	# verify that the todo list has not been truncated
++	grep -v "^#" .git/rebase-merge/git-rebase-todo >actual &&
++	test_cmp orig actual &&
++
++	test_must_fail git rebase --edit-todo 2>actual &&
++	grep "cannot .fixup. without a previous commit" actual &&
++	grep "You can fix this with .git rebase --edit-todo.." actual &&
++	# verify that the todo list has not been truncated
++	grep -v "^#" .git/rebase-merge/git-rebase-todo >actual &&
++	test_cmp orig actual
++'
++
+ test_expect_success 'tabs and spaces are accepted in the todolist' '
+ 	rebase_setup_and_clean indented-comment &&
+ 	write_script add-indent.sh <<-\EOF &&
+-- 
+2.39.3 (Apple Git-145)
+

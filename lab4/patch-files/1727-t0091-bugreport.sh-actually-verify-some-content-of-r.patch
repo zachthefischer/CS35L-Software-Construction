@@ -1,0 +1,136 @@
+From 1aa92b8500b7189bafb1cff26c056ada3e911a3d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Wed, 5 Jul 2023 20:35:27 +0200
+Subject: [PATCH 1727/2871] t0091-bugreport.sh: actually verify some content of
+ report
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In the first test in this script, 'creates a report with content in the
+right places', we generate a report and pipe it into our helper
+`check_all_headers_populated()`. The idea of the helper is to find all
+lines that look like headers ("[Some Header Here]") and to check that
+the next line is non-empty. This is supposed to catch erroneous outputs
+such as the following:
+
+  [A Header]
+  something
+  more here
+
+  [Another Header]
+
+  [Too Early Header]
+  contents
+
+However, we provide the lines of the bug report as filenames to grep,
+meaning we mostly end up spewing errors:
+
+  grep: : No such file or directory
+  grep: [System Info]: No such file or directory
+  grep: git version:: No such file or directory
+  grep: git version 2.41.0.2.gfb7d80edca: No such file or directory
+
+This doesn't disturb the test, which tugs along and reports success, not
+really having verified the contents of the report at all.
+
+Note that after 788a776069 ("bugreport: collect list of populated
+hooks", 2020-05-07), the bug report, which is created in our hook-less
+test repo, contains an empty section with the enabled hooks. Thus, even
+the intention of our helper is a bit misguided: there is nothing
+inherently wrong with having an empty section in the bug report.
+
+Let's instead split this test into three: first verify that we generate
+a report at all, then check that the introductory blurb looks the way it
+should, then verify that the "[System Info]" seems to contain the right
+things. (The "[Enabled Hooks]" section is tested later in the script.)
+
+Reported-by: SZEDER Gábor <szeder.dev@gmail.com>
+Helped-by: Phillip Wood <phillip.wood123@gmail.com>
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0091-bugreport.sh | 67 +++++++++++++++++++++++++++++---------------
+ 1 file changed, 44 insertions(+), 23 deletions(-)
+
+diff --git a/t/t0091-bugreport.sh b/t/t0091-bugreport.sh
+index b6d2f591ac..f6998269be 100755
+--- a/t/t0091-bugreport.sh
++++ b/t/t0091-bugreport.sh
+@@ -5,29 +5,50 @@ test_description='git bugreport'
+ TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+-# Headers "[System Info]" will be followed by a non-empty line if we put some
+-# information there; we can make sure all our headers were followed by some
+-# information to check if the command was successful.
+-HEADER_PATTERN="^\[.*\]$"
+-
+-check_all_headers_populated () {
+-	while read -r line
+-	do
+-		if test "$(grep "$HEADER_PATTERN" "$line")"
+-		then
+-			echo "$line"
+-			read -r nextline
+-			if test -z "$nextline"; then
+-				return 1;
+-			fi
+-		fi
+-	done
+-}
+-
+-test_expect_success 'creates a report with content in the right places' '
+-	test_when_finished rm git-bugreport-check-headers.txt &&
+-	git bugreport -s check-headers &&
+-	check_all_headers_populated <git-bugreport-check-headers.txt
++test_expect_success 'create a report' '
++	git bugreport -s format &&
++	test_file_not_empty git-bugreport-format.txt
++'
++
++test_expect_success 'report contains wanted template (before first section)' '
++	sed -ne "/^\[/q;p" git-bugreport-format.txt >actual &&
++	cat >expect <<-\EOF &&
++	Thank you for filling out a Git bug report!
++	Please answer the following questions to help us understand your issue.
++
++	What did you do before the bug happened? (Steps to reproduce your issue)
++
++	What did you expect to happen? (Expected behavior)
++
++	What happened instead? (Actual behavior)
++
++	What'\''s different between what you expected and what actually happened?
++
++	Anything else you want to add:
++
++	Please review the rest of the bug report below.
++	You can delete any lines you don'\''t wish to share.
++
++
++	EOF
++	test_cmp expect actual
++'
++
++test_expect_success 'sanity check "System Info" section' '
++	test_when_finished rm -f git-bugreport-format.txt &&
++
++	sed -ne "/^\[System Info\]$/,/^$/p" <git-bugreport-format.txt >system &&
++
++	# The beginning should match "git version --build-info" verbatim,
++	# but rather than checking bit-for-bit equality, just test some basics.
++	grep "git version [0-9]." system &&
++	grep "shell-path: ." system &&
++
++	# After the version, there should be some more info.
++	# This is bound to differ from environment to environment,
++	# so we just do some rather high-level checks.
++	grep "uname: ." system &&
++	grep "compiler info: ." system
+ '
+ 
+ test_expect_success 'dies if file with same name as report already exists' '
+-- 
+2.39.3 (Apple Git-145)
+

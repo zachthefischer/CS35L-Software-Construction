@@ -1,0 +1,148 @@
+From 0df19eb9d905ff9b6115139106d98d8f0a8a9046 Mon Sep 17 00:00:00 2001
+From: Jerry Zhang <Jerry@skydio.com>
+Date: Mon, 24 Oct 2022 20:07:41 +0000
+Subject: [PATCH 0236/2871] builtin: patch-id: fix patch-id with binary diffs
+
+"git patch-id" currently doesn't produce correct output if the
+incoming diff has any binary files. Add logic to get_one_patchid
+to handle the different possible styles of binary diff. This
+attempts to keep resulting patch-ids identical to what would be
+produced by the counterpart logic in diff.c, that is it produces
+the id by hashing the a and b oids in succession.
+
+In general we handle binary diffs by first caching the object ids from
+the "index" line and using those if we then find an indication
+that the diff is binary.
+
+The input could contain patches generated with "git diff --binary". This
+currently breaks the parse logic and results in multiple patch-ids
+output for a single commit. Here we have to skip the contents of the
+patch itself since those do not go into the patch id. --binary
+implies --full-index so the object ids are always available.
+
+When the diff is generated with --full-index there is no patch content
+to skip over.
+
+When a diff is generated without --full-index or --binary, it will
+contain abbreviated object ids. This will still result in a sufficiently
+unique patch-id when hashed, but does not match internal patch id
+output. We'll call this ok for now as we already need specialized
+arguments to diff in order to match internal patch id (namely -U3).
+
+Signed-off-by: Jerry Zhang <Jerry@skydio.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/patch-id.c  | 36 ++++++++++++++++++++++++++++++++++--
+ t/t4204-patch-id.sh | 29 ++++++++++++++++++++++++++++-
+ 2 files changed, 62 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/patch-id.c b/builtin/patch-id.c
+index 881fcf3273..e7a3112314 100644
+--- a/builtin/patch-id.c
++++ b/builtin/patch-id.c
+@@ -61,6 +61,8 @@ static int get_one_patchid(struct object_id *next_oid, struct object_id *result,
+ {
+ 	int patchlen = 0, found_next = 0;
+ 	int before = -1, after = -1;
++	int diff_is_binary = 0;
++	char pre_oid_str[GIT_MAX_HEXSZ + 1], post_oid_str[GIT_MAX_HEXSZ + 1];
+ 	git_hash_ctx ctx;
+ 
+ 	the_hash_algo->init_fn(&ctx);
+@@ -88,14 +90,44 @@ static int get_one_patchid(struct object_id *next_oid, struct object_id *result,
+ 
+ 		/* Parsing diff header?  */
+ 		if (before == -1) {
+-			if (starts_with(line, "index "))
++			if (starts_with(line, "GIT binary patch") ||
++			    starts_with(line, "Binary files")) {
++				diff_is_binary = 1;
++				before = 0;
++				the_hash_algo->update_fn(&ctx, pre_oid_str,
++							 strlen(pre_oid_str));
++				the_hash_algo->update_fn(&ctx, post_oid_str,
++							 strlen(post_oid_str));
++				if (stable)
++					flush_one_hunk(result, &ctx);
+ 				continue;
+-			else if (starts_with(line, "--- "))
++			} else if (skip_prefix(line, "index ", &p)) {
++				char *oid1_end = strstr(line, "..");
++				char *oid2_end = NULL;
++				if (oid1_end)
++					oid2_end = strstr(oid1_end, " ");
++				if (!oid2_end)
++					oid2_end = line + strlen(line) - 1;
++				if (oid1_end != NULL && oid2_end != NULL) {
++					*oid1_end = *oid2_end = '\0';
++					strlcpy(pre_oid_str, p, GIT_MAX_HEXSZ + 1);
++					strlcpy(post_oid_str, oid1_end + 2, GIT_MAX_HEXSZ + 1);
++				}
++				continue;
++			} else if (starts_with(line, "--- "))
+ 				before = after = 1;
+ 			else if (!isalpha(line[0]))
+ 				break;
+ 		}
+ 
++		if (diff_is_binary) {
++			if (starts_with(line, "diff ")) {
++				diff_is_binary = 0;
++				before = -1;
++			}
++			continue;
++		}
++
+ 		/* Looking for a valid hunk header?  */
+ 		if (before == 0 && after == 0) {
+ 			if (starts_with(line, "@@ -")) {
+diff --git a/t/t4204-patch-id.sh b/t/t4204-patch-id.sh
+index a730c0db98..cdc5191aa8 100755
+--- a/t/t4204-patch-id.sh
++++ b/t/t4204-patch-id.sh
+@@ -42,7 +42,7 @@ calc_patch_id () {
+ }
+ 
+ get_top_diff () {
+-	git log -p -1 "$@" -O bar-then-foo --
++	git log -p -1 "$@" -O bar-then-foo --full-index --
+ }
+ 
+ get_patch_id () {
+@@ -61,6 +61,33 @@ test_expect_success 'patch-id detects inequality' '
+ 	get_patch_id notsame &&
+ 	! test_cmp patch-id_main patch-id_notsame
+ '
++test_expect_success 'patch-id detects equality binary' '
++	cat >.gitattributes <<-\EOF &&
++	foo binary
++	bar binary
++	EOF
++	get_patch_id main &&
++	get_patch_id same &&
++	git log -p -1 --binary main >top-diff.output &&
++	calc_patch_id <top-diff.output main_binpatch &&
++	git log -p -1 --binary same >top-diff.output &&
++	calc_patch_id <top-diff.output same_binpatch &&
++	test_cmp patch-id_main patch-id_main_binpatch &&
++	test_cmp patch-id_same patch-id_same_binpatch &&
++	test_cmp patch-id_main patch-id_same &&
++	test_when_finished "rm .gitattributes"
++'
++
++test_expect_success 'patch-id detects inequality binary' '
++	cat >.gitattributes <<-\EOF &&
++	foo binary
++	bar binary
++	EOF
++	get_patch_id main &&
++	get_patch_id notsame &&
++	! test_cmp patch-id_main patch-id_notsame &&
++	test_when_finished "rm .gitattributes"
++'
+ 
+ test_expect_success 'patch-id supports git-format-patch output' '
+ 	get_patch_id main &&
+-- 
+2.39.3 (Apple Git-145)
+

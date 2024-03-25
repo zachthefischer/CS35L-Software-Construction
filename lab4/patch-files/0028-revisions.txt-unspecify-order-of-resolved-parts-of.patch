@@ -1,0 +1,36 @@
+From 9f91da752fa28e405e91dfd6bd7372f897bbae8d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 1 Oct 2022 12:26:34 +0200
+Subject: [PATCH 0028/2871] revisions.txt: unspecify order of resolved parts of
+ ^!
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+gitrevisions(7) says that <rev>^! resolves to <rev> and then all the
+parents of <rev>.  revision.c::handle_revision_arg_1() actually adds
+all parents first, then <rev>.  Change the documentation to leave the
+order unspecified, to avoid misleading readers.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/revisions.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/revisions.txt b/Documentation/revisions.txt
+index e3e350126d..0d2e55d781 100644
+--- a/Documentation/revisions.txt
++++ b/Documentation/revisions.txt
+@@ -363,7 +363,7 @@ Revision Range Summary
+ 
+ '<rev>{caret}!', e.g. 'HEAD{caret}!'::
+   A suffix '{caret}' followed by an exclamation mark is the same
+-  as giving commit '<rev>' and then all its parents prefixed with
++  as giving commit '<rev>' and all its parents prefixed with
+   '{caret}' to exclude them (and their ancestors).
+ 
+ '<rev>{caret}-<n>', e.g. 'HEAD{caret}-, HEAD{caret}-2'::
+-- 
+2.39.3 (Apple Git-145)
+

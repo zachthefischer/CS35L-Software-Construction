@@ -1,0 +1,198 @@
+From 988aad99b44f3fb3f04f4a75cadf0dbb7ac89ffe Mon Sep 17 00:00:00 2001
+From: Matthew John Cheetham <mjcheetham@outlook.com>
+Date: Mon, 27 Feb 2023 17:20:18 +0000
+Subject: [PATCH 0973/2871] t5563: add tests for basic and anoymous HTTP access
+
+Add a test showing simple anoymous HTTP access to an unprotected
+repository, that results in no credential helper invocations.
+Also add a test demonstrating simple basic authentication with
+simple credential helper support.
+
+Leverage a no-parsed headers (NPH) CGI script so that we can directly
+control the HTTP responses to simulate a multitude of good, bad and ugly
+remote server implementations around auth.
+
+Signed-off-by: Matthew John Cheetham <mjcheetham@outlook.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-httpd.sh                 |  1 +
+ t/lib-httpd/apache.conf        |  6 +++
+ t/lib-httpd/nph-custom-auth.sh | 39 ++++++++++++++++
+ t/t5563-simple-http-auth.sh    | 83 ++++++++++++++++++++++++++++++++++
+ 4 files changed, 129 insertions(+)
+ create mode 100644 t/lib-httpd/nph-custom-auth.sh
+ create mode 100755 t/t5563-simple-http-auth.sh
+
+diff --git a/t/lib-httpd.sh b/t/lib-httpd.sh
+index 608949ea80..2c49569f67 100644
+--- a/t/lib-httpd.sh
++++ b/t/lib-httpd.sh
+@@ -137,6 +137,7 @@ prepare_httpd() {
+ 	install_script error-smart-http.sh
+ 	install_script error.sh
+ 	install_script apply-one-time-perl.sh
++	install_script nph-custom-auth.sh
+ 
+ 	ln -s "$LIB_HTTPD_MODULE_PATH" "$HTTPD_ROOT_PATH/modules"
+ 
+diff --git a/t/lib-httpd/apache.conf b/t/lib-httpd/apache.conf
+index 0294739a77..76335cdb24 100644
+--- a/t/lib-httpd/apache.conf
++++ b/t/lib-httpd/apache.conf
+@@ -135,6 +135,11 @@ Alias /auth/dumb/ www/auth/dumb/
+ 	SetEnv GIT_HTTP_EXPORT_ALL
+ 	SetEnv GIT_PROTOCOL
+ </LocationMatch>
++<LocationMatch /custom_auth/>
++	SetEnv GIT_EXEC_PATH ${GIT_EXEC_PATH}
++	SetEnv GIT_HTTP_EXPORT_ALL
++	CGIPassAuth on
++</LocationMatch>
+ ScriptAlias /smart/incomplete_length/git-upload-pack incomplete-length-upload-pack-v2-http.sh/
+ ScriptAlias /smart/incomplete_body/git-upload-pack incomplete-body-upload-pack-v2-http.sh/
+ ScriptAlias /smart/no_report/git-receive-pack error-no-report.sh/
+@@ -144,6 +149,7 @@ ScriptAlias /broken_smart/ broken-smart-http.sh/
+ ScriptAlias /error_smart/ error-smart-http.sh/
+ ScriptAlias /error/ error.sh/
+ ScriptAliasMatch /one_time_perl/(.*) apply-one-time-perl.sh/$1
++ScriptAliasMatch /custom_auth/(.*) nph-custom-auth.sh/$1
+ <Directory ${GIT_EXEC_PATH}>
+ 	Options FollowSymlinks
+ </Directory>
+diff --git a/t/lib-httpd/nph-custom-auth.sh b/t/lib-httpd/nph-custom-auth.sh
+new file mode 100644
+index 0000000000..f5345e775e
+--- /dev/null
++++ b/t/lib-httpd/nph-custom-auth.sh
+@@ -0,0 +1,39 @@
++#!/bin/sh
++
++VALID_CREDS_FILE=custom-auth.valid
++CHALLENGE_FILE=custom-auth.challenge
++
++#
++# If $VALID_CREDS_FILE exists in $HTTPD_ROOT_PATH, consider each line as a valid
++# credential for the current request. Each line in the file is considered a
++# valid HTTP Authorization header value. For example:
++#
++# Basic YWxpY2U6c2VjcmV0LXBhc3N3ZA==
++#
++# If $CHALLENGE_FILE exists in $HTTPD_ROOT_PATH, output the contents as headers
++# in a 401 response if no valid authentication credentials were included in the
++# request. For example:
++#
++# WWW-Authenticate: Bearer authorize_uri="id.example.com" p=1 q=0
++# WWW-Authenticate: Basic realm="example.com"
++#
++
++if test -n "$HTTP_AUTHORIZATION" && \
++	grep -Fqsx "${HTTP_AUTHORIZATION}" "$VALID_CREDS_FILE"
++then
++	# Note that although git-http-backend returns a status line, it
++	# does so using a CGI 'Status' header. Because this script is an
++	# No Parsed Headers (NPH) script, we must return a real HTTP
++	# status line.
++	# This is only a test script, so we don't bother to check for
++	# the actual status from git-http-backend and always return 200.
++	echo 'HTTP/1.1 200 OK'
++	exec "$GIT_EXEC_PATH"/git-http-backend
++fi
++
++echo 'HTTP/1.1 401 Authorization Required'
++if test -f "$CHALLENGE_FILE"
++then
++	cat "$CHALLENGE_FILE"
++fi
++echo
+diff --git a/t/t5563-simple-http-auth.sh b/t/t5563-simple-http-auth.sh
+new file mode 100755
+index 0000000000..bc880bf80f
+--- /dev/null
++++ b/t/t5563-simple-http-auth.sh
+@@ -0,0 +1,83 @@
++#!/bin/sh
++
++test_description='test http auth header and credential helper interop'
++
++. ./test-lib.sh
++. "$TEST_DIRECTORY"/lib-httpd.sh
++
++start_httpd
++
++test_expect_success 'setup_credential_helper' '
++	mkdir "$TRASH_DIRECTORY/bin" &&
++	PATH=$PATH:"$TRASH_DIRECTORY/bin" &&
++	export PATH &&
++
++	CREDENTIAL_HELPER="$TRASH_DIRECTORY/bin/git-credential-test-helper" &&
++	write_script "$CREDENTIAL_HELPER" <<-\EOF
++	cmd=$1
++	teefile=$cmd-query.cred
++	catfile=$cmd-reply.cred
++	sed -n -e "/^$/q" -e "p" >>$teefile
++	if test "$cmd" = "get"
++	then
++		cat $catfile
++	fi
++	EOF
++'
++
++set_credential_reply () {
++	cat >"$TRASH_DIRECTORY/$1-reply.cred"
++}
++
++expect_credential_query () {
++	cat >"$TRASH_DIRECTORY/$1-expect.cred" &&
++	test_cmp "$TRASH_DIRECTORY/$1-expect.cred" \
++		 "$TRASH_DIRECTORY/$1-query.cred"
++}
++
++per_test_cleanup () {
++	rm -f *.cred &&
++	rm -f "$HTTPD_ROOT_PATH"/custom-auth.valid \
++	      "$HTTPD_ROOT_PATH"/custom-auth.challenge
++}
++
++test_expect_success 'setup repository' '
++	test_commit foo &&
++	git init --bare "$HTTPD_DOCUMENT_ROOT_PATH/repo.git" &&
++	git push --mirror "$HTTPD_DOCUMENT_ROOT_PATH/repo.git"
++'
++
++test_expect_success 'access using basic auth' '
++	test_when_finished "per_test_cleanup" &&
++
++	set_credential_reply get <<-EOF &&
++	username=alice
++	password=secret-passwd
++	EOF
++
++	# Basic base64(alice:secret-passwd)
++	cat >"$HTTPD_ROOT_PATH/custom-auth.valid" <<-EOF &&
++	Basic YWxpY2U6c2VjcmV0LXBhc3N3ZA==
++	EOF
++
++	cat >"$HTTPD_ROOT_PATH/custom-auth.challenge" <<-EOF &&
++	WWW-Authenticate: Basic realm="example.com"
++	EOF
++
++	test_config_global credential.helper test-helper &&
++	git ls-remote "$HTTPD_URL/custom_auth/repo.git" &&
++
++	expect_credential_query get <<-EOF &&
++	protocol=http
++	host=$HTTPD_DEST
++	EOF
++
++	expect_credential_query store <<-EOF
++	protocol=http
++	host=$HTTPD_DEST
++	username=alice
++	password=secret-passwd
++	EOF
++'
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

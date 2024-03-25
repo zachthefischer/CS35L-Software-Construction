@@ -1,0 +1,88 @@
+From ca63af0a248d31bf917d207722b284da41ffcee7 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 6 Feb 2024 07:35:31 +0100
+Subject: [PATCH 2811/2871] reftable/stack: fix parameter validation when
+ compacting range
+
+The `stack_compact_range()` function receives a "first" and "last" index
+that indicates which tables of the reftable stack should be compacted.
+Naturally, "first" must be smaller than "last" in order to identify a
+proper range of tables to compress, which we indeed also assert in the
+function. But the validations happens after we have already allocated
+arrays with a size of `last - first + 1`, leading to an underflow and
+thus an invalid allocation size.
+
+Fix this by reordering the array allocations to happen after we have
+validated parameters. While at it, convert the array allocations to use
+the newly introduced macros.
+
+Note that the relevant variables pointing into arrays should also be
+converted to use `size_t` instead of `int`. This is left for a later
+commit in this series.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c | 24 +++++++++++++-----------
+ 1 file changed, 13 insertions(+), 11 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index a7b2c61026..1de2f6751c 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -966,6 +966,7 @@ static int stack_write_compact(struct reftable_stack *st,
+ static int stack_compact_range(struct reftable_stack *st, int first, int last,
+ 			       struct reftable_log_expiry_config *expiry)
+ {
++	char **delete_on_success = NULL, **subtable_locks = NULL, **listp = NULL;
+ 	struct strbuf temp_tab_file_name = STRBUF_INIT;
+ 	struct strbuf new_table_name = STRBUF_INIT;
+ 	struct strbuf lock_file_name = STRBUF_INIT;
+@@ -974,12 +975,7 @@ static int stack_compact_range(struct reftable_stack *st, int first, int last,
+ 	int err = 0;
+ 	int have_lock = 0;
+ 	int lock_file_fd = -1;
+-	int compact_count = last - first + 1;
+-	char **listp = NULL;
+-	char **delete_on_success =
+-		reftable_calloc(compact_count + 1, sizeof(*delete_on_success));
+-	char **subtable_locks =
+-		reftable_calloc(compact_count + 1, sizeof(*subtable_locks));
++	int compact_count;
+ 	int i = 0;
+ 	int j = 0;
+ 	int is_empty_table = 0;
+@@ -989,6 +985,10 @@ static int stack_compact_range(struct reftable_stack *st, int first, int last,
+ 		goto done;
+ 	}
+ 
++	compact_count = last - first + 1;
++	REFTABLE_CALLOC_ARRAY(delete_on_success, compact_count + 1);
++	REFTABLE_CALLOC_ARRAY(subtable_locks, compact_count + 1);
++
+ 	st->stats.attempts++;
+ 
+ 	strbuf_reset(&lock_file_name);
+@@ -1146,12 +1146,14 @@ static int stack_compact_range(struct reftable_stack *st, int first, int last,
+ done:
+ 	free_names(delete_on_success);
+ 
+-	listp = subtable_locks;
+-	while (*listp) {
+-		unlink(*listp);
+-		listp++;
++	if (subtable_locks) {
++		listp = subtable_locks;
++		while (*listp) {
++			unlink(*listp);
++			listp++;
++		}
++		free_names(subtable_locks);
+ 	}
+-	free_names(subtable_locks);
+ 	if (lock_file_fd >= 0) {
+ 		close(lock_file_fd);
+ 		lock_file_fd = -1;
+-- 
+2.39.3 (Apple Git-145)
+

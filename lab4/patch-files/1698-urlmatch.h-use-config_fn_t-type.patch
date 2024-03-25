@@ -1,0 +1,40 @@
+From e0f9a51c327b54216f85f4569ea54da8a5092802 Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Wed, 28 Jun 2023 19:26:21 +0000
+Subject: [PATCH 1698/2871] urlmatch.h: use config_fn_t type
+
+These are actually used as config callbacks, so use the typedef-ed type
+and make future refactors easier.
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ urlmatch.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/urlmatch.h b/urlmatch.h
+index 9f40b00bfb..bee374a642 100644
+--- a/urlmatch.h
++++ b/urlmatch.h
+@@ -2,6 +2,7 @@
+ #define URL_MATCH_H
+ 
+ #include "string-list.h"
++#include "config.h"
+ 
+ struct url_info {
+ 	/* normalized url on success, must be freed, otherwise NULL */
+@@ -48,8 +49,8 @@ struct urlmatch_config {
+ 	const char *key;
+ 
+ 	void *cb;
+-	int (*collect_fn)(const char *var, const char *value, void *cb);
+-	int (*cascade_fn)(const char *var, const char *value, void *cb);
++	config_fn_t collect_fn;
++	config_fn_t cascade_fn;
+ 	/*
+ 	 * Compare the two matches, the one just discovered and the existing
+ 	 * best match and return a negative value if the found item is to be
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,70 @@
+From cbb83daeafa27ba8880516deb943900e46cb047f Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Mon, 1 May 2023 22:02:41 +0200
+Subject: [PATCH 1385/2871] doc: interpret-trailers: fix example
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We need to provide `--trailer sign` since the command won’t output
+anything if you don’t give it an input and/or a
+`--trailer`. Furthermore, the message which already contains an s-o-b is
+wrong:
+
+    $ git interpret-trailers --trailer sign <msg.txt
+    Signed-off-by: Alice <alice@example.com>
+
+    Signed-off-by: Alice <alice@example.com>
+
+This can’t be what was originally intended.
+
+So change the messages in this example to use the typical
+“subject/message” file.
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index acecc037ec..4b97f812be 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -322,16 +322,30 @@ $ git interpret-trailers --trailer 'Cc: Alice <alice@example.com>' --trailer 'Re
+   'Signed-off-by: ' already, and show how it works:
+ +
+ ------------
++$ cat msg1.txt
++subject
++
++message
+ $ git config trailer.sign.key "Signed-off-by: "
+ $ git config trailer.sign.ifmissing add
+ $ git config trailer.sign.ifexists doNothing
+ $ git config trailer.sign.cmd 'echo "$(git config user.name) <$(git config user.email)>"'
+-$ git interpret-trailers </dev/null
++$ git interpret-trailers --trailer sign <msg1.txt
++subject
++
++message
+ 
+ Signed-off-by: Bob <bob@example.com>
+-$ cat msg.txt
++$ cat msg2.txt
++subject
++
++message
++
+ Signed-off-by: Alice <alice@example.com>
+-$ git interpret-trailers <msg.txt
++$ git interpret-trailers --trailer sign <msg2.txt
++subject
++
++message
+ 
+ Signed-off-by: Alice <alice@example.com>
+ ------------
+-- 
+2.39.3 (Apple Git-145)
+

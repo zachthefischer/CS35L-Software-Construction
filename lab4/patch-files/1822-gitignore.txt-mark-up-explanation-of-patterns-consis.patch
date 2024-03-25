@@ -1,0 +1,31 @@
+From d6f598e443f705d1f08a87d65aa3d574289c0be3 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 18 Jul 2023 10:47:39 -0700
+Subject: [PATCH 1822/2871] gitignore.txt: mark up explanation of patterns
+ consistently
+
+In the "PATTERN FORMAT" section, all the other pattern elements are
+shown as `monospace` literals inside "double quoted" strings.  Do
+the same for the explanation of a slash to make it consistent.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitignore.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/gitignore.txt b/Documentation/gitignore.txt
+index 4c17f2356c..bf2d823c94 100644
+--- a/Documentation/gitignore.txt
++++ b/Documentation/gitignore.txt
+@@ -88,7 +88,7 @@ PATTERN FORMAT
+    Put a backslash ("`\`") in front of the first "`!`" for patterns
+    that begin with a literal "`!`", for example, "`\!important!.txt`".
+ 
+- - The slash '/' is used as the directory separator. Separators may
++ - The slash "`/`" is used as the directory separator. Separators may
+    occur at the beginning, middle or end of the `.gitignore` search pattern.
+ 
+  - If there is a separator at the beginning or middle (or both) of the
+-- 
+2.39.3 (Apple Git-145)
+

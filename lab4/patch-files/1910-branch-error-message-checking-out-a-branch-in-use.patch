@@ -1,0 +1,64 @@
+From 2a499264d39c663517a8e4fe7f3abb55fc4a829a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 7 Aug 2023 22:42:40 +0200
+Subject: [PATCH 1910/2871] branch: error message checking out a branch in use
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Let's update the error message we show when the user tries to check out
+a branch which is being used in another worktree, following the
+guideline reasoned in 4970bedef2 (branch: update the message to refuse
+touching a branch in-use, 2023-07-21).
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c                | 2 +-
+ t/t2400-worktree-add.sh | 3 ++-
+ t/t3400-rebase.sh       | 2 +-
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/branch.c b/branch.c
+index 3e4684f79f..06f7af9dd4 100644
+--- a/branch.c
++++ b/branch.c
+@@ -838,7 +838,7 @@ void die_if_checked_out(const char *branch, int ignore_current_worktree)
+ 
+ 		if (is_shared_symref(worktrees[i], "HEAD", branch)) {
+ 			skip_prefix(branch, "refs/heads/", &branch);
+-			die(_("'%s' is already checked out at '%s'"),
++			die(_("'%s' is already used by worktree at '%s'"),
+ 				branch, worktrees[i]->path);
+ 		}
+ 	}
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index 0ac468e69e..a2483145fe 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -121,7 +121,8 @@ test_expect_success '"add" worktree creating new branch' '
+ test_expect_success 'die the same branch is already checked out' '
+ 	(
+ 		cd here &&
+-		test_must_fail git checkout newmain
++		test_must_fail git checkout newmain 2>actual &&
++		grep "already used by worktree at" actual
+ 	)
+ '
+ 
+diff --git a/t/t3400-rebase.sh b/t/t3400-rebase.sh
+index 3ce918fdb8..d3df19a51f 100755
+--- a/t/t3400-rebase.sh
++++ b/t/t3400-rebase.sh
+@@ -421,7 +421,7 @@ test_expect_success 'refuse to switch to branch checked out elsewhere' '
+ 	git checkout main &&
+ 	git worktree add wt &&
+ 	test_must_fail git -C wt rebase main main 2>err &&
+-	test_i18ngrep "already checked out" err
++	test_i18ngrep "already used by worktree at" err
+ '
+ 
+ test_expect_success MINGW,SYMLINKS_WINDOWS 'rebase when .git/logs is a symlink' '
+-- 
+2.39.3 (Apple Git-145)
+

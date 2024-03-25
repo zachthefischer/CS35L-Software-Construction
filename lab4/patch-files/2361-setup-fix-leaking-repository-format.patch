@@ -1,0 +1,38 @@
+From 9972cd6004ac46a919d2e8773be976ef1e2d6a65 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 6 Nov 2023 11:46:05 +0100
+Subject: [PATCH 2361/2871] setup: fix leaking repository format
+
+While populating the `repository_format` structure may cause us to
+allocate memory, we do not call `clear_repository_format()` in some
+places and thus potentially leak memory. Fix this.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ setup.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/setup.c b/setup.c
+index b9474b163a..fc592dc6dd 100644
+--- a/setup.c
++++ b/setup.c
+@@ -722,6 +722,7 @@ int upgrade_repository_format(int target_version)
+ 	ret = 1;
+ 
+ out:
++	clear_repository_format(&repo_fmt);
+ 	strbuf_release(&repo_version);
+ 	strbuf_release(&err);
+ 	return ret;
+@@ -2199,6 +2200,7 @@ int init_db(const char *git_dir, const char *real_git_dir,
+ 			       git_dir, len && git_dir[len-1] != '/' ? "/" : "");
+ 	}
+ 
++	clear_repository_format(&repo_fmt);
+ 	free(original_git_dir);
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

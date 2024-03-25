@@ -1,0 +1,30 @@
+From 904d404274fef6695c78a6b055edd184b72e2f9b Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 20 Jan 2023 13:48:44 -0800
+Subject: [PATCH 0726/2871] The eighth batch
+
+The cURL one hasn't cooked for a week in 'next', but let's fast
+track it so that linux-musl CI job would be happy.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index df67b5e421..07ae9f20c3 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -141,6 +141,9 @@ Fixes since v2.39
+    that names a single file as specifying a cone.
+    (merge 5842710dc2 ws/single-file-cone later to maint).
+ 
++ * Deal with a few deprecation warning from cURL library.
++   (merge 6c065f72b8 jk/curl-avoid-deprecated-api later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 77e04b2ed4 rs/t4205-do-not-exit-in-test-script later to maint).
+    (merge faebba436e rs/plug-pattern-list-leak-in-lof later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

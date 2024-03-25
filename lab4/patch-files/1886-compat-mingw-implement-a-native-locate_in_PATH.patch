@@ -1,0 +1,60 @@
+From 2bf46a9f62159ced3a84ab8bc9ba151778414bd6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Matthias=20A=C3=9Fhauer?= <mha1993@live.de>
+Date: Fri, 4 Aug 2023 04:08:43 +0000
+Subject: [PATCH 1886/2871] compat/mingw: implement a native locate_in_PATH()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+since 5e1f28d (bisect--helper: reimplement `bisect_visualize()` shell
+ function in C, 2021-09-13) `git bisect visualize` uses exists_in_PATH()
+to check wether it should call `gitk`, but exists_in_PATH() relies on
+locate_in_PATH() which currently only understands POSIX-ish PATH variables
+(a list of paths, separated by colons) on native Windows executables
+we encounter Windows PATH variables (a list of paths that often contain
+drive letters (and thus colons), separated by semicolons). Luckily we do
+already have a function that can lookup executables on windows PATHs:
+path_lookup(). Implement a small replacement for the existing
+locate_in_PATH() based on path_lookup().
+
+Reported-by: Louis Strous <Louis.Strous@intellimagic.com>
+Signed-off-by: Matthias Aßhauer <mha1993@live.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/mingw.c | 5 +++++
+ compat/mingw.h | 3 +++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/compat/mingw.c b/compat/mingw.c
+index d06cdc6254..bc3669d298 100644
+--- a/compat/mingw.c
++++ b/compat/mingw.c
+@@ -1347,6 +1347,11 @@ static char *path_lookup(const char *cmd, int exe_only)
+ 	return prog;
+ }
+ 
++char *mingw_locate_in_PATH(const char *cmd)
++{
++	return path_lookup(cmd, 0);
++}
++
+ static const wchar_t *wcschrnul(const wchar_t *s, wchar_t c)
+ {
+ 	while (*s && *s != c)
+diff --git a/compat/mingw.h b/compat/mingw.h
+index 209cf7ceba..b526220596 100644
+--- a/compat/mingw.h
++++ b/compat/mingw.h
+@@ -175,6 +175,9 @@ pid_t waitpid(pid_t pid, int *status, int options);
+ #define kill mingw_kill
+ int mingw_kill(pid_t pid, int sig);
+ 
++#define locate_in_PATH mingw_locate_in_PATH
++char *mingw_locate_in_PATH(const char *cmd);
++
+ #ifndef NO_OPENSSL
+ #include <openssl/ssl.h>
+ static inline int mingw_SSL_set_fd(SSL *ssl, int fd)
+-- 
+2.39.3 (Apple Git-145)
+

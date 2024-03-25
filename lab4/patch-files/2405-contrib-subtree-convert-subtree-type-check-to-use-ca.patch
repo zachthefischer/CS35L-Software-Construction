@@ -1,0 +1,48 @@
+From 47c39c28bc1a0001e4341ae70629adcb10f425cc Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Nov 2023 11:01:24 +0100
+Subject: [PATCH 2405/2871] contrib/subtree: convert subtree type check to use
+ case statement
+
+The `subtree_for_commit ()` helper function asserts that the subtree
+identified by its parameters are either a commit or tree. This is done
+via the `-o` parameter of test, which is discouraged.
+
+Refactor the code to instead use a switch statement over the type.
+Despite being aligned with our coding guidelines, the resulting code is
+arguably also easier to read.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/git-subtree.sh | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index 8af0a81ba3..3028029ac2 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -641,10 +641,16 @@ subtree_for_commit () {
+ 	while read mode type tree name
+ 	do
+ 		assert test "$name" = "$dir"
+-		assert test "$type" = "tree" -o "$type" = "commit"
+-		test "$type" = "commit" && continue  # ignore submodules
+-		echo $tree
+-		break
++
++		case "$type" in
++		commit)
++			continue;; # ignore submodules
++		tree)
++			echo $tree
++			break;;
++		*)
++			die "fatal: tree entry is of type ${type}, expected tree or commit";;
++		esac
+ 	done || exit $?
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

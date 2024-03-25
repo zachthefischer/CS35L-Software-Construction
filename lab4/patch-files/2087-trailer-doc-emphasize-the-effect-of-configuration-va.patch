@@ -1,0 +1,40 @@
+From db97296122b8cfb14cd166124d3e933df64c9a78 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 7 Sep 2023 22:20:07 +0000
+Subject: [PATCH 2087/2871] trailer doc: emphasize the effect of configuration
+ variables
+
+The sentence does not mention the effect of configuration variables at
+all, when they are actively used by default (unless --parse is
+specified) to potentially add new trailers, without the user having to
+always supply --trailer manually.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 62ba2b1232..a288ff111c 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -34,9 +34,12 @@ This command reads commit messages from either the
+ If `--parse` is specified, the output consists of the parsed trailers
+ coming from the input, without influencing them with any command line
+ options or configuration variables.
+-Otherwise, this command applies the arguments passed using the
+-`--trailer` option, if any, to each input file. The result is emitted on the
+-standard output.
++
++Otherwise, this command applies `trailer.*` configuration variables
++(which could potentially add new trailers, as well as reposition them),
++as well as any command line arguments that can override configuration
++variables (such as `--trailer=...` which could also add new trailers),
++to each input file. The result is emitted on the standard output.
+ 
+ This command can also operate on the output of linkgit:git-format-patch[1],
+ which is more elaborate than a plain commit message. Namely, such output
+-- 
+2.39.3 (Apple Git-145)
+

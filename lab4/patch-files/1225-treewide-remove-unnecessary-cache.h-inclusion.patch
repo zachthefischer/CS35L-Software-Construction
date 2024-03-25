@@ -1,0 +1,135 @@
+From 5579f44d2fb37e1126e71870b208d93e93e510ac Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:41:48 -0700
+Subject: [PATCH 1225/2871] treewide: remove unnecessary cache.h inclusion
+
+Several files were including cache.h solely to get other headers, such
+as trace.h and trace2.h.  Since the last few commits have modified
+files to make these dependencies more explicit, the inclusion of cache.h
+is no longer needed in several cases.  Remove it.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/simple-ipc/ipc-unix-socket.c | 2 +-
+ connect.c                           | 1 -
+ fetch-pack.c                        | 2 +-
+ pack-write.c                        | 2 +-
+ promisor-remote.c                   | 2 +-
+ protocol.c                          | 2 +-
+ scalar.c                            | 2 +-
+ t/helper/test-date.c                | 1 -
+ trace.c                             | 2 +-
+ upload-pack.c                       | 2 +-
+ 10 files changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/compat/simple-ipc/ipc-unix-socket.c b/compat/simple-ipc/ipc-unix-socket.c
+index 7064475b39..b2f4f22ce4 100644
+--- a/compat/simple-ipc/ipc-unix-socket.c
++++ b/compat/simple-ipc/ipc-unix-socket.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "simple-ipc.h"
+ #include "strbuf.h"
+diff --git a/connect.c b/connect.c
+index 929f72ec5d..5d8036197d 100644
+--- a/connect.c
++++ b/connect.c
+@@ -1,5 +1,4 @@
+ #include "git-compat-util.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/fetch-pack.c b/fetch-pack.c
+index 7d4f190fb1..677102465a 100644
+--- a/fetch-pack.c
++++ b/fetch-pack.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "repository.h"
+ #include "config.h"
+diff --git a/pack-write.c b/pack-write.c
+index 152c14aa7a..d9b460fab4 100644
+--- a/pack-write.c
++++ b/pack-write.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/promisor-remote.c b/promisor-remote.c
+index 9d83d2f4b9..1adcd6fb0a 100644
+--- a/promisor-remote.c
++++ b/promisor-remote.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "object-store.h"
+diff --git a/protocol.c b/protocol.c
+index 4d8eb887e8..079ba75acf 100644
+--- a/protocol.c
++++ b/protocol.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "protocol.h"
+diff --git a/scalar.c b/scalar.c
+index f7680463e1..af64f75ca6 100644
+--- a/scalar.c
++++ b/scalar.c
+@@ -2,7 +2,7 @@
+  * The Scalar command-line interface.
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+diff --git a/t/helper/test-date.c b/t/helper/test-date.c
+index a01eec99f3..7adadd41e0 100644
+--- a/t/helper/test-date.c
++++ b/t/helper/test-date.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "date.h"
+ #include "trace.h"
+ 
+diff --git a/trace.c b/trace.c
+index d8eaa0a786..592c141d78 100644
+--- a/trace.c
++++ b/trace.c
+@@ -21,7 +21,7 @@
+  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "environment.h"
+ #include "quote.h"
+diff --git a/upload-pack.c b/upload-pack.c
+index e17545a834..0305fb2fbd 100644
+--- a/upload-pack.c
++++ b/upload-pack.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+-- 
+2.39.3 (Apple Git-145)
+

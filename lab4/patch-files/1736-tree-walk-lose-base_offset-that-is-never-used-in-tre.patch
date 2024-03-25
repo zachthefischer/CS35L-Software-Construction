@@ -1,0 +1,117 @@
+From 0ad927e9e0013471cc752781f0c368f862934a44 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 7 Jul 2023 15:21:15 -0700
+Subject: [PATCH 1736/2871] tree-walk: lose base_offset that is never used in
+ tree_entry_interesting
+
+The tree_entry_interesting() function takes base_offset, allowing
+its callers to potentially pass a non-zero number to skip the early
+part of the path string.
+
+The feature is never exercised and we do not even know what bugs are
+lurking there, as all callers pass 0 to the parameter.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/grep.c | 2 +-
+ list-objects.c | 2 +-
+ tree-diff.c    | 2 +-
+ tree-walk.c    | 5 +++--
+ tree-walk.h    | 2 +-
+ tree.c         | 2 +-
+ 6 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/grep.c b/builtin/grep.c
+index b86c754def..a36fea03a8 100644
+--- a/builtin/grep.c
++++ b/builtin/grep.c
+@@ -639,7 +639,7 @@ static int grep_tree(struct grep_opt *opt, const struct pathspec *pathspec,
+ 			strbuf_addstr(&name, base->buf + tn_len);
+ 			match = tree_entry_interesting(repo->index,
+ 						       &entry, &name,
+-						       0, pathspec);
++						       pathspec);
+ 			strbuf_setlen(&name, name_base_len);
+ 
+ 			if (match == all_entries_not_interesting)
+diff --git a/list-objects.c b/list-objects.c
+index eecca721ac..97dfef69b4 100644
+--- a/list-objects.c
++++ b/list-objects.c
+@@ -102,7 +102,7 @@ static void process_tree_contents(struct traversal_context *ctx,
+ 	while (tree_entry(&desc, &entry)) {
+ 		if (match != all_entries_interesting) {
+ 			match = tree_entry_interesting(ctx->revs->repo->index,
+-						       &entry, base, 0,
++						       &entry, base,
+ 						       &ctx->revs->diffopt.pathspec);
+ 			if (match == all_entries_not_interesting)
+ 				break;
+diff --git a/tree-diff.c b/tree-diff.c
+index 20bb15f38d..a01f36f685 100644
+--- a/tree-diff.c
++++ b/tree-diff.c
+@@ -316,7 +316,7 @@ static void skip_uninteresting(struct tree_desc *t, struct strbuf *base,
+ 
+ 	while (t->size) {
+ 		match = tree_entry_interesting(opt->repo->index, &t->entry,
+-					       base, 0, &opt->pathspec);
++					       base, &opt->pathspec);
+ 		if (match) {
+ 			if (match == all_entries_not_interesting)
+ 				t->size = 0;
+diff --git a/tree-walk.c b/tree-walk.c
+index d3c48e06df..28d59936ad 100644
+--- a/tree-walk.c
++++ b/tree-walk.c
+@@ -435,7 +435,7 @@ static inline int prune_traversal(struct index_state *istate,
+ 	if (still_interesting < 0)
+ 		return still_interesting;
+ 	return tree_entry_interesting(istate, e, base,
+-				      0, info->pathspec);
++				      info->pathspec);
+ }
+ 
+ int traverse_trees(struct index_state *istate,
+@@ -1223,10 +1223,11 @@ static enum interesting do_match(struct index_state *istate,
+  */
+ enum interesting tree_entry_interesting(struct index_state *istate,
+ 					const struct name_entry *entry,
+-					struct strbuf *base, int base_offset,
++					struct strbuf *base,
+ 					const struct pathspec *ps)
+ {
+ 	enum interesting positive, negative;
++	const int base_offset = 0;
+ 	positive = do_match(istate, entry, base, base_offset, ps, 0);
+ 
+ 	/*
+diff --git a/tree-walk.h b/tree-walk.h
+index 01a9d8eb44..74cdceb3fe 100644
+--- a/tree-walk.h
++++ b/tree-walk.h
+@@ -224,7 +224,7 @@ enum interesting {
+ 
+ enum interesting tree_entry_interesting(struct index_state *istate,
+ 					const struct name_entry *,
+-					struct strbuf *, int,
++					struct strbuf *,
+ 					const struct pathspec *ps);
+ 
+ #endif
+diff --git a/tree.c b/tree.c
+index 0dd2029a8a..fcce9c0d88 100644
+--- a/tree.c
++++ b/tree.c
+@@ -32,7 +32,7 @@ int read_tree_at(struct repository *r,
+ 	while (tree_entry(&desc, &entry)) {
+ 		if (retval != all_entries_interesting) {
+ 			retval = tree_entry_interesting(r->index, &entry,
+-							base, 0, pathspec);
++							base, pathspec);
+ 			if (retval == all_entries_not_interesting)
+ 				break;
+ 			if (retval == entry_not_interesting)
+-- 
+2.39.3 (Apple Git-145)
+

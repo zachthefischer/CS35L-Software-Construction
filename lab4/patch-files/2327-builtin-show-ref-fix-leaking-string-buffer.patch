@@ -1,0 +1,40 @@
+From dbabd0b023b6a65267fd57ed04ecd47ac34b5ae5 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 31 Oct 2023 09:16:21 +0100
+Subject: [PATCH 2327/2871] builtin/show-ref: fix leaking string buffer
+
+Fix a leaking string buffer in `git show-ref --exclude-existing`. While
+the buffer is technically not leaking because its variable is declared
+as static, there is no inherent reason why it should be.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/show-ref.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/show-ref.c b/builtin/show-ref.c
+index cad5b8b506..e55c38af47 100644
+--- a/builtin/show-ref.c
++++ b/builtin/show-ref.c
+@@ -106,7 +106,7 @@ static int add_existing(const char *refname,
+  */
+ static int cmd_show_ref__exclude_existing(const char *match)
+ {
+-	static struct string_list existing_refs = STRING_LIST_INIT_DUP;
++	struct string_list existing_refs = STRING_LIST_INIT_DUP;
+ 	char buf[1024];
+ 	int matchlen = match ? strlen(match) : 0;
+ 
+@@ -139,6 +139,8 @@ static int cmd_show_ref__exclude_existing(const char *match)
+ 			printf("%s\n", buf);
+ 		}
+ 	}
++
++	string_list_clear(&existing_refs, 0);
+ 	return 0;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

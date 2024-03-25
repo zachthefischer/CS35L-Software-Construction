@@ -1,0 +1,66 @@
+From d115b877879cc8d072971437395ea2b97d47a7d7 Mon Sep 17 00:00:00 2001
+From: Britton Leo Kerin <britton.kerin@gmail.com>
+Date: Tue, 6 Feb 2024 12:50:47 -0900
+Subject: [PATCH 2825/2871] completion: bisect: complete log opts for visualize
+ subcommand
+
+Arguments passed to the "visualize" subcommand of git-bisect(1) get
+forwarded to git-log(1). It thus supports the same options as git-log(1)
+would, but our Bash completion script does not know to handle this.
+
+Make completion of porcelain git-log options and option arguments to the
+visualize subcommand work by calling __git_complete_log_opts when the
+start of an option to the subcommand is seen (visualize doesn't support
+any options besides the git-log options).  Add test.
+
+Signed-off-by: Britton Leo Kerin <britton.kerin@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash |  4 ++++
+ t/t9902-completion.sh                  | 15 +++++++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index b9ebd5e409..5337ae4ce2 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1490,6 +1490,10 @@ _git_bisect ()
+ 		__gitcomp "--term-good --term-old --term-bad --term-new"
+ 		return
+ 		;;
++	visualize)
++		__git_complete_log_opts
++		return
++		;;
+ 	bad|new|"$term_bad"|good|old|"$term_good"|reset|skip)
+ 		__git_complete_refs
+ 		;;
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index 8fcd1cfa7e..b989388e7e 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -1361,6 +1361,21 @@ test_expect_success 'git-bisect - options to terms subcommand are candidates' '
+ 	)
+ '
+ 
++test_expect_success 'git-bisect - git-log options to visualize subcommand are candidates' '
++	(
++		cd git-bisect &&
++		# The completion used for git-log and here does not complete
++		# every git-log option, so rather than hope to stay in sync
++		# with exactly what it does we will just spot-test here.
++		test_completion "git bisect visualize --sta" <<-\EOF &&
++		--stat Z
++		EOF
++		test_completion "git bisect visualize --summar" <<-\EOF
++		--summary Z
++		EOF
++	)
++'
++
+ test_expect_success 'git checkout - completes refs and unique remote branches for DWIM' '
+ 	test_completion "git checkout " <<-\EOF
+ 	HEAD Z
+-- 
+2.39.3 (Apple Git-145)
+

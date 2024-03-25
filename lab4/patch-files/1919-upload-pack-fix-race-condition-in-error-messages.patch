@@ -1,0 +1,51 @@
+From 7ba7c52d76630183b47c57bdd2da8eea033bdd2f Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <dstolee@microsoft.com>
+Date: Thu, 10 Aug 2023 14:40:50 +0000
+Subject: [PATCH 1919/2871] upload-pack: fix race condition in error messages
+
+Test t5516-fetch-push.sh has a test 'deny fetch unreachable SHA1,
+allowtipsha1inwant=true' that checks stderr for a specific error
+string from the remote. In some build environments the error sent
+over the remote connection gets mingled with the error from the
+die() statement. Since both signals are being output to the same
+file descriptor (but from parent and child processes), the output
+we are matching with grep gets split.
+
+To reduce the risk of this failure, follow this process instead:
+
+1. Write an error message to stderr.
+2. Write an error message across the connection.
+3. exit(1).
+
+This reorders the events so the error is written entirely before
+the client receives a message from the remote, removing the race
+condition.
+
+Signed-off-by: Derrick Stolee <dstolee@microsoft.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ upload-pack.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/upload-pack.c b/upload-pack.c
+index d3312006a3..ece111c629 100644
+--- a/upload-pack.c
++++ b/upload-pack.c
+@@ -777,11 +777,12 @@ static void check_non_tip(struct upload_pack_data *data)
+ 	for (i = 0; i < data->want_obj.nr; i++) {
+ 		struct object *o = data->want_obj.objects[i].item;
+ 		if (!is_our_ref(o, data->allow_uor)) {
++			error("git upload-pack: not our ref %s",
++			      oid_to_hex(&o->oid));
+ 			packet_writer_error(&data->writer,
+ 					    "upload-pack: not our ref %s",
+ 					    oid_to_hex(&o->oid));
+-			die("git upload-pack: not our ref %s",
+-			    oid_to_hex(&o->oid));
++			exit(1);
+ 		}
+ 	}
+ }
+-- 
+2.39.3 (Apple Git-145)
+

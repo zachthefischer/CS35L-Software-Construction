@@ -1,0 +1,123 @@
+From f66286364f7875f9b3e3ac63733dd98e396fb7b8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Sun, 11 Feb 2024 07:58:04 -0800
+Subject: [PATCH 2841/2871] unit-tests: do show relative file paths on
+ non-Windows, too
+
+There are compilers other than Visual C that want to show absolute
+paths.  Generalize the helper introduced by a2c5e294 (unit-tests: do
+show relative file paths, 2023-09-25) so that it can also work with
+a path that uses slash as the directory separator, and becomes
+almost no-op once one-time preparation finds out that we are using a
+compiler that already gives relative paths.  Incidentally, this also
+should do the right thing on Windows with a compiler that shows
+relative paths but with backslash as the directory separator (if
+such a thing exists and is used to build git).
+
+Reported-by: Randall S. Becker <rsbecker@nexbridge.com>
+Helped-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/unit-tests/test-lib.c | 61 +++++++++++++++++++++++++++++++----------
+ 1 file changed, 47 insertions(+), 14 deletions(-)
+
+diff --git a/t/unit-tests/test-lib.c b/t/unit-tests/test-lib.c
+index 7bf9dfdb95..66d6980ffb 100644
+--- a/t/unit-tests/test-lib.c
++++ b/t/unit-tests/test-lib.c
+@@ -21,12 +21,11 @@ static struct {
+ 	.result = RESULT_NONE,
+ };
+ 
+-#ifndef _MSC_VER
+-#define make_relative(location) location
+-#else
+ /*
+  * Visual C interpolates the absolute Windows path for `__FILE__`,
+  * but we want to see relative paths, as verified by t0080.
++ * There are other compilers that do the same, and are not for
++ * Windows.
+  */
+ #include "dir.h"
+ 
+@@ -34,32 +33,66 @@ static const char *make_relative(const char *location)
+ {
+ 	static char prefix[] = __FILE__, buf[PATH_MAX], *p;
+ 	static size_t prefix_len;
++	static int need_bs_to_fs = -1;
+ 
+-	if (!prefix_len) {
++	/* one-time preparation */
++	if (need_bs_to_fs < 0) {
+ 		size_t len = strlen(prefix);
+-		const char *needle = "\\t\\unit-tests\\test-lib.c";
++		char needle[] = "t\\unit-tests\\test-lib.c";
+ 		size_t needle_len = strlen(needle);
+ 
+-		if (len < needle_len || strcmp(needle, prefix + len - needle_len))
+-			die("unexpected suffix of '%s'", prefix);
++		if (len < needle_len)
++			die("unexpected prefix '%s'", prefix);
++
++		/*
++		 * The path could be relative (t/unit-tests/test-lib.c)
++		 * or full (/home/user/git/t/unit-tests/test-lib.c).
++		 * Check the slash between "t" and "unit-tests".
++		 */
++		prefix_len = len - needle_len;
++		if (prefix[prefix_len + 1] == '/') {
++			/* Oh, we're not Windows */
++			for (size_t i = 0; i < needle_len; i++)
++				if (needle[i] == '\\')
++					needle[i] = '/';
++			need_bs_to_fs = 0;
++		} else {
++			need_bs_to_fs = 1;
++		}
+ 
+-		/* let it end in a directory separator */
+-		prefix_len = len - needle_len + 1;
++		/*
++		 * prefix_len == 0 if the compiler gives paths relative
++		 * to the root of the working tree.  Otherwise, we want
++		 * to see that we did find the needle[] at a directory
++		 * boundary.  Again we rely on that needle[] begins with
++		 * "t" followed by the directory separator.
++		 */
++		if (fspathcmp(needle, prefix + prefix_len) ||
++		    (prefix_len && prefix[prefix_len - 1] != needle[1]))
++			die("unexpected suffix of '%s'", prefix);
+ 	}
+ 
+-	/* Does it not start with the expected prefix? */
+-	if (fspathncmp(location, prefix, prefix_len))
++	/*
++	 * Does it not start with the expected prefix?
++	 * Return it as-is without making it worse.
++	 */
++	if (prefix_len && fspathncmp(location, prefix, prefix_len))
+ 		return location;
+ 
+-	strlcpy(buf, location + prefix_len, sizeof(buf));
++	/*
++	 * If we do not need to munge directory separator, we can return
++	 * the substring at the tail of the location.
++	 */
++	if (!need_bs_to_fs)
++		return location + prefix_len;
++
+ 	/* convert backslashes to forward slashes */
++	strlcpy(buf, location + prefix_len, sizeof(buf));
+ 	for (p = buf; *p; p++)
+ 		if (*p == '\\')
+ 			*p = '/';
+-
+ 	return buf;
+ }
+-#endif
+ 
+ static void msg_with_prefix(const char *prefix, const char *format, va_list ap)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

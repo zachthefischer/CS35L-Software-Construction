@@ -1,0 +1,72 @@
+From 1030d1407f92996034afc0f45317e87b90ea65c7 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:59 +0000
+Subject: [PATCH 2753/2871] t4202: move reffiles specific tests to t0600
+
+Move two tests into t0600 since they write loose reflog refs manually
+and thus are specific to the reffiles backend.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0600-reffiles-backend.sh | 17 +++++++++++++++++
+ t/t4202-log.sh              | 17 -----------------
+ 2 files changed, 17 insertions(+), 17 deletions(-)
+
+diff --git a/t/t0600-reffiles-backend.sh b/t/t0600-reffiles-backend.sh
+index 630b8ee11b..e6a5f1868f 100755
+--- a/t/t0600-reffiles-backend.sh
++++ b/t/t0600-reffiles-backend.sh
+@@ -364,4 +364,21 @@ test_expect_success SYMLINKS 'ref resolution not confused by broken symlinks' '
+        test_must_fail git rev-parse --verify broken
+ '
+ 
++test_expect_success 'log diagnoses bogus HEAD hash' '
++	git init empty &&
++	test_when_finished "rm -rf empty" &&
++	echo 1234abcd >empty/.git/refs/heads/main &&
++	test_must_fail git -C empty log 2>stderr &&
++	test_grep broken stderr
++'
++
++test_expect_success 'log diagnoses bogus HEAD symref' '
++	git init empty &&
++	test-tool -C empty ref-store main create-symref HEAD refs/heads/invalid.lock &&
++	test_must_fail git -C empty log 2>stderr &&
++	test_grep broken stderr &&
++	test_must_fail git -C empty log --default totally-bogus 2>stderr &&
++	test_grep broken stderr
++'
++
+ test_done
+diff --git a/t/t4202-log.sh b/t/t4202-log.sh
+index ddd205f98a..60fe60d761 100755
+--- a/t/t4202-log.sh
++++ b/t/t4202-log.sh
+@@ -2255,23 +2255,6 @@ test_expect_success 'log on empty repo fails' '
+ 	test_grep does.not.have.any.commits stderr
+ '
+ 
+-test_expect_success REFFILES 'log diagnoses bogus HEAD hash' '
+-	git init empty &&
+-	test_when_finished "rm -rf empty" &&
+-	echo 1234abcd >empty/.git/refs/heads/main &&
+-	test_must_fail git -C empty log 2>stderr &&
+-	test_grep broken stderr
+-'
+-
+-test_expect_success REFFILES 'log diagnoses bogus HEAD symref' '
+-	git init empty &&
+-	test-tool -C empty ref-store main create-symref HEAD refs/heads/invalid.lock &&
+-	test_must_fail git -C empty log 2>stderr &&
+-	test_grep broken stderr &&
+-	test_must_fail git -C empty log --default totally-bogus 2>stderr &&
+-	test_grep broken stderr
+-'
+-
+ test_expect_success 'log does not default to HEAD when rev input is given' '
+ 	git log --branches=does-not-exist >actual &&
+ 	test_must_be_empty actual
+-- 
+2.39.3 (Apple Git-145)
+

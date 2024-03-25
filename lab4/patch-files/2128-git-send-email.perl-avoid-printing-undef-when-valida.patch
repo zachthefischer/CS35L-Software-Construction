@@ -1,0 +1,64 @@
+From 12288cc44e48810758b6d38b453b94568cb6fce3 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 18 Sep 2023 12:35:53 -0400
+Subject: [PATCH 2128/2871] git-send-email.perl: avoid printing undef when
+ validating addresses
+
+When validating email addresses with `extract_valid_address_or_die()`,
+we print out a helpful error message when the given input does not
+contain a valid email address.
+
+However, the pre-image of this patch looks something like:
+
+    my $address = shift;
+    $address = extract_valid_address($address):
+    die sprintf(__("..."), $address) if !$address;
+
+which fails when given a bogus email address by trying to use $address
+(which is undef) in a sprintf() expansion, like so:
+
+    $ git.compile send-email --to="pi <pi@pi>" /tmp/x/*.patch --force
+    Use of uninitialized value $address in sprintf at /home/ttaylorr/src/git/git-send-email line 1175.
+    error: unable to extract a valid address from:
+
+This regression dates back to e431225569 (git-send-email: remove invalid
+addresses earlier, 2012-11-22), but became more noticeable in a8022c5f7b
+(send-email: expose header information to git-send-email's
+sendemail-validate hook, 2023-04-19), which validates SMTP headers in
+the sendemail-validate hook.
+
+Avoid trying to format an undef by storing the given and cleaned address
+separately. After applying this fix, the error contains the invalid
+email address, and the warning disappears:
+
+    $ git.compile send-email --to="pi <pi@pi>" /tmp/x/*.patch --force
+    error: unable to extract a valid address from: pi <pi@pi>
+
+Reported-by: Bagas Sanjaya <bagasdotme@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 897cea6564..288ea1ae80 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -1166,10 +1166,10 @@ sub extract_valid_address {
+ 
+ sub extract_valid_address_or_die {
+ 	my $address = shift;
+-	$address = extract_valid_address($address);
++	my $valid_address = extract_valid_address($address);
+ 	die sprintf(__("error: unable to extract a valid address from: %s\n"), $address)
+-		if !$address;
+-	return $address;
++		if !$valid_address;
++	return $valid_address;
+ }
+ 
+ sub validate_address {
+-- 
+2.39.3 (Apple Git-145)
+

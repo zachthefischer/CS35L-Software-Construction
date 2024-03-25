@@ -1,0 +1,137 @@
+From 297be59456f2d27710de01ab88c025241ccb4206 Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Tue, 14 Nov 2023 21:43:38 +0000
+Subject: [PATCH 2415/2871] rebase: support --autosquash without -i
+
+The rebase --autosquash option is quietly ignored when used without
+--interactive (apart from preventing preemptive fast-forwarding and
+triggering conflicts with apply backend options).
+
+Change that to support --autosquash without --interactive, by dropping
+its restriction to REBASE_INTERACTIVE_EXCPLICIT mode. When used this
+way, auto-squashing is done without opening the todo list editor.
+
+Drop the -i requirement from the --autosquash description, and amend
+t3415-rebase-autosquash.sh to test the option and the rebase.autoSquash
+config variable with and without -i.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt |  2 +-
+ builtin/rebase.c             |  4 +---
+ t/t3415-rebase-autosquash.sh | 38 ++++++++++++++++++++++++++----------
+ 3 files changed, 30 insertions(+), 14 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index b4526ca246..10548e715c 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -592,7 +592,7 @@ See also INCOMPATIBLE OPTIONS below.
+ 	When the commit log message begins with "squash! ..." or "fixup! ..."
+ 	or "amend! ...", and there is already a commit in the todo list that
+ 	matches the same `...`, automatically modify the todo list of
+-	`rebase -i`, so that the commit marked for squashing comes right after
++	`rebase`, so that the commit marked for squashing comes right after
+ 	the commit to be modified, and change the action of the moved commit
+ 	from `pick` to `squash` or `fixup` or `fixup -C` respectively. A commit
+ 	matches the `...` if the commit subject matches, or if the `...` refers
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index a73de7892b..9f8192e0a5 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -710,10 +710,8 @@ static int run_specific_rebase(struct rebase_options *opts)
+ 	if (opts->type == REBASE_MERGE) {
+ 		/* Run sequencer-based rebase */
+ 		setenv("GIT_CHERRY_PICK_HELP", resolvemsg, 1);
+-		if (!(opts->flags & REBASE_INTERACTIVE_EXPLICIT)) {
++		if (!(opts->flags & REBASE_INTERACTIVE_EXPLICIT))
+ 			setenv("GIT_SEQUENCE_EDITOR", ":", 1);
+-			opts->autosquash = 0;
+-		}
+ 		if (opts->gpg_sign_opt) {
+ 			/* remove the leading "-S" */
+ 			char *tmp = xstrdup(opts->gpg_sign_opt + 2);
+diff --git a/t/t3415-rebase-autosquash.sh b/t/t3415-rebase-autosquash.sh
+index a364530d76..fcc40d6fe1 100755
+--- a/t/t3415-rebase-autosquash.sh
++++ b/t/t3415-rebase-autosquash.sh
+@@ -43,7 +43,7 @@ test_auto_fixup () {
+ 
+ 	git tag $1 &&
+ 	test_tick &&
+-	git rebase $2 -i HEAD^^^ &&
++	git rebase $2 HEAD^^^ &&
+ 	git log --oneline >actual &&
+ 	if test -n "$no_squash"
+ 	then
+@@ -61,15 +61,24 @@ test_auto_fixup () {
+ }
+ 
+ test_expect_success 'auto fixup (option)' '
+-	test_auto_fixup final-fixup-option --autosquash
++	test_auto_fixup fixup-option --autosquash &&
++	test_auto_fixup fixup-option-i "--autosquash -i"
+ '
+ 
+-test_expect_success 'auto fixup (config)' '
++test_expect_success 'auto fixup (config true)' '
+ 	git config rebase.autosquash true &&
+-	test_auto_fixup final-fixup-config-true &&
++	test_auto_fixup ! fixup-config-true &&
++	test_auto_fixup fixup-config-true-i -i &&
+ 	test_auto_fixup ! fixup-config-true-no --no-autosquash &&
++	test_auto_fixup ! fixup-config-true-i-no "-i --no-autosquash"
++'
++
++test_expect_success 'auto fixup (config false)' '
+ 	git config rebase.autosquash false &&
+-	test_auto_fixup ! final-fixup-config-false
++	test_auto_fixup ! fixup-config-false &&
++	test_auto_fixup ! fixup-config-false-i -i &&
++	test_auto_fixup fixup-config-false-yes --autosquash &&
++	test_auto_fixup fixup-config-false-i-yes "-i --autosquash"
+ '
+ 
+ test_auto_squash () {
+@@ -87,7 +96,7 @@ test_auto_squash () {
+ 	git commit -m "squash! first" -m "extra para for first" &&
+ 	git tag $1 &&
+ 	test_tick &&
+-	git rebase $2 -i HEAD^^^ &&
++	git rebase $2 HEAD^^^ &&
+ 	git log --oneline >actual &&
+ 	if test -n "$no_squash"
+ 	then
+@@ -105,15 +114,24 @@ test_auto_squash () {
+ }
+ 
+ test_expect_success 'auto squash (option)' '
+-	test_auto_squash final-squash --autosquash
++	test_auto_squash squash-option --autosquash &&
++	test_auto_squash squash-option-i "--autosquash -i"
+ '
+ 
+-test_expect_success 'auto squash (config)' '
++test_expect_success 'auto squash (config true)' '
+ 	git config rebase.autosquash true &&
+-	test_auto_squash final-squash-config-true &&
++	test_auto_squash ! squash-config-true &&
++	test_auto_squash squash-config-true-i -i &&
+ 	test_auto_squash ! squash-config-true-no --no-autosquash &&
++	test_auto_squash ! squash-config-true-i-no "-i --no-autosquash"
++'
++
++test_expect_success 'auto squash (config false)' '
+ 	git config rebase.autosquash false &&
+-	test_auto_squash ! final-squash-config-false
++	test_auto_squash ! squash-config-false &&
++	test_auto_squash ! squash-config-false-i -i &&
++	test_auto_squash squash-config-false-yes --autosquash &&
++	test_auto_squash squash-config-false-i-yes "-i --autosquash"
+ '
+ 
+ test_expect_success 'misspelled auto squash' '
+-- 
+2.39.3 (Apple Git-145)
+

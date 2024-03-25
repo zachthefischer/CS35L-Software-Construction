@@ -1,0 +1,56 @@
+From 91b81b64e332da185d3ac8679a977c665c80914e Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Mon, 20 Mar 2023 16:10:02 +0000
+Subject: [PATCH 1054/2871] wildmatch: hide internal return values
+
+WM_ABORT_ALL and WM_ABORT_TO_STARSTAR are used internally to limit
+backtracking when a match fails, they are not of interest to the caller
+and so should not be public.
+
+Suggested-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ wildmatch.c | 7 ++++++-
+ wildmatch.h | 2 --
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/wildmatch.c b/wildmatch.c
+index 694d2f8e40..372aa6ea54 100644
+--- a/wildmatch.c
++++ b/wildmatch.c
+@@ -14,6 +14,10 @@
+ 
+ typedef unsigned char uchar;
+ 
++/* Internal return values */
++#define WM_ABORT_ALL -1
++#define WM_ABORT_TO_STARSTAR -2
++
+ /* What character marks an inverted character class? */
+ #define NEGATE_CLASS	'!'
+ #define NEGATE_CLASS2	'^'
+@@ -278,5 +282,6 @@ static int dowild(const uchar *p, const uchar *text, unsigned int flags)
+ /* Match the "pattern" against the "text" string. */
+ int wildmatch(const char *pattern, const char *text, unsigned int flags)
+ {
+-	return dowild((const uchar*)pattern, (const uchar*)text, flags);
++	int res = dowild((const uchar*)pattern, (const uchar*)text, flags);
++	return res == WM_MATCH ? WM_MATCH : WM_NOMATCH;
+ }
+diff --git a/wildmatch.h b/wildmatch.h
+index 5993696298..0c890cb56b 100644
+--- a/wildmatch.h
++++ b/wildmatch.h
+@@ -6,8 +6,6 @@
+ 
+ #define WM_NOMATCH 1
+ #define WM_MATCH 0
+-#define WM_ABORT_ALL -1
+-#define WM_ABORT_TO_STARSTAR -2
+ 
+ int wildmatch(const char *pattern, const char *text, unsigned int flags);
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

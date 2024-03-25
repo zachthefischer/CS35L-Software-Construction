@@ -1,0 +1,34 @@
+From 3991bb73dd01332459c84a72365daa17065c62ea Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 7 Oct 2022 11:07:54 -0700
+Subject: [PATCH 0064/2871] SubmittingPatches: use usual capitalization in the
+ log message body
+
+Update the description of the summary section to clarify that the
+"do not capitalize" rule applies only the word after the "<area>:"
+prefix of the title and nowhere else.  This hopefully will prevent
+folks from writing their proposed log message in all lowercase.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index 5bd795e5db..927f7329a5 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -153,7 +153,9 @@ files you are modifying to see the current conventions.
+ 
+ [[summary-section]]
+ The title sentence after the "area:" prefix omits the full stop at the
+-end, and its first word is not capitalized unless there is a reason to
++end, and its first word is not capitalized (the omission
++of capitalization applies only to the word after the "area:"
++prefix of the title) unless there is a reason to
+ capitalize it other than because it is the first word in the sentence.
+ E.g. "doc: clarify...", not "doc: Clarify...", or "githooks.txt:
+ improve...", not "githooks.txt: Improve...".  But "refs: HEAD is also
+-- 
+2.39.3 (Apple Git-145)
+

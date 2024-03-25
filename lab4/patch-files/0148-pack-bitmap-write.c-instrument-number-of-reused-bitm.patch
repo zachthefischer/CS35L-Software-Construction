@@ -1,0 +1,56 @@
+From e9c383994493f3b775191aed13811a868aa639da Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Oct 2022 18:01:57 -0400
+Subject: [PATCH 0148/2871] pack-bitmap-write.c: instrument number of reused
+ bitmaps
+
+When debugging bitmap generation performance, it is useful to know how
+many bitmaps were generated from scratch, and how many were the result
+of permuting the bit-order of an existing bitmap.
+
+Keep track of the latter, and emit the count as a trace2_data line to
+aid in debugging.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-bitmap-write.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/pack-bitmap-write.c b/pack-bitmap-write.c
+index a213f5eddc..cfa67a510f 100644
+--- a/pack-bitmap-write.c
++++ b/pack-bitmap-write.c
+@@ -384,6 +384,8 @@ static int fill_bitmap_tree(struct bitmap *bitmap,
+ 	return 0;
+ }
+ 
++static int reused_bitmaps_nr;
++
+ static int fill_bitmap_commit(struct bb_commit *ent,
+ 			      struct commit *commit,
+ 			      struct prio_queue *queue,
+@@ -409,8 +411,10 @@ static int fill_bitmap_commit(struct bb_commit *ent,
+ 			 * bitmap and add its bits to this one. No need to walk
+ 			 * parents or the tree for this commit.
+ 			 */
+-			if (old && !rebuild_bitmap(mapping, old, ent->bitmap))
++			if (old && !rebuild_bitmap(mapping, old, ent->bitmap)) {
++				reused_bitmaps_nr++;
+ 				continue;
++			}
+ 		}
+ 
+ 		/*
+@@ -526,6 +530,8 @@ int bitmap_writer_build(struct packing_data *to_pack)
+ 
+ 	trace2_region_leave("pack-bitmap-write", "building_bitmaps_total",
+ 			    the_repository);
++	trace2_data_intmax("pack-bitmap-write", the_repository,
++			   "building_bitmaps_reused", reused_bitmaps_nr);
+ 
+ 	stop_progress(&writer.progress);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

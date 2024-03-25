@@ -1,0 +1,68 @@
+From 20debfb210c07c6b741bf2e55a03111a5b4a68b0 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 28 Aug 2023 18:52:59 -0400
+Subject: [PATCH 2000/2871] leak tests: mark a handful of tests as leak-free
+
+In the topic merged via 5a4f8381b6 (Merge branch
+'ab/mark-leak-free-tests', 2021-10-25), a handful of tests in the suite
+were marked as leak-free.
+
+Since then, a handful of tests have become leak-free due to changes like
+
+  - 861c56f6f9 (branch: fix a leak in setup_tracking, 2023-06-11), and
+  - 866b43e644 (do_read_index(): always mark index as initialized unless
+    erroring out, 2023-06-29)
+
+, but weren't updated at the time to mark themselves as such. This leads
+to test "failures" when running:
+
+    $ make SANITIZE=leak
+    $ make -C t \
+        GIT_TEST_PASSING_SANITIZE_LEAK=check \
+        GIT_TEST_SANITIZE_LEAK_LOG=true \
+        GIT_TEST_OPTS=-vi test
+
+This patch closes those gaps by exporting TEST_PASSES_SANITIZE_LEAK=true
+before sourcing t/test-lib.sh on most remaining leak-free tests.
+
+There are a couple of other tests which are similarly leak-free, but not
+included in the list of tests touched by this patch. The remaining tests
+will be addressed in the subsequent two patches.
+
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5571-pre-push-hook.sh | 1 +
+ t/t7516-commit-races.sh  | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/t/t5571-pre-push-hook.sh b/t/t5571-pre-push-hook.sh
+index a11b20e378..448134c4bf 100755
+--- a/t/t5571-pre-push-hook.sh
++++ b/t/t5571-pre-push-hook.sh
+@@ -4,6 +4,7 @@ test_description='check pre-push hooks'
+ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ test_expect_success 'setup' '
+diff --git a/t/t7516-commit-races.sh b/t/t7516-commit-races.sh
+index 2d38a16480..bb95f09810 100755
+--- a/t/t7516-commit-races.sh
++++ b/t/t7516-commit-races.sh
+@@ -1,6 +1,8 @@
+ #!/bin/sh
+ 
+ test_description='git commit races'
++
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ test_expect_success 'race to create orphan commit' '
+-- 
+2.39.3 (Apple Git-145)
+

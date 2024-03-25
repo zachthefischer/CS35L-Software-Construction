@@ -1,0 +1,121 @@
+From f8ab66f9f304d87c6c14e3e1449c689c56c20a26 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 26 Dec 2023 19:39:22 +0000
+Subject: [PATCH 2610/2871] sparse-checkout: be consistent with end of options
+ markers
+
+93851746 (parse-options: decouple "--end-of-options" and "--",
+2023-12-06) updated the world order to make callers of parse-options
+that set PARSE_OPT_KEEP_UNKNOWN_OPT responsible for deciding what to
+do with "--end-of-options" they may see after parse_options() returns.
+
+This made a previous bug in sparse-checkout more visible; namely,
+that
+
+  git sparse-checkout [add|set] --[no-]cone --end-of-options ...
+
+would simply treat "--end-of-options" as one of the paths to include in
+the sparse-checkout.  But this was already problematic before; namely,
+
+  git sparse-checkout [add|set| --[no-]cone --sikp-checks ...
+
+would not give an error on the mis-typed "--skip-checks" but instead
+simply treat "--sikp-checks" as a path or pattern to include in the
+sparse-checkout, which is highly unfriendly.
+
+This behavior began when the command was converted to parse-options in
+7bffca95ea (sparse-checkout: add '--stdin' option to set subcommand,
+2019-11-21).  Back then it was just called KEEP_UNKNOWN. Later it was
+renamed to KEEP_UNKNOWN_OPT in 99d86d60e5 (parse-options:
+PARSE_OPT_KEEP_UNKNOWN only applies to --options, 2022-08-19) to clarify
+that it was only about dashed options; we always keep non-option
+arguments.  Looking at that original patch, both Peff and I think that
+the author was simply confused about the mis-named option, and really
+just wanted to keep the non-option arguments.  We never should have used
+the flag all along (and the other cases were cargo-culted within the
+file).
+
+Remove the erroneous PARSE_OPT_KEEP_UNKNOWN_OPT flag now to fix this
+bug.  Note that this does mean that anyone who might have been using
+
+  git sparse-checkout [add|set] [--[no-]cone] --foo --bar
+
+to request paths or patterns '--foo' and '--bar' will now have to use
+
+  git sparse-checkout [add|set] [--[no-]cone] -- --foo --bar
+
+That makes sparse-checkout more consistent with other git commands,
+provides users much friendlier error messages and behavior, and is
+consistent with the all-caps warning in git-sparse-checkout.txt that
+this command "is experimental...its behavior...will likely change".  :-)
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/sparse-checkout.c          | 9 +++------
+ t/t1091-sparse-checkout-builtin.sh | 8 +++++++-
+ 2 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/sparse-checkout.c b/builtin/sparse-checkout.c
+index 5c8ffb1f75..0e68e9b0b0 100644
+--- a/builtin/sparse-checkout.c
++++ b/builtin/sparse-checkout.c
+@@ -777,8 +777,7 @@ static int sparse_checkout_add(int argc, const char **argv, const char *prefix)
+ 
+ 	argc = parse_options(argc, argv, prefix,
+ 			     builtin_sparse_checkout_add_options,
+-			     builtin_sparse_checkout_add_usage,
+-			     PARSE_OPT_KEEP_UNKNOWN_OPT);
++			     builtin_sparse_checkout_add_usage, 0);
+ 
+ 	sanitize_paths(argc, argv, prefix, add_opts.skip_checks);
+ 
+@@ -824,8 +823,7 @@ static int sparse_checkout_set(int argc, const char **argv, const char *prefix)
+ 
+ 	argc = parse_options(argc, argv, prefix,
+ 			     builtin_sparse_checkout_set_options,
+-			     builtin_sparse_checkout_set_usage,
+-			     PARSE_OPT_KEEP_UNKNOWN_OPT);
++			     builtin_sparse_checkout_set_usage, 0);
+ 
+ 	if (update_modes(&set_opts.cone_mode, &set_opts.sparse_index))
+ 		return 1;
+@@ -996,8 +994,7 @@ static int sparse_checkout_check_rules(int argc, const char **argv, const char *
+ 
+ 	argc = parse_options(argc, argv, prefix,
+ 			     builtin_sparse_checkout_check_rules_options,
+-			     builtin_sparse_checkout_check_rules_usage,
+-			     PARSE_OPT_KEEP_UNKNOWN_OPT);
++			     builtin_sparse_checkout_check_rules_usage, 0);
+ 
+ 	if (check_rules_opts.rules_file && check_rules_opts.cone_mode < 0)
+ 		check_rules_opts.cone_mode = 1;
+diff --git a/t/t1091-sparse-checkout-builtin.sh b/t/t1091-sparse-checkout-builtin.sh
+index f67611da28..e49b8024ac 100755
+--- a/t/t1091-sparse-checkout-builtin.sh
++++ b/t/t1091-sparse-checkout-builtin.sh
+@@ -334,7 +334,7 @@ test_expect_success 'cone mode: set with nested folders' '
+ 
+ test_expect_success 'cone mode: add independent path' '
+ 	git -C repo sparse-checkout set deep/deeper1 &&
+-	git -C repo sparse-checkout add folder1 &&
++	git -C repo sparse-checkout add --end-of-options folder1 &&
+ 	cat >expect <<-\EOF &&
+ 	/*
+ 	!/*/
+@@ -886,6 +886,12 @@ test_expect_success 'by default, cone mode will error out when passed files' '
+ 	grep ".gitignore.*is not a directory" error
+ '
+ 
++test_expect_success 'error on mistyped command line options' '
++	test_must_fail git -C repo sparse-checkout add --sikp-checks .gitignore 2>error &&
++
++	grep "unknown option.*sikp-checks" error
++'
++
+ test_expect_success 'by default, non-cone mode will warn on individual files' '
+ 	git -C repo sparse-checkout reapply --no-cone &&
+ 	git -C repo sparse-checkout add .gitignore 2>warning &&
+-- 
+2.39.3 (Apple Git-145)
+

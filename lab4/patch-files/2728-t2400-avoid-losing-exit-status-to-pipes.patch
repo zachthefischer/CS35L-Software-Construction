@@ -1,0 +1,44 @@
+From 425ae8a3df3d2378e8da5a96b995f8fc0fac32e8 Mon Sep 17 00:00:00 2001
+From: Achu Luma <ach.lumap@gmail.com>
+Date: Sat, 20 Jan 2024 03:15:47 +0100
+Subject: [PATCH 2728/2871] t2400: avoid losing exit status to pipes
+
+The exit code of the preceding command in a pipe is disregarded. So
+if that preceding command is a Git command that fails, the test would
+not fail. Instead, by saving the output of that Git command to a file,
+and removing the pipe, we make sure the test will fail if that Git
+command fails.
+
+Signed-off-by: Achu Luma <ach.lumap@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2400-worktree-add.sh | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index 3742971105..c28c04133c 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -490,7 +490,8 @@ test_expect_success 'put a worktree under rebase' '
+ 		cd under-rebase &&
+ 		set_fake_editor &&
+ 		FAKE_LINES="edit 1" git rebase -i HEAD^ &&
+-		git worktree list | grep "under-rebase.*detached HEAD"
++		git worktree list >actual &&
++		grep "under-rebase.*detached HEAD" actual
+ 	)
+ '
+ 
+@@ -531,7 +532,8 @@ test_expect_success 'checkout a branch under bisect' '
+ 		git bisect start &&
+ 		git bisect bad &&
+ 		git bisect good HEAD~2 &&
+-		git worktree list | grep "under-bisect.*detached HEAD" &&
++		git worktree list >actual &&
++		grep "under-bisect.*detached HEAD" actual &&
+ 		test_must_fail git worktree add new-bisect under-bisect &&
+ 		! test -d new-bisect
+ 	)
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,54 @@
+From 9c575b020232c5af0d2068aa82ce390923b81646 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Tue, 14 Nov 2023 19:53:53 +0000
+Subject: [PATCH 2422/2871] ref-filter.c: rename 'ref_filter_handler()' to
+ 'filter_one()'
+
+Rename 'ref_filter_handler()' to 'filter_one()' to more clearly distinguish
+it from other ref filtering callbacks that will be added in later patches.
+The "*_one()" naming convention is common throughout the codebase for
+iteration callbacks.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index f062bb4938..02a852bb34 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -2686,7 +2686,7 @@ struct ref_filter_cbdata {
+  * A call-back given to for_each_ref().  Filter refs and keep them for
+  * later object processing.
+  */
+-static int ref_filter_handler(const char *refname, const struct object_id *oid, int flag, void *cb_data)
++static int filter_one(const char *refname, const struct object_id *oid, int flag, void *cb_data)
+ {
+ 	struct ref_filter_cbdata *ref_cbdata = cb_data;
+ 	struct ref_filter *filter = ref_cbdata->filter;
+@@ -2917,15 +2917,15 @@ int filter_refs(struct ref_array *array, struct ref_filter *filter, unsigned int
+ 		 * of filter_ref_kind().
+ 		 */
+ 		if (filter->kind == FILTER_REFS_BRANCHES)
+-			ret = for_each_fullref_in("refs/heads/", ref_filter_handler, &ref_cbdata);
++			ret = for_each_fullref_in("refs/heads/", filter_one, &ref_cbdata);
+ 		else if (filter->kind == FILTER_REFS_REMOTES)
+-			ret = for_each_fullref_in("refs/remotes/", ref_filter_handler, &ref_cbdata);
++			ret = for_each_fullref_in("refs/remotes/", filter_one, &ref_cbdata);
+ 		else if (filter->kind == FILTER_REFS_TAGS)
+-			ret = for_each_fullref_in("refs/tags/", ref_filter_handler, &ref_cbdata);
++			ret = for_each_fullref_in("refs/tags/", filter_one, &ref_cbdata);
+ 		else if (filter->kind & FILTER_REFS_ALL)
+-			ret = for_each_fullref_in_pattern(filter, ref_filter_handler, &ref_cbdata);
++			ret = for_each_fullref_in_pattern(filter, filter_one, &ref_cbdata);
+ 		if (!ret && (filter->kind & FILTER_REFS_DETACHED_HEAD))
+-			head_ref(ref_filter_handler, &ref_cbdata);
++			head_ref(filter_one, &ref_cbdata);
+ 	}
+ 
+ 	clear_contains_cache(&filter->internal.contains_cache);
+-- 
+2.39.3 (Apple Git-145)
+

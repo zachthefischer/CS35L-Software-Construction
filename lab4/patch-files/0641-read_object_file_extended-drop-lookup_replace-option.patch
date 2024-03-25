@@ -1,0 +1,66 @@
+From 7be13f5f743978180ba377e12a312b773ed9af2b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 7 Jan 2023 08:50:19 -0500
+Subject: [PATCH 0641/2871] read_object_file_extended(): drop lookup_replace
+ option
+
+Our sole caller always passes in "1", so we can just drop the parameter
+entirely. Anybody who doesn't want this behavior could easily call
+oid_object_info_extended() themselves, as we're just a thin wrapper
+around it.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-file.c  | 7 ++-----
+ object-store.h | 4 ++--
+ 2 files changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/object-file.c b/object-file.c
+index ed1babbac2..f472f2d6a0 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -1698,18 +1698,15 @@ int pretend_object_file(void *buf, unsigned long len, enum object_type type,
+ void *read_object_file_extended(struct repository *r,
+ 				const struct object_id *oid,
+ 				enum object_type *type,
+-				unsigned long *size,
+-				int lookup_replace)
++				unsigned long *size)
+ {
+ 	struct object_info oi = OBJECT_INFO_INIT;
+-	unsigned flags = OBJECT_INFO_DIE_IF_CORRUPT;
++	unsigned flags = OBJECT_INFO_DIE_IF_CORRUPT | OBJECT_INFO_LOOKUP_REPLACE;
+ 	void *data;
+ 
+ 	oi.typep = type;
+ 	oi.sizep = size;
+ 	oi.contentp = &data;
+-	if (lookup_replace)
+-		flags |= OBJECT_INFO_LOOKUP_REPLACE;
+ 	if (oid_object_info_extended(r, oid, &oi, flags))
+ 	    return NULL;
+ 
+diff --git a/object-store.h b/object-store.h
+index f0aa03bbb9..6ccacc947b 100644
+--- a/object-store.h
++++ b/object-store.h
+@@ -244,13 +244,13 @@ void *map_loose_object(struct repository *r, const struct object_id *oid,
+ void *read_object_file_extended(struct repository *r,
+ 				const struct object_id *oid,
+ 				enum object_type *type,
+-				unsigned long *size, int lookup_replace);
++				unsigned long *size);
+ static inline void *repo_read_object_file(struct repository *r,
+ 					  const struct object_id *oid,
+ 					  enum object_type *type,
+ 					  unsigned long *size)
+ {
+-	return read_object_file_extended(r, oid, type, size, 1);
++	return read_object_file_extended(r, oid, type, size);
+ }
+ #ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
+ #define read_object_file(oid, type, size) repo_read_object_file(the_repository, oid, type, size)
+-- 
+2.39.3 (Apple Git-145)
+

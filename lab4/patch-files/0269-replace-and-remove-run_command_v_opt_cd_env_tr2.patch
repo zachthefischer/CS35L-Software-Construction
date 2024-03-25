@@ -1,0 +1,78 @@
+From ef249b398e26dd76f473ce83a35219c520f6fdbe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 30 Oct 2022 12:53:40 +0100
+Subject: [PATCH 0269/2871] replace and remove run_command_v_opt_cd_env_tr2()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The convenience function run_command_v_opt_cd_env_tr2() has no external
+callers left.  Inline it and remove it from the API.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ run-command.c | 10 ----------
+ run-command.h | 10 +---------
+ 2 files changed, 1 insertion(+), 19 deletions(-)
+
+diff --git a/run-command.c b/run-command.c
+index 32fa4b0ed6..923bad37fe 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -1005,12 +1005,6 @@ int run_command(struct child_process *cmd)
+ }
+ 
+ int run_command_v_opt(const char **argv, int opt)
+-{
+-	return run_command_v_opt_cd_env_tr2(argv, opt, NULL, NULL, NULL);
+-}
+-
+-int run_command_v_opt_cd_env_tr2(const char **argv, int opt, const char *dir,
+-				 const char *const *env, const char *tr2_class)
+ {
+ 	struct child_process cmd = CHILD_PROCESS_INIT;
+ 	strvec_pushv(&cmd.args, argv);
+@@ -1022,10 +1016,6 @@ int run_command_v_opt_cd_env_tr2(const char **argv, int opt, const char *dir,
+ 	cmd.clean_on_exit = opt & RUN_CLEAN_ON_EXIT ? 1 : 0;
+ 	cmd.wait_after_clean = opt & RUN_WAIT_AFTER_CLEAN ? 1 : 0;
+ 	cmd.close_object_store = opt & RUN_CLOSE_OBJECT_STORE ? 1 : 0;
+-	cmd.dir = dir;
+-	if (env)
+-		strvec_pushv(&cmd.env, (const char **)env);
+-	cmd.trace2_child_class = tr2_class;
+ 	return run_command(&cmd);
+ }
+ 
+diff --git a/run-command.h b/run-command.h
+index 1bfa18575e..63ed6e18ff 100644
+--- a/run-command.h
++++ b/run-command.h
+@@ -233,23 +233,15 @@ int run_auto_maintenance(int quiet);
+ #define RUN_CLOSE_OBJECT_STORE		(1<<7)
+ 
+ /**
+- * Convenience functions that encapsulate a sequence of
++ * Convenience function that encapsulates a sequence of
+  * start_command() followed by finish_command(). The argument argv
+  * specifies the program and its arguments. The argument opt is zero
+  * or more of the flags `RUN_COMMAND_NO_STDIN`, `RUN_GIT_CMD`,
+  * `RUN_COMMAND_STDOUT_TO_STDERR`, or `RUN_SILENT_EXEC_FAILURE`
+  * that correspond to the members .no_stdin, .git_cmd,
+  * .stdout_to_stderr, .silent_exec_failure of `struct child_process`.
+- * The argument dir corresponds the member .dir. The argument env
+- * corresponds to the member .env.
+  */
+ int run_command_v_opt(const char **argv, int opt);
+-/*
+- * env (the environment) is to be formatted like environ: "VAR=VALUE".
+- * To unset an environment variable use just "VAR".
+- */
+-int run_command_v_opt_cd_env_tr2(const char **argv, int opt, const char *dir,
+-				 const char *const *env, const char *tr2_class);
+ 
+ /**
+  * Execute the given command, sending "in" to its stdin, and capturing its
+-- 
+2.39.3 (Apple Git-145)
+

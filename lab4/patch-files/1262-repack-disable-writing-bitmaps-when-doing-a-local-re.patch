@@ -1,0 +1,173 @@
+From d85cd1877777aa92c73868b9e86516d4be04b4a0 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 14 Apr 2023 08:02:12 +0200
+Subject: [PATCH 1262/2871] repack: disable writing bitmaps when doing a local
+ repack
+
+In order to write a bitmap, we need to have full coverage of all objects
+that are about to be packed. In the traditional non-multi-pack-index
+world this meant we need to do a full repack of all objects into a
+single packfile. But in the new multi-pack-index world we can get away
+with writing bitmaps when we have multiple packfiles as long as the
+multi-pack-index covers all objects.
+
+This is not always the case though. When asked to perform a repack of
+local objects, only, then we cannot guarantee to have full coverage of
+all objects regardless of whether we do a full repack or a repack with a
+multi-pack-index. The end result is that writing the bitmap will fail in
+both worlds:
+
+    $ git multi-pack-index write --stdin-packs --bitmap <packfiles
+    warning: Failed to write bitmap index. Packfile doesn't have full closure (object 1529341d78cf45377407369acb0f4ff2b5cdae42 is missing)
+    error: could not write multi-pack bitmap
+
+Now there are two different ways to fix this. The first one would be to
+amend git-multi-pack-index(1) to disable writing bitmaps when we notice
+that we don't have full object coverage.
+
+    - We don't have enough information in git-multi-pack-index(1) in
+      order to tell whether the local repository _should_ have full
+      coverage. Because even when connected to an alternate object
+      directory, it may be the case that we still have all objects
+      around in the main object database.
+
+    - git-multi-pack-index(1) is quite a low-level tool. Automatically
+      disabling functionality that it was asked to provide does not feel
+      like the right thing to do.
+
+We can easily fix it at a higher level in git-repack(1) though. When
+asked to only include local objects via `-l` and when connected to an
+alternate object directory then we will override the user's ask and
+disable writing bitmaps with a warning. This is similar to what we do in
+git-pack-objects(1), where we also disable writing bitmaps in case we
+omit an object from the pack.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c            | 12 ++++++++++++
+ object-file.c               |  6 ++++++
+ object-store.h              |  1 +
+ t/t7700-repack.sh           | 17 +++++++++++++++++
+ t/t7703-repack-geometric.sh | 27 +++++++++++++++++++++++++++
+ 5 files changed, 63 insertions(+)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 165fe1b628..c26f06769b 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -885,6 +885,18 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 	if (write_bitmaps && !(pack_everything & ALL_INTO_ONE) && !write_midx)
+ 		die(_(incremental_bitmap_conflict_error));
+ 
++	if (write_bitmaps && po_args.local && has_alt_odb(the_repository)) {
++		/*
++		 * When asked to do a local repack, but we have
++		 * packfiles that are inherited from an alternate, then
++		 * we cannot guarantee that the multi-pack-index would
++		 * have full coverage of all objects. We thus disable
++		 * writing bitmaps in that case.
++		 */
++		warning(_("disabling bitmap writing, as some objects are not being packed"));
++		write_bitmaps = 0;
++	}
++
+ 	if (write_midx && write_bitmaps) {
+ 		struct strbuf path = STRBUF_INIT;
+ 
+diff --git a/object-file.c b/object-file.c
+index 939865c1ae..a6574b265d 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -944,6 +944,12 @@ void prepare_alt_odb(struct repository *r)
+ 	r->objects->loaded_alternates = 1;
+ }
+ 
++int has_alt_odb(struct repository *r)
++{
++	prepare_alt_odb(r);
++	return !!r->objects->odb->next;
++}
++
+ /* Returns 1 if we have successfully freshened the file, 0 otherwise. */
+ static int freshen_file(const char *fn)
+ {
+diff --git a/object-store.h b/object-store.h
+index 1a713d89d7..8ba010a9d6 100644
+--- a/object-store.h
++++ b/object-store.h
+@@ -56,6 +56,7 @@ KHASH_INIT(odb_path_map, const char * /* key: odb_path */,
+ 	struct object_directory *, 1, fspathhash, fspatheq)
+ 
+ void prepare_alt_odb(struct repository *r);
++int has_alt_odb(struct repository *r);
+ char *compute_alternate_path(const char *path, struct strbuf *err);
+ struct object_directory *find_odb(struct repository *r, const char *obj_dir);
+ typedef int alt_odb_fn(struct object_directory *, void *);
+diff --git a/t/t7700-repack.sh b/t/t7700-repack.sh
+index 4aabe98139..faa739eeb9 100755
+--- a/t/t7700-repack.sh
++++ b/t/t7700-repack.sh
+@@ -106,6 +106,23 @@ test_expect_success SYMLINKS '--local keeps packs when alternate is objectdir '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success '--local disables writing bitmaps when connected to alternate ODB' '
++	test_when_finished "rm -rf shared member" &&
++
++	git init shared &&
++	git clone --shared shared member &&
++	(
++		cd member &&
++		test_commit "object" &&
++		GIT_TEST_MULTI_PACK_INDEX=0 git repack -Adl --write-bitmap-index 2>err &&
++		cat >expect <<-EOF &&
++		warning: disabling bitmap writing, as some objects are not being packed
++		EOF
++		test_cmp expect err &&
++		test_path_is_missing .git/objects/pack-*.bitmap
++	)
++'
++
+ test_expect_success 'packed obs in alt ODB are repacked even when local repo is packless' '
+ 	mkdir alt_objects/pack &&
+ 	mv .git/objects/pack/* alt_objects/pack &&
+diff --git a/t/t7703-repack-geometric.sh b/t/t7703-repack-geometric.sh
+index be8fe78448..00f28fb558 100755
+--- a/t/t7703-repack-geometric.sh
++++ b/t/t7703-repack-geometric.sh
+@@ -418,4 +418,31 @@ test_expect_success '--geometric -l with non-intact geometric sequence across OD
+ 	test_cmp expected-objects actual-objects
+ '
+ 
++test_expect_success '--geometric -l disables writing bitmaps with non-local packfiles' '
++	test_when_finished "rm -fr shared member" &&
++
++	git init shared &&
++	test_commit_bulk -C shared --start=1 1 &&
++
++	git clone --shared shared member &&
++	test_commit_bulk -C member --start=2 1 &&
++
++	# When performing a geometric repack with `-l` while connected to an
++	# alternate object database that has a packfile we do not have full
++	# coverage of objects. As a result, we expect that writing the bitmap
++	# will be disabled.
++	git -C member repack -l --geometric=2 --write-midx --write-bitmap-index 2>err &&
++	cat >expect <<-EOF &&
++	warning: disabling bitmap writing, as some objects are not being packed
++	EOF
++	test_cmp expect err &&
++	test_path_is_missing member/.git/objects/pack/multi-pack-index-*.bitmap &&
++
++	# On the other hand, when we repack without `-l`, we should see that
++	# the bitmap gets created.
++	git -C member repack --geometric=2 --write-midx --write-bitmap-index 2>err &&
++	test_must_be_empty err &&
++	test_path_is_file member/.git/objects/pack/multi-pack-index-*.bitmap
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

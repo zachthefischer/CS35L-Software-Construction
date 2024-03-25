@@ -1,0 +1,27 @@
+From 93ec6111a6460dd5acf52dbdd7bbfe8ec0c49598 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:27 +0000
+Subject: [PATCH 1665/2871] completion: complete --cc
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index f07b00b9c6..b61c54e37f 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1754,7 +1754,7 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--submodule --submodule= --ignore-submodules
+ 			--indent-heuristic --no-indent-heuristic
+ 			--textconv --no-textconv --break-rewrites
+-			--patch --no-patch
++			--patch --no-patch --cc
+ 			--anchored=
+ "
+ 
+-- 
+2.39.3 (Apple Git-145)
+

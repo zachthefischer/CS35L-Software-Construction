@@ -1,0 +1,80 @@
+From 6799aadfdf484135476aaf74f5d2eb825d9f00e8 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Mar 2023 01:07:06 -0500
+Subject: [PATCH 1004/2871] diff: factor out src/dst prefix setup
+
+We directly manipulate diffopt's a_prefix and b_prefix to set up either
+the default "a/foo" prefix or the "--no-prefix" variant. Although this
+is only a few lines, it's worth pulling these into their own functions.
+That lets us avoid one repetition already in this patch, but will also
+give us a cleaner interface for callers which want to tweak this
+setting.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 19 ++++++++++++++-----
+ diff.h |  2 ++
+ 2 files changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index 469e18aed2..750d1b1a6c 100644
+--- a/diff.c
++++ b/diff.c
+@@ -3374,6 +3374,17 @@ void diff_set_mnemonic_prefix(struct diff_options *options, const char *a, const
+ 		options->b_prefix = b;
+ }
+ 
++void diff_set_noprefix(struct diff_options *options)
++{
++	options->a_prefix = options->b_prefix = "";
++}
++
++void diff_set_default_prefix(struct diff_options *options)
++{
++	options->a_prefix = "a/";
++	options->b_prefix = "b/";
++}
++
+ struct userdiff_driver *get_textconv(struct repository *r,
+ 				     struct diff_filespec *one)
+ {
+@@ -4674,10 +4685,9 @@ void repo_diff_setup(struct repository *r, struct diff_options *options)
+ 		options->flags.ignore_untracked_in_submodules = 1;
+ 
+ 	if (diff_no_prefix) {
+-		options->a_prefix = options->b_prefix = "";
++		diff_set_noprefix(options);
+ 	} else if (!diff_mnemonic_prefix) {
+-		options->a_prefix = "a/";
+-		options->b_prefix = "b/";
++		diff_set_default_prefix(options);
+ 	}
+ 
+ 	options->color_moved = diff_color_moved_default;
+@@ -5261,8 +5271,7 @@ static int diff_opt_no_prefix(const struct option *opt,
+ 
+ 	BUG_ON_OPT_NEG(unset);
+ 	BUG_ON_OPT_ARG(optarg);
+-	options->a_prefix = "";
+-	options->b_prefix = "";
++	diff_set_noprefix(options);
+ 	return 0;
+ }
+ 
+diff --git a/diff.h b/diff.h
+index 8d770b1d57..2af10bc585 100644
+--- a/diff.h
++++ b/diff.h
+@@ -497,6 +497,8 @@ void diff_tree_combined(const struct object_id *oid, const struct oid_array *par
+ void diff_tree_combined_merge(const struct commit *commit, struct rev_info *rev);
+ 
+ void diff_set_mnemonic_prefix(struct diff_options *options, const char *a, const char *b);
++void diff_set_noprefix(struct diff_options *options);
++void diff_set_default_prefix(struct diff_options *options);
+ 
+ int diff_can_quit_early(struct diff_options *);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

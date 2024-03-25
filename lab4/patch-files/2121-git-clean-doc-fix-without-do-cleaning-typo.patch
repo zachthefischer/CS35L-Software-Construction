@@ -1,0 +1,29 @@
+From 563f339d984f42d6c6e65a693ce52c2fea68788b Mon Sep 17 00:00:00 2001
+From: Caleb Hill <chill389cc@gmail.com>
+Date: Fri, 15 Sep 2023 17:53:29 +0000
+Subject: [PATCH 2121/2871] git-clean doc: fix "without do cleaning" typo
+
+"quit without do cleaning" is not grammatical.
+
+Signed-off-by: Caleb Hill <chill389cc@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-clean.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-clean.txt b/Documentation/git-clean.txt
+index 91742633fa..24ad979ff9 100644
+--- a/Documentation/git-clean.txt
++++ b/Documentation/git-clean.txt
+@@ -127,7 +127,7 @@ ask each::
+ 
+ quit::
+ 
+-  This lets you quit without do cleaning.
++  This lets you quit without doing any cleaning.
+ 
+ help::
+ 
+-- 
+2.39.3 (Apple Git-145)
+

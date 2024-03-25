@@ -1,0 +1,42 @@
+From 3423e372e4021b6608d4b5e65da9231425d0c455 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Fri, 14 Jul 2023 06:01:30 +0000
+Subject: [PATCH 1807/2871] SubmittingPatches: discuss subsystems separately
+ from git.git
+
+The discussion around subsystems disrupts the flow of discussion in the
+surrounding area, which only deals with starting points used for the
+git.git project. So move this bullet point out to the end.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index b89678cedc..7919a362e3 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -35,14 +35,14 @@ change is relevant to.
+   to stabilize, you would have to rebase it (see the "depends on other
+   topics" above).
+ 
+-* Some parts of the system have dedicated maintainers with their own
+-  repositories (see the section "Subsystems" below).  Changes to
+-  these parts should be based on their trees.
+-
+ To find the tip of a topic branch, run `git log --first-parent
+ master..seen` and look for the merge commit. The second parent of this
+ commit is the tip of the topic branch.
+ 
++Finally, note that some parts of the system have dedicated maintainers
++with their own separate source code repositories (see the section
++"Subsystems" below).
++
+ [[separate-commits]]
+ === Make separate commits for logically separate changes.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

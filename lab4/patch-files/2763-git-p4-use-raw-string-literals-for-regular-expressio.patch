@@ -1,0 +1,123 @@
+From 90231982800152c4d66d0feb026c2ed8d28949d4 Mon Sep 17 00:00:00 2001
+From: James Touton <bekenn@gmail.com>
+Date: Fri, 26 Jan 2024 23:41:36 +0000
+Subject: [PATCH 2763/2871] git-p4: use raw string literals for regular
+ expressions
+
+Fixes several Python diagnostics about invalid escape sequences. The
+diagnostics appear for me in Python 3.12, and may appear in earlier
+versions. The fix is to use raw string literals so that backslashes are
+not interpreted as introducing escape sequences. Raw string literals
+are already in use in this file, so adding more does not impact
+toolchain compatibility.
+
+Signed-off-by: James Touton <bekenn@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-p4.py | 26 +++++++++++++-------------
+ 1 file changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/git-p4.py b/git-p4.py
+index 0eb3bb4c47..156597adb5 100755
+--- a/git-p4.py
++++ b/git-p4.py
+@@ -689,8 +689,8 @@ def setP4ExecBit(file, mode):
+ 
+     if not isModeExec(mode):
+         p4Type = getP4OpenedType(file)
+-        p4Type = re.sub('^([cku]?)x(.*)', '\\1\\2', p4Type)
+-        p4Type = re.sub('(.*?\+.*?)x(.*?)', '\\1\\2', p4Type)
++        p4Type = re.sub(r'^([cku]?)x(.*)', r'\1\2', p4Type)
++        p4Type = re.sub(r'(.*?\+.*?)x(.*?)', r'\1\2', p4Type)
+         if p4Type[-1] == "+":
+             p4Type = p4Type[0:-1]
+ 
+@@ -701,7 +701,7 @@ def getP4OpenedType(file):
+     """Returns the perforce file type for the given file."""
+ 
+     result = p4_read_pipe(["opened", wildcard_encode(file)])
+-    match = re.match(".*\((.+)\)( \*exclusive\*)?\r?$", result)
++    match = re.match(r".*\((.+)\)( \*exclusive\*)?\r?$", result)
+     if match:
+         return match.group(1)
+     else:
+@@ -757,7 +757,7 @@ def parseDiffTreeEntry(entry):
+ 
+     global _diff_tree_pattern
+     if not _diff_tree_pattern:
+-        _diff_tree_pattern = re.compile(':(\d+) (\d+) (\w+) (\w+) ([A-Z])(\d+)?\t(.*?)((\t(.*))|$)')
++        _diff_tree_pattern = re.compile(r':(\d+) (\d+) (\w+) (\w+) ([A-Z])(\d+)?\t(.*?)((\t(.*))|$)')
+ 
+     match = _diff_tree_pattern.match(entry)
+     if match:
+@@ -918,9 +918,9 @@ def p4CmdList(cmd, stdin=None, stdin_mode='w+b', cb=None, skip_info=False,
+             if len(result) > 0:
+                 data = result[0].get('data')
+                 if data:
+-                    m = re.search('Too many rows scanned \(over (\d+)\)', data)
++                    m = re.search(r'Too many rows scanned \(over (\d+)\)', data)
+                     if not m:
+-                        m = re.search('Request too large \(over (\d+)\)', data)
++                        m = re.search(r'Request too large \(over (\d+)\)', data)
+ 
+                     if m:
+                         limit = int(m.group(1))
+@@ -1452,7 +1452,7 @@ def wildcard_encode(path):
+ 
+ 
+ def wildcard_present(path):
+-    m = re.search("[*#@%]", path)
++    m = re.search(r"[*#@%]", path)
+     return m is not None
+ 
+ 
+@@ -3048,7 +3048,7 @@ def stripRepoPath(self, path, prefixes):
+             # Preserve everything in relative path name except leading
+             # //depot/; just look at first prefix as they all should
+             # be in the same depot.
+-            depot = re.sub("^(//[^/]+/).*", r'\1', prefixes[0])
++            depot = re.sub(r"^(//[^/]+/).*", r'\1', prefixes[0])
+             if p4PathStartsWith(path, depot):
+                 path = path[len(depot):]
+ 
+@@ -3603,7 +3603,7 @@ def importP4Labels(self, stream, p4Labels):
+                     commitFound = True
+                 else:
+                     gitCommit = read_pipe(["git", "rev-list", "--max-count=1",
+-                        "--reverse", ":/\[git-p4:.*change = %d\]" % changelist], ignore_error=True)
++                        "--reverse", r":/\[git-p4:.*change = %d\]" % changelist], ignore_error=True)
+                     if len(gitCommit) == 0:
+                         print("importing label %s: could not find git commit for changelist %d" % (name, changelist))
+                     else:
+@@ -4182,7 +4182,7 @@ def run(self, args):
+                 if len(self.changesFile) == 0:
+                     revision = "#head"
+ 
+-            p = re.sub("\.\.\.$", "", p)
++            p = re.sub(r"\.\.\.$", "", p)
+             if not p.endswith("/"):
+                 p += "/"
+ 
+@@ -4291,7 +4291,7 @@ def rebase(self):
+             die("Cannot find upstream branchpoint for rebase")
+ 
+         # the branchpoint may be p4/foo~3, so strip off the parent
+-        upstream = re.sub("~[0-9]+$", "", upstream)
++        upstream = re.sub(r"~[0-9]+$", "", upstream)
+ 
+         print("Rebasing the current branch onto %s" % upstream)
+         oldHead = read_pipe(["git", "rev-parse", "HEAD"]).strip()
+@@ -4320,8 +4320,8 @@ def __init__(self):
+     def defaultDestination(self, args):
+         # TODO: use common prefix of args?
+         depotPath = args[0]
+-        depotDir = re.sub("(@[^@]*)$", "", depotPath)
+-        depotDir = re.sub("(#[^#]*)$", "", depotDir)
++        depotDir = re.sub(r"(@[^@]*)$", "", depotPath)
++        depotDir = re.sub(r"(#[^#]*)$", "", depotDir)
+         depotDir = re.sub(r"\.\.\.$", "", depotDir)
+         depotDir = re.sub(r"/$", "", depotDir)
+         return os.path.split(depotDir)[1]
+-- 
+2.39.3 (Apple Git-145)
+

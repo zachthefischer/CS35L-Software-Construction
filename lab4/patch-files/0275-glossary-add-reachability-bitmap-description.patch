@@ -1,0 +1,35 @@
+From 8fea12ab40aab3e0590a5980ce336437b5dcc694 Mon Sep 17 00:00:00 2001
+From: Philip Oakley <philipoakley@iee.email>
+Date: Sat, 29 Oct 2022 17:41:11 +0100
+Subject: [PATCH 0275/2871] glossary: add reachability bitmap description
+
+Describe the purpose of the reachability bitmap.
+
+Signed-off-by: Philip Oakley <philipoakley@iee.email>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/glossary-content.txt | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Documentation/glossary-content.txt b/Documentation/glossary-content.txt
+index a526710278..5a537268e2 100644
+--- a/Documentation/glossary-content.txt
++++ b/Documentation/glossary-content.txt
+@@ -508,6 +508,14 @@ exclude;;
+ 	<<def_tree_object,trees>> to the trees or <<def_blob_object,blobs>>
+ 	that they contain.
+ 
++[[def_reachability_bitmap]]reachability bitmaps::
++	Reachability bitmaps store information about the
++	<<def_reachable,reachability>> of a selected set of commits in
++	a packfile, or a multi-pack index (MIDX), to speed up object search.
++	The bitmaps are stored in a ".bitmap" file. A repository may have at
++	most one bitmap file in use. The bitmap file may belong to either one
++	pack, or the repository's multi-pack index (if it exists).
++
+ [[def_rebase]]rebase::
+ 	To reapply a series of changes from a <<def_branch,branch>> to a
+ 	different base, and reset the <<def_head,head>> of that branch
+-- 
+2.39.3 (Apple Git-145)
+

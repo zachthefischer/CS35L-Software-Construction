@@ -1,0 +1,53 @@
+From d716512870317692129b2b4d706a82b393ffbe6e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:37:40 +0200
+Subject: [PATCH 1891/2871] subtree: disallow
+ --no-{help,quiet,debug,branch,message}
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+"git subtree" only handles the negated variant of the options annotate,
+prefix, onto, rejoin, ignore-joins and squash explicitly.  help is
+handled by "git rev-parse --parseopt" implicitly, but not its negated
+form.  Disable negation for it and the for the rest of the options to
+get a helpful error message when trying them.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/git-subtree.sh | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index 7db4c45676..e0c5d3b0de 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -33,19 +33,19 @@ git subtree split --prefix=<prefix> [<commit>]
+ git subtree pull  --prefix=<prefix> <repository> <ref>
+ git subtree push  --prefix=<prefix> <repository> <refspec>
+ --
+-h,help        show the help
+-q,quiet       quiet
+-d,debug       show debug messages
++h,help!       show the help
++q,quiet!      quiet
++d,debug!      show debug messages
+ P,prefix=     the name of the subdir to split out
+  options for 'split' (also: 'push')
+ annotate=     add a prefix to commit message of new commits
+-b,branch=     create a new branch from the split subtree
++b,branch!=    create a new branch from the split subtree
+ ignore-joins  ignore prior --rejoin commits
+ onto=         try connecting new tree to an existing one
+ rejoin        merge the new branch back into HEAD
+  options for 'add' and 'merge' (also: 'pull', 'split --rejoin', and 'push --rejoin')
+ squash        merge subtree changes as a single commit
+-m,message=    use the given message as the commit message for the merge commit
++m,message!=   use the given message as the commit message for the merge commit
+ "
+ 
+ indent=0
+-- 
+2.39.3 (Apple Git-145)
+

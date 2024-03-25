@@ -1,0 +1,59 @@
+From 48750b2d0d22f07d60c6179a7c3726446060136a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 30 Oct 2022 12:47:02 +0100
+Subject: [PATCH 0262/2871] bisect: simplify building "checkout" argument list
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Reduce the scope of argv_checkout, which allows to fully build it during
+initialization.  Use oid_to_hex() instead of oid_to_hex_r(), because
+that's simpler and using the static buffer of the former is just as safe
+as the old static argv_checkout.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ bisect.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/bisect.c b/bisect.c
+index fd581b85a7..090aa5c4b4 100644
+--- a/bisect.c
++++ b/bisect.c
+@@ -22,8 +22,6 @@ static struct oid_array skipped_revs;
+ 
+ static struct object_id *current_bad_oid;
+ 
+-static const char *argv_checkout[] = {"checkout", "-q", NULL, "--", NULL};
+-
+ static const char *term_bad;
+ static const char *term_good;
+ 
+@@ -729,19 +727,20 @@ static int is_expected_rev(const struct object_id *oid)
+ enum bisect_error bisect_checkout(const struct object_id *bisect_rev,
+ 				  int no_checkout)
+ {
+-	char bisect_rev_hex[GIT_MAX_HEXSZ + 1];
+ 	struct commit *commit;
+ 	struct pretty_print_context pp = {0};
+ 	struct strbuf commit_msg = STRBUF_INIT;
+ 
+-	oid_to_hex_r(bisect_rev_hex, bisect_rev);
+ 	update_ref(NULL, "BISECT_EXPECTED_REV", bisect_rev, NULL, 0, UPDATE_REFS_DIE_ON_ERR);
+ 
+-	argv_checkout[2] = bisect_rev_hex;
+ 	if (no_checkout) {
+ 		update_ref(NULL, "BISECT_HEAD", bisect_rev, NULL, 0,
+ 			   UPDATE_REFS_DIE_ON_ERR);
+ 	} else {
++		const char *argv_checkout[] = {
++			"checkout", "-q", oid_to_hex(bisect_rev), "--", NULL
++		};
++
+ 		if (run_command_v_opt(argv_checkout, RUN_GIT_CMD))
+ 			/*
+ 			 * Errors in `run_command()` itself, signaled by res < 0,
+-- 
+2.39.3 (Apple Git-145)
+

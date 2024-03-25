@@ -1,0 +1,207 @@
+From 6021e1d1580169532512772afbb86996f717f4ae Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Wed, 28 Jun 2023 19:26:23 +0000
+Subject: [PATCH 1700/2871] config.c: pass ctx in configsets
+
+Pass config_context to config callbacks in configset_iter(), trivially
+setting the .kvi member to the cached key_value_info. Then, in config
+callbacks that are only used with configsets, use the .kvi member to
+replace calls to current_config_*(), and delete current_config_line()
+because it has no remaining callers.
+
+This leaves builtin/config.c and config.c as the only remaining users of
+current_config_*().
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/remote.c       | 10 ++++++----
+ config.c               | 35 ++++++++++++++++-------------------
+ config.h               |  2 +-
+ remote.c               |  7 ++++---
+ t/helper/test-config.c | 11 ++++++-----
+ 5 files changed, 33 insertions(+), 32 deletions(-)
+
+diff --git a/builtin/remote.c b/builtin/remote.c
+index 87de81105e..d47f9ee21c 100644
+--- a/builtin/remote.c
++++ b/builtin/remote.c
+@@ -646,17 +646,19 @@ struct push_default_info
+ };
+ 
+ static int config_read_push_default(const char *key, const char *value,
+-	const struct config_context *ctx UNUSED, void *cb)
++	const struct config_context *ctx, void *cb)
+ {
++	const struct key_value_info *kvi = ctx->kvi;
++
+ 	struct push_default_info* info = cb;
+ 	if (strcmp(key, "remote.pushdefault") ||
+ 	    !value || strcmp(value, info->old_name))
+ 		return 0;
+ 
+-	info->scope = current_config_scope();
++	info->scope = kvi->scope;
+ 	strbuf_reset(&info->origin);
+-	strbuf_addstr(&info->origin, current_config_name());
+-	info->linenr = current_config_line();
++	strbuf_addstr(&info->origin, config_origin_type_name(kvi->origin_type));
++	info->linenr = kvi->linenr;
+ 
+ 	return 0;
+ }
+diff --git a/config.c b/config.c
+index 850e432e30..662d406ac1 100644
+--- a/config.c
++++ b/config.c
+@@ -2317,6 +2317,7 @@ static void configset_iter(struct config_reader *reader, struct config_set *set,
+ 	struct string_list *values;
+ 	struct config_set_element *entry;
+ 	struct configset_list *list = &set->list;
++	struct config_context ctx = CONFIG_CONTEXT_INIT;
+ 
+ 	for (i = 0; i < list->nr; i++) {
+ 		entry = list->items[i].e;
+@@ -2324,12 +2325,11 @@ static void configset_iter(struct config_reader *reader, struct config_set *set,
+ 		values = &entry->value_list;
+ 
+ 		config_reader_set_kvi(reader, values->items[value_index].util);
+-
+-		if (fn(entry->key, values->items[value_index].string, NULL, data) < 0)
++		ctx.kvi = values->items[value_index].util;
++		if (fn(entry->key, values->items[value_index].string, &ctx, data) < 0)
+ 			git_die_config_linenr(entry->key,
+-					      reader->config_kvi->filename,
+-					      reader->config_kvi->linenr);
+-
++					      ctx.kvi->filename,
++					      ctx.kvi->linenr);
+ 		config_reader_set_kvi(reader, NULL);
+ 	}
+ }
+@@ -3984,13 +3984,8 @@ static int reader_origin_type(struct config_reader *reader,
+ 	return 0;
+ }
+ 
+-const char *current_config_origin_type(void)
++const char *config_origin_type_name(enum config_origin_type type)
+ {
+-	enum config_origin_type type = CONFIG_ORIGIN_UNKNOWN;
+-
+-	if (reader_origin_type(&the_reader, &type))
+-		BUG("current_config_origin_type called outside config callback");
+-
+ 	switch (type) {
+ 	case CONFIG_ORIGIN_BLOB:
+ 		return "blob";
+@@ -4007,6 +4002,16 @@ const char *current_config_origin_type(void)
+ 	}
+ }
+ 
++const char *current_config_origin_type(void)
++{
++	enum config_origin_type type = CONFIG_ORIGIN_UNKNOWN;
++
++	if (reader_origin_type(&the_reader, &type))
++		BUG("current_config_origin_type called outside config callback");
++
++	return config_origin_type_name(type);
++}
++
+ const char *config_scope_name(enum config_scope scope)
+ {
+ 	switch (scope) {
+@@ -4054,14 +4059,6 @@ enum config_scope current_config_scope(void)
+ 		return the_reader.parsing_scope;
+ }
+ 
+-int current_config_line(void)
+-{
+-	if (the_reader.config_kvi)
+-		return the_reader.config_kvi->linenr;
+-	else
+-		return the_reader.source->linenr;
+-}
+-
+ int lookup_config(const char **mapping, int nr_mapping, const char *var)
+ {
+ 	int i;
+diff --git a/config.h b/config.h
+index cd30125a8a..ddf147bb2d 100644
+--- a/config.h
++++ b/config.h
+@@ -387,7 +387,7 @@ int git_config_parse_parameter(const char *, config_fn_t fn, void *data);
+ enum config_scope current_config_scope(void);
+ const char *current_config_origin_type(void);
+ const char *current_config_name(void);
+-int current_config_line(void);
++const char *config_origin_type_name(enum config_origin_type type);
+ 
+ /*
+  * Match and parse a config key of the form:
+diff --git a/remote.c b/remote.c
+index 241999c284..1dab860141 100644
+--- a/remote.c
++++ b/remote.c
+@@ -350,7 +350,7 @@ static void read_branches_file(struct remote_state *remote_state,
+ }
+ 
+ static int handle_config(const char *key, const char *value,
+-			 const struct config_context *ctx UNUSED, void *cb)
++			 const struct config_context *ctx, void *cb)
+ {
+ 	const char *name;
+ 	size_t namelen;
+@@ -358,6 +358,7 @@ static int handle_config(const char *key, const char *value,
+ 	struct remote *remote;
+ 	struct branch *branch;
+ 	struct remote_state *remote_state = cb;
++	const struct key_value_info *kvi = ctx->kvi;
+ 
+ 	if (parse_config_key(key, "branch", &name, &namelen, &subkey) >= 0) {
+ 		/* There is no subsection. */
+@@ -415,8 +416,8 @@ static int handle_config(const char *key, const char *value,
+ 	}
+ 	remote = make_remote(remote_state, name, namelen);
+ 	remote->origin = REMOTE_CONFIG;
+-	if (current_config_scope() == CONFIG_SCOPE_LOCAL ||
+-	    current_config_scope() == CONFIG_SCOPE_WORKTREE)
++	if (kvi->scope == CONFIG_SCOPE_LOCAL ||
++	    kvi->scope == CONFIG_SCOPE_WORKTREE)
+ 		remote->configured_in_repo = 1;
+ 	if (!strcmp(subkey, "mirror"))
+ 		remote->mirror = git_config_bool(key, value);
+diff --git a/t/helper/test-config.c b/t/helper/test-config.c
+index 85ad815358..3f4c367831 100644
+--- a/t/helper/test-config.c
++++ b/t/helper/test-config.c
+@@ -43,9 +43,10 @@
+  */
+ 
+ static int iterate_cb(const char *var, const char *value,
+-		      const struct config_context *ctx UNUSED,
++		      const struct config_context *ctx,
+ 		      void *data UNUSED)
+ {
++	const struct key_value_info *kvi = ctx->kvi;
+ 	static int nr;
+ 
+ 	if (nr++)
+@@ -53,10 +54,10 @@ static int iterate_cb(const char *var, const char *value,
+ 
+ 	printf("key=%s\n", var);
+ 	printf("value=%s\n", value ? value : "(null)");
+-	printf("origin=%s\n", current_config_origin_type());
+-	printf("name=%s\n", current_config_name());
+-	printf("lno=%d\n", current_config_line());
+-	printf("scope=%s\n", config_scope_name(current_config_scope()));
++	printf("origin=%s\n", config_origin_type_name(kvi->origin_type));
++	printf("name=%s\n", kvi->filename ? kvi->filename : "");
++	printf("lno=%d\n", kvi->linenr);
++	printf("scope=%s\n", config_scope_name(kvi->scope));
+ 
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

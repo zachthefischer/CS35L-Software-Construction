@@ -1,0 +1,22 @@
+#!/bin/bash
+
+
+comm -23 <(sort -u <(tr -cs 'A-Za-z' '[\n*]')) <(sort -u my.words)
+
+
+
+#include punctuation
+
+
+
+
+# what is it asking me to do?
+# look at linux.words which is the gold standard
+# if there are any words in a file that do not match linux words, print them
+
+
+
+# tr -cs 'A-Za-z' '[\n*]' </usr/share/dict/linux.words | sort -u | comm -23 - sorted.words
+
+#is the same as
+

@@ -1,0 +1,135 @@
+From cebfaaa33332f26e40b99322b7d26f72a2ddcabb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0t=C4=9Bp=C3=A1n=20N=C4=9Bmec?= <stepnem@smrk.net>
+Date: Mon, 9 Oct 2023 19:56:04 +0200
+Subject: [PATCH 2243/2871] doc/cat-file: make synopsis and description less
+ confusing
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The DESCRIPTION's "first form" is actually the 1st, 2nd, 3rd and 5th
+form in SYNOPSIS, the "second form" is the 4th one.
+
+Interestingly, this state of affairs was introduced in
+97fe7250753b (cat-file docs: fix SYNOPSIS and "-h" output, 2021-12-28)
+with the claim of "Now the two will match again." ("the two" being
+DESCRIPTION and SYNOPSIS)...
+
+The description also suffers from other correctness and clarity issues,
+e.g., the "first form" paragraph discusses -p, -s and -t, but leaves out
+-e, which is included in the corresponding SYNOPSIS section; the second
+paragraph mentions <format>, which doesn't occur in SYNOPSIS at all, and
+of the three batch options, really only describes the behavior of
+--batch-check.  Also the mention of "drivers" seems an implementation
+detail not adding much clarity in a short summary (and isn't expanded
+upon in the rest of the man page, either).
+
+Rather than trying to maintain one-to-one (or N-to-M) correspondence
+between the DESCRIPTION and SYNOPSIS forms, creating duplication and
+providing opportunities for error, shorten the former into a concise
+summary describing the two general modes of operation: batch and
+non-batch, leaving details to the subsequent manual sections.
+
+While here, fix a grammar error in the description of -e and make the
+following further minor improvements:
+
+  NAME:
+    shorten ("content or type and size" isn't the whole story; say
+    "details" and leave the actual details to later sections)
+
+  SYNOPSIS and --help:
+    move the (--textconv | --filters) form before --batch, closer
+    to the other non-batch forms
+
+Signed-off-by: Štěpán Němec <stepnem@smrk.net>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-cat-file.txt | 32 +++++++++++++++-----------------
+ builtin/cat-file.c             |  4 ++--
+ 2 files changed, 17 insertions(+), 19 deletions(-)
+
+diff --git a/Documentation/git-cat-file.txt b/Documentation/git-cat-file.txt
+index 0e4936d182..bd95a6c10a 100644
+--- a/Documentation/git-cat-file.txt
++++ b/Documentation/git-cat-file.txt
+@@ -3,8 +3,7 @@ git-cat-file(1)
+ 
+ NAME
+ ----
+-git-cat-file - Provide content or type and size information for repository objects
+-
++git-cat-file - Provide contents or details of repository objects
+ 
+ SYNOPSIS
+ --------
+@@ -12,25 +11,24 @@ SYNOPSIS
+ 'git cat-file' <type> <object>
+ 'git cat-file' (-e | -p) <object>
+ 'git cat-file' (-t | -s) [--allow-unknown-type] <object>
++'git cat-file' (--textconv | --filters)
++	     [<rev>:<path|tree-ish> | --path=<path|tree-ish> <rev>]
+ 'git cat-file' (--batch | --batch-check | --batch-command) [--batch-all-objects]
+ 	     [--buffer] [--follow-symlinks] [--unordered]
+ 	     [--textconv | --filters] [-Z]
+-'git cat-file' (--textconv | --filters)
+-	     [<rev>:<path|tree-ish> | --path=<path|tree-ish> <rev>]
+ 
+ DESCRIPTION
+ -----------
+-In its first form, the command provides the content or the type of an object in
+-the repository. The type is required unless `-t` or `-p` is used to find the
+-object type, or `-s` is used to find the object size, or `--textconv` or
+-`--filters` is used (which imply type "blob").
+-
+-In the second form, a list of objects (separated by linefeeds) is provided on
+-stdin, and the SHA-1, type, and size of each object is printed on stdout. The
+-output format can be overridden using the optional `<format>` argument. If
+-either `--textconv` or `--filters` was specified, the input is expected to
+-list the object names followed by the path name, separated by a single
+-whitespace, so that the appropriate drivers can be determined.
++Output the contents or other properties such as size, type or delta
++information of one or more objects.
++
++This command can operate in two modes, depending on whether an option
++from the `--batch` family is specified.
++
++In non-batch mode, the command provides information on an object
++named on the command line.
++
++In batch mode, arguments are read from standard input.
+ 
+ OPTIONS
+ -------
+@@ -51,8 +49,8 @@ OPTIONS
+ 
+ -e::
+ 	Exit with zero status if `<object>` exists and is a valid
+-	object. If `<object>` is of an invalid format exit with non-zero and
+-	emits an error on stderr.
++	object. If `<object>` is of an invalid format, exit with non-zero
++	status and emit an error on stderr.
+ 
+ -p::
+ 	Pretty-print the contents of `<object>` based on its type.
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index 694c8538df..ea8ad601ec 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -922,11 +922,11 @@ int cmd_cat_file(int argc, const char **argv, const char *prefix)
+ 		N_("git cat-file <type> <object>"),
+ 		N_("git cat-file (-e | -p) <object>"),
+ 		N_("git cat-file (-t | -s) [--allow-unknown-type] <object>"),
++		N_("git cat-file (--textconv | --filters)\n"
++		   "             [<rev>:<path|tree-ish> | --path=<path|tree-ish> <rev>]"),
+ 		N_("git cat-file (--batch | --batch-check | --batch-command) [--batch-all-objects]\n"
+ 		   "             [--buffer] [--follow-symlinks] [--unordered]\n"
+ 		   "             [--textconv | --filters] [-Z]"),
+-		N_("git cat-file (--textconv | --filters)\n"
+-		   "             [<rev>:<path|tree-ish> | --path=<path|tree-ish> <rev>]"),
+ 		NULL
+ 	};
+ 	const struct option options[] = {
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,61 @@
+From 23b7d59a82ce39c0e08a4052de3be9ffbccd99b9 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 21 Jan 2024 21:15:34 +0800
+Subject: [PATCH 2732/2871] remote-curl: supports git-upload-archive service
+
+Add new service (git-upload-archive) support in remote-curl, so we can
+support remote archive over HTTP/HTTPS protocols. Differences between
+git-upload-archive and other services:
+
+ 1. The git-archive program does not expect to see protocol version and
+    capabilities when connecting to remote-helper, so do not send them
+    in remote-curl for the git-upload-archive service.
+
+ 2. We need to detect protocol version by calling discover_refs().
+    Fallback to use the git-upload-pack service (which, like
+    git-upload-archive, is a read-only operation) to discover protocol
+    version.
+
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ remote-curl.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/remote-curl.c b/remote-curl.c
+index ef05752ca5..ce6cb8ac05 100644
+--- a/remote-curl.c
++++ b/remote-curl.c
+@@ -1447,8 +1447,14 @@ static int stateless_connect(const char *service_name)
+ 	 * establish a stateless connection, otherwise we need to tell the
+ 	 * client to fallback to using other transport helper functions to
+ 	 * complete their request.
++	 *
++	 * The "git-upload-archive" service is a read-only operation. Fallback
++	 * to use "git-upload-pack" service to discover protocol version.
+ 	 */
+-	discover = discover_refs(service_name, 0);
++	if (!strcmp(service_name, "git-upload-archive"))
++		discover = discover_refs("git-upload-pack", 0);
++	else
++		discover = discover_refs(service_name, 0);
+ 	if (discover->version != protocol_v2) {
+ 		printf("fallback\n");
+ 		fflush(stdout);
+@@ -1486,9 +1492,11 @@ static int stateless_connect(const char *service_name)
+ 
+ 	/*
+ 	 * Dump the capability listing that we got from the server earlier
+-	 * during the info/refs request.
++	 * during the info/refs request. This does not work with the
++	 * "git-upload-archive" service.
+ 	 */
+-	write_or_die(rpc.in, discover->buf, discover->len);
++	if (strcmp(service_name, "git-upload-archive"))
++		write_or_die(rpc.in, discover->buf, discover->len);
+ 
+ 	/* Until we see EOF keep sending POSTs */
+ 	while (1) {
+-- 
+2.39.3 (Apple Git-145)
+

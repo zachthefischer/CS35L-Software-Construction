@@ -1,0 +1,74 @@
+From 13d5bbdf72aab109c9b69994c90aaff2a0b7e42f Mon Sep 17 00:00:00 2001
+From: Ronan Pigott <ronan@rjp.ie>
+Date: Wed, 9 Nov 2022 12:07:07 -0700
+Subject: [PATCH 0386/2871] for-each-repo: interpolate repo path arguments
+
+This is a quality of life change for git-maintenance, so repos can be
+recorded with the tilde syntax. The register subcommand will not record
+repos in this format by default.
+
+Signed-off-by: Ronan Pigott <ronan@rjp.ie>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/for-each-repo.c  | 5 ++++-
+ t/t0068-for-each-repo.sh | 6 ++++++
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/for-each-repo.c b/builtin/for-each-repo.c
+index d45d873f57..6aeac37148 100644
+--- a/builtin/for-each-repo.c
++++ b/builtin/for-each-repo.c
+@@ -14,13 +14,16 @@ static int run_command_on_repo(const char *path, int argc, const char ** argv)
+ {
+ 	int i;
+ 	struct child_process child = CHILD_PROCESS_INIT;
++	char *abspath = interpolate_path(path, 0);
+ 
+ 	child.git_cmd = 1;
+-	strvec_pushl(&child.args, "-C", path, NULL);
++	strvec_pushl(&child.args, "-C", abspath, NULL);
+ 
+ 	for (i = 0; i < argc; i++)
+ 		strvec_push(&child.args, argv[i]);
+ 
++	free(abspath);
++
+ 	return run_command(&child);
+ }
+ 
+diff --git a/t/t0068-for-each-repo.sh b/t/t0068-for-each-repo.sh
+index 4675e85251..c6e0d65563 100755
+--- a/t/t0068-for-each-repo.sh
++++ b/t/t0068-for-each-repo.sh
+@@ -8,9 +8,11 @@ test_expect_success 'run based on configured value' '
+ 	git init one &&
+ 	git init two &&
+ 	git init three &&
++	git init ~/four &&
+ 	git -C two commit --allow-empty -m "DID NOT RUN" &&
+ 	git config run.key "$TRASH_DIRECTORY/one" &&
+ 	git config --add run.key "$TRASH_DIRECTORY/three" &&
++	git config --add run.key "~/four" &&
+ 	git for-each-repo --config=run.key commit --allow-empty -m "ran" &&
+ 	git -C one log -1 --pretty=format:%s >message &&
+ 	grep ran message &&
+@@ -18,12 +20,16 @@ test_expect_success 'run based on configured value' '
+ 	! grep ran message &&
+ 	git -C three log -1 --pretty=format:%s >message &&
+ 	grep ran message &&
++	git -C ~/four log -1 --pretty=format:%s >message &&
++	grep ran message &&
+ 	git for-each-repo --config=run.key -- commit --allow-empty -m "ran again" &&
+ 	git -C one log -1 --pretty=format:%s >message &&
+ 	grep again message &&
+ 	git -C two log -1 --pretty=format:%s >message &&
+ 	! grep again message &&
+ 	git -C three log -1 --pretty=format:%s >message &&
++	grep again message &&
++	git -C ~/four log -1 --pretty=format:%s >message &&
+ 	grep again message
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

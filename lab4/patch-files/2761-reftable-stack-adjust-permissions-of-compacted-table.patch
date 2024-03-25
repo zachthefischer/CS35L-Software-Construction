@@ -1,0 +1,98 @@
+From b3a79dd4e97a76317b528437e7413452b285ee88 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 26 Jan 2024 11:09:10 +0100
+Subject: [PATCH 2761/2871] reftable/stack: adjust permissions of compacted
+ tables
+
+When creating a new compacted table from a range of preexisting ones we
+don't set the default permissions on the resulting table when specified
+by the user. This has the effect that the "core.sharedRepository" config
+will not be honored correctly.
+
+Fix this bug and add a test to catch this issue. Note that we only test
+on non-Windows platforms because Windows does not use POSIX permissions
+natively.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c      |  6 ++++++
+ reftable/stack_test.c | 25 +++++++++++++++++++++++--
+ 2 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index 7ffeb3ee10..38e784a8ab 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -731,6 +731,12 @@ static int stack_compact_locked(struct reftable_stack *st, int first, int last,
+ 	strbuf_addstr(temp_tab, ".temp.XXXXXX");
+ 
+ 	tab_fd = mkstemp(temp_tab->buf);
++	if (st->config.default_permissions &&
++	    chmod(temp_tab->buf, st->config.default_permissions) < 0) {
++		err = REFTABLE_IO_ERROR;
++		goto done;
++	}
++
+ 	wr = reftable_new_writer(reftable_fd_write, &tab_fd, &st->config);
+ 
+ 	err = stack_write_compact(st, wr, first, last, config);
+diff --git a/reftable/stack_test.c b/reftable/stack_test.c
+index 289e902146..5089392f7b 100644
+--- a/reftable/stack_test.c
++++ b/reftable/stack_test.c
+@@ -443,15 +443,16 @@ static void test_reftable_stack_add(void)
+ 	int err = 0;
+ 	struct reftable_write_options cfg = {
+ 		.exact_log_message = 1,
++		.default_permissions = 0660,
+ 	};
+ 	struct reftable_stack *st = NULL;
+ 	char *dir = get_tmp_dir(__LINE__);
+-
+ 	struct reftable_ref_record refs[2] = { { NULL } };
+ 	struct reftable_log_record logs[2] = { { NULL } };
++	struct strbuf path = STRBUF_INIT;
++	struct stat stat_result;
+ 	int N = ARRAY_SIZE(refs);
+ 
+-
+ 	err = reftable_new_stack(&st, dir, cfg);
+ 	EXPECT_ERR(err);
+ 	st->disable_auto_compact = 1;
+@@ -509,12 +510,32 @@ static void test_reftable_stack_add(void)
+ 		reftable_log_record_release(&dest);
+ 	}
+ 
++#ifndef GIT_WINDOWS_NATIVE
++	strbuf_addstr(&path, dir);
++	strbuf_addstr(&path, "/tables.list");
++	err = stat(path.buf, &stat_result);
++	EXPECT(!err);
++	EXPECT((stat_result.st_mode & 0777) == cfg.default_permissions);
++
++	strbuf_reset(&path);
++	strbuf_addstr(&path, dir);
++	strbuf_addstr(&path, "/");
++	/* do not try at home; not an external API for reftable. */
++	strbuf_addstr(&path, st->readers[0]->name);
++	err = stat(path.buf, &stat_result);
++	EXPECT(!err);
++	EXPECT((stat_result.st_mode & 0777) == cfg.default_permissions);
++#else
++	(void) stat_result;
++#endif
++
+ 	/* cleanup */
+ 	reftable_stack_destroy(st);
+ 	for (i = 0; i < N; i++) {
+ 		reftable_ref_record_release(&refs[i]);
+ 		reftable_log_record_release(&logs[i]);
+ 	}
++	strbuf_release(&path);
+ 	clear_dir(dir);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

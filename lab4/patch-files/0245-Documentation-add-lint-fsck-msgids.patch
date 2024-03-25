@@ -1,0 +1,124 @@
+From 3882a0d3ad92ace6559c950921d9afb4cdcc7ea0 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 25 Oct 2022 15:42:24 -0700
+Subject: [PATCH 0245/2871] Documentation: add lint-fsck-msgids
+
+During the initial development of the fsck-msgids.txt feature, it
+has become apparent that it is very much error prone to make sure
+the description in the documentation file are sorted and correctly
+match what is in the fsck.h header file.
+
+Add a quick-and-dirty Perl script and doc-lint target to sanity
+check that the fsck-msgids.txt is consistent with the error type
+list in the fsck.h header file.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/Makefile              | 11 +++++
+ Documentation/lint-fsck-msgids.perl | 70 +++++++++++++++++++++++++++++
+ 2 files changed, 81 insertions(+)
+ create mode 100755 Documentation/lint-fsck-msgids.perl
+
+diff --git a/Documentation/Makefile b/Documentation/Makefile
+index d47acb2e25..5e1a7f655c 100644
+--- a/Documentation/Makefile
++++ b/Documentation/Makefile
+@@ -476,8 +476,19 @@ $(LINT_DOCS_MAN_SECTION_ORDER): .build/lint-docs/man-section-order/%.ok: %.txt
+ .PHONY: lint-docs-man-section-order
+ lint-docs-man-section-order: $(LINT_DOCS_MAN_SECTION_ORDER)
+ 
++.PHONY: lint-docs-fsck-msgids
++LINT_DOCS_FSCK_MSGIDS = .build/lint-docs/fsck-msgids.ok
++$(LINT_DOCS_FSCK_MSGIDS): lint-fsck-msgids.perl
++$(LINT_DOCS_FSCK_MSGIDS): ../fsck.h fsck-msgids.txt
++	$(call mkdir_p_parent_template)
++	$(QUIET_GEN)$(PERL_PATH) lint-fsck-msgids.perl \
++		../fsck.h fsck-msgids.txt $@
++
++lint-docs-fsck-msgids: $(LINT_DOCS_FSCK_MSGIDS)
++
+ ## Lint: list of targets above
+ .PHONY: lint-docs
++lint-docs: lint-docs-fsck-msgids
+ lint-docs: lint-docs-gitlink
+ lint-docs: lint-docs-man-end-blurb
+ lint-docs: lint-docs-man-section-order
+diff --git a/Documentation/lint-fsck-msgids.perl b/Documentation/lint-fsck-msgids.perl
+new file mode 100755
+index 0000000000..1233ffe815
+--- /dev/null
++++ b/Documentation/lint-fsck-msgids.perl
+@@ -0,0 +1,70 @@
++#!/usr/bin/perl
++
++my ($fsck_h, $fsck_msgids_txt, $okfile) = @ARGV;
++
++my (%in_fsck_h, $fh, $bad);
++
++open($fh, "<", "$fsck_h") or die;
++while (<$fh>) {
++	if (/^\s+FUNC\(([0-9A-Z_]+), ([A-Z]+)\)/) {
++		my ($name, $severity) = ($1, $2);
++		my ($first) = 1;
++		$name = join('',
++			     map {
++				     y/A-Z/a-z/;
++				     if (!$first) {
++					     s/^(.)/uc($1)/e;
++				     } else {
++					     $first = 0;
++				     }
++				     $_;
++			     }
++			     split(/_/, $name));
++		$in_fsck_h{$name} = $severity;
++	}
++}
++close($fh);
++
++open($fh, "<", "$fsck_msgids_txt") or die;
++my ($previous, $current);
++while (<$fh>) {
++	if (!defined $current) {
++		if (/^\`([a-zA-Z0-9]*)\`::/) {
++			$current = $1;
++			if ((defined $previous) &&
++			    ($current le $previous)) {
++				print STDERR "$previous >= $current in doc\n";
++				$bad = 1;
++			}
++		}
++	} elsif (/^\s+\(([A-Z]+)\) /) {
++		my ($level) = $1;
++		if (!exists $in_fsck_h{$current}) {
++			print STDERR "$current does not exist in fsck.h\n";
++			$bad = 1;
++		} elsif ($in_fsck_h{$current} eq "") {
++			print STDERR "$current defined twice\n";
++			$bad = 1;
++		} elsif ($in_fsck_h{$current} ne $level) {
++			print STDERR "$current severity $level != $in_fsck_h{$current}\n";
++			$bad = 1;
++		}
++		$previous = $current;
++		$in_fsck_h{$current} = ""; # mark as seen.
++		undef $current;
++	}
++}
++close($fh);
++
++for my $key (keys %in_fsck_h) {
++	if ($in_fsck_h{$key} ne "") {
++		print STDERR "$key not explained in doc.\n";
++		$bad = 1;
++	}
++}
++
++die if ($bad);
++
++open($fh, ">", "$okfile");
++print $fh "good\n";
++close($fh);
+-- 
+2.39.3 (Apple Git-145)
+

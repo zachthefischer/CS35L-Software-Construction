@@ -1,0 +1,51 @@
+From 60ff56f50372c1498718938ef504e744fe011ffb Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Apr 2023 18:20:26 -0400
+Subject: [PATCH 1358/2871] banned.h: mark `strtok()` and `strtok_r()` as
+ banned
+
+`strtok()` has a couple of drawbacks that make it undesirable to have
+any new instances. In addition to being thread-unsafe, it also
+encourages confusing data flows, where `strtok()` may be called from
+multiple functions with its first argument as NULL, making it unclear
+from the immediate context which string is being tokenized.
+
+Now that we have removed all instances of `strtok()` from the tree,
+let's ban `strtok()` to avoid introducing new ones in the future. If new
+callers should arise, they are encouraged to use
+`string_list_split_in_place()` (and `string_list_remove_empty_items()`,
+if applicable).
+
+string_list_split_in_place() is not a perfect drop-in replacement
+for `strtok_r()`, particularly if the caller is processing a string with
+an arbitrary number of tokens, and wants to process each token one at a
+time.
+
+But there are no instances of this in Git's tree which are more
+well-suited to `strtok_r()` than the friendlier
+`string_list_split_in_place()`, so ban `strtok_r()`, too.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ banned.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/banned.h b/banned.h
+index 6ccf46bc19..44e76bd90a 100644
+--- a/banned.h
++++ b/banned.h
+@@ -18,6 +18,10 @@
+ #define strncpy(x,y,n) BANNED(strncpy)
+ #undef strncat
+ #define strncat(x,y,n) BANNED(strncat)
++#undef strtok
++#define strtok(x,y) BANNED(strtok)
++#undef strtok_r
++#define strtok_r(x,y,z) BANNED(strtok_r)
+ 
+ #undef sprintf
+ #undef vsprintf
+-- 
+2.39.3 (Apple Git-145)
+

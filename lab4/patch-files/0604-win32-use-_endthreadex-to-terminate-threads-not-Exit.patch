@@ -1,0 +1,40 @@
+From 0006e2e3f1de6a3a5351da298ee52b5d936addfd Mon Sep 17 00:00:00 2001
+From: Seija Kijin <doremylover123@gmail.com>
+Date: Sun, 25 Dec 2022 01:41:50 +0000
+Subject: [PATCH 0604/2871] win32: use _endthreadex to terminate threads, not
+ ExitThread
+
+Because we use the C runtime and
+use _beginthreadex to create pthreads,
+pthread_exit MUST use _endthreadex.
+
+Otherwise, according to Microsoft:
+"Failure to do so results in small
+memory leaks when the thread
+calls ExitThread."
+
+Simply put, this is not the same as ExitThread.
+
+Signed-off-by: Seija Kijin <doremylover123@gmail.com>
+Acked-by: Johannes Sixt <j6t@kdbg.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/win32/pthread.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/compat/win32/pthread.h b/compat/win32/pthread.h
+index 737983d00b..cc3221cb2c 100644
+--- a/compat/win32/pthread.h
++++ b/compat/win32/pthread.h
+@@ -66,7 +66,7 @@ pthread_t pthread_self(void);
+ 
+ static inline void NORETURN pthread_exit(void *ret)
+ {
+-	ExitThread((DWORD)(intptr_t)ret);
++	_endthreadex((unsigned)(uintptr_t)ret);
+ }
+ 
+ typedef DWORD pthread_key_t;
+-- 
+2.39.3 (Apple Git-145)
+

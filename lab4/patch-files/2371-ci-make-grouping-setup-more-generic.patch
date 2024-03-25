@@ -1,0 +1,103 @@
+From a7d499cb9361e4c4d6c8b5f841e95fc8cd97584d Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 9 Nov 2023 09:05:29 +0100
+Subject: [PATCH 2371/2871] ci: make grouping setup more generic
+
+Make the grouping setup more generic by always calling `begin_group ()`
+and `end_group ()` regardless of whether we have stubbed those functions
+or not. This ensures we can more readily add support for additional CI
+platforms.
+
+Furthermore, the `group ()` function is made generic so that it is the
+same for both GitHub Actions and for other platforms. There is a
+semantic conflict here though: GitHub Actions used to call `set +x` in
+`group ()` whereas the non-GitHub case unconditionally uses `set -x`.
+The latter would get overriden if we kept the `set +x` in the generic
+version of `group ()`. To resolve this conflict, we simply drop the `set
++x` in the generic variant of this function. As `begin_group ()` calls
+`set -x` anyway this is not much of a change though, as the only
+commands that aren't printed anymore now are the ones between the
+beginning of `group ()` and the end of `begin_group ()`.
+
+Last, this commit changes `end_group ()` to also accept a parameter that
+indicates _which_ group should end. This will be required by a later
+commit that introduces support for GitLab CI.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 46 ++++++++++++++++++++++------------------------
+ 1 file changed, 22 insertions(+), 24 deletions(-)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 26895ddbcc..3938cad32c 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -14,36 +14,34 @@ then
+ 		need_to_end_group=
+ 		echo '::endgroup::' >&2
+ 	}
+-	trap end_group EXIT
+-
+-	group () {
+-		set +x
+-		begin_group "$1"
+-		shift
+-		# work around `dash` not supporting `set -o pipefail`
+-		(
+-			"$@" 2>&1
+-			echo $? >exit.status
+-		) |
+-		sed 's/^\(\([^ ]*\):\([0-9]*\):\([0-9]*:\) \)\(error\|warning\): /::\5 file=\2,line=\3::\1/'
+-		res=$(cat exit.status)
+-		rm exit.status
+-		end_group
+-		return $res
+-	}
+-
+-	begin_group "CI setup"
+ else
+ 	begin_group () { :; }
+ 	end_group () { :; }
+ 
+-	group () {
+-		shift
+-		"$@"
+-	}
+ 	set -x
+ fi
+ 
++group () {
++	group="$1"
++	shift
++	begin_group "$group"
++
++	# work around `dash` not supporting `set -o pipefail`
++	(
++		"$@" 2>&1
++		echo $? >exit.status
++	) |
++	sed 's/^\(\([^ ]*\):\([0-9]*\):\([0-9]*:\) \)\(error\|warning\): /::\5 file=\2,line=\3::\1/'
++	res=$(cat exit.status)
++	rm exit.status
++
++	end_group "$group"
++	return $res
++}
++
++begin_group "CI setup"
++trap "end_group 'CI setup'" EXIT
++
+ # Set 'exit on error' for all CI scripts to let the caller know that
+ # something went wrong.
+ #
+@@ -285,5 +283,5 @@ esac
+ 
+ MAKEFLAGS="$MAKEFLAGS CC=${CC:-cc}"
+ 
+-end_group
++end_group "CI setup"
+ set -x
+-- 
+2.39.3 (Apple Git-145)
+

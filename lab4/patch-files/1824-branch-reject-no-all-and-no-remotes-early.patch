@@ -1,0 +1,90 @@
+From e12cb98e1e083c23a03fcfabb3a3c6a5a22ce3c5 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 18 Jul 2023 11:27:49 -0700
+Subject: [PATCH 1824/2871] branch: reject "--no-all" and "--no-remotes" early
+
+As the command line parser for "git branch --all" forgets to use
+PARSE_OPT_NONEG, it accepted "git branch --no-all", and then passed
+a nonsense value to the underlying machinery, leading to a fatal
+error "filter_refs: invalid type".  The "--remotes" option had
+exactly the same issue.
+
+Catch the unsupported options early in the option parser.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c         | 10 ++++++----
+ t/t3203-branch-output.sh | 16 ++++++++++++++++
+ 2 files changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index e6c2655af6..8d68354266 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -726,8 +726,9 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 		OPT_STRING('u', "set-upstream-to", &new_upstream, N_("upstream"), N_("change the upstream info")),
+ 		OPT_BOOL(0, "unset-upstream", &unset_upstream, N_("unset the upstream info")),
+ 		OPT__COLOR(&branch_use_color, N_("use colored output")),
+-		OPT_SET_INT('r', "remotes",     &filter.kind, N_("act on remote-tracking branches"),
+-			FILTER_REFS_REMOTES),
++		OPT_SET_INT_F('r', "remotes",     &filter.kind, N_("act on remote-tracking branches"),
++			      FILTER_REFS_REMOTES,
++			      PARSE_OPT_NONEG),
+ 		OPT_CONTAINS(&filter.with_commit, N_("print only branches that contain the commit")),
+ 		OPT_NO_CONTAINS(&filter.no_commit, N_("print only branches that don't contain the commit")),
+ 		OPT_WITH(&filter.with_commit, N_("print only branches that contain the commit")),
+@@ -735,8 +736,9 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 		OPT__ABBREV(&filter.abbrev),
+ 
+ 		OPT_GROUP(N_("Specific git-branch actions:")),
+-		OPT_SET_INT('a', "all", &filter.kind, N_("list both remote-tracking and local branches"),
+-			FILTER_REFS_REMOTES | FILTER_REFS_BRANCHES),
++		OPT_SET_INT_F('a', "all", &filter.kind, N_("list both remote-tracking and local branches"),
++			      FILTER_REFS_REMOTES | FILTER_REFS_BRANCHES,
++			      PARSE_OPT_NONEG),
+ 		OPT_BIT('d', "delete", &delete, N_("delete fully merged branch"), 1),
+ 		OPT_BIT('D', NULL, &delete, N_("delete branch (even if not merged)"), 2),
+ 		OPT_BIT('m', "move", &rename, N_("move/rename a branch and its reflog"), 1),
+diff --git a/t/t3203-branch-output.sh b/t/t3203-branch-output.sh
+index 93f8295339..758963b189 100755
+--- a/t/t3203-branch-output.sh
++++ b/t/t3203-branch-output.sh
+@@ -55,9 +55,17 @@ cat >expect <<'EOF'
+ EOF
+ test_expect_success 'git branch -r shows remote branches' '
+ 	git branch -r >actual &&
++	test_cmp expect actual &&
++
++	git branch --remotes >actual &&
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'git branch --no-remotes is rejected' '
++	test_must_fail git branch --no-remotes 2>err &&
++	grep "unknown option .no-remotes." err
++'
++
+ cat >expect <<'EOF'
+   branch-one
+   branch-two
+@@ -68,9 +76,17 @@ cat >expect <<'EOF'
+ EOF
+ test_expect_success 'git branch -a shows local and remote branches' '
+ 	git branch -a >actual &&
++	test_cmp expect actual &&
++
++	git branch --all >actual &&
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'git branch --no-all is rejected' '
++	test_must_fail git branch --no-all 2>err &&
++	grep "unknown option .no-all." err
++'
++
+ cat >expect <<'EOF'
+ two
+ one
+-- 
+2.39.3 (Apple Git-145)
+

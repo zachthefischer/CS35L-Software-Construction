@@ -1,0 +1,64 @@
+From fd7263742342d79fe9fdfb87448346d1744b8ad9 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sat, 8 Apr 2023 22:54:50 +0200
+Subject: [PATCH 1217/2871] t2024: fix loose/strict local base branch DWIM test
+
+Test 'loosely defined local base branch is reported correctly' in
+t2024-checkout-dwim.sh, which was introduced in [1] compares output of
+two invocations of "git checkout", invoked with two different branches
+named "strict" and "loose".  As per description in [1], the test is
+validating that output of tracking information for these two branches.
+This tracking information is printed to standard output:
+
+    Your branch is behind 'main' by 1 commit, and can be fast-forwarded.
+      (use "git pull" to update your local branch)
+
+The test assumes that the names of the two branches (strict and loose)
+are in that output, and pipes the output through sed to replace names of
+the branches with "BRANCHNAME".  Command "git checkout", however,
+outputs the branch name to standard error, not standard output -- see
+message "Switched to branch '%s'\n" in function "update_refs_for_switch"
+in "builtin/checkout.c".  This means that the two invocations of sed do
+nothing.
+
+Redirect both the standard output and the standard error of "git
+checkout" for these assertions.  Ensure that compared files have the
+string "BRANCHNAME".
+
+In a series of piped commands, only the return code of the last command
+is used.  Thus, all other commands will have their return codes masked.
+Avoid piping of output of git directly into sed to preserve the exit
+status code of "git checkout", while we're here.
+
+[1] 05e73682cd (checkout: report upstream correctly even with loosely
+    defined branch.*.merge, 2014-10-14)
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2024-checkout-dwim.sh | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/t/t2024-checkout-dwim.sh b/t/t2024-checkout-dwim.sh
+index 4a1c901456..74049a9812 100755
+--- a/t/t2024-checkout-dwim.sh
++++ b/t/t2024-checkout-dwim.sh
+@@ -305,10 +305,13 @@ test_expect_success 'loosely defined local base branch is reported correctly' '
+ 	test_config branch.strict.merge refs/heads/main &&
+ 	test_config branch.loose.merge main &&
+ 
+-	git checkout strict | sed -e "s/strict/BRANCHNAME/g" >expect &&
++	git checkout strict >expect.raw 2>&1 &&
++	sed -e "s/strict/BRANCHNAME/g" <expect.raw >expect &&
+ 	status_uno_is_clean &&
+-	git checkout loose | sed -e "s/loose/BRANCHNAME/g" >actual &&
++	git checkout loose >actual.raw 2>&1 &&
++	sed -e "s/loose/BRANCHNAME/g" <actual.raw >actual &&
+ 	status_uno_is_clean &&
++	grep BRANCHNAME actual &&
+ 
+ 	test_cmp expect actual
+ '
+-- 
+2.39.3 (Apple Git-145)
+

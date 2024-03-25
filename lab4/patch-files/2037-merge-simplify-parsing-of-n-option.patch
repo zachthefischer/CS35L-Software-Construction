@@ -1,0 +1,61 @@
+From 7fa701106d485f7bf9d042f822d4366d7059f8ba Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 17:17:16 -0400
+Subject: [PATCH 2037/2871] merge: simplify parsing of "-n" option
+
+The "-n" option is implemented by an option callback, as it is really a
+"reverse bool". If given, it sets show_diffstat to 0. In theory, when
+negated, it would set the same flag to 1. But it's not possible to
+trigger that, since short options cannot be negated.
+
+So in practice this is really just a SET_INT to 0. Let's use that
+instead, which shortens the code.
+
+Note that negation here would do the wrong thing (as with any SET_INT
+with a value of "0"). We could specify PARSE_OPT_NONEG to future-proof
+ourselves against somebody adding a long option name (which would make
+it possible to negate). But there's not much point:
+
+  1. Nobody is going to do that, because the negated form already
+     exists, and is called "--stat" (which is defined separately so that
+     "--no-stat" works).
+
+  2. If they did, the BUG() check added by 3284b93862 (parse-options:
+     disallow negating OPTION_SET_INT 0, 2023-08-08) will catch it (and
+     that check is smart enough to realize that our short-only option is
+     OK).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/merge.c | 13 ++-----------
+ 1 file changed, 2 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/merge.c b/builtin/merge.c
+index 53e9fe70d9..21363b7985 100644
+--- a/builtin/merge.c
++++ b/builtin/merge.c
+@@ -241,18 +241,9 @@ static int option_parse_strategy(const struct option *opt,
+ 	return 0;
+ }
+ 
+-static int option_parse_n(const struct option *opt,
+-			  const char *arg, int unset)
+-{
+-	BUG_ON_OPT_ARG(arg);
+-	show_diffstat = unset;
+-	return 0;
+-}
+-
+ static struct option builtin_merge_options[] = {
+-	OPT_CALLBACK_F('n', NULL, NULL, NULL,
+-		N_("do not show a diffstat at the end of the merge"),
+-		PARSE_OPT_NOARG, option_parse_n),
++	OPT_SET_INT('n', NULL, &show_diffstat,
++		N_("do not show a diffstat at the end of the merge"), 0),
+ 	OPT_BOOL(0, "stat", &show_diffstat,
+ 		N_("show a diffstat at the end of the merge")),
+ 	OPT_BOOL(0, "summary", &show_diffstat, N_("(synonym to --stat)")),
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,84 @@
+From a953d2b628952f8d225d337deb1c30e20f835689 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Jul 2023 12:39:25 -0400
+Subject: [PATCH 1848/2871] t/lib-commit-graph.sh: avoid directory change in
+ `graph_git_behavior()`
+
+The `graph_git_behavior()` helper asserts that a number of common Git
+operations (such as `git log --oneline`, `git log --topo-order`, etc.)
+produce identical output regardless of whether or not a commit-graph is
+in use.
+
+This helper takes as its second argument the location (relative to the
+`$TRASH_DIRECTORY`) of the Git repostiory under test. In order to run
+each of its commands within that repository, it first changes into that
+directory, without the use of a sub-shell.
+
+This pollutes future tests which expect to be run in the top-level
+`$TRASH_DIRECTORY` as usual. We could wrap `graph_git_behavior()` in a
+sub-shell, like:
+
+    graph_git_behavior() {
+      # ...
+      (
+        cd "$TRASH_DIRECTORY/$DIR" &&
+        graph_git_two_modesl
+      )
+    }
+
+, but since we're invoking git directly, we can pass along a "-C $DIR"
+when "$DIR" is non-empty.
+
+Note, however, that until the remaining callers are cleaned up to avoid
+changing working directories outside of a sub-shell, that we need to
+ensure that we are operating in the top-level $TRASH_DIRECTORY. The
+inner-subshell will go away in a future commit once it is no longer
+necessary.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-commit-graph.sh | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/t/lib-commit-graph.sh b/t/lib-commit-graph.sh
+index 4d3e7f0623..c8bd76a777 100755
+--- a/t/lib-commit-graph.sh
++++ b/t/lib-commit-graph.sh
+@@ -14,18 +14,27 @@ graph_git_two_modes() {
+ 	test_cmp expect output
+ }
+ 
++# graph_git_behavior <name> <directory> <branch> <compare>
++#
++# Ensures that a handful of traversal operations produce the same
++# results with and without the commit-graph in use.
++#
++# NOTE: it is a bug to call this function with <directory> containing
++# any characters in $IFS.
+ graph_git_behavior() {
+ 	MSG=$1
+ 	DIR=$2
+ 	BRANCH=$3
+ 	COMPARE=$4
+ 	test_expect_success "check normal git operations: $MSG" '
+-		cd "$TRASH_DIRECTORY/$DIR" &&
+-		graph_git_two_modes "log --oneline $BRANCH" &&
+-		graph_git_two_modes "log --topo-order $BRANCH" &&
+-		graph_git_two_modes "log --graph $COMPARE..$BRANCH" &&
+-		graph_git_two_modes "branch -vv" &&
+-		graph_git_two_modes "merge-base -a $BRANCH $COMPARE"
++		(
++			cd "$TRASH_DIRECTORY" &&
++			graph_git_two_modes "${DIR:+-C $DIR} log --oneline $BRANCH" &&
++			graph_git_two_modes "${DIR:+-C $DIR} log --topo-order $BRANCH" &&
++			graph_git_two_modes "${DIR:+-C $DIR} log --graph $COMPARE..$BRANCH" &&
++			graph_git_two_modes "${DIR:+-C $DIR} branch -vv" &&
++			graph_git_two_modes "${DIR:+-C $DIR} merge-base -a $BRANCH $COMPARE"
++		)
+ 	'
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

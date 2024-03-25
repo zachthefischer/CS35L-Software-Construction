@@ -1,0 +1,166 @@
+From 0fcc285c5eaab904ea9a8ade2696fe61355cf587 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 29 Dec 2023 08:26:34 +0100
+Subject: [PATCH 2628/2871] refs: refactor logic to look up storage backends
+
+In order to look up ref storage backends, we're currently using a linked
+list of backends, where each backend is expected to set up its `next`
+pointer to the next ref storage backend. This is kind of a weird setup
+as backends need to be aware of other backends without much of a reason.
+
+Refactor the code so that the array of backends is centrally defined in
+"refs.c", where each backend is now identified by an integer constant.
+Expose functions to translate from those integer constants to the name
+and vice versa, which will be required by subsequent patches.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs.c                | 34 +++++++++++++++++++++++++---------
+ refs.h                |  3 +++
+ refs/debug.c          |  1 -
+ refs/files-backend.c  |  1 -
+ refs/packed-backend.c |  1 -
+ refs/refs-internal.h  |  1 -
+ repository.h          |  3 +++
+ 7 files changed, 31 insertions(+), 13 deletions(-)
+
+diff --git a/refs.c b/refs.c
+index 16bfa21df7..dea3d5c9a0 100644
+--- a/refs.c
++++ b/refs.c
+@@ -33,17 +33,33 @@
+ /*
+  * List of all available backends
+  */
+-static struct ref_storage_be *refs_backends = &refs_be_files;
++static const struct ref_storage_be *refs_backends[] = {
++	[REF_STORAGE_FORMAT_FILES] = &refs_be_files,
++};
+ 
+-static struct ref_storage_be *find_ref_storage_backend(const char *name)
++static const struct ref_storage_be *find_ref_storage_backend(unsigned int ref_storage_format)
+ {
+-	struct ref_storage_be *be;
+-	for (be = refs_backends; be; be = be->next)
+-		if (!strcmp(be->name, name))
+-			return be;
++	if (ref_storage_format < ARRAY_SIZE(refs_backends))
++		return refs_backends[ref_storage_format];
+ 	return NULL;
+ }
+ 
++unsigned int ref_storage_format_by_name(const char *name)
++{
++	for (unsigned int i = 0; i < ARRAY_SIZE(refs_backends); i++)
++		if (refs_backends[i] && !strcmp(refs_backends[i]->name, name))
++			return i;
++	return REF_STORAGE_FORMAT_UNKNOWN;
++}
++
++const char *ref_storage_format_to_name(unsigned int ref_storage_format)
++{
++	const struct ref_storage_be *be = find_ref_storage_backend(ref_storage_format);
++	if (!be)
++		return "unknown";
++	return be->name;
++}
++
+ /*
+  * How to handle various characters in refnames:
+  * 0: An acceptable character for refs
+@@ -2029,12 +2045,12 @@ static struct ref_store *ref_store_init(struct repository *repo,
+ 					const char *gitdir,
+ 					unsigned int flags)
+ {
+-	const char *be_name = "files";
+-	struct ref_storage_be *be = find_ref_storage_backend(be_name);
++	unsigned int format = REF_STORAGE_FORMAT_FILES;
++	const struct ref_storage_be *be = find_ref_storage_backend(format);
+ 	struct ref_store *refs;
+ 
+ 	if (!be)
+-		BUG("reference backend %s is unknown", be_name);
++		BUG("reference backend is unknown");
+ 
+ 	refs = be->init(repo, gitdir, flags);
+ 	return refs;
+diff --git a/refs.h b/refs.h
+index 23211a5ea1..916b874ae3 100644
+--- a/refs.h
++++ b/refs.h
+@@ -11,6 +11,9 @@ struct string_list;
+ struct string_list_item;
+ struct worktree;
+ 
++unsigned int ref_storage_format_by_name(const char *name);
++const char *ref_storage_format_to_name(unsigned int ref_storage_format);
++
+ /*
+  * Resolve a reference, recursively following symbolic refererences.
+  *
+diff --git a/refs/debug.c b/refs/debug.c
+index 83b7a0ba65..b9775f2c37 100644
+--- a/refs/debug.c
++++ b/refs/debug.c
+@@ -426,7 +426,6 @@ static int debug_reflog_expire(struct ref_store *ref_store, const char *refname,
+ }
+ 
+ struct ref_storage_be refs_be_debug = {
+-	.next = NULL,
+ 	.name = "debug",
+ 	.init = NULL,
+ 	.init_db = debug_init_db,
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index ad8b1d143f..43fd0ac760 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -3241,7 +3241,6 @@ static int files_init_db(struct ref_store *ref_store, struct strbuf *err UNUSED)
+ }
+ 
+ struct ref_storage_be refs_be_files = {
+-	.next = NULL,
+ 	.name = "files",
+ 	.init = files_ref_store_create,
+ 	.init_db = files_init_db,
+diff --git a/refs/packed-backend.c b/refs/packed-backend.c
+index b9fa097a29..8d1090e284 100644
+--- a/refs/packed-backend.c
++++ b/refs/packed-backend.c
+@@ -1705,7 +1705,6 @@ static struct ref_iterator *packed_reflog_iterator_begin(struct ref_store *ref_s
+ }
+ 
+ struct ref_storage_be refs_be_packed = {
+-	.next = NULL,
+ 	.name = "packed",
+ 	.init = packed_ref_store_create,
+ 	.init_db = packed_init_db,
+diff --git a/refs/refs-internal.h b/refs/refs-internal.h
+index 4af83bf9a5..8e9f04cc67 100644
+--- a/refs/refs-internal.h
++++ b/refs/refs-internal.h
+@@ -663,7 +663,6 @@ typedef int read_symbolic_ref_fn(struct ref_store *ref_store, const char *refnam
+ 				 struct strbuf *referent);
+ 
+ struct ref_storage_be {
+-	struct ref_storage_be *next;
+ 	const char *name;
+ 	ref_store_init_fn *init;
+ 	ref_init_db_fn *init_db;
+diff --git a/repository.h b/repository.h
+index 5f18486f64..ea4c488b81 100644
+--- a/repository.h
++++ b/repository.h
+@@ -24,6 +24,9 @@ enum fetch_negotiation_setting {
+ 	FETCH_NEGOTIATION_NOOP,
+ };
+ 
++#define REF_STORAGE_FORMAT_UNKNOWN 0
++#define REF_STORAGE_FORMAT_FILES   1
++
+ struct repo_settings {
+ 	int initialized;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

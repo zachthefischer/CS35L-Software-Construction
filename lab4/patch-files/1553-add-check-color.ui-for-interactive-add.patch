@@ -1,0 +1,76 @@
+From 7cf3b49f47f02ed1cab5b1cd03a5e27acaa13c99 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 6 Jun 2023 14:20:18 +0000
+Subject: [PATCH 1553/2871] add: check color.ui for interactive add
+
+When 'git add -i' and 'git add -p' were converted to a builtin, they
+introduced a color bug: the 'color.ui' config setting is ignored.
+
+The included test demonstrates an example that is similar to the
+previous test, which focuses on customizing colors. Here, we are
+demonstrating that colors are not being used at all by comparing the raw
+output and the color-decoded version of that output.
+
+The fix is simple, to use git_color_default_config() as the fallback for
+git_add_config(). A more robust change would instead encapsulate the
+git_use_color_default global in methods that would check the config
+setting if it has not been initialized yet. Some ideas are being
+discussed on this front [1], but nothing has been finalized.
+
+[1] https://lore.kernel.org/git/pull.1539.git.1685716420.gitgitgadget@gmail.com/
+
+This test case naturally bisects down to 0527ccb1b55 (add -i: default to
+the built-in implementation, 2021-11-30), but the fix makes it clear
+that this would be broken even if we added the config to use the builtin
+earlier than this.
+
+Reported-by: Greg Alexander <gitgreg@galexander.org>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/add.c              |  2 +-
+ t/t3701-add-interactive.sh | 15 +++++++++++++++
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/add.c b/builtin/add.c
+index 61dd386d10..3e13983c46 100644
+--- a/builtin/add.c
++++ b/builtin/add.c
+@@ -362,7 +362,7 @@ static int add_config(const char *var, const char *value, void *cb)
+ 		return 0;
+ 	}
+ 
+-	return git_default_config(var, value, cb);
++	return git_color_default_config(var, value, cb);
+ }
+ 
+ static const char embedded_advice[] = N_(
+diff --git a/t/t3701-add-interactive.sh b/t/t3701-add-interactive.sh
+index 3a99837d9b..99192d76a3 100755
+--- a/t/t3701-add-interactive.sh
++++ b/t/t3701-add-interactive.sh
+@@ -738,6 +738,21 @@ test_expect_success 'colors can be overridden' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'colors can be skipped with color.ui=false' '
++	git reset --hard &&
++	test_when_finished "git rm -f color-test" &&
++	test_write_lines context old more-context >color-test &&
++	git add color-test &&
++	test_write_lines context new more-context another-one >color-test &&
++
++	test_write_lines help quit >input &&
++	force_color git \
++		-c color.ui=false \
++		add -i >actual.raw <input &&
++	test_decode_color <actual.raw >actual &&
++	test_cmp actual.raw actual
++'
++
+ test_expect_success 'colorized diffs respect diff.wsErrorHighlight' '
+ 	git reset --hard &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,33 @@
+From 454dfcbddf9624c129fa7600b3c774b99e36cb43 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 28 Feb 2023 15:42:20 -0800
+Subject: [PATCH 0979/2871] A bit more before 2.40-rc1
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index 094a2937cc..3ea445bf20 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -281,6 +281,15 @@ Fixes since v2.39
+    code to avoid sscanf() altogether to work it around.
+    (merge 613bef56b8 jk/shorten-unambiguous-ref-wo-sscanf later to maint).
+ 
++ * Various fix-ups on HTTP tests.
++   (merge 8f2146dbf1 jk/http-test-fixes later to maint).
++
++ * Fixes to code that parses the todo file used in "rebase -i".
++   (merge 666b6e1135 pw/rebase-i-parse-fix later to maint).
++
++ * Test library clean-up.
++   (merge c600a91c94 ar/test-lib-remove-stale-comment later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 4eb1ccecd4 dh/mingw-ownership-check-typofix later to maint).
+    (merge f95526419b ar/typofix-gitattributes-doc later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,37 @@
+From 3a2ebaebc76b302629a5789696d67a0ce2c4378e Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Wed, 1 Feb 2023 10:40:41 +0800
+Subject: [PATCH 0772/2871] docs: document zero bits in index "mode"
+
+Documentation/gitformat-index.txt describes the "mode" as 32 bits, but
+only documents 16 bits. Document the missing 16 bits and specify that
+'unused' bits must be zero.
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitformat-index.txt | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/gitformat-index.txt b/Documentation/gitformat-index.txt
+index 015cb21bdc..0773e5c380 100644
+--- a/Documentation/gitformat-index.txt
++++ b/Documentation/gitformat-index.txt
+@@ -83,11 +83,13 @@ Git index format
+ 
+   32-bit mode, split into (high to low bits)
+ 
++    16-bit unused, must be zero
++
+     4-bit object type
+       valid values in binary are 1000 (regular file), 1010 (symbolic link)
+       and 1110 (gitlink)
+ 
+-    3-bit unused
++    3-bit unused, must be zero
+ 
+     9-bit unix permission. Only 0755 and 0644 are valid for regular files.
+     Symbolic links and gitlinks have value 0 in this field.
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,48 @@
+From 4548b0145f17c633de5e267b6c7932c72824e9d3 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:34 -0400
+Subject: [PATCH 2025/2871] grep: mark unused parmaeters in pcre fallbacks
+
+When USE_LIBPCRE2 is not defined, we compile several noop fallbacks.
+These need to have their parameters annotated to avoid
+-Wunused-parameter warnings (and obviously we cannot remove the
+parameters, since the functions must match the non-fallback versions).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ grep.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/grep.c b/grep.c
+index 0124eb1960..fc2d0c837a 100644
+--- a/grep.c
++++ b/grep.c
+@@ -452,18 +452,20 @@ static void free_pcre2_pattern(struct grep_pat *p)
+ 	pcre2_general_context_free(p->pcre2_general_context);
+ }
+ #else /* !USE_LIBPCRE2 */
+-static void compile_pcre2_pattern(struct grep_pat *p, const struct grep_opt *opt)
++static void compile_pcre2_pattern(struct grep_pat *p UNUSED,
++				  const struct grep_opt *opt UNUSED)
+ {
+ 	die("cannot use Perl-compatible regexes when not compiled with USE_LIBPCRE");
+ }
+ 
+-static int pcre2match(struct grep_pat *p, const char *line, const char *eol,
+-		regmatch_t *match, int eflags)
++static int pcre2match(struct grep_pat *p UNUSED, const char *line UNUSED,
++		      const char *eol UNUSED, regmatch_t *match UNUSED,
++		      int eflags UNUSED)
+ {
+ 	return 1;
+ }
+ 
+-static void free_pcre2_pattern(struct grep_pat *p)
++static void free_pcre2_pattern(struct grep_pat *p UNUSED)
+ {
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

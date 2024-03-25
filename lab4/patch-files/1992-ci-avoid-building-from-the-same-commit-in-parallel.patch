@@ -1,0 +1,63 @@
+From 99fe06cbfd660726b1601a4d36897ed90e5d5b64 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Date: Wed, 23 Aug 2023 10:42:45 +0200
+Subject: [PATCH 1992/2871] ci: avoid building from the same commit in parallel
+
+At times, we may need to push the same commit to multiple branches
+in the same push.  Rewinding 'next' to rebuild on top of 'master'
+soon after a release is such an occasion.  Making sure 'main' stays
+in sync with 'master' to help those who expect that primary branch
+of the project is named either of these is another.
+
+We already use the branch name as a "concurrency group" key, but
+that does not address the situation illustrated above.
+
+Let's introduce another `concurrency` attribute, using the commit
+hash as the concurrency group key, on the workflow run level, to
+address this. This will hold any workflow run in the queued state
+when there is already a workflow run targeting the same commit,
+until that latter run completed. The `skip-if-redundant` check of
+the second run will then have a chance to see whether the first
+run succeeded.
+
+The only caveat with this strategy is that only one workflow run
+will be kept in the queued state by the `concurrency` feature: if
+another run targeting the same commit is triggered, the
+previously-queued run will be canceled. Considering the benefit,
+this seems the smaller price to pay than to overload Git's build
+agent pool with undesired workflow runs.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 30492eacdd..1739a0278d 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -5,6 +5,19 @@ on: [push, pull_request]
+ env:
+   DEVELOPER: 1
+ 
++# If more than one workflow run is triggered for the very same commit hash
++# (which happens when multiple branches pointing to the same commit), only
++# the first one is allowed to run, the second will be kept in the "queued"
++# state. This allows a successful completion of the first run to be reused
++# in the second run via the `skip-if-redundant` logic in the `config` job.
++#
++# The only caveat is that if a workflow run is triggered for the same commit
++# hash that another run is already being held, that latter run will be
++# canceled. For more details about the `concurrency` attribute, see:
++# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#concurrency
++concurrency:
++  group: ${{ github.sha }}
++
+ jobs:
+   ci-config:
+     name: config
+-- 
+2.39.3 (Apple Git-145)
+

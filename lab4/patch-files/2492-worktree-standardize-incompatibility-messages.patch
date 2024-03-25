@@ -1,0 +1,74 @@
+From 62bc6dd33c9cfc3fe155f46dc91d1c9056464dde Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Wed, 6 Dec 2023 12:52:00 +0100
+Subject: [PATCH 2492/2871] worktree: standardize incompatibility messages
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use the standard parameterized message for reporting incompatible
+options for worktree add.  This reduces the number of strings to
+translate and makes the UI slightly more consistent.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/worktree.c      | 17 +++++++++--------
+ t/t2400-worktree-add.sh |  2 +-
+ 2 files changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 62b7e26f4b..036ceaa981 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -730,11 +730,11 @@ static int dwim_orphan(const struct add_opts *opts, int opt_track, int remote)
+ 	}
+ 
+ 	if (opt_track) {
+-		die(_("'%s' and '%s' cannot be used together"), "--orphan",
+-		    "--track");
++		die(_("options '%s' and '%s' cannot be used together"),
++		    "--orphan", "--track");
+ 	} else if (!opts->checkout) {
+-		die(_("'%s' and '%s' cannot be used together"), "--orphan",
+-		    "--no-checkout");
++		die(_("options '%s' and '%s' cannot be used together"),
++		    "--orphan", "--no-checkout");
+ 	}
+ 	return 1;
+ }
+@@ -806,13 +806,14 @@ static int add(int ac, const char **av, const char *prefix)
+ 	if (!!opts.detach + !!new_branch + !!new_branch_force > 1)
+ 		die(_("options '%s', '%s', and '%s' cannot be used together"), "-b", "-B", "--detach");
+ 	if (opts.detach && opts.orphan)
+-		die(_("options '%s', and '%s' cannot be used together"),
++		die(_("options '%s' and '%s' cannot be used together"),
+ 		    "--orphan", "--detach");
+ 	if (opts.orphan && opt_track)
+-		die(_("'%s' and '%s' cannot be used together"), "--orphan", "--track");
++		die(_("options '%s' and '%s' cannot be used together"),
++		    "--orphan", "--track");
+ 	if (opts.orphan && !opts.checkout)
+-		die(_("'%s' and '%s' cannot be used together"), "--orphan",
+-		    "--no-checkout");
++		die(_("options '%s' and '%s' cannot be used together"),
++		    "--orphan", "--no-checkout");
+ 	if (opts.orphan && ac == 2)
+ 		die(_("'%s' and '%s' cannot be used together"), "--orphan",
+ 		    _("<commit-ish>"));
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index df4aff7825..245656b53a 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -711,7 +711,7 @@ test_dwim_orphan () {
+ 	local fetch_error_text="fatal: No local or remote refs exist despite at least one remote" &&
+ 	local orphan_hint="hint: If you meant to create a worktree containing a new orphan branch" &&
+ 	local invalid_ref_regex="^fatal: invalid reference: " &&
+-	local bad_combo_regex="^fatal: '[-a-z]*' and '[-a-z]*' cannot be used together" &&
++	local bad_combo_regex="^fatal: options '[-a-z]*' and '[-a-z]*' cannot be used together" &&
+ 
+ 	local git_ns="repo" &&
+ 	local dashc_args="-C $git_ns" &&
+-- 
+2.39.3 (Apple Git-145)
+

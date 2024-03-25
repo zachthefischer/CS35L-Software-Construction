@@ -1,0 +1,59 @@
+From f10b0989b8d34b9677ee7b07194296f999815378 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Fri, 12 Jan 2024 07:06:35 +0000
+Subject: [PATCH 2682/2871] strvec: use correct member name in comments
+
+In d70a9eb611 (strvec: rename struct fields, 2020-07-28), we renamed the
+"argv" member to "v". In the same patch we also did the following rename
+in strvec.c:
+
+    -void strvec_pushv(struct strvec *array, const char **argv)
+    +void strvec_pushv(struct strvec *array, const char **items)
+
+and it appears that this s/argv/items operation was erroneously applied
+to strvec.h.
+
+Rename "items" to "v".
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ strvec.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/strvec.h b/strvec.h
+index 9f55c8766b..4715d3e51f 100644
+--- a/strvec.h
++++ b/strvec.h
+@@ -4,8 +4,8 @@
+ /**
+  * The strvec API allows one to dynamically build and store
+  * NULL-terminated arrays of strings. A strvec maintains the invariant that the
+- * `items` member always points to a non-NULL array, and that the array is
+- * always NULL-terminated at the element pointed to by `items[nr]`. This
++ * `v` member always points to a non-NULL array, and that the array is
++ * always NULL-terminated at the element pointed to by `v[nr]`. This
+  * makes the result suitable for passing to functions expecting to receive
+  * argv from main().
+  *
+@@ -22,7 +22,7 @@ extern const char *empty_strvec[];
+ 
+ /**
+  * A single array. This should be initialized by assignment from
+- * `STRVEC_INIT`, or by calling `strvec_init`. The `items`
++ * `STRVEC_INIT`, or by calling `strvec_init`. The `v`
+  * member contains the actual array; the `nr` member contains the
+  * number of elements in the array, not including the terminating
+  * NULL.
+@@ -80,7 +80,7 @@ void strvec_split(struct strvec *, const char *);
+ void strvec_clear(struct strvec *);
+ 
+ /**
+- * Disconnect the `items` member from the `strvec` struct and
++ * Disconnect the `v` member from the `strvec` struct and
+  * return it. The caller is responsible for freeing the memory used
+  * by the array, and by the strings it references. After detaching,
+  * the `strvec` is in a reinitialized state and can be pushed
+-- 
+2.39.3 (Apple Git-145)
+

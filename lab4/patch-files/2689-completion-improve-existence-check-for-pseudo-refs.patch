@@ -1,0 +1,57 @@
+From 7b9cda2d3d7de794974ce6f29a2a838565cd338d Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 15 Jan 2024 11:36:06 +0100
+Subject: [PATCH 2689/2871] completion: improve existence check for pseudo-refs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Improve the existence check along the following lines:
+
+  - Stop stripping the "ref :" prefix and compare to the expected value
+    directly. This allows us to drop a now-unused variable that was
+    previously leaking into the user's shell.
+
+  - Mark the "head" variable as local so that we don't leak its value
+    into the user's shell.
+
+  - Stop manually handling the `-C $__git_repo_path` option, which the
+    `__git ()` wrapper aleady does for us.
+
+  - In simlar spirit, stop redirecting stderr, which is also handled by
+    the wrapper already.
+
+Suggested-by: SZEDER Gábor <szeder.dev@gmail.com>
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 06a9107449..d703e3e64f 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -137,6 +137,7 @@ __git_eread ()
+ __git_pseudoref_exists ()
+ {
+ 	local ref=$1
++	local head
+ 
+ 	__git_find_repo_path
+ 
+@@ -146,9 +147,8 @@ __git_pseudoref_exists ()
+ 	# Bash builtins since executing Git commands are expensive on some
+ 	# platforms.
+ 	if __git_eread "$__git_repo_path/HEAD" head; then
+-		b="${head#ref: }"
+-		if [ "$b" == "refs/heads/.invalid" ]; then
+-			__git -C "$__git_repo_path" rev-parse --verify --quiet "$ref" 2>/dev/null
++		if [ "$head" == "ref: refs/heads/.invalid" ]; then
++			__git rev-parse --verify --quiet "$ref"
+ 			return $?
+ 		fi
+ 	fi
+-- 
+2.39.3 (Apple Git-145)
+

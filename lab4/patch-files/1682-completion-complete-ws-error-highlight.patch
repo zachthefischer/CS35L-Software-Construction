@@ -1,0 +1,71 @@
+From da260f61889f0cda3267ca09db3fe48794f52a26 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:44 +0000
+Subject: [PATCH 1682/2871] completion: complete --ws-error-highlight
+
+Add --ws-error-highlight= to the list in __git_diff_common_options, and
+add the accepted values in a new list __git_ws_error_highlight_opts.
+
+Use __git_ws_error_highlight_opts in _git_diff, _git_log and _git_show
+to offer the accepted values.
+
+As noted in fd0bc17557 (completion: add diff --color-moved[-ws],
+2020-02-21), there is no easy way to offer completion for several
+comma-separated values, so this is limited to completing a single
+value.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 7babd95d84..9de33ed05d 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1733,6 +1733,8 @@ __git_color_moved_opts="no default plain blocks zebra dimmed-zebra"
+ __git_color_moved_ws_opts="no ignore-space-at-eol ignore-space-change
+ 			ignore-all-space allow-indentation-change"
+ 
++__git_ws_error_highlight_opts="context old new all default"
++
+ # Options for the diff machinery (diff, log, show, stash, range-diff, ...)
+ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--patch-with-stat --name-only --name-status --color
+@@ -1790,6 +1792,10 @@ _git_diff ()
+ 		__gitcomp "$__git_color_moved_ws_opts" "" "${cur##--color-moved-ws=}"
+ 		return
+ 		;;
++	--ws-error-highlight=*)
++		__gitcomp "$__git_ws_error_highlight_opts" "" "${cur##--ws-error-highlight=}"
++		return
++		;;
+ 	--*)
+ 		__gitcomp "$__git_diff_difftool_options"
+ 		return
+@@ -2080,6 +2086,10 @@ _git_log ()
+ 		__gitcomp "$__git_diff_submodule_formats" "" "${cur##--submodule=}"
+ 		return
+ 		;;
++	--ws-error-highlight=*)
++		__gitcomp "$__git_ws_error_highlight_opts" "" "${cur##--ws-error-highlight=}"
++		return
++		;;
+ 	--no-walk=*)
+ 		__gitcomp "sorted unsorted" "" "${cur##--no-walk=}"
+ 		return
+@@ -3000,6 +3010,10 @@ _git_show ()
+ 		__gitcomp "$__git_color_moved_ws_opts" "" "${cur##--color-moved-ws=}"
+ 		return
+ 		;;
++	--ws-error-highlight=*)
++		__gitcomp "$__git_ws_error_highlight_opts" "" "${cur##--ws-error-highlight=}"
++		return
++		;;
+ 	--*)
+ 		__gitcomp "--pretty= --format= --abbrev-commit --no-abbrev-commit
+ 			--oneline --show-signature
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,102 @@
+From db7288b321d5429a6a02b47f27907a519300c6e6 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 29 Nov 2023 08:24:44 +0100
+Subject: [PATCH 2473/2871] t1400: split up generic reflog tests from the
+ reffile-specific ones
+
+We have a bunch of tests in t1400 that check whether we correctly read
+reflog entries. These tests create the reflog by manually writing to the
+respective loose file, which makes them specific to the files backend.
+But while some of them do indeed exercise very specific edge cases in
+the reffiles backend, most of the tests exercise generic functionality
+that should be common to all backends.
+
+Unfortunately, we can't easily adapt all of the tests to work with all
+backends. Instead, split out the reffile-specific tests from the ones
+that should work with all backends and refactor the generic ones to not
+write to the on-disk files directly anymore.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1400-update-ref.sh | 41 +++++++++++++++++++++++++++++++++++------
+ 1 file changed, 35 insertions(+), 6 deletions(-)
+
+diff --git a/t/t1400-update-ref.sh b/t/t1400-update-ref.sh
+index 9ac4b7036b..c41cd9b6bf 100755
+--- a/t/t1400-update-ref.sh
++++ b/t/t1400-update-ref.sh
+@@ -354,14 +354,28 @@ test_expect_success "verifying $m's log (logged by config)" '
+ '
+ 
+ test_expect_success 'set up for querying the reflog' '
++	git update-ref -d $m &&
++	test-tool ref-store main delete-reflog $m &&
++
++	GIT_COMMITTER_DATE="1117150320 -0500" git update-ref $m $C &&
++	GIT_COMMITTER_DATE="1117150350 -0500" git update-ref $m $A &&
++	GIT_COMMITTER_DATE="1117150380 -0500" git update-ref $m $B &&
++	GIT_COMMITTER_DATE="1117150680 -0500" git update-ref $m $F &&
++	GIT_COMMITTER_DATE="1117150980 -0500" git update-ref $m $E &&
+ 	git update-ref $m $D &&
+-	cat >.git/logs/$m <<-EOF
++	# Delete the last reflog entry so that the tip of m and the reflog for
++	# it disagree.
++	git reflog delete $m@{0} &&
++
++	cat >expect <<-EOF &&
+ 	$Z $C $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150320 -0500
+ 	$C $A $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150350 -0500
+ 	$A $B $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150380 -0500
+-	$F $Z $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150680 -0500
+-	$Z $E $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150980 -0500
++	$B $F $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150680 -0500
++	$F $E $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150980 -0500
+ 	EOF
++	test-tool ref-store main for-each-reflog-ent $m >actual &&
++	test_cmp expect actual
+ '
+ 
+ ed="Thu, 26 May 2005 18:32:00 -0500"
+@@ -409,13 +423,12 @@ test_expect_success 'Query "main@{2005-05-26 23:33:01}" (middle of history with
+ 	test_when_finished "rm -f o e" &&
+ 	git rev-parse --verify "main@{2005-05-26 23:33:01}" >o 2>e &&
+ 	echo "$B" >expect &&
+-	test_cmp expect o &&
+-	test_grep -F "warning: log for ref $m has gap after $gd" e
++	test_cmp expect o
+ '
+ test_expect_success 'Query "main@{2005-05-26 23:38:00}" (middle of history)' '
+ 	test_when_finished "rm -f o e" &&
+ 	git rev-parse --verify "main@{2005-05-26 23:38:00}" >o 2>e &&
+-	echo "$Z" >expect &&
++	echo "$F" >expect &&
+ 	test_cmp expect o &&
+ 	test_must_be_empty e
+ '
+@@ -436,6 +449,22 @@ test_expect_success 'Query "main@{2005-05-28}" (past end of history)' '
+ 
+ rm -f .git/$m .git/logs/$m expect
+ 
++test_expect_success REFFILES 'query reflog with gap' '
++	test_when_finished "git update-ref -d $m" &&
++
++	git update-ref $m $F &&
++	cat >.git/logs/$m <<-EOF &&
++	$Z $A $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150320 -0500
++	$A $B $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150380 -0500
++	$D $F $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150680 -0500
++	EOF
++
++	git rev-parse --verify "main@{2005-05-26 23:33:01}" >actual 2>stderr &&
++	echo "$B" >expect &&
++	test_cmp expect actual &&
++	test_grep -F "warning: log for ref $m has gap after $gd" stderr
++'
++
+ test_expect_success 'creating initial files' '
+ 	test_when_finished rm -f M &&
+ 	echo TEST >F &&
+-- 
+2.39.3 (Apple Git-145)
+

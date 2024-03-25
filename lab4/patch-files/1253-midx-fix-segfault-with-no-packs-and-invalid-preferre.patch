@@ -1,0 +1,81 @@
+From ceb96a160b05c3ec45c416851bac00b711418839 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 14 Apr 2023 08:01:31 +0200
+Subject: [PATCH 1253/2871] midx: fix segfault with no packs and invalid
+ preferred pack
+
+When asked to write a multi-pack-index the user can specify a preferred
+pack that is used as a tie breaker when multiple packs contain the same
+objects. When this packfile cannot be found, we just pick the first pack
+that is getting tracked by the newly written multi-pack-index as a
+fallback.
+
+Picking the fallback can fail in the case where we're asked to write a
+multi-pack-index with no packfiles at all: picking the fallback value
+will cause a segfault as we blindly index into the array of packfiles,
+which would be empty.
+
+Fix this bug by resetting the preferred packfile index to `-1` before
+searching for the preferred pack. This fixes the segfault as we already
+check for whether the index is `> - 1`. If it is not, we simply don't
+pick a preferred packfile at all.
+
+Helped-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c                      |  6 +++---
+ t/t5319-multi-pack-index.sh | 12 ++++++++++++
+ 2 files changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index 7cfad04a24..8455df4f35 100644
+--- a/midx.c
++++ b/midx.c
+@@ -1326,17 +1326,17 @@ static int write_midx_internal(const char *object_dir,
+ 	}
+ 
+ 	if (preferred_pack_name) {
+-		int found = 0;
++		ctx.preferred_pack_idx = -1;
++
+ 		for (i = 0; i < ctx.nr; i++) {
+ 			if (!cmp_idx_or_pack_name(preferred_pack_name,
+ 						  ctx.info[i].pack_name)) {
+ 				ctx.preferred_pack_idx = i;
+-				found = 1;
+ 				break;
+ 			}
+ 		}
+ 
+-		if (!found)
++		if (ctx.preferred_pack_idx == -1)
+ 			warning(_("unknown preferred pack: '%s'"),
+ 				preferred_pack_name);
+ 	} else if (ctx.nr &&
+diff --git a/t/t5319-multi-pack-index.sh b/t/t5319-multi-pack-index.sh
+index 499d5d4c78..0883c7c6bd 100755
+--- a/t/t5319-multi-pack-index.sh
++++ b/t/t5319-multi-pack-index.sh
+@@ -183,6 +183,18 @@ test_expect_success 'write midx with --stdin-packs' '
+ 
+ compare_results_with_midx "mixed mode (one pack + extra)"
+ 
++test_expect_success 'write with no objects and preferred pack' '
++	test_when_finished "rm -rf empty" &&
++	git init empty &&
++	test_must_fail git -C empty multi-pack-index write \
++		--stdin-packs --preferred-pack=does-not-exist </dev/null 2>err &&
++	cat >expect <<-EOF &&
++	warning: unknown preferred pack: ${SQ}does-not-exist${SQ}
++	error: no pack files to index.
++	EOF
++	test_cmp expect err
++'
++
+ test_expect_success 'write progress off for redirected stderr' '
+ 	git multi-pack-index --object-dir=$objdir write 2>err &&
+ 	test_line_count = 0 err
+-- 
+2.39.3 (Apple Git-145)
+

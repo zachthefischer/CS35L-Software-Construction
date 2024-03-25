@@ -1,0 +1,53 @@
+From c600a91c949a01548fbd8fbc70397b401f0a7747 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sun, 26 Feb 2023 11:53:03 +0100
+Subject: [PATCH 0969/2871] test-lib: drop comment about test_description
+
+When a comment describing how each test file should start was added in
+commit [1], it was the second comment of t/test-lib.sh.  The comment
+describes how variable "test_description" is supposed to be assigned at
+the top of each test file and how "test-lib.sh" should be used by
+sourcing it.  However, even in [1], the comment was ten lines away from
+the usage of the variable by test-lib.sh.  Since then, the comment has
+drifted away both from the top of the file and from the usage of the
+variable.  The comment just sits in the middle of the initialization of
+the test library, surrounded by unrelated code, almost one hundred lines
+away from the usage of "test_description".
+
+Nobody has noticed this drift during evolution of test-lib.sh, which
+suggests that this comment has outlived its usefulness.  The assignment
+of "test_description", sourcing of "test-lib.sh" by tests, and the
+process of writing tests in general are described in detail in
+"t/README".  So drop the obsolete comment.
+
+An alternative solution could be to move the comment either to the top
+of the file, or down to the usage of variable "test_description".
+
+[1] e1970ce43a ("[PATCH 1/2] Test framework take two.", 2005-05-13)
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib.sh | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 6db377f68b..97b09d8e37 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -645,12 +645,6 @@ u200c=$(printf '\342\200\214')
+ 
+ export _x05 _x35 LF u200c EMPTY_TREE EMPTY_BLOB ZERO_OID OID_REGEX
+ 
+-# Each test should start with something like this, after copyright notices:
+-#
+-# test_description='Description of this test...
+-# This test checks if command xyzzy does the right thing...
+-# '
+-# . ./test-lib.sh
+ test "x$TERM" != "xdumb" && (
+ 		test -t 1 &&
+ 		tput bold >/dev/null 2>&1 &&
+-- 
+2.39.3 (Apple Git-145)
+

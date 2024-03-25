@@ -1,0 +1,50 @@
+From 3d77fbb664acab5157617cdb368a0c657bf20919 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sun, 23 Apr 2023 15:46:49 +0200
+Subject: [PATCH 1346/2871] t1300: add tests for missing keys
+
+There are several tests in t1300-config.sh that validate failing
+invocations of "git config".  However, there are no tests that check
+what happens when "git config" is asked to retrieve a value for a
+missing key.
+
+Add tests that check this for various combinations of "<section>.<key>"
+and "<section>.<subsection>.<key>".
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1300-config.sh | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/t/t1300-config.sh b/t/t1300-config.sh
+index 20a15ede5c..423948f384 100755
+--- a/t/t1300-config.sh
++++ b/t/t1300-config.sh
+@@ -98,6 +98,23 @@ test_expect_success 'subsections are not canonicalized by git-config' '
+ 	test_cmp_config two section.SubSection.key
+ '
+ 
++test_missing_key () {
++	local key="$1" &&
++	local title="$2" &&
++	test_expect_success "value for $title is not printed" '
++		test_must_fail git config "$key" >out 2>err &&
++		test_must_be_empty out &&
++		test_must_be_empty err
++	'
++}
++
++test_missing_key 'missingsection.missingkey' 'missing section and missing key'
++test_missing_key 'missingsection.penguin' 'missing section and existing key'
++test_missing_key 'section.missingkey' 'existing section and missing key'
++test_missing_key 'section.MissingSubSection.missingkey' 'missing subsection and missing key'
++test_missing_key 'section.SubSection.missingkey' 'existing subsection and missing key'
++test_missing_key 'section.MissingSubSection.key' 'missing subsection and existing key'
++
+ cat > .git/config <<\EOF
+ [alpha]
+ bar = foo
+-- 
+2.39.3 (Apple Git-145)
+

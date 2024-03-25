@@ -1,0 +1,37 @@
+From 3dc55b2087f1207911e6142c5082e4b06e6c9cbf Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:53 +0000
+Subject: [PATCH 0750/2871] rebase: put rebase_options initialization in single
+ place
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index d6b20a6a53..ad5ebecbbd 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -134,6 +134,8 @@ struct rebase_options {
+ 		.exec = STRING_LIST_INIT_NODUP,		\
+ 		.git_format_patch_opt = STRBUF_INIT,	\
+ 		.fork_point = -1,			\
++		.reapply_cherry_picks = -1,             \
++		.allow_empty_message = 1,               \
+ 	}
+ 
+ static struct replay_opts get_replay_opts(const struct rebase_options *opts)
+@@ -1158,8 +1160,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	prepare_repo_settings(the_repository);
+ 	the_repository->settings.command_requires_full_index = 0;
+ 
+-	options.reapply_cherry_picks = -1;
+-	options.allow_empty_message = 1;
+ 	git_config(rebase_config, &options);
+ 	/* options.gpg_sign_opt will be either "-S" or NULL */
+ 	gpg_sign = options.gpg_sign_opt ? "" : NULL;
+-- 
+2.39.3 (Apple Git-145)
+

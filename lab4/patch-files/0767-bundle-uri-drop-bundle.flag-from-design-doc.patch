@@ -1,0 +1,44 @@
+From 0524ad3542c48c759366bc49dbd8bed4cc94dc79 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 31 Jan 2023 13:29:16 +0000
+Subject: [PATCH 0767/2871] bundle-uri: drop bundle.flag from design doc
+
+The Implementation Plan section lists a 'bundle.flag' option that is not
+documented anywhere else. What is documented elsewhere in the document
+and implemented by previous changes is the 'bundle.heuristic' config
+key. For now, a heuristic is required to indicate that a bundle list is
+organized for use during 'git fetch', and it is also sufficient for all
+existing designs.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/technical/bundle-uri.txt | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/technical/bundle-uri.txt b/Documentation/technical/bundle-uri.txt
+index b78d01d9ad..91d3a13e32 100644
+--- a/Documentation/technical/bundle-uri.txt
++++ b/Documentation/technical/bundle-uri.txt
+@@ -479,14 +479,14 @@ outline for submitting these features:
+    (This choice is an opt-in via a config option and a command-line
+    option.)
+ 
+-4. Allow the client to understand the `bundle.flag=forFetch` configuration
++4. Allow the client to understand the `bundle.heuristic` configuration key
+    and the `bundle.<id>.creationToken` heuristic. When `git clone`
+-   discovers a bundle URI with `bundle.flag=forFetch`, it configures the
+-   client repository to check that bundle URI during later `git fetch <remote>`
++   discovers a bundle URI with `bundle.heuristic`, it configures the client
++   repository to check that bundle URI during later `git fetch <remote>`
+    commands.
+ 
+ 5. Allow clients to discover bundle URIs during `git fetch` and configure
+-   a bundle URI for later fetches if `bundle.flag=forFetch`.
++   a bundle URI for later fetches if `bundle.heuristic` is set.
+ 
+ 6. Implement the "inspect headers" heuristic to reduce data downloads when
+    the `bundle.<id>.creationToken` heuristic is not available.
+-- 
+2.39.3 (Apple Git-145)
+

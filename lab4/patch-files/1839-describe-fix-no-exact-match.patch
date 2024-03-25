@@ -1,0 +1,109 @@
+From c95ae3ff9cdcbe6229dc3aa4cd7aa14b1354759a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 21 Jul 2023 15:41:33 +0200
+Subject: [PATCH 1839/2871] describe: fix --no-exact-match
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 2c33f75754 (Teach git-describe --exact-match to avoid expensive
+tag searches, 2008-02-24) git describe accepts --no-exact-match, but it
+does the same as --exact-match, an alias for --candidates=0.  That's
+because it's defined using OPT_SET_INT with a value of 0, which sets 0
+when negated as well.
+
+Let --no-exact-match set the number of candidates to the default value
+instead.  Users that need a more specific lack of exactitude can specify
+their preferred value using --candidates, as before.
+
+The "--no-exact-match" option was not covered in the tests, so let's
+add a few.  Also add a case where --exact-match option is used on a
+commit that cannot be described without distance from tags and make
+sure the command fails.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+[jc: added trivial tests]
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/describe.c  | 17 ++++++++++++++---
+ t/t6120-describe.sh |  8 ++++++++
+ 2 files changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/describe.c b/builtin/describe.c
+index 55b4baaa22..a5ba584cdd 100644
+--- a/builtin/describe.c
++++ b/builtin/describe.c
+@@ -24,6 +24,7 @@
+ #include "commit-slab.h"
+ 
+ #define MAX_TAGS	(FLAG_BITS - 1)
++#define DEFAULT_CANDIDATES 10
+ 
+ define_commit_slab(commit_names, struct commit_name *);
+ 
+@@ -40,7 +41,7 @@ static int tags;	/* Allow lightweight tags */
+ static int longformat;
+ static int first_parent;
+ static int abbrev = -1; /* unspecified */
+-static int max_candidates = 10;
++static int max_candidates = DEFAULT_CANDIDATES;
+ static struct hashmap names;
+ static int have_util;
+ static struct string_list patterns = STRING_LIST_INIT_NODUP;
+@@ -556,6 +557,15 @@ static void describe(const char *arg, int last_one)
+ 	strbuf_release(&sb);
+ }
+ 
++static int option_parse_exact_match(const struct option *opt, const char *arg,
++				    int unset)
++{
++	BUG_ON_OPT_ARG(arg);
++
++	max_candidates = unset ? DEFAULT_CANDIDATES : 0;
++	return 0;
++}
++
+ int cmd_describe(int argc, const char **argv, const char *prefix)
+ {
+ 	int contains = 0;
+@@ -567,8 +577,9 @@ int cmd_describe(int argc, const char **argv, const char *prefix)
+ 		OPT_BOOL(0, "long",       &longformat, N_("always use long format")),
+ 		OPT_BOOL(0, "first-parent", &first_parent, N_("only follow first parent")),
+ 		OPT__ABBREV(&abbrev),
+-		OPT_SET_INT(0, "exact-match", &max_candidates,
+-			    N_("only output exact matches"), 0),
++		OPT_CALLBACK_F(0, "exact-match", NULL, NULL,
++			       N_("only output exact matches"),
++			       PARSE_OPT_NOARG, option_parse_exact_match),
+ 		OPT_INTEGER(0, "candidates", &max_candidates,
+ 			    N_("consider <n> most recent tags (default: 10)")),
+ 		OPT_STRING_LIST(0, "match", &patterns, N_("pattern"),
+diff --git a/t/t6120-describe.sh b/t/t6120-describe.sh
+index c9afcef201..0a5c487540 100755
+--- a/t/t6120-describe.sh
++++ b/t/t6120-describe.sh
+@@ -85,6 +85,7 @@ check_describe e-1-gHASH --tags HEAD^^
+ check_describe c-2-gHASH --tags HEAD^^2
+ check_describe B --tags HEAD^^2^
+ check_describe e --tags HEAD^^^
++check_describe e --tags --exact-match HEAD^^^
+ 
+ check_describe heads/main --all HEAD
+ check_describe tags/c-6-gHASH --all HEAD^
+@@ -96,6 +97,13 @@ check_describe A-3-gHASH --long HEAD^^2
+ check_describe c-7-gHASH --tags
+ check_describe e-3-gHASH --first-parent --tags
+ 
++check_describe c-7-gHASH --tags --no-exact-match HEAD
++check_describe e-3-gHASH --first-parent --tags --no-exact-match HEAD
++
++test_expect_success '--exact-match failure' '
++	test_must_fail git describe --exact-match HEAD 2>err
++'
++
+ test_expect_success 'describe --contains defaults to HEAD without commit-ish' '
+ 	echo "A^0" >expect &&
+ 	git checkout A &&
+-- 
+2.39.3 (Apple Git-145)
+

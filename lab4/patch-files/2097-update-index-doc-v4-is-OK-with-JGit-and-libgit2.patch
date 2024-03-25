@@ -1,0 +1,44 @@
+From 764b2330db42d07ed8c7d4f6c66a1d1203fb95de Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 12 Sep 2023 12:32:33 -0700
+Subject: [PATCH 2097/2871] update-index doc: v4 is OK with JGit and libgit2
+
+Being invented in late 2012 no longer makes the index v4 format
+"relatively young".
+
+The support for the index version 4 was added to libgit2 with their
+5625d86b (index: support index v4, 2016-05-17) and to JGit with
+their e9cb0a8e (DirCache: support index V4, 2020-08-10).
+
+Let's update the paragraph that discouraged its use for folks overly
+cautious about cross-tool compatibility.
+
+Helped-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Helped-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-update-index.txt | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-update-index.txt b/Documentation/git-update-index.txt
+index f4bb9c5daf..71d6ef9457 100644
+--- a/Documentation/git-update-index.txt
++++ b/Documentation/git-update-index.txt
+@@ -166,9 +166,11 @@ you will need to handle the situation manually.
+ +
+ Version 4 performs a simple pathname compression that reduces index
+ size by 30%-50% on large repositories, which results in faster load
+-time. Version 4 is relatively young (first released in 1.8.0 in
+-October 2012). Other Git implementations such as JGit and libgit2
+-may not support it yet.
++time.  Git supports it since version 1.8.0, released in October 2012,
++and support for it was added to libgit2 in 2016 and to JGit in 2020.
++Older versions of this manual page called it "relatively young", but
++it should be considered mature technology these days.
++
+ 
+ -z::
+ 	Only meaningful with `--stdin` or `--index-info`; paths are
+-- 
+2.39.3 (Apple Git-145)
+

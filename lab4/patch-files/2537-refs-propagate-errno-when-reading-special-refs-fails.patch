@@ -1,0 +1,60 @@
+From 668cdc043fe6f6d1fa2bf2b3f3c2375a20819e77 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 14 Dec 2023 14:37:02 +0100
+Subject: [PATCH 2537/2871] refs: propagate errno when reading special refs
+ fails
+
+Some refs in Git are more special than others due to reasons explained
+in the next commit. These refs are read via `refs_read_special_head()`,
+but this function doesn't behave the same as when we try to read a
+normal ref. Most importantly, we do not propagate `failure_errno` in the
+case where the reference does not exist, which is behaviour that we rely
+on in many parts of Git.
+
+Fix this bug by propagating errno when `strbuf_read_file()` fails.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs.c              |  4 +++-
+ t/t1403-show-ref.sh | 10 ++++++++++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/refs.c b/refs.c
+index fcae5dddc6..00e72a2abf 100644
+--- a/refs.c
++++ b/refs.c
+@@ -1806,8 +1806,10 @@ static int refs_read_special_head(struct ref_store *ref_store,
+ 	int result = -1;
+ 	strbuf_addf(&full_path, "%s/%s", ref_store->gitdir, refname);
+ 
+-	if (strbuf_read_file(&content, full_path.buf, 0) < 0)
++	if (strbuf_read_file(&content, full_path.buf, 0) < 0) {
++		*failure_errno = errno;
+ 		goto done;
++	}
+ 
+ 	result = parse_loose_ref_contents(content.buf, oid, referent, type,
+ 					  failure_errno);
+diff --git a/t/t1403-show-ref.sh b/t/t1403-show-ref.sh
+index b50ae6fcf1..66e6e77fa9 100755
+--- a/t/t1403-show-ref.sh
++++ b/t/t1403-show-ref.sh
+@@ -266,4 +266,14 @@ test_expect_success '--exists with directory fails with generic error' '
+ 	test_cmp expect err
+ '
+ 
++test_expect_success '--exists with non-existent special ref' '
++	test_expect_code 2 git show-ref --exists FETCH_HEAD
++'
++
++test_expect_success '--exists with existing special ref' '
++	test_when_finished "rm .git/FETCH_HEAD" &&
++	git rev-parse HEAD >.git/FETCH_HEAD &&
++	git show-ref --exists FETCH_HEAD
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

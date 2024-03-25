@@ -1,0 +1,112 @@
+From ffeaca177ac789942b1db95c334d0eff9c8f12a5 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:49 +0000
+Subject: [PATCH 0746/2871] rebase: fix incompatiblity checks for
+ --[no-]reapply-cherry-picks
+
+--[no-]reapply-cherry-picks was traditionally only supported by the
+sequencer.  Support was added for the apply backend, when --keep-base is
+also specified, in commit ce5238a690 ("rebase --keep-base: imply
+--reapply-cherry-picks", 2022-10-17).  Make the code error out when
+--[no-]reapply-cherry-picks is specified AND the apply backend is used
+AND --keep-base is not specified.  Also, clarify a number of comments
+surrounding the interaction of these flags.
+
+Helped-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt           |  2 +-
+ builtin/rebase.c                       | 34 ++++++++++++++++----------
+ t/t3422-rebase-incompatible-options.sh | 10 ++++++++
+ 3 files changed, 32 insertions(+), 14 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 846aeed1b6..8a09f12d89 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -650,7 +650,7 @@ are incompatible with the following options:
+  * --exec
+  * --no-keep-empty
+  * --empty=
+- * --reapply-cherry-picks
++ * --[no-]reapply-cherry-picks when used without --keep-base
+  * --edit-todo
+  * --update-refs
+  * --root when used without --onto
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index b742cc8fb5..05b130bfae 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1224,13 +1224,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 		if (options.fork_point < 0)
+ 			options.fork_point = 0;
+ 	}
+-	/*
+-	 * --keep-base defaults to --reapply-cherry-picks to avoid losing
+-	 * commits when using this option.
+-	 */
+-	if (options.reapply_cherry_picks < 0)
+-		options.reapply_cherry_picks = keep_base;
+-
+ 	if (options.root && options.fork_point > 0)
+ 		die(_("options '%s' and '%s' cannot be used together"), "--root", "--fork-point");
+ 
+@@ -1406,12 +1399,27 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	if (options.empty != EMPTY_UNSPECIFIED)
+ 		imply_merge(&options, "--empty");
+ 
+-	/*
+-	 * --keep-base implements --reapply-cherry-picks by altering upstream so
+-	 * it works with both backends.
+-	 */
+-	if (options.reapply_cherry_picks && !keep_base)
+-		imply_merge(&options, "--reapply-cherry-picks");
++	if (options.reapply_cherry_picks < 0)
++		/*
++		 * We default to --no-reapply-cherry-picks unless
++		 * --keep-base is given; when --keep-base is given, we want
++		 * to default to --reapply-cherry-picks.
++		 */
++		options.reapply_cherry_picks = keep_base;
++	else if (!keep_base)
++		/*
++		 * The apply backend always searches for and drops cherry
++		 * picks.  This is often not wanted with --keep-base, so
++		 * --keep-base allows --reapply-cherry-picks to be
++		 * simulated by altering the upstream such that
++		 * cherry-picks cannot be detected and thus all commits are
++		 * reapplied.  Thus, --[no-]reapply-cherry-picks is
++		 * supported when --keep-base is specified, but not when
++		 * --keep-base is left out.
++		 */
++		imply_merge(&options, options.reapply_cherry_picks ?
++					  "--reapply-cherry-picks" :
++					  "--no-reapply-cherry-picks");
+ 
+ 	if (gpg_sign)
+ 		options.gpg_sign_opt = xstrfmt("-S%s", gpg_sign);
+diff --git a/t/t3422-rebase-incompatible-options.sh b/t/t3422-rebase-incompatible-options.sh
+index f86274990b..826f3b94ae 100755
+--- a/t/t3422-rebase-incompatible-options.sh
++++ b/t/t3422-rebase-incompatible-options.sh
+@@ -60,6 +60,16 @@ test_rebase_am_only () {
+ 		test_must_fail git rebase $opt --exec 'true' A
+ 	"
+ 
++	test_expect_success "$opt incompatible with --no-reapply-cherry-picks" "
++		git checkout B^0 &&
++		test_must_fail git rebase $opt --no-reapply-cherry-picks A
++	"
++
++	test_expect_success "$opt incompatible with --reapply-cherry-picks" "
++		git checkout B^0 &&
++		test_must_fail git rebase $opt --reapply-cherry-picks A
++	"
++
+ 	test_expect_success "$opt incompatible with --update-refs" "
+ 		git checkout B^0 &&
+ 		test_must_fail git rebase $opt --update-refs A
+-- 
+2.39.3 (Apple Git-145)
+

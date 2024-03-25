@@ -1,0 +1,84 @@
+From c577d65158aa78817a59a58649bb381f2daaa88d Mon Sep 17 00:00:00 2001
+From: Alex Henrie <alexhenrie24@gmail.com>
+Date: Wed, 12 Jul 2023 22:41:15 -0600
+Subject: [PATCH 1770/2871] push: don't imply that integration is always
+ required before pushing
+
+In a narrow but common case, the user is the only author of a branch and
+doesn't mind overwriting the corresponding branch on the remote. This
+workflow is especially common on GitHub, GitLab, and Gerrit, which keep
+a permanent record of every version of a branch that is pushed while a
+pull request is open for that branch. On those platforms, force-pushing
+is encouraged and is analogous to emailing a new version of a patchset.
+
+When giving advice about divergent branches, tell the user about
+`git pull`, but don't unconditionally instruct the user to do it. A less
+prescriptive message will help prevent users from thinking that they are
+required to create an integrated history instead of simply replacing the
+previous history. Also, don't put `git pull` in an awkward
+parenthetical, because `git pull` can always be used to reconcile
+branches and is the normal way to do so.
+
+Due to the difficulty of knowing which command for force-pushing is best
+suited to the user's situation, no specific advice is given about
+force-pushing. Instead, the user is directed to the Git documentation to
+read about possible ways forward that do not involve integration.
+
+Signed-off-by: Alex Henrie <alexhenrie24@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/push.c | 24 ++++++++++++------------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/builtin/push.c b/builtin/push.c
+index 6f8a8dc711..61a251c50a 100644
+--- a/builtin/push.c
++++ b/builtin/push.c
+@@ -301,21 +301,21 @@ static void setup_default_push_refspecs(int *flags, struct remote *remote)
+ 
+ static const char message_advice_pull_before_push[] =
+ 	N_("Updates were rejected because the tip of your current branch is behind\n"
+-	   "its remote counterpart. Integrate the remote changes (e.g.\n"
+-	   "'git pull ...') before pushing again.\n"
++	   "its remote counterpart. If you want to integrate the remote changes,\n"
++	   "use 'git pull' before pushing again.\n"
+ 	   "See the 'Note about fast-forwards' in 'git push --help' for details.");
+ 
+ static const char message_advice_checkout_pull_push[] =
+ 	N_("Updates were rejected because a pushed branch tip is behind its remote\n"
+-	   "counterpart. Check out this branch and integrate the remote changes\n"
+-	   "(e.g. 'git pull ...') before pushing again.\n"
++	   "counterpart. If you want to integrate the remote changes, use 'git pull'\n"
++	   "before pushing again.\n"
+ 	   "See the 'Note about fast-forwards' in 'git push --help' for details.");
+ 
+ static const char message_advice_ref_fetch_first[] =
+-	N_("Updates were rejected because the remote contains work that you do\n"
+-	   "not have locally. This is usually caused by another repository pushing\n"
+-	   "to the same ref. You may want to first integrate the remote changes\n"
+-	   "(e.g., 'git pull ...') before pushing again.\n"
++	N_("Updates were rejected because the remote contains work that you do not\n"
++	   "have locally. This is usually caused by another repository pushing to\n"
++	   "the same ref. If you want to integrate the remote changes, use\n"
++	   "'git pull' before pushing again.\n"
+ 	   "See the 'Note about fast-forwards' in 'git push --help' for details.");
+ 
+ static const char message_advice_ref_already_exists[] =
+@@ -327,10 +327,10 @@ static const char message_advice_ref_needs_force[] =
+ 	   "without using the '--force' option.\n");
+ 
+ static const char message_advice_ref_needs_update[] =
+-	N_("Updates were rejected because the tip of the remote-tracking\n"
+-	   "branch has been updated since the last checkout. You may want\n"
+-	   "to integrate those changes locally (e.g., 'git pull ...')\n"
+-	   "before forcing an update.\n");
++	N_("Updates were rejected because the tip of the remote-tracking branch has\n"
++	   "been updated since the last checkout. If you want to integrate the\n"
++	   "remote changes, use 'git pull' before pushing again.\n"
++	   "See the 'Note about fast-forwards' in 'git push --help' for details.");
+ 
+ static void advise_pull_before_push(void)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

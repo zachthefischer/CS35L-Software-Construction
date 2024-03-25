@@ -1,0 +1,74 @@
+From 46e87b548290ca59644a9d1265fe7451a6e64d8e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 8 Nov 2022 15:10:36 +0100
+Subject: [PATCH 0326/2871] submodule.c: refactor recursive block out of absorb
+ function
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A move and indentation-only change to move the
+ABSORB_GITDIR_RECURSE_SUBMODULES case into its own function, which as
+we'll see makes the subsequent commit changing this code much smaller.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ submodule.c | 30 ++++++++++++++++++------------
+ 1 file changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/submodule.c b/submodule.c
+index b958162d28..fe1e3f0390 100644
+--- a/submodule.c
++++ b/submodule.c
+@@ -2310,6 +2310,23 @@ static void relocate_single_git_dir_into_superproject(const char *path)
+ 	strbuf_release(&new_gitdir);
+ }
+ 
++static void absorb_git_dir_into_superproject_recurse(const char *path)
++{
++
++	struct child_process cp = CHILD_PROCESS_INIT;
++
++	cp.dir = path;
++	cp.git_cmd = 1;
++	cp.no_stdin = 1;
++	strvec_pushf(&cp.args, "--super-prefix=%s%s/",
++		     get_super_prefix_or_empty(), path);
++	strvec_pushl(&cp.args, "submodule--helper",
++		     "absorbgitdirs", NULL);
++	prepare_submodule_repo_env(&cp.env);
++	if (run_command(&cp))
++		die(_("could not recurse into submodule '%s'"), path);
++}
++
+ /*
+  * Migrate the git directory of the submodule given by path from
+  * having its git directory within the working tree to the git dir nested
+@@ -2366,21 +2383,10 @@ void absorb_git_dir_into_superproject(const char *path,
+ 	strbuf_release(&gitdir);
+ 
+ 	if (flags & ABSORB_GITDIR_RECURSE_SUBMODULES) {
+-		struct child_process cp = CHILD_PROCESS_INIT;
+-
+ 		if (flags & ~ABSORB_GITDIR_RECURSE_SUBMODULES)
+ 			BUG("we don't know how to pass the flags down?");
+ 
+-		cp.dir = path;
+-		cp.git_cmd = 1;
+-		cp.no_stdin = 1;
+-		strvec_pushf(&cp.args, "--super-prefix=%s%s/",
+-			     get_super_prefix_or_empty(), path);
+-		strvec_pushl(&cp.args, "submodule--helper",
+-			     "absorbgitdirs", NULL);
+-		prepare_submodule_repo_env(&cp.env);
+-		if (run_command(&cp))
+-			die(_("could not recurse into submodule '%s'"), path);
++		absorb_git_dir_into_superproject_recurse(path);
+ 	}
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

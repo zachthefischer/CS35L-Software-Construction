@@ -1,0 +1,211 @@
+From a797c0ea042af697d82ad475b9f354c4a33a9047 Mon Sep 17 00:00:00 2001
+From: Siddharth Asthana <siddharthasthana31@gmail.com>
+Date: Tue, 20 Dec 2022 11:31:13 +0530
+Subject: [PATCH 0589/2871] cat-file: add mailmap support to --batch-check
+ option
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Even though the cat-file command with `--batch-check` option does not
+complain when `--use-mailmap` option is given, the latter option is
+ignored. Compute the size of the object after replacing the idents and
+report it instead.
+
+In order to make `--batch-check` option honour the mailmap mechanism we
+have to read the contents of the commit/tag object.
+
+There were two ways to do it:
+
+1. Make two calls to `oid_object_info_extended()`. If `--use-mailmap`
+   option is given, the first call will get us the type of the object
+   and second call will only be made if the object type is either a
+   commit or tag to get the contents of the object.
+
+2. Make one call to `oid_object_info_extended()` to get the type of the
+   object. Then, if the object type is either of commit or tag, make a
+   call to `repo_read_object_file()` to read the contents of the object.
+
+I benchmarked the following command with both the above approaches and
+compared against the current implementation where `--use-mailmap`
+option is ignored:
+
+`git cat-file --use-mailmap --batch-all-objects --batch-check --buffer
+--unordered`
+
+The results can be summarized as follows:
+                       Time (mean ± σ)
+default               827.7 ms ± 104.8 ms
+first approach        6.197 s ± 0.093 s
+second approach       1.975 s ± 0.217 s
+
+Since, the second approach is faster than the first one, I implemented
+it in this patch.
+
+The command git cat-file can now use the mailmap mechanism to replace
+idents with canonical versions for commit and tag objects. There are
+several options like `--batch`, `--batch-check` and `--batch-command`
+that can be combined with `--use-mailmap`. But the documentation for
+`--batch`, `--batch-check` and `--batch-command` doesn't say so. This
+patch fixes that documentation.
+
+Mentored-by: Christian Couder <christian.couder@gmail.com>
+Mentored-by: John Cai <johncai86@gmail.com>
+Helped-by: Taylor Blau <me@ttaylorr.com>
+Helped-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Siddharth Asthana <siddharthasthana31@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-cat-file.txt | 49 +++++++++++++++++++++++++---------
+ builtin/cat-file.c             | 15 +++++++++++
+ t/t4203-mailmap.sh             | 36 +++++++++++++++++++++++++
+ 3 files changed, 87 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/git-cat-file.txt b/Documentation/git-cat-file.txt
+index f82d702d6b..830f0a2eff 100644
+--- a/Documentation/git-cat-file.txt
++++ b/Documentation/git-cat-file.txt
+@@ -91,26 +91,49 @@ OPTIONS
+ --batch::
+ --batch=<format>::
+ 	Print object information and contents for each object provided
+-	on stdin.  May not be combined with any other options or arguments
+-	except `--textconv` or `--filters`, in which case the input lines
+-	also need to specify the path, separated by whitespace.  See the
+-	section `BATCH OUTPUT` below for details.
++	on stdin. May not be combined with any other options or arguments
++	except `--textconv`, `--filters`, or `--use-mailmap`.
++	+
++	* When used with `--textconv` or `--filters`, the input lines
++	  must specify the path, separated by whitespace. See the section
++	  `BATCH OUTPUT` below for details.
++	+
++	* When used with `--use-mailmap`, for commit and tag objects, the
++	  contents part of the output shows the identities replaced using the
++	  mailmap mechanism, while the information part of the output shows
++	  the size of the object as if it actually recorded the replacement
++	  identities.
+ 
+ --batch-check::
+ --batch-check=<format>::
+-	Print object information for each object provided on stdin.  May
+-	not be combined with any other options or arguments except
+-	`--textconv` or `--filters`, in which case the input lines also
+-	need to specify the path, separated by whitespace.  See the
+-	section `BATCH OUTPUT` below for details.
++	Print object information for each object provided on stdin. May not be
++	combined with any other options or arguments except `--textconv`, `--filters`
++	or `--use-mailmap`.
++	+
++	* When used with `--textconv` or `--filters`, the input lines must
++	 specify the path, separated by whitespace. See the section
++	 `BATCH OUTPUT` below for details.
++	+
++	* When used with `--use-mailmap`, for commit and tag objects, the
++	  printed object information shows the size of the object as if the
++	  identities recorded in it were replaced by the mailmap mechanism.
+ 
+ --batch-command::
+ --batch-command=<format>::
+ 	Enter a command mode that reads commands and arguments from stdin. May
+-	only be combined with `--buffer`, `--textconv` or `--filters`. In the
+-	case of `--textconv` or `--filters`, the input lines also need to specify
+-	the path, separated by whitespace. See the section `BATCH OUTPUT` below
+-	for details.
++	only be combined with `--buffer`, `--textconv`, `--use-mailmap` or
++	`--filters`.
++	+
++	* When used with `--textconv` or `--filters`, the input lines must
++	  specify the path, separated by whitespace. See the section
++	  `BATCH OUTPUT` below for details.
++	+
++	* When used with `--use-mailmap`, for commit and tag objects, the
++	  `contents` command shows the identities replaced using the
++	  mailmap mechanism, while the `info` command shows the size
++	  of the object as if it actually recorded the replacement
++	  identities.
++
+ +
+ `--batch-command` recognizes the following commands:
+ +
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index 8a6e2343ec..1a8d90b5f5 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -444,6 +444,9 @@ static void batch_object_write(const char *obj_name,
+ 	if (!data->skip_object_info) {
+ 		int ret;
+ 
++		if (use_mailmap)
++			data->info.typep = &data->type;
++
+ 		if (pack)
+ 			ret = packed_object_info(the_repository, pack, offset,
+ 						 &data->info);
+@@ -457,6 +460,18 @@ static void batch_object_write(const char *obj_name,
+ 			fflush(stdout);
+ 			return;
+ 		}
++
++		if (use_mailmap && (data->type == OBJ_COMMIT || data->type == OBJ_TAG)) {
++			size_t s = data->size;
++			char *buf = NULL;
++
++			buf = repo_read_object_file(the_repository, &data->oid, &data->type,
++						    &data->size);
++			buf = replace_idents_using_mailmap(buf, &s);
++			data->size = cast_size_t_to_ulong(s);
++
++			free(buf);
++		}
+ 	}
+ 
+ 	strbuf_reset(scratch);
+diff --git a/t/t4203-mailmap.sh b/t/t4203-mailmap.sh
+index b8ec5e0959..fa7f987284 100755
+--- a/t/t4203-mailmap.sh
++++ b/t/t4203-mailmap.sh
+@@ -1051,4 +1051,40 @@ test_expect_success 'git cat-file -s returns correct size with --use-mailmap for
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'git cat-file --batch-check returns correct size with --use-mailmap' '
++	test_when_finished "rm .mailmap" &&
++	cat >.mailmap <<-\EOF &&
++	C O Mitter <committer@example.com> Orig <orig@example.com>
++	EOF
++	git cat-file commit HEAD >commit.out &&
++	commit_size=$(wc -c <commit.out) &&
++	commit_sha=$(git rev-parse HEAD) &&
++	echo $commit_sha commit $commit_size >expect &&
++	git cat-file --use-mailmap commit HEAD >commit.out &&
++	commit_size=$(wc -c <commit.out) &&
++	echo $commit_sha commit $commit_size >>expect &&
++	echo "HEAD" >in &&
++	git cat-file --batch-check <in >actual &&
++	git cat-file --use-mailmap --batch-check <in >>actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'git cat-file --batch-command returns correct size with --use-mailmap' '
++	test_when_finished "rm .mailmap" &&
++	cat >.mailmap <<-\EOF &&
++	C O Mitter <committer@example.com> Orig <orig@example.com>
++	EOF
++	git cat-file commit HEAD >commit.out &&
++	commit_size=$(wc -c <commit.out) &&
++	commit_sha=$(git rev-parse HEAD) &&
++	echo $commit_sha commit $commit_size >expect &&
++	git cat-file --use-mailmap commit HEAD >commit.out &&
++	commit_size=$(wc -c <commit.out) &&
++	echo $commit_sha commit $commit_size >>expect &&
++	echo "info HEAD" >in &&
++	git cat-file --batch-command <in >actual &&
++	git cat-file --use-mailmap --batch-command <in >>actual &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,61 @@
+From d6484e9fab5747dd1d36fd7895e796922f4e2c76 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 22 Mar 2023 13:38:04 -0400
+Subject: [PATCH 1098/2871] fast-export: simplify initialization of anonymized
+ hashmaps
+
+We take pains to avoid doing a lookup on a hashmap which has not been
+initialized with hashmap_init(). That was necessary back when this code
+was written. But hashmap_get() became safer in b7879b0ba6e (hashmap:
+allow re-use after hashmap_free(), 2020-11-02). Since then it's OK to
+call functions on a zero-initialized table; it will just correctly
+return NULL, since there is no match.
+
+This simplifies the code a little, and also lets us keep the
+initialization line closer to when we add an entry (which is when the
+hashmap really does need to be totally initialized). That will help
+later refactoring.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fast-export.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/fast-export.c b/builtin/fast-export.c
+index f422819c82..ba9ab3a97e 100644
+--- a/builtin/fast-export.c
++++ b/builtin/fast-export.c
+@@ -152,18 +152,12 @@ static const char *anonymize_str(struct hashmap *map,
+ 	struct anonymized_entry_key key;
+ 	struct anonymized_entry *ret;
+ 
+-	if (!map->cmpfn)
+-		hashmap_init(map, anonymized_entry_cmp, NULL, 0);
+-
+ 	hashmap_entry_init(&key.hash, memhash(orig, len));
+ 	key.orig = orig;
+ 	key.orig_len = len;
+ 
+ 	/* First check if it's a token the user configured manually... */
+-	if (anonymized_seeds.cmpfn)
+-		ret = hashmap_get_entry(&anonymized_seeds, &key, hash, &key);
+-	else
+-		ret = NULL;
++	ret = hashmap_get_entry(&anonymized_seeds, &key, hash, &key);
+ 
+ 	/* ...otherwise check if we've already seen it in this context... */
+ 	if (!ret)
+@@ -171,6 +165,9 @@ static const char *anonymize_str(struct hashmap *map,
+ 
+ 	/* ...and finally generate a new mapping if necessary */
+ 	if (!ret) {
++		if (!map->cmpfn)
++			hashmap_init(map, anonymized_entry_cmp, NULL, 0);
++
+ 		FLEX_ALLOC_MEM(ret, orig, orig, len);
+ 		hashmap_entry_init(&ret->hash, key.hash.hash);
+ 		ret->anon = generate(data);
+-- 
+2.39.3 (Apple Git-145)
+

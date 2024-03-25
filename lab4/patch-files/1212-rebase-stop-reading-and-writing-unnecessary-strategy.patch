@@ -1,0 +1,85 @@
+From 461434a013c2289fb59070e1a118d39441828847 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Mon, 10 Apr 2023 10:08:27 +0100
+Subject: [PATCH 1212/2871] rebase: stop reading and writing unnecessary
+ strategy state
+
+The state files for "--strategy" and "--strategy-option" are written and
+read twice, once by builtin/rebase.c and then by sequencer.c. This is an
+artifact of the scripted rebase and the need to support "rebase
+--preserve-merges". Now that "--preserve-merges" no-longer exists we
+only need to read and write these files in sequencer.c. This enables us
+to remove a call to free() in read_strategy_opts() that was added by
+f1f4ebf432 (sequencer.c: fix "opts->strategy" leak in
+read_strategy_opts(), 2022-11-08) as this commit fixes the root cause of
+that leak.
+
+There is further scope for removing duplication in the reading and
+writing of state files between builtin/rebase.c and sequencer.c but that
+is left for a follow up series.
+
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 24 ------------------------
+ sequencer.c      |  1 -
+ 2 files changed, 25 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 5b7b908b66..3bd215c771 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -483,24 +483,6 @@ static int read_basic_state(struct rebase_options *opts)
+ 		opts->gpg_sign_opt = xstrdup(buf.buf);
+ 	}
+ 
+-	if (file_exists(state_dir_path("strategy", opts))) {
+-		strbuf_reset(&buf);
+-		if (!read_oneliner(&buf, state_dir_path("strategy", opts),
+-				   READ_ONELINER_WARN_MISSING))
+-			return -1;
+-		free(opts->strategy);
+-		opts->strategy = xstrdup(buf.buf);
+-	}
+-
+-	if (file_exists(state_dir_path("strategy_opts", opts))) {
+-		strbuf_reset(&buf);
+-		if (!read_oneliner(&buf, state_dir_path("strategy_opts", opts),
+-				   READ_ONELINER_WARN_MISSING))
+-			return -1;
+-		free(opts->strategy_opts);
+-		opts->strategy_opts = xstrdup(buf.buf);
+-	}
+-
+ 	strbuf_release(&buf);
+ 
+ 	return 0;
+@@ -518,12 +500,6 @@ static int rebase_write_basic_state(struct rebase_options *opts)
+ 		write_file(state_dir_path("quiet", opts), "%s", "");
+ 	if (opts->flags & REBASE_VERBOSE)
+ 		write_file(state_dir_path("verbose", opts), "%s", "");
+-	if (opts->strategy)
+-		write_file(state_dir_path("strategy", opts), "%s",
+-			   opts->strategy);
+-	if (opts->strategy_opts)
+-		write_file(state_dir_path("strategy_opts", opts), "%s",
+-			   opts->strategy_opts);
+ 	if (opts->allow_rerere_autoupdate > 0)
+ 		write_file(state_dir_path("allow_rerere_autoupdate", opts),
+ 			   "-%s-rerere-autoupdate",
+diff --git a/sequencer.c b/sequencer.c
+index 3be23d7ca2..c35a67e104 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -2944,7 +2944,6 @@ static void read_strategy_opts(struct replay_opts *opts, struct strbuf *buf)
+ 	strbuf_reset(buf);
+ 	if (!read_oneliner(buf, rebase_path_strategy(), 0))
+ 		return;
+-	free(opts->strategy);
+ 	opts->strategy = strbuf_detach(buf, NULL);
+ 	if (!read_oneliner(buf, rebase_path_strategy_opts(), 0))
+ 		return;
+-- 
+2.39.3 (Apple Git-145)
+

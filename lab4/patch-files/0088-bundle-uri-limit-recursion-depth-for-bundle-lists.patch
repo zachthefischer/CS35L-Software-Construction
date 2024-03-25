@@ -1,0 +1,68 @@
+From 20c1e2a68bfcb85dd919c92a82c129cee215c23a Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 12 Oct 2022 12:52:34 +0000
+Subject: [PATCH 0088/2871] bundle-uri: limit recursion depth for bundle lists
+
+The next change will start allowing us to parse bundle lists that are
+downloaded from a provided bundle URI. Those lists might point to other
+lists, which could proceed to an arbitrary depth (and even create
+cycles). Restructure fetch_bundle_uri() to have an internal version that
+has a recursion depth. Compare that to a new max_bundle_uri_depth
+constant that is twice as high as we expect this depth to be for any
+legitimate use of bundle list linking.
+
+We can consider making max_bundle_uri_depth a configurable value if
+there is demonstrated value in the future.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 3d44ec2b1e..8a7c11c639 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -334,11 +334,25 @@ static int unbundle_from_file(struct repository *r, const char *file)
+ 	return result;
+ }
+ 
+-int fetch_bundle_uri(struct repository *r, const char *uri)
++/**
++ * This limits the recursion on fetch_bundle_uri_internal() when following
++ * bundle lists.
++ */
++static int max_bundle_uri_depth = 4;
++
++static int fetch_bundle_uri_internal(struct repository *r,
++				     const char *uri,
++				     int depth)
+ {
+ 	int result = 0;
+ 	char *filename;
+ 
++	if (depth >= max_bundle_uri_depth) {
++		warning(_("exceeded bundle URI recursion limit (%d)"),
++			max_bundle_uri_depth);
++		return -1;
++	}
++
+ 	if (!(filename = find_temp_filename())) {
+ 		result = -1;
+ 		goto cleanup;
+@@ -366,6 +380,11 @@ int fetch_bundle_uri(struct repository *r, const char *uri)
+ 	return result;
+ }
+ 
++int fetch_bundle_uri(struct repository *r, const char *uri)
++{
++	return fetch_bundle_uri_internal(r, uri, 0);
++}
++
+ /**
+  * General API for {transport,connect}.c etc.
+  */
+-- 
+2.39.3 (Apple Git-145)
+

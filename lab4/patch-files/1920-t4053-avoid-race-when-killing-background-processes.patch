@@ -1,0 +1,51 @@
+From 231e86c10c674235cf28447a8486f7955d5f4dd9 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Thu, 10 Aug 2023 14:33:13 +0000
+Subject: [PATCH 1920/2871] t4053: avoid race when killing background processes
+
+The test 'diff --no-index reads from pipes' starts a couple of
+background processes that write to the pipes that are passed to "diff
+--no-index". If the test passes then we expect these processes to exit
+as all their output will have been read. However if the test fails
+then we want to make sure they do not hang about on the users machine
+and the test remembers they should be killed by calling
+
+      test_when_finished  "! kill $!"
+
+after each background process is created. Unfortunately there is a
+race where test_when_finished may run before the background process
+exits even when all its output has been read resulting in the kill
+command succeeding which causes the test to fail. Fix this by ignoring
+the exit status of the kill command. If the diff is successful we
+could instead wait for the background process to exit and check their
+status but that feels like it is testing the platform's printf
+implementation rather than git's code.
+
+Reported-by: Jeff King <peff@peff.net>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4053-diff-no-index.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t4053-diff-no-index.sh b/t/t4053-diff-no-index.sh
+index a28b9ff243..1fb7d33462 100755
+--- a/t/t4053-diff-no-index.sh
++++ b/t/t4053-diff-no-index.sh
+@@ -248,11 +248,11 @@ test_expect_success PIPE,SYMLINKS 'diff --no-index reads from pipes' '
+ 	{
+ 		(test_write_lines a b c >old) &
+ 	} &&
+-	test_when_finished "! kill $!" &&
++	test_when_finished "kill $! || :" &&
+ 	{
+ 		(test_write_lines a x c >new) &
+ 	} &&
+-	test_when_finished "! kill $!" &&
++	test_when_finished "kill $! || :" &&
+ 
+ 	cat >expect <<-EOF &&
+ 	diff --git a/old b/new-link
+-- 
+2.39.3 (Apple Git-145)
+

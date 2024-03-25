@@ -1,0 +1,36 @@
+From 6193aaa9f91117922264ac577301d7df0e666131 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Fri, 10 Feb 2023 11:28:34 +0100
+Subject: [PATCH 0851/2871] builtin/rm.c: use narrower "USE_THE_INDEX_VARIABLE"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Replace the "USE_THE_INDEX_COMPATIBILITY_MACROS" define with the
+narrower "USE_THE_INDEX_VARIABLE". This could have been done in
+07047d68294 (cocci: apply "pending" index-compatibility to some
+"builtin/*.c", 2022-11-19), but I missed it at the time.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rm.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/rm.c b/builtin/rm.c
+index 4a4aec0d00..8844f90655 100644
+--- a/builtin/rm.c
++++ b/builtin/rm.c
+@@ -3,7 +3,7 @@
+  *
+  * Copyright (C) Linus Torvalds 2006
+  */
+-#define USE_THE_INDEX_COMPATIBILITY_MACROS
++#define USE_THE_INDEX_VARIABLE
+ #include "builtin.h"
+ #include "advice.h"
+ #include "config.h"
+-- 
+2.39.3 (Apple Git-145)
+

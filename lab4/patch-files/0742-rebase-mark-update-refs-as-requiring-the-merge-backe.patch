@@ -1,0 +1,86 @@
+From 1207599e839bd9311ec506d82cd507e820767e9b Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:45 +0000
+Subject: [PATCH 0742/2871] rebase: mark --update-refs as requiring the merge
+ backend
+
+--update-refs is built in terms of the sequencer, which requires the
+merge backend.  It was already marked as incompatible with the apply
+backend in the git-rebase manual, but the code didn't check for this
+incompatibility and warn the user.  Check and error now.
+
+While at it, fix a typo in t3422...and fix some misleading wording
+(most options which used to be am-specific have since been implemented
+in the merge backend as well).
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt           |  2 ++
+ builtin/rebase.c                       |  3 +++
+ t/t3422-rebase-incompatible-options.sh | 15 ++++++++++-----
+ 3 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index d811c1cf44..6490bc96a1 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -630,6 +630,8 @@ start would be overridden by the presence of
+ +
+ If the configuration variable `rebase.updateRefs` is set, then this option
+ can be used to override and disable this setting.
+++
++See also INCOMPATIBLE OPTIONS below.
+ 
+ INCOMPATIBLE OPTIONS
+ --------------------
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index a26cc0cfdb..c111b89e13 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1492,6 +1492,9 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 		}
+ 	}
+ 
++	if (options.update_refs)
++		imply_merge(&options, "--update-refs");
++
+ 	if (options.type == REBASE_UNSPECIFIED) {
+ 		if (!strcmp(options.default_backend, "merge"))
+ 			imply_merge(&options, "--merge");
+diff --git a/t/t3422-rebase-incompatible-options.sh b/t/t3422-rebase-incompatible-options.sh
+index 6dabb05a2a..9da39cd91c 100755
+--- a/t/t3422-rebase-incompatible-options.sh
++++ b/t/t3422-rebase-incompatible-options.sh
+@@ -25,11 +25,11 @@ test_expect_success 'setup' '
+ '
+ 
+ #
+-# Rebase has lots of useful options like --whitepsace=fix, which are
+-# actually all built in terms of flags to git-am.  Since neither
+-# --merge nor --interactive (nor any options that imply those two) use
+-# git-am, using them together will result in flags like --whitespace=fix
+-# being ignored.  Make sure rebase warns the user and aborts instead.
++# Rebase has a couple options which are specific to the apply backend,
++# and several options which are specific to the merge backend.  Flags
++# from the different sets cannot work together, and we do not want to
++# just ignore one of the sets of flags.  Make sure rebase warns the
++# user and aborts instead.
+ #
+ 
+ test_rebase_am_only () {
+@@ -60,6 +60,11 @@ test_rebase_am_only () {
+ 		test_must_fail git rebase $opt --exec 'true' A
+ 	"
+ 
++	test_expect_success "$opt incompatible with --update-refs" "
++		git checkout B^0 &&
++		test_must_fail git rebase $opt --update-refs A
++	"
++
+ }
+ 
+ test_rebase_am_only --whitespace=fix
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,37 @@
+From a5c01603b397f7f99b013a1334e0792d70be641c Mon Sep 17 00:00:00 2001
+From: "brian m. carlson" <bk2204@github.com>
+Date: Fri, 4 Aug 2023 17:13:28 +0000
+Subject: [PATCH 1889/2871] gitignore: ignore clangd .cache directory
+
+In at least some versions of clangd, including version 15 in Ubuntu
+23.04, a directory, .cache, is written in the root of the repository
+with index information about the files in the repository.  Since clangd
+is the most common language server protocol (LSP) implementation for C,
+and we already support it using the GENERATE_COMPILATION_DATABASE flags
+to make it functional, it's likely many users are using or will want to
+use it.
+
+As a result, ignore the ".cache" directory to help avoid users
+accidentally committing the data.
+
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .gitignore | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.gitignore b/.gitignore
+index e875c59054..5e56e471b3 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -222,6 +222,7 @@
+ /TAGS
+ /cscope*
+ /compile_commands.json
++/.cache/
+ *.hcc
+ *.obj
+ *.lib
+-- 
+2.39.3 (Apple Git-145)
+

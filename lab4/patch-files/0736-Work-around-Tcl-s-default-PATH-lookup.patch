@@ -1,0 +1,126 @@
+From aae9560a355d4ab91385e49eae62fade2ddd27ef Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 23 Nov 2022 09:31:06 +0100
+Subject: [PATCH 0736/2871] Work around Tcl's default `PATH` lookup
+
+As per https://www.tcl.tk/man/tcl8.6/TclCmd/exec.html#M23, Tcl's `exec`
+function goes out of its way to imitate the highly dangerous path lookup
+of `cmd.exe`, but _of course_ only on Windows:
+
+	If a directory name was not specified as part of the application
+	name, the following directories are automatically searched in
+	order when attempting to locate the application:
+
+	    The directory from which the Tcl executable was loaded.
+
+	    The current directory.
+
+	    The Windows 32-bit system directory.
+
+	    The Windows home directory.
+
+	    The directories listed in the path.
+
+The dangerous part is the second item, of course: `exec` _prefers_
+executables in the current directory to those that are actually in the
+`PATH`.
+
+It is almost as if people wanted to Windows users vulnerable,
+specifically.
+
+To avoid that, Git GUI already has the `_which` function that does not
+imitate that dangerous practice when looking up executables in the
+search path.
+
+However, Git GUI currently fails to use that function e.g. when trying to
+execute `aspell` for spell checking.
+
+That is not only dangerous but combined with Tcl's unfortunate default
+behavior and with the fact that Git GUI tries to spell-check a
+repository just after cloning, leads to a critical Remote Code Execution
+vulnerability.
+
+Let's override both `exec` and `open` to always use `_which` instead of
+letting Tcl perform the path lookup, to prevent this attack vector.
+
+This addresses CVE-2022-41953.
+
+For more details, see
+https://github.com/git-for-windows/git/security/advisories/GHSA-v4px-mx59-w99c
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Pratyush Yadav <me@yadavpratyush.com>
+---
+ git-gui.sh | 56 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/git-gui.sh b/git-gui.sh
+index b0eb5a6ae4..cb92bba1c4 100755
+--- a/git-gui.sh
++++ b/git-gui.sh
+@@ -121,6 +121,62 @@ proc _which {what args} {
+ 	return {}
+ }
+ 
++proc sanitize_command_line {command_line from_index} {
++	set i $from_index
++	while {$i < [llength $command_line]} {
++		set cmd [lindex $command_line $i]
++		if {[file pathtype $cmd] ne "absolute"} {
++			set fullpath [_which $cmd]
++			if {$fullpath eq ""} {
++				throw {NOT-FOUND} "$cmd not found in PATH"
++			}
++			lset command_line $i $fullpath
++		}
++
++		# handle piped commands, e.g. `exec A | B`
++		for {incr i} {$i < [llength $command_line]} {incr i} {
++			if {[lindex $command_line $i] eq "|"} {
++				incr i
++				break
++			}
++		}
++	}
++	return $command_line
++}
++
++# Override `exec` to avoid unsafe PATH lookup
++
++rename exec real_exec
++
++proc exec {args} {
++	# skip options
++	for {set i 0} {$i < [llength $args]} {incr i} {
++		set arg [lindex $args $i]
++		if {$arg eq "--"} {
++			incr i
++			break
++		}
++		if {[string range $arg 0 0] ne "-"} {
++			break
++		}
++	}
++	set args [sanitize_command_line $args $i]
++	uplevel 1 real_exec $args
++}
++
++# Override `open` to avoid unsafe PATH lookup
++
++rename open real_open
++
++proc open {args} {
++	set arg0 [lindex $args 0]
++	if {[string range $arg0 0 0] eq "|"} {
++		set command_line [string trim [string range $arg0 1 end]]
++		lset args 0 "| [sanitize_command_line $command_line 0]"
++	}
++	uplevel 1 real_open $args
++}
++
+ ######################################################################
+ ##
+ ## locate our library
+-- 
+2.39.3 (Apple Git-145)
+

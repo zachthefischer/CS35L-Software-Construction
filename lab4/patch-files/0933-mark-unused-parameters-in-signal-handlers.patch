@@ -1,0 +1,74 @@
+From 9ec03b59a8c4f5a0b4e666bd179a8eed71484825 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:20 -0500
+Subject: [PATCH 0933/2871] mark unused parameters in signal handlers
+
+Signal handlers receive their signal number as a parameter, but many
+don't care what it is (because they only handle one signal, or because
+their action is the same regardless of the signal). Mark such parameters
+to silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fast-import.c | 2 +-
+ builtin/log.c         | 2 +-
+ daemon.c              | 2 +-
+ progress.c            | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/fast-import.c b/builtin/fast-import.c
+index 7134683ab9..4a8c835062 100644
+--- a/builtin/fast-import.c
++++ b/builtin/fast-import.c
+@@ -436,7 +436,7 @@ static void set_checkpoint_signal(void)
+ 
+ #else
+ 
+-static void checkpoint_signal(int signo)
++static void checkpoint_signal(int signo UNUSED)
+ {
+ 	checkpoint_requested = 1;
+ }
+diff --git a/builtin/log.c b/builtin/log.c
+index 04412dd9c9..813b768e24 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -436,7 +436,7 @@ static void log_show_early(struct rev_info *revs, struct commit_list *list)
+ 	setitimer(ITIMER_REAL, &early_output_timer, NULL);
+ }
+ 
+-static void early_output(int signal)
++static void early_output(int signal UNUSED)
+ {
+ 	show_early_output = log_show_early;
+ }
+diff --git a/daemon.c b/daemon.c
+index 0ae7d12b5c..06d5bc6931 100644
+--- a/daemon.c
++++ b/daemon.c
+@@ -928,7 +928,7 @@ static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
+ 		add_child(&cld, addr, addrlen);
+ }
+ 
+-static void child_handler(int signo)
++static void child_handler(int signo UNUSED)
+ {
+ 	/*
+ 	 * Otherwise empty handler because systemcalls will get interrupted
+diff --git a/progress.c b/progress.c
+index 0cdd875d37..9b33a2df32 100644
+--- a/progress.c
++++ b/progress.c
+@@ -59,7 +59,7 @@ void progress_test_force_update(void)
+ }
+ 
+ 
+-static void progress_interval(int signum)
++static void progress_interval(int signum UNUSED)
+ {
+ 	progress_update = 1;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

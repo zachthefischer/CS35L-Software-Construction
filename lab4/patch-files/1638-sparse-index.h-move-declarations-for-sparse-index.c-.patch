@@ -1,0 +1,290 @@
+From baf889c2cdc616c7eff67f49608f1d93642c13f0 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:51 +0000
+Subject: [PATCH 1638/2871] sparse-index.h: move declarations for
+ sparse-index.c from cache.h
+
+Note in particular that this reverses the decision made in 118a2e8bde0
+("cache: move ensure_full_index() to cache.h", 2021-04-01).
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/checkout-index.c    | 1 +
+ builtin/commit.c            | 1 +
+ builtin/difftool.c          | 1 +
+ builtin/fsck.c              | 1 +
+ builtin/ls-files.c          | 1 +
+ builtin/merge-index.c       | 1 +
+ builtin/read-tree.c         | 1 +
+ builtin/reset.c             | 1 +
+ builtin/rm.c                | 1 +
+ builtin/stash.c             | 1 +
+ builtin/submodule--helper.c | 1 +
+ builtin/update-index.c      | 1 +
+ cache.h                     | 2 --
+ dir.c                       | 1 +
+ entry.c                     | 1 +
+ merge-ort.c                 | 1 +
+ merge-recursive.c           | 1 +
+ resolve-undo.c              | 1 +
+ revision.c                  | 1 +
+ sequencer.c                 | 1 +
+ sparse-index.h              | 2 ++
+ 21 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/checkout-index.c b/builtin/checkout-index.c
+index 9375a05539..b1cd8bef26 100644
+--- a/builtin/checkout-index.c
++++ b/builtin/checkout-index.c
+@@ -17,6 +17,7 @@
+ #include "entry.h"
+ #include "parallel-checkout.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ 
+ #define CHECKOUT_ALL 4
+ static int nul_term_line;
+diff --git a/builtin/commit.c b/builtin/commit.c
+index f3a1d3eb73..ee296e5ec6 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -38,6 +38,7 @@
+ #include "gpg-interface.h"
+ #include "column.h"
+ #include "sequencer.h"
++#include "sparse-index.h"
+ #include "mailmap.h"
+ #include "help.h"
+ #include "commit-reach.h"
+diff --git a/builtin/difftool.c b/builtin/difftool.c
+index 0049342f5c..2c27a59e04 100644
+--- a/builtin/difftool.c
++++ b/builtin/difftool.c
+@@ -23,6 +23,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "parse-options.h"
++#include "sparse-index.h"
+ #include "strvec.h"
+ #include "strbuf.h"
+ #include "lockfile.h"
+diff --git a/builtin/fsck.c b/builtin/fsck.c
+index dcc165bf0c..712e3dc68c 100644
+--- a/builtin/fsck.c
++++ b/builtin/fsck.c
+@@ -25,6 +25,7 @@
+ #include "replace-object.h"
+ #include "resolve-undo.h"
+ #include "run-command.h"
++#include "sparse-index.h"
+ #include "worktree.h"
+ #include "pack-revindex.h"
+ #include "pack-bitmap.h"
+diff --git a/builtin/ls-files.c b/builtin/ls-files.c
+index eb7cce4e6e..b6238966d2 100644
+--- a/builtin/ls-files.c
++++ b/builtin/ls-files.c
+@@ -23,6 +23,7 @@
+ #include "pathspec.h"
+ #include "run-command.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "submodule.h"
+ #include "submodule-config.h"
+ #include "object-store.h"
+diff --git a/builtin/merge-index.c b/builtin/merge-index.c
+index ab16e70f23..d16e8aa414 100644
+--- a/builtin/merge-index.c
++++ b/builtin/merge-index.c
+@@ -3,6 +3,7 @@
+ #include "hex.h"
+ #include "repository.h"
+ #include "run-command.h"
++#include "sparse-index.h"
+ 
+ static const char *pgm;
+ static int one_shot, quiet;
+diff --git a/builtin/read-tree.c b/builtin/read-tree.c
+index 440f19b1b8..bd1ce1d963 100644
+--- a/builtin/read-tree.c
++++ b/builtin/read-tree.c
+@@ -22,6 +22,7 @@
+ #include "repository.h"
+ #include "resolve-undo.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "submodule.h"
+ #include "submodule-config.h"
+ 
+diff --git a/builtin/reset.c b/builtin/reset.c
+index f99f32d580..3dc41ac332 100644
+--- a/builtin/reset.c
++++ b/builtin/reset.c
+@@ -29,6 +29,7 @@
+ #include "unpack-trees.h"
+ #include "cache-tree.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "submodule.h"
+ #include "submodule-config.h"
+ #include "trace.h"
+diff --git a/builtin/rm.c b/builtin/rm.c
+index b4589c824c..377a0f66ad 100644
+--- a/builtin/rm.c
++++ b/builtin/rm.c
+@@ -19,6 +19,7 @@
+ #include "repository.h"
+ #include "string-list.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "submodule.h"
+ #include "pathspec.h"
+ 
+diff --git a/builtin/stash.c b/builtin/stash.c
+index a7e17ffe38..8856ac6d5c 100644
+--- a/builtin/stash.c
++++ b/builtin/stash.c
+@@ -20,6 +20,7 @@
+ #include "rerere.h"
+ #include "revision.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "log-tree.h"
+ #include "diffcore.h"
+ #include "exec-cmd.h"
+diff --git a/builtin/submodule--helper.c b/builtin/submodule--helper.c
+index 6a16208e8a..fa30959535 100644
+--- a/builtin/submodule--helper.c
++++ b/builtin/submodule--helper.c
+@@ -13,6 +13,7 @@
+ #include "pathspec.h"
+ #include "dir.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "submodule.h"
+ #include "submodule-config.h"
+ #include "string-list.h"
+diff --git a/builtin/update-index.c b/builtin/update-index.c
+index 5fab9ad2ec..47dc9b626e 100644
+--- a/builtin/update-index.c
++++ b/builtin/update-index.c
+@@ -24,6 +24,7 @@
+ #include "dir.h"
+ #include "repository.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "split-index.h"
+ #include "symlinks.h"
+ #include "fsmonitor.h"
+diff --git a/cache.h b/cache.h
+index 316904da39..79daaa166b 100644
+--- a/cache.h
++++ b/cache.h
+@@ -327,8 +327,6 @@ int read_index_from(struct index_state *, const char *path,
+ 		    const char *gitdir);
+ int is_index_unborn(struct index_state *);
+ 
+-void ensure_full_index(struct index_state *istate);
+-
+ /* For use with `write_locked_index()`. */
+ #define COMMIT_LOCK		(1 << 0)
+ #define SKIP_IF_UNCHANGED	(1 << 1)
+diff --git a/dir.c b/dir.c
+index 029aab36fe..1e84b1e1f2 100644
+--- a/dir.c
++++ b/dir.c
+@@ -25,6 +25,7 @@
+ #include "ewah/ewok.h"
+ #include "fsmonitor.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "submodule-config.h"
+ #include "symlinks.h"
+ #include "trace2.h"
+diff --git a/entry.c b/entry.c
+index 7791cc999c..53d0038674 100644
+--- a/entry.c
++++ b/entry.c
+@@ -6,6 +6,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "name-hash.h"
++#include "sparse-index.h"
+ #include "streaming.h"
+ #include "submodule.h"
+ #include "symlinks.h"
+diff --git a/merge-ort.c b/merge-ort.c
+index a50b095c47..69e3c4a890 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -38,6 +38,7 @@
+ #include "oid-array.h"
+ #include "promisor-remote.h"
+ #include "revision.h"
++#include "sparse-index.h"
+ #include "strmap.h"
+ #include "submodule-config.h"
+ #include "submodule.h"
+diff --git a/merge-recursive.c b/merge-recursive.c
+index b341ba4f38..0e16e7a06d 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -29,6 +29,7 @@
+ #include "object-store.h"
+ #include "repository.h"
+ #include "revision.h"
++#include "sparse-index.h"
+ #include "string-list.h"
+ #include "submodule-config.h"
+ #include "submodule.h"
+diff --git a/resolve-undo.c b/resolve-undo.c
+index 70a6db526d..7ec09e89d4 100644
+--- a/resolve-undo.c
++++ b/resolve-undo.c
+@@ -2,6 +2,7 @@
+ #include "dir.h"
+ #include "hash.h"
+ #include "resolve-undo.h"
++#include "sparse-index.h"
+ #include "string-list.h"
+ 
+ /* The only error case is to run out of memory in string-list */
+diff --git a/revision.c b/revision.c
+index b33cc1d106..88b2f42daa 100644
+--- a/revision.c
++++ b/revision.c
+@@ -32,6 +32,7 @@
+ #include "packfile.h"
+ #include "worktree.h"
+ #include "setup.h"
++#include "sparse-index.h"
+ #include "strvec.h"
+ #include "trace2.h"
+ #include "commit-reach.h"
+diff --git a/sequencer.c b/sequencer.c
+index bceb6abcb6..d132cd884f 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -28,6 +28,7 @@
+ #include "merge-ort.h"
+ #include "merge-ort-wrappers.h"
+ #include "refs.h"
++#include "sparse-index.h"
+ #include "strvec.h"
+ #include "quote.h"
+ #include "trailer.h"
+diff --git a/sparse-index.h b/sparse-index.h
+index 59a92d819e..a16f3e67d7 100644
+--- a/sparse-index.h
++++ b/sparse-index.h
+@@ -37,4 +37,6 @@ struct pattern_list;
+  */
+ void expand_index(struct index_state *istate, struct pattern_list *pl);
+ 
++void ensure_full_index(struct index_state *istate);
++
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

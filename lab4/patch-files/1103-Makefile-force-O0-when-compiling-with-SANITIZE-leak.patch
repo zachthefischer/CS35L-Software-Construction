@@ -1,0 +1,32 @@
+From 8453685d0437bd5ffc25f0bd3b5b07b12225119b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 18 Oct 2022 16:15:33 -0400
+Subject: [PATCH 1103/2871] Makefile: force -O0 when compiling with
+ SANITIZE=leak
+
+Cherry pick commit d3775de0 (Makefile: force -O0 when compiling with
+SANITIZE=leak, 2022-10-18), as otherwise the leak checker at GitHub
+Actions CI seems to fail with a false positive.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Makefile b/Makefile
+index 5580859afd..c4ad7595ed 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1268,6 +1268,7 @@ BASIC_CFLAGS += -DSHA1DC_FORCE_ALIGNED_ACCESS
+ endif
+ ifneq ($(filter leak,$(SANITIZERS)),)
+ BASIC_CFLAGS += -DSUPPRESS_ANNOTATED_LEAKS
++BASIC_CFLAGS += -O0
+ SANITIZE_LEAK = YesCompiledWithIt
+ endif
+ ifneq ($(filter address,$(SANITIZERS)),)
+-- 
+2.39.3 (Apple Git-145)
+

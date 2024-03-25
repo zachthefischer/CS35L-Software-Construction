@@ -1,0 +1,140 @@
+From 7b3c8e9f388c8ef56f17d2cb633c0a579730a563 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 6 Nov 2023 17:56:33 -0500
+Subject: [PATCH 2366/2871] pack-bitmap: drop --unpacked non-commit objects
+ from results
+
+When performing revision queries with `--objects` and
+`--use-bitmap-index`, the output may incorrectly contain objects which
+are packed, even when the `--unpacked` option is given. This affects
+traversals, but also other querying operations, like `--count`,
+`--disk-usage`, etc.
+
+Like in the previous commit, the fix is to exclude those objects from
+the result set before they are shown to the user (or, in this case,
+before the bitmap containing the result of the traversal is enumerated
+and its objects listed).
+
+This is performed by a new function in pack-bitmap.c, called
+`filter_packed_objects_from_bitmap()`. Note that we do not have to
+inspect individual bits in the result bitmap, since we know that the
+first N (where N is the number of objects in the bitmap's pack/MIDX)
+bits correspond to objects which packed by definition.
+
+In other words, for an object to have a bitmap position (not in the
+extended index), it must appear in either the bitmap's pack or one of
+the packs in its MIDX.
+
+This presents an appealing optimization to us, which is that we can
+simply memset() the corresponding number of `eword_t`'s to zero,
+provided that we handle any objects which spill into the next word (but
+don't occupy all 64 bits of the word itself).
+
+We only have to handle objects in the bitmap's extended index. These
+objects may (or may not) appear in one or more pack(s). Since these
+objects are known to not appear in either the bitmap's MIDX or pack,
+they may be stored as loose, appear in other pack(s), or both.
+
+Before returning a bitmap containing the result of the traversal back to
+the caller, drop any bits from the extended index which appear in one or
+more packs. This implements the correct behavior for rev-list operations
+which use the bitmap index to compute their result.
+
+Co-authored-by: Jeff King <peff@peff.net>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-bitmap.c                      | 27 +++++++++++++++++++++++++++
+ t/t6113-rev-list-bitmap-filters.sh | 13 +++++++++++++
+ t/t6115-rev-list-du.sh             |  7 +++++++
+ 3 files changed, 47 insertions(+)
+
+diff --git a/pack-bitmap.c b/pack-bitmap.c
+index 6afc03d1e4..e0d0293a33 100644
+--- a/pack-bitmap.c
++++ b/pack-bitmap.c
+@@ -1665,6 +1665,30 @@ static int can_filter_bitmap(struct list_objects_filter_options *filter)
+ 	return !filter_bitmap(NULL, NULL, NULL, filter);
+ }
+ 
++
++static void filter_packed_objects_from_bitmap(struct bitmap_index *bitmap_git,
++					      struct bitmap *result)
++{
++	struct eindex *eindex = &bitmap_git->ext_index;
++	uint32_t objects_nr;
++	size_t i, pos;
++
++	objects_nr = bitmap_num_objects(bitmap_git);
++	pos = objects_nr / BITS_IN_EWORD;
++
++	if (pos > result->word_alloc)
++		pos = result->word_alloc;
++
++	memset(result->words, 0x00, sizeof(eword_t) * pos);
++	for (i = pos * BITS_IN_EWORD; i < objects_nr; i++)
++		bitmap_unset(result, i);
++
++	for (i = 0; i < eindex->count; ++i) {
++		if (has_object_pack(&eindex->objects[i]->oid))
++			bitmap_unset(result, objects_nr + i);
++	}
++}
++
+ struct bitmap_index *prepare_bitmap_walk(struct rev_info *revs,
+ 					 int filter_provided_objects)
+ {
+@@ -1787,6 +1811,9 @@ struct bitmap_index *prepare_bitmap_walk(struct rev_info *revs,
+ 		      wants_bitmap,
+ 		      &revs->filter);
+ 
++	if (revs->unpacked)
++		filter_packed_objects_from_bitmap(bitmap_git, wants_bitmap);
++
+ 	bitmap_git->result = wants_bitmap;
+ 	bitmap_git->haves = haves_bitmap;
+ 
+diff --git a/t/t6113-rev-list-bitmap-filters.sh b/t/t6113-rev-list-bitmap-filters.sh
+index 4d8e09167e..86c70521f1 100755
+--- a/t/t6113-rev-list-bitmap-filters.sh
++++ b/t/t6113-rev-list-bitmap-filters.sh
+@@ -141,4 +141,17 @@ test_expect_success 'combine filter with --filter-provided-objects' '
+ 	done <objects
+ '
+ 
++test_expect_success 'bitmap traversal with --unpacked' '
++	git repack -adb &&
++	test_commit unpacked &&
++
++	git rev-list --objects --no-object-names unpacked^.. >expect.raw &&
++	sort expect.raw >expect &&
++
++	git rev-list --use-bitmap-index --objects --all --unpacked >actual.raw &&
++	sort actual.raw >actual &&
++
++	test_cmp expect actual
++'
++
+ test_done
+diff --git a/t/t6115-rev-list-du.sh b/t/t6115-rev-list-du.sh
+index d59111dede..c0cfda62fa 100755
+--- a/t/t6115-rev-list-du.sh
++++ b/t/t6115-rev-list-du.sh
+@@ -48,6 +48,13 @@ check_du HEAD
+ check_du --objects HEAD
+ check_du --objects HEAD^..HEAD
+ 
++test_expect_success 'setup for --unpacked tests' '
++	git repack -adb &&
++	test_commit unpacked
++'
++
++check_du --all --objects --unpacked
++
+ # As mentioned above, don't use hardcode sizes as actual size, but use the
+ # output from git cat-file.
+ test_expect_success 'rev-list --disk-usage=human' '
+-- 
+2.39.3 (Apple Git-145)
+

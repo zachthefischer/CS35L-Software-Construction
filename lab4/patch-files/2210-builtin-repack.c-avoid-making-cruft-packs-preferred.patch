@@ -1,0 +1,166 @@
+From 3c1e2c2113842b8462803ef8c9aca596eacfd3af Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 3 Oct 2023 17:54:19 -0400
+Subject: [PATCH 2210/2871] builtin/repack.c: avoid making cruft packs
+ preferred
+
+When doing a `--geometric` repack, we make sure that the preferred pack
+(if writing a MIDX) is the largest pack that we *didn't* repack. That
+has the effect of keeping the preferred pack in sync with the pack
+containing a majority of the repository's reachable objects.
+
+But if the repository happens to double in size, we'll repack
+everything. Here we don't specify any `--preferred-pack`, and instead
+let the MIDX code choose.
+
+In the past, that worked fine, since there would only be one pack to
+choose from: the one we just wrote. But it's no longer necessarily the
+case that there is one pack to choose from. It's possible that the
+repository also has a cruft pack, too.
+
+If the cruft pack happens to come earlier in lexical order (and has an
+earlier mtime than any non-cruft pack), we'll pick that pack as
+preferred. This makes it impossible to reuse chunks of the reachable
+pack verbatim from pack-objects, so is sub-optimal.
+
+Luckily, this is a somewhat rare circumstance to be in, since we would
+have to repack the entire repository during a `--geometric` repack, and
+the cruft pack would have to sort ahead of the pack we just created.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c        | 47 ++++++++++++++++++++++++++++++++++++++++-
+ t/t7704-repack-cruft.sh | 39 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 85 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 04770b15fe..a1a893d952 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -355,6 +355,18 @@ static struct generated_pack_data *populate_pack_exts(const char *name)
+ 	return data;
+ }
+ 
++static int has_pack_ext(const struct generated_pack_data *data,
++			const char *ext)
++{
++	int i;
++	for (i = 0; i < ARRAY_SIZE(exts); i++) {
++		if (strcmp(exts[i].name, ext))
++			continue;
++		return !!data->tempfiles[i];
++	}
++	BUG("unknown pack extension: '%s'", ext);
++}
++
+ static void repack_promisor_objects(const struct pack_objects_args *args,
+ 				    struct string_list *names)
+ {
+@@ -772,6 +784,7 @@ static void midx_included_packs(struct string_list *include,
+ 
+ static int write_midx_included_packs(struct string_list *include,
+ 				     struct pack_geometry *geometry,
++				     struct string_list *names,
+ 				     const char *refs_snapshot,
+ 				     int show_progress, int write_bitmaps)
+ {
+@@ -801,6 +814,38 @@ static int write_midx_included_packs(struct string_list *include,
+ 	if (preferred)
+ 		strvec_pushf(&cmd.args, "--preferred-pack=%s",
+ 			     pack_basename(preferred));
++	else if (names->nr) {
++		/* The largest pack was repacked, meaning that either
++		 * one or two packs exist depending on whether the
++		 * repository has a cruft pack or not.
++		 *
++		 * Select the non-cruft one as preferred to encourage
++		 * pack-reuse among packs containing reachable objects
++		 * over unreachable ones.
++		 *
++		 * (Note we could write multiple packs here if
++		 * `--max-pack-size` was given, but any one of them
++		 * will suffice, so pick the first one.)
++		 */
++		for_each_string_list_item(item, names) {
++			struct generated_pack_data *data = item->util;
++			if (has_pack_ext(data, ".mtimes"))
++				continue;
++
++			strvec_pushf(&cmd.args, "--preferred-pack=pack-%s.pack",
++				     item->string);
++			break;
++		}
++	} else {
++		/*
++		 * No packs were kept, and no packs were written. The
++		 * only thing remaining are .keep packs (unless
++		 * --pack-kept-objects was given).
++		 *
++		 * Set the `--preferred-pack` arbitrarily here.
++		 */
++		;
++	}
+ 
+ 	if (refs_snapshot)
+ 		strvec_pushf(&cmd.args, "--refs-snapshot=%s", refs_snapshot);
+@@ -1360,7 +1405,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 		struct string_list include = STRING_LIST_INIT_NODUP;
+ 		midx_included_packs(&include, &existing, &names, &geometry);
+ 
+-		ret = write_midx_included_packs(&include, &geometry,
++		ret = write_midx_included_packs(&include, &geometry, &names,
+ 						refs_snapshot ? get_tempfile_path(refs_snapshot) : NULL,
+ 						show_progress, write_bitmaps > 0);
+ 
+diff --git a/t/t7704-repack-cruft.sh b/t/t7704-repack-cruft.sh
+index dc86ca8269..be3735dff0 100755
+--- a/t/t7704-repack-cruft.sh
++++ b/t/t7704-repack-cruft.sh
+@@ -372,4 +372,43 @@ test_expect_success '--max-cruft-size ignores non-local packs' '
+ 	)
+ '
+ 
++test_expect_success 'reachable packs are preferred over cruft ones' '
++	repo="cruft-preferred-packs" &&
++	git init "$repo" &&
++	(
++		cd "$repo" &&
++
++		# This test needs to exercise careful control over when a MIDX
++		# is and is not written. Unset the corresponding TEST variable
++		# accordingly.
++		sane_unset GIT_TEST_MULTI_PACK_INDEX &&
++
++		test_commit base &&
++		test_commit --no-tag cruft &&
++
++		non_cruft="$(echo base | git pack-objects --revs $packdir/pack)" &&
++		# Write a cruft pack which both (a) sorts ahead of the non-cruft
++		# pack in lexical order, and (b) has an older mtime to appease
++		# the MIDX preferred pack selection routine.
++		cruft="$(echo pack-$non_cruft.pack | git pack-objects --cruft $packdir/pack-A)" &&
++		test-tool chmtime -1000 $packdir/pack-A-$cruft.pack &&
++
++		test_commit other &&
++		git repack -d &&
++
++		git repack --geometric 2 -d --write-midx --write-bitmap-index &&
++
++		# After repacking, there are two packs left: one reachable one
++		# (which is the result of combining both of the existing two
++		# non-cruft packs), and one cruft pack.
++		find .git/objects/pack -type f -name "*.pack" >packs &&
++		test_line_count = 2 packs &&
++
++		# Make sure that the pack we just wrote is marked as preferred,
++		# not the cruft one.
++		pack="$(test-tool read-midx --preferred-pack $objdir)" &&
++		test_path_is_missing "$packdir/$(basename "$pack" ".idx").mtimes"
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

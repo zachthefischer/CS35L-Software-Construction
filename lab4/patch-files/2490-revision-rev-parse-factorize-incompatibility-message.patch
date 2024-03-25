@@ -1,0 +1,158 @@
+From 81fb70f55e93ca0b5f013284e15aec0ee9f79824 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Wed, 6 Dec 2023 12:51:58 +0100
+Subject: [PATCH 2490/2871] revision, rev-parse: factorize incompatibility
+ messages about - -exclude-hidden
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use the standard parameterized message for reporting incompatible
+options to report options that are not accepted in combination with
+--exclude-hidden.  This reduces the number of strings to translate and
+makes the UI a bit more consistent.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rev-parse.c                |  9 ++++++---
+ revision.c                         | 18 ++++++++++++------
+ t/t6018-rev-list-glob.sh           |  6 ++----
+ t/t6021-rev-list-exclude-hidden.sh |  4 ++--
+ 4 files changed, 22 insertions(+), 15 deletions(-)
+
+diff --git a/builtin/rev-parse.c b/builtin/rev-parse.c
+index fde8861ca4..917f122440 100644
+--- a/builtin/rev-parse.c
++++ b/builtin/rev-parse.c
+@@ -893,13 +893,15 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
+ 			}
+ 			if (opt_with_value(arg, "--branches", &arg)) {
+ 				if (ref_excludes.hidden_refs_configured)
+-					return error(_("--exclude-hidden cannot be used together with --branches"));
++					return error(_("options '%s' and '%s' cannot be used together"),
++						     "--exclude-hidden", "--branches");
+ 				handle_ref_opt(arg, "refs/heads/");
+ 				continue;
+ 			}
+ 			if (opt_with_value(arg, "--tags", &arg)) {
+ 				if (ref_excludes.hidden_refs_configured)
+-					return error(_("--exclude-hidden cannot be used together with --tags"));
++					return error(_("options '%s' and '%s' cannot be used together"),
++						     "--exclude-hidden", "--tags");
+ 				handle_ref_opt(arg, "refs/tags/");
+ 				continue;
+ 			}
+@@ -909,7 +911,8 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
+ 			}
+ 			if (opt_with_value(arg, "--remotes", &arg)) {
+ 				if (ref_excludes.hidden_refs_configured)
+-					return error(_("--exclude-hidden cannot be used together with --remotes"));
++					return error(_("options '%s' and '%s' cannot be used together"),
++						     "--exclude-hidden", "--remotes");
+ 				handle_ref_opt(arg, "refs/remotes/");
+ 				continue;
+ 			}
+diff --git a/revision.c b/revision.c
+index 34bd386a81..70c8a92f21 100644
+--- a/revision.c
++++ b/revision.c
+@@ -2709,7 +2709,8 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ 		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (!strcmp(arg, "--branches")) {
+ 		if (revs->ref_excludes.hidden_refs_configured)
+-			return error(_("--exclude-hidden cannot be used together with --branches"));
++			return error(_("options '%s' and '%s' cannot be used together"),
++				     "--exclude-hidden", "--branches");
+ 		handle_refs(refs, revs, *flags, refs_for_each_branch_ref);
+ 		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (!strcmp(arg, "--bisect")) {
+@@ -2720,12 +2721,14 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ 		revs->bisect = 1;
+ 	} else if (!strcmp(arg, "--tags")) {
+ 		if (revs->ref_excludes.hidden_refs_configured)
+-			return error(_("--exclude-hidden cannot be used together with --tags"));
++			return error(_("options '%s' and '%s' cannot be used together"),
++				     "--exclude-hidden", "--tags");
+ 		handle_refs(refs, revs, *flags, refs_for_each_tag_ref);
+ 		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (!strcmp(arg, "--remotes")) {
+ 		if (revs->ref_excludes.hidden_refs_configured)
+-			return error(_("--exclude-hidden cannot be used together with --remotes"));
++			return error(_("options '%s' and '%s' cannot be used together"),
++				     "--exclude-hidden", "--remotes");
+ 		handle_refs(refs, revs, *flags, refs_for_each_remote_ref);
+ 		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if ((argcount = parse_long_opt("glob", argv, &optarg))) {
+@@ -2743,21 +2746,24 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ 	} else if (skip_prefix(arg, "--branches=", &optarg)) {
+ 		struct all_refs_cb cb;
+ 		if (revs->ref_excludes.hidden_refs_configured)
+-			return error(_("--exclude-hidden cannot be used together with --branches"));
++			return error(_("options '%s' and '%s' cannot be used together"),
++				     "--exclude-hidden", "--branches");
+ 		init_all_refs_cb(&cb, revs, *flags);
+ 		for_each_glob_ref_in(handle_one_ref, optarg, "refs/heads/", &cb);
+ 		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (skip_prefix(arg, "--tags=", &optarg)) {
+ 		struct all_refs_cb cb;
+ 		if (revs->ref_excludes.hidden_refs_configured)
+-			return error(_("--exclude-hidden cannot be used together with --tags"));
++			return error(_("options '%s' and '%s' cannot be used together"),
++				     "--exclude-hidden", "--tags");
+ 		init_all_refs_cb(&cb, revs, *flags);
+ 		for_each_glob_ref_in(handle_one_ref, optarg, "refs/tags/", &cb);
+ 		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (skip_prefix(arg, "--remotes=", &optarg)) {
+ 		struct all_refs_cb cb;
+ 		if (revs->ref_excludes.hidden_refs_configured)
+-			return error(_("--exclude-hidden cannot be used together with --remotes"));
++			return error(_("options '%s' and '%s' cannot be used together"),
++				     "--exclude-hidden", "--remotes");
+ 		init_all_refs_cb(&cb, revs, *flags);
+ 		for_each_glob_ref_in(handle_one_ref, optarg, "refs/remotes/", &cb);
+ 		clear_ref_exclusions(&revs->ref_excludes);
+diff --git a/t/t6018-rev-list-glob.sh b/t/t6018-rev-list-glob.sh
+index 67d523d405..3b181f771c 100755
+--- a/t/t6018-rev-list-glob.sh
++++ b/t/t6018-rev-list-glob.sh
+@@ -214,15 +214,13 @@ do
+ 	for pseudoopt in branches tags remotes
+ 	do
+ 		test_expect_success "rev-parse --exclude-hidden=$section fails with --$pseudoopt" '
+-			echo "error: --exclude-hidden cannot be used together with --$pseudoopt" >expected &&
+ 			test_must_fail git rev-parse --exclude-hidden=$section --$pseudoopt 2>err &&
+-			test_cmp expected err
++			test_grep "error: options .--exclude-hidden. and .--$pseudoopt. cannot be used together" err
+ 		'
+ 
+ 		test_expect_success "rev-parse --exclude-hidden=$section fails with --$pseudoopt=pattern" '
+-			echo "error: --exclude-hidden cannot be used together with --$pseudoopt" >expected &&
+ 			test_must_fail git rev-parse --exclude-hidden=$section --$pseudoopt=pattern 2>err &&
+-			test_cmp expected err
++			test_grep "error: options .--exclude-hidden. and .--$pseudoopt. cannot be used together" err
+ 		'
+ 	done
+ done
+diff --git a/t/t6021-rev-list-exclude-hidden.sh b/t/t6021-rev-list-exclude-hidden.sh
+index cdf7aa9427..51df02105d 100755
+--- a/t/t6021-rev-list-exclude-hidden.sh
++++ b/t/t6021-rev-list-exclude-hidden.sh
+@@ -151,12 +151,12 @@ do
+ 	do
+ 		test_expect_success "$section: fails with --$pseudoopt" '
+ 			test_must_fail git rev-list --exclude-hidden=$section --$pseudoopt 2>err &&
+-			test_grep "error: --exclude-hidden cannot be used together with --$pseudoopt" err
++			test_grep "error: options .--exclude-hidden. and .--$pseudoopt. cannot be used together" err
+ 		'
+ 
+ 		test_expect_success "$section: fails with --$pseudoopt=pattern" '
+ 			test_must_fail git rev-list --exclude-hidden=$section --$pseudoopt=pattern 2>err &&
+-			test_grep "error: --exclude-hidden cannot be used together with --$pseudoopt" err
++			test_grep "error: options .--exclude-hidden. and .--$pseudoopt. cannot be used together" err
+ 		'
+ 	done
+ done
+-- 
+2.39.3 (Apple Git-145)
+

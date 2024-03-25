@@ -1,0 +1,231 @@
+From 92b1dd1b9e6e272c5115d6e37e19a892610a2686 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 24 Mar 2023 23:27:11 +0100
+Subject: [PATCH 1110/2871] archive: improve support for running in
+ subdirectory
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When git archive is started in a subdirectory, it archives its
+corresponding tree and its child objects, only.  That is intended.  It
+does that by effectively cd'ing into that tree and setting "prefix" to
+the empty string.
+
+This has unfortunate consequences, though: Attributes are anchored at
+the root of the repository and git archive still applies them to
+subtrees, causing mismatches.  And when checking pathspecs it cannot
+tell the difference between one that doesn't match anthing or one that
+matches some actual blob outside of the subdirectory, leading to a
+confusing error message.
+
+Fix that by keeping the "prefix" value and passing it to pathspec and
+attribute functions, and shortening it using relative_path() for paths
+written to the archive and (if --verbose is given) to stdout.
+
+Still reject attempts to archive files outside the current directory,
+but print a more specific error in that case.  Recognizing it requires a
+full traversal of the subtree for each pathspec, however.  Allowing them
+would be easier, but archive entry paths starting with "../" can be
+problematic to extract -- e.g. bsdtar skips them by default.
+
+Reported-by: Cristian Le <cristian.le@mpsd.mpg.de>
+Reported-by: Matthias Görgens <matthias.goergens@gmail.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ archive.c               | 75 +++++++++++++++++++++++++++++------------
+ t/t5000-tar-tree.sh     | 13 +++++++
+ t/t5001-archive-attr.sh | 16 +++++++++
+ 3 files changed, 83 insertions(+), 21 deletions(-)
+
+diff --git a/archive.c b/archive.c
+index 9aeaf2bd87..a1748d77cd 100644
+--- a/archive.c
++++ b/archive.c
+@@ -166,6 +166,29 @@ static int write_archive_entry(const struct object_id *oid, const char *base,
+ 		args->convert = check_attr_export_subst(check);
+ 	}
+ 
++	if (args->prefix) {
++		static struct strbuf new_path = STRBUF_INIT;
++		static struct strbuf buf = STRBUF_INIT;
++		const char *rel;
++
++		rel = relative_path(path_without_prefix, args->prefix, &buf);
++
++		/*
++		 * We don't add an entry for the current working
++		 * directory when we are at the root; skip it also when
++		 * we're in a subdirectory or submodule.  Skip entries
++		 * higher up as well.
++		 */
++		if (!strcmp(rel, "./") || starts_with(rel, "../"))
++			return S_ISDIR(mode) ? READ_TREE_RECURSIVE : 0;
++
++		/* rel can refer to path, so don't edit it in place */
++		strbuf_reset(&new_path);
++		strbuf_add(&new_path, args->base, args->baselen);
++		strbuf_addstr(&new_path, rel);
++		strbuf_swap(&path, &new_path);
++	}
++
+ 	if (args->verbose)
+ 		fprintf(stderr, "%.*s\n", (int)path.len, path.buf);
+ 
+@@ -401,6 +424,27 @@ static int reject_entry(const struct object_id *oid UNUSED,
+ 	return ret;
+ }
+ 
++static int reject_outside(const struct object_id *oid UNUSED,
++			  struct strbuf *base, const char *filename,
++			  unsigned mode, void *context)
++{
++	struct archiver_args *args = context;
++	struct strbuf buf = STRBUF_INIT;
++	struct strbuf path = STRBUF_INIT;
++	int ret = 0;
++
++	if (S_ISDIR(mode))
++		return READ_TREE_RECURSIVE;
++
++	strbuf_addbuf(&path, base);
++	strbuf_addstr(&path, filename);
++	if (starts_with(relative_path(path.buf, args->prefix, &buf), "../"))
++		ret = -1;
++	strbuf_release(&buf);
++	strbuf_release(&path);
++	return ret;
++}
++
+ static int path_exists(struct archiver_args *args, const char *path)
+ {
+ 	const char *paths[] = { path, NULL };
+@@ -408,8 +452,13 @@ static int path_exists(struct archiver_args *args, const char *path)
+ 	int ret;
+ 
+ 	ctx.args = args;
+-	parse_pathspec(&ctx.pathspec, 0, 0, "", paths);
++	parse_pathspec(&ctx.pathspec, 0, PATHSPEC_PREFER_CWD,
++		       args->prefix, paths);
+ 	ctx.pathspec.recursive = 1;
++	if (args->prefix && read_tree(args->repo, args->tree, &ctx.pathspec,
++				      reject_outside, args))
++		die(_("pathspec '%s' matches files outside the "
++		      "current directory"), path);
+ 	ret = read_tree(args->repo, args->tree,
+ 			&ctx.pathspec,
+ 			reject_entry, &ctx);
+@@ -425,9 +474,8 @@ static void parse_pathspec_arg(const char **pathspec,
+ 	 * Also if pathspec patterns are dependent, we're in big
+ 	 * trouble as we test each one separately
+ 	 */
+-	parse_pathspec(&ar_args->pathspec, 0,
+-		       PATHSPEC_PREFER_FULL,
+-		       "", pathspec);
++	parse_pathspec(&ar_args->pathspec, 0, PATHSPEC_PREFER_CWD,
++		       ar_args->prefix, pathspec);
+ 	ar_args->pathspec.recursive = 1;
+ 	if (pathspec) {
+ 		while (*pathspec) {
+@@ -439,8 +487,7 @@ static void parse_pathspec_arg(const char **pathspec,
+ }
+ 
+ static void parse_treeish_arg(const char **argv,
+-		struct archiver_args *ar_args, const char *prefix,
+-		int remote)
++			      struct archiver_args *ar_args, int remote)
+ {
+ 	const char *name = argv[0];
+ 	const struct object_id *commit_oid;
+@@ -479,20 +526,6 @@ static void parse_treeish_arg(const char **argv,
+ 	if (!tree)
+ 		die(_("not a tree object: %s"), oid_to_hex(&oid));
+ 
+-	if (prefix) {
+-		struct object_id tree_oid;
+-		unsigned short mode;
+-		int err;
+-
+-		err = get_tree_entry(ar_args->repo,
+-				     &tree->object.oid,
+-				     prefix, &tree_oid,
+-				     &mode);
+-		if (err || !S_ISDIR(mode))
+-			die(_("current working directory is untracked"));
+-
+-		tree = parse_tree_indirect(&tree_oid);
+-	}
+ 	ar_args->refname = ref;
+ 	ar_args->tree = tree;
+ 	ar_args->commit_oid = commit_oid;
+@@ -710,7 +743,7 @@ int write_archive(int argc, const char **argv, const char *prefix,
+ 		setup_git_directory();
+ 	}
+ 
+-	parse_treeish_arg(argv, &args, prefix, remote);
++	parse_treeish_arg(argv, &args, remote);
+ 	parse_pathspec_arg(argv + 1, &args);
+ 
+ 	rc = ar->write_archive(ar, &args);
+diff --git a/t/t5000-tar-tree.sh b/t/t5000-tar-tree.sh
+index 918a2fc7c6..a60ae6145e 100755
+--- a/t/t5000-tar-tree.sh
++++ b/t/t5000-tar-tree.sh
+@@ -433,6 +433,19 @@ test_expect_success 'catch non-matching pathspec' '
+ 	test_must_fail git archive -v HEAD -- "*.abc" >/dev/null
+ '
+ 
++test_expect_success 'reject paths outside the current directory' '
++	test_must_fail git -C a/bin archive HEAD .. >/dev/null 2>err &&
++	grep "outside the current directory" err
++'
++
++test_expect_success 'allow pathspecs that resolve to the current directory' '
++	git -C a/bin archive -v HEAD ../bin >/dev/null 2>actual &&
++	cat >expect <<-\EOF &&
++	sh
++	EOF
++	test_cmp expect actual
++'
++
+ # Pull the size and date of each entry in a tarfile using the system tar.
+ #
+ # We'll pull out only the year from the date; that avoids any question of
+diff --git a/t/t5001-archive-attr.sh b/t/t5001-archive-attr.sh
+index 04d300eeda..0ff47a239d 100755
+--- a/t/t5001-archive-attr.sh
++++ b/t/t5001-archive-attr.sh
+@@ -33,6 +33,13 @@ test_expect_success 'setup' '
+ 	echo ignored-by-tree.d export-ignore >>.gitattributes &&
+ 	git add ignored-by-tree ignored-by-tree.d .gitattributes &&
+ 
++	mkdir subdir &&
++	>subdir/included &&
++	>subdir/ignored-by-subtree &&
++	>subdir/ignored-by-tree &&
++	echo ignored-by-subtree export-ignore >subdir/.gitattributes &&
++	git add subdir &&
++
+ 	echo ignored by worktree >ignored-by-worktree &&
+ 	echo ignored-by-worktree export-ignore >.gitattributes &&
+ 	git add ignored-by-worktree &&
+@@ -93,6 +100,15 @@ test_expect_exists	archive-pathspec-wildcard/ignored-by-worktree
+ test_expect_missing	archive-pathspec-wildcard/excluded-by-pathspec.d
+ test_expect_missing	archive-pathspec-wildcard/excluded-by-pathspec.d/file
+ 
++test_expect_success 'git -C subdir archive' '
++	git -C subdir archive HEAD >archive-subdir.tar &&
++	extract_tar_to_dir archive-subdir
++'
++
++test_expect_exists	archive-subdir/included
++test_expect_missing	archive-subdir/ignored-by-subtree
++test_expect_missing	archive-subdir/ignored-by-tree
++
+ test_expect_success 'git archive with worktree attributes' '
+ 	git archive --worktree-attributes HEAD >worktree.tar &&
+ 	(mkdir worktree && cd worktree && "$TAR" xf -) <worktree.tar
+-- 
+2.39.3 (Apple Git-145)
+

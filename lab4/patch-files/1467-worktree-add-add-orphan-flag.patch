@@ -1,0 +1,343 @@
+From 7ab891898524abbeb2c52f3f55fcf5e2457f930b Mon Sep 17 00:00:00 2001
+From: Jacob Abel <jacobabel@nullpo.dev>
+Date: Wed, 17 May 2023 21:48:47 +0000
+Subject: [PATCH 1467/2871] worktree add: add --orphan flag
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add support for creating an orphan branch when adding a new worktree.
+The functionality of this flag is equivalent to git switch's --orphan
+option.
+
+Current Behavior:
+% git -C foo.git --no-pager branch -l
++ main
+% git -C foo.git worktree add main/
+Preparing worktree (new branch 'main')
+HEAD is now at 6c93a75 a commit
+%
+
+% git init bar.git
+Initialized empty Git repository in /path/to/bar.git/
+% git -C bar.git --no-pager branch -l
+
+% git -C bar.git worktree add main/
+Preparing worktree (new branch 'main')
+fatal: not a valid object name: 'HEAD'
+%
+
+New Behavior:
+
+% git -C foo.git --no-pager branch -l
++ main
+% git -C foo.git worktree add main/
+Preparing worktree (new branch 'main')
+HEAD is now at 6c93a75 a commit
+%
+
+% git init --bare bar.git
+Initialized empty Git repository in /path/to/bar.git/
+% git -C bar.git --no-pager branch -l
+
+% git -C bar.git worktree add main/
+Preparing worktree (new branch 'main')
+fatal: invalid reference: HEAD
+% git -C bar.git worktree add --orphan -b main/
+Preparing worktree (new branch 'main')
+% git -C bar.git worktree add --orphan -b newbranch worktreedir/
+Preparing worktree (new branch 'newbranch')
+%
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Jacob Abel <jacobabel@nullpo.dev>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-worktree.txt |  6 ++-
+ builtin/worktree.c             | 67 +++++++++++++++++++++++++++------
+ t/t2400-worktree-add.sh        | 68 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 129 insertions(+), 12 deletions(-)
+
+diff --git a/Documentation/git-worktree.txt b/Documentation/git-worktree.txt
+index b9c12779f1..485d865eb2 100644
+--- a/Documentation/git-worktree.txt
++++ b/Documentation/git-worktree.txt
+@@ -10,7 +10,7 @@ SYNOPSIS
+ --------
+ [verse]
+ 'git worktree add' [-f] [--detach] [--checkout] [--lock [--reason <string>]]
+-		   [(-b | -B) <new-branch>] <path> [<commit-ish>]
++		   [--orphan] [(-b | -B) <new-branch>] <path> [<commit-ish>]
+ 'git worktree list' [-v | --porcelain [-z]]
+ 'git worktree lock' [--reason <string>] <worktree>
+ 'git worktree move' <worktree> <new-path>
+@@ -222,6 +222,10 @@ This can also be set up as the default behaviour by using the
+ 	With `prune`, do not remove anything; just report what it would
+ 	remove.
+ 
++--orphan::
++	With `add`, make the new worktree and index empty, associating
++	the worktree with a new orphan/unborn branch named `<new-branch>`.
++
+ --porcelain::
+ 	With `list`, output in an easy-to-parse format for scripts.
+ 	This format will remain stable across Git versions and regardless of user
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index d1b4b53f2c..48de7fc3b0 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -22,7 +22,8 @@
+ 
+ #define BUILTIN_WORKTREE_ADD_USAGE \
+ 	N_("git worktree add [-f] [--detach] [--checkout] [--lock [--reason <string>]]\n" \
+-	   "                 [(-b | -B) <new-branch>] <path> [<commit-ish>]")
++	   "                 [--orphan] [(-b | -B) <new-branch>] <path> [<commit-ish>]")
++
+ #define BUILTIN_WORKTREE_LIST_USAGE \
+ 	N_("git worktree list [-v | --porcelain [-z]]")
+ #define BUILTIN_WORKTREE_LOCK_USAGE \
+@@ -95,6 +96,7 @@ struct add_opts {
+ 	int detach;
+ 	int quiet;
+ 	int checkout;
++	int orphan;
+ 	const char *keep_locked;
+ };
+ 
+@@ -368,6 +370,22 @@ static int checkout_worktree(const struct add_opts *opts,
+ 	return run_command(&cp);
+ }
+ 
++static int make_worktree_orphan(const char * ref, const struct add_opts *opts,
++				struct strvec *child_env)
++{
++	struct strbuf symref = STRBUF_INIT;
++	struct child_process cp = CHILD_PROCESS_INIT;
++
++	validate_new_branchname(ref, &symref, 0);
++	strvec_pushl(&cp.args, "symbolic-ref", "HEAD", symref.buf, NULL);
++	if (opts->quiet)
++		strvec_push(&cp.args, "--quiet");
++	strvec_pushv(&cp.env, child_env->v);
++	strbuf_release(&symref);
++	cp.git_cmd = 1;
++	return run_command(&cp);
++}
++
+ static int add_worktree(const char *path, const char *refname,
+ 			const struct add_opts *opts)
+ {
+@@ -397,7 +415,7 @@ static int add_worktree(const char *path, const char *refname,
+ 			die_if_checked_out(symref.buf, 0);
+ 	}
+ 	commit = lookup_commit_reference_by_name(refname);
+-	if (!commit)
++	if (!commit && !opts->orphan)
+ 		die(_("invalid reference: %s"), refname);
+ 
+ 	name = worktree_basename(path, &len);
+@@ -486,10 +504,10 @@ static int add_worktree(const char *path, const char *refname,
+ 	strvec_pushf(&child_env, "%s=%s", GIT_WORK_TREE_ENVIRONMENT, path);
+ 	cp.git_cmd = 1;
+ 
+-	if (!is_branch)
++	if (!is_branch && commit) {
+ 		strvec_pushl(&cp.args, "update-ref", "HEAD",
+ 			     oid_to_hex(&commit->object.oid), NULL);
+-	else {
++	} else {
+ 		strvec_pushl(&cp.args, "symbolic-ref", "HEAD",
+ 			     symref.buf, NULL);
+ 		if (opts->quiet)
+@@ -501,6 +519,10 @@ static int add_worktree(const char *path, const char *refname,
+ 	if (ret)
+ 		goto done;
+ 
++	if (opts->orphan &&
++	    (ret = make_worktree_orphan(refname, opts, &child_env)))
++		goto done;
++
+ 	if (opts->checkout &&
+ 	    (ret = checkout_worktree(opts, &child_env)))
+ 		goto done;
+@@ -520,7 +542,7 @@ static int add_worktree(const char *path, const char *refname,
+ 	 * Hook failure does not warrant worktree deletion, so run hook after
+ 	 * is_junk is cleared, but do return appropriate code when hook fails.
+ 	 */
+-	if (!ret && opts->checkout) {
++	if (!ret && opts->checkout && !opts->orphan) {
+ 		struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT;
+ 
+ 		strvec_pushl(&opt.env, "GIT_DIR", "GIT_WORK_TREE", NULL);
+@@ -568,7 +590,7 @@ static void print_preparing_worktree_line(int detach,
+ 		else {
+ 			struct commit *commit = lookup_commit_reference_by_name(branch);
+ 			if (!commit)
+-				die(_("invalid reference: %s"), branch);
++				BUG(_("unreachable: invalid reference: %s"), branch);
+ 			fprintf_ln(stderr, _("Preparing worktree (detached HEAD %s)"),
+ 				  repo_find_unique_abbrev(the_repository, &commit->object.oid, DEFAULT_ABBREV));
+ 		}
+@@ -620,6 +642,7 @@ static int add(int ac, const char **av, const char *prefix)
+ 			   N_("create a new branch")),
+ 		OPT_STRING('B', NULL, &new_branch_force, N_("branch"),
+ 			   N_("create or reset a branch")),
++		OPT_BOOL(0, "orphan", &opts.orphan, N_("create unborn/orphaned branch")),
+ 		OPT_BOOL('d', "detach", &opts.detach, N_("detach HEAD at named commit")),
+ 		OPT_BOOL(0, "checkout", &opts.checkout, N_("populate the new working tree")),
+ 		OPT_BOOL(0, "lock", &keep_locked, N_("keep the new working tree locked")),
+@@ -640,6 +663,17 @@ static int add(int ac, const char **av, const char *prefix)
+ 	ac = parse_options(ac, av, prefix, options, git_worktree_add_usage, 0);
+ 	if (!!opts.detach + !!new_branch + !!new_branch_force > 1)
+ 		die(_("options '%s', '%s', and '%s' cannot be used together"), "-b", "-B", "--detach");
++	if (opts.detach && opts.orphan)
++		die(_("options '%s', and '%s' cannot be used together"),
++		    "--orphan", "--detach");
++	if (opts.orphan && opt_track)
++		die(_("'%s' and '%s' cannot be used together"), "--orphan", "--track");
++	if (opts.orphan && !opts.checkout)
++		die(_("'%s' and '%s' cannot be used together"), "--orphan",
++		    "--no-checkout");
++	if (opts.orphan && ac == 2)
++		die(_("'%s' and '%s' cannot be used together"), "--orphan",
++		    _("<commit-ish>"));
+ 	if (lock_reason && !keep_locked)
+ 		die(_("the option '%s' requires '%s'"), "--reason", "--lock");
+ 	if (lock_reason)
+@@ -668,13 +702,17 @@ static int add(int ac, const char **av, const char *prefix)
+ 		strbuf_release(&symref);
+ 	}
+ 
+-	if (ac < 2 && !new_branch && !opts.detach) {
++	if (opts.orphan && !new_branch) {
++		int n;
++		const char *s = worktree_basename(path, &n);
++		new_branch = xstrndup(s, n);
++	} else if (new_branch || opts.detach || opts.orphan) {
++		// No-op
++	} else if (ac < 2) {
+ 		const char *s = dwim_branch(path, &new_branch);
+ 		if (s)
+ 			branch = s;
+-	}
+-
+-	if (ac == 2 && !new_branch && !opts.detach) {
++	} else if (ac == 2) {
+ 		struct object_id oid;
+ 		struct commit *commit;
+ 		const char *remote;
+@@ -688,10 +726,17 @@ static int add(int ac, const char **av, const char *prefix)
+ 			}
+ 		}
+ 	}
++
++	if (!opts.orphan && !lookup_commit_reference_by_name(branch)) {
++		die(_("invalid reference: %s"), branch);
++	}
++
+ 	if (!opts.quiet)
+ 		print_preparing_worktree_line(opts.detach, branch, new_branch, !!new_branch_force);
+ 
+-	if (new_branch) {
++	if (opts.orphan) {
++		branch = new_branch;
++	} else if (new_branch) {
+ 		struct child_process cp = CHILD_PROCESS_INIT;
+ 		cp.git_cmd = 1;
+ 		strvec_push(&cp.args, "branch");
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index 841f15f59e..fba90582b6 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -312,6 +312,10 @@ test_wt_add_excl () {
+ test_wt_add_excl -b poodle -B poodle bamboo main
+ test_wt_add_excl -b poodle --detach bamboo main
+ test_wt_add_excl -B poodle --detach bamboo main
++test_wt_add_excl --orphan --detach bamboo
++test_wt_add_excl --orphan --no-checkout bamboo
++test_wt_add_excl --orphan bamboo main
++test_wt_add_excl --orphan -b bamboo wtdir/ main
+ 
+ test_expect_success '"add -B" fails if the branch is checked out' '
+ 	git rev-parse newmain >before &&
+@@ -341,6 +345,62 @@ test_expect_success 'add --quiet -b' '
+ 	test_must_be_empty actual
+ '
+ 
++test_expect_success '"add --orphan"' '
++	test_when_finished "git worktree remove -f -f orphandir" &&
++	git worktree add --orphan -b neworphan orphandir &&
++	echo refs/heads/neworphan >expected &&
++	git -C orphandir symbolic-ref HEAD >actual &&
++	test_cmp expected actual
++'
++
++test_expect_success '"add --orphan (no -b)"' '
++	test_when_finished "git worktree remove -f -f neworphan" &&
++	git worktree add --orphan neworphan &&
++	echo refs/heads/neworphan >expected &&
++	git -C neworphan symbolic-ref HEAD >actual &&
++	test_cmp expected actual
++'
++
++test_expect_success '"add --orphan --quiet"' '
++	test_when_finished "git worktree remove -f -f orphandir" &&
++	git worktree add --quiet --orphan -b neworphan orphandir 2>log.actual &&
++	test_must_be_empty log.actual &&
++	echo refs/heads/neworphan >expected &&
++	git -C orphandir symbolic-ref HEAD >actual &&
++	test_cmp expected actual
++'
++
++test_expect_success '"add --orphan" fails if the branch already exists' '
++	test_when_finished "git branch -D existingbranch" &&
++	git worktree add -b existingbranch orphandir main &&
++	git worktree remove orphandir &&
++	test_must_fail git worktree add --orphan -b existingbranch orphandir
++'
++
++test_expect_success '"add --orphan" with empty repository' '
++	test_when_finished "rm -rf empty_repo" &&
++	echo refs/heads/newbranch >expected &&
++	GIT_DIR="empty_repo" git init --bare &&
++	git -C empty_repo worktree add --orphan -b newbranch worktreedir &&
++	git -C empty_repo/worktreedir symbolic-ref HEAD >actual &&
++	test_cmp expected actual
++'
++
++test_expect_success '"add" worktree with orphan branch and lock' '
++	git worktree add --lock --orphan -b orphanbr orphan-with-lock &&
++	test_when_finished "git worktree unlock orphan-with-lock || :" &&
++	test -f .git/worktrees/orphan-with-lock/locked
++'
++
++test_expect_success '"add" worktree with orphan branch, lock, and reason' '
++	lock_reason="why not" &&
++	git worktree add --detach --lock --reason "$lock_reason" orphan-with-lock-reason main &&
++	test_when_finished "git worktree unlock orphan-with-lock-reason || :" &&
++	test -f .git/worktrees/orphan-with-lock-reason/locked &&
++	echo "$lock_reason" >expect &&
++	test_cmp expect .git/worktrees/orphan-with-lock-reason/locked
++'
++
+ test_expect_success 'local clone from linked checkout' '
+ 	git clone --local here here-clone &&
+ 	( cd here-clone && git fsck )
+@@ -457,6 +517,14 @@ setup_remote_repo () {
+ 	)
+ }
+ 
++test_expect_success '"add" <path> <remote/branch> w/ no HEAD' '
++	test_when_finished rm -rf repo_upstream repo_local foo &&
++	setup_remote_repo repo_upstream repo_local &&
++	git -C repo_local config --bool core.bare true &&
++	git -C repo_local branch -D main &&
++	git -C repo_local worktree add ./foo repo_upstream/foo
++'
++
+ test_expect_success '--no-track avoids setting up tracking' '
+ 	test_when_finished rm -rf repo_upstream repo_local foo &&
+ 	setup_remote_repo repo_upstream repo_local &&
+-- 
+2.39.3 (Apple Git-145)
+

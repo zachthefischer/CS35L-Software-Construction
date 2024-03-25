@@ -1,0 +1,99 @@
+From 6d6e5c53b0c3d5566680ee8786d40405db917917 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Tue, 14 Nov 2023 19:53:51 +0000
+Subject: [PATCH 2420/2871] ref-filter.h: move contains caches into filter
+
+Move the 'contains_cache' and 'no_contains_cache' used in filter_refs into
+an 'internal' struct of the 'struct ref_filter'. In later patches, the
+'struct ref_filter *' will be a common data structure across multiple
+filtering functions. These caches are part of the common functionality the
+filter struct will support, so they are updated to be internally accessible
+wherever the filter is used.
+
+The design used here mirrors what was introduced in 576de3d956
+(unpack_trees: start splitting internal fields from public API, 2023-02-27)
+for 'unpack_trees_options'.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c | 14 ++++++--------
+ ref-filter.h |  6 ++++++
+ 2 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index f65551dc68..3de4cefcf5 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -2680,8 +2680,6 @@ static int filter_ref_kind(struct ref_filter *filter, const char *refname)
+ struct ref_filter_cbdata {
+ 	struct ref_array *array;
+ 	struct ref_filter *filter;
+-	struct contains_cache contains_cache;
+-	struct contains_cache no_contains_cache;
+ };
+ 
+ /*
+@@ -2732,11 +2730,11 @@ static int ref_filter_handler(const char *refname, const struct object_id *oid,
+ 			return 0;
+ 		/* We perform the filtering for the '--contains' option... */
+ 		if (filter->with_commit &&
+-		    !commit_contains(filter, commit, filter->with_commit, &ref_cbdata->contains_cache))
++		    !commit_contains(filter, commit, filter->with_commit, &filter->internal.contains_cache))
+ 			return 0;
+ 		/* ...or for the `--no-contains' option */
+ 		if (filter->no_commit &&
+-		    commit_contains(filter, commit, filter->no_commit, &ref_cbdata->no_contains_cache))
++		    commit_contains(filter, commit, filter->no_commit, &filter->internal.no_contains_cache))
+ 			return 0;
+ 	}
+ 
+@@ -2905,8 +2903,8 @@ int filter_refs(struct ref_array *array, struct ref_filter *filter, unsigned int
+ 	save_commit_buffer_orig = save_commit_buffer;
+ 	save_commit_buffer = 0;
+ 
+-	init_contains_cache(&ref_cbdata.contains_cache);
+-	init_contains_cache(&ref_cbdata.no_contains_cache);
++	init_contains_cache(&filter->internal.contains_cache);
++	init_contains_cache(&filter->internal.no_contains_cache);
+ 
+ 	/*  Simple per-ref filtering */
+ 	if (!filter->kind)
+@@ -2930,8 +2928,8 @@ int filter_refs(struct ref_array *array, struct ref_filter *filter, unsigned int
+ 			head_ref(ref_filter_handler, &ref_cbdata);
+ 	}
+ 
+-	clear_contains_cache(&ref_cbdata.contains_cache);
+-	clear_contains_cache(&ref_cbdata.no_contains_cache);
++	clear_contains_cache(&filter->internal.contains_cache);
++	clear_contains_cache(&filter->internal.no_contains_cache);
+ 
+ 	/*  Filters that need revision walking */
+ 	reach_filter(array, &filter->reachable_from, INCLUDE_REACHED);
+diff --git a/ref-filter.h b/ref-filter.h
+index d87d61238b..0db3ff5288 100644
+--- a/ref-filter.h
++++ b/ref-filter.h
+@@ -7,6 +7,7 @@
+ #include "commit.h"
+ #include "string-list.h"
+ #include "strvec.h"
++#include "commit-reach.h"
+ 
+ /* Quoting styles */
+ #define QUOTE_NONE 0
+@@ -75,6 +76,11 @@ struct ref_filter {
+ 		lines;
+ 	int abbrev,
+ 		verbose;
++
++	struct {
++		struct contains_cache contains_cache;
++		struct contains_cache no_contains_cache;
++	} internal;
+ };
+ 
+ struct ref_format {
+-- 
+2.39.3 (Apple Git-145)
+

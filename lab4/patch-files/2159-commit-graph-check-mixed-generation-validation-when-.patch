@@ -1,0 +1,120 @@
+From 8298b54317772ca28fec2673f59a8c2048552ae6 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 28 Sep 2023 00:38:17 -0400
+Subject: [PATCH 2159/2871] commit-graph: check mixed generation validation
+ when loading chain file
+
+In read_commit_graph_one(), we call validate_mixed_generation_chain()
+after loading the graph. Even though we don't check the return value,
+this has the side effect of clearing the read_generation_data flag,
+which is important when working with mixed generation numbers.
+
+But doing this in load_commit_graph_chain_fd_st() makes more sense:
+
+  1. We are calling it even when we did not load a chain at all, which
+     is pointless (you cannot have mixed generations in a single file).
+
+  2. For now, all callers load the graph via read_commit_graph_one().
+     But the point of factoring out the open/load in the previous commit
+     was to let "commit-graph verify" call them separately. So it needs
+     to trigger this function as part of the load.
+
+     Without this patch, the mixed-generation tests in t5324 would start
+     failing on "git commit-graph verify" calls, once we switch to using
+     a separate open/load call there.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 54 +++++++++++++++++++++++++-------------------------
+ 1 file changed, 27 insertions(+), 27 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 12cdd9af8e..8b29c6de24 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -473,6 +473,31 @@ static struct commit_graph *load_commit_graph_v1(struct repository *r,
+ 	return g;
+ }
+ 
++/*
++ * returns 1 if and only if all graphs in the chain have
++ * corrected commit dates stored in the generation_data chunk.
++ */
++static int validate_mixed_generation_chain(struct commit_graph *g)
++{
++	int read_generation_data = 1;
++	struct commit_graph *p = g;
++
++	while (read_generation_data && p) {
++		read_generation_data = p->read_generation_data;
++		p = p->base_graph;
++	}
++
++	if (read_generation_data)
++		return 1;
++
++	while (g) {
++		g->read_generation_data = 0;
++		g = g->base_graph;
++	}
++
++	return 0;
++}
++
+ static int add_graph_to_chain(struct commit_graph *g,
+ 			      struct commit_graph *chain,
+ 			      struct object_id *oids,
+@@ -581,6 +606,8 @@ struct commit_graph *load_commit_graph_chain_fd_st(struct repository *r,
+ 		}
+ 	}
+ 
++	validate_mixed_generation_chain(graph_chain);
++
+ 	free(oids);
+ 	fclose(fp);
+ 	strbuf_release(&line);
+@@ -605,31 +632,6 @@ static struct commit_graph *load_commit_graph_chain(struct repository *r,
+ 	return g;
+ }
+ 
+-/*
+- * returns 1 if and only if all graphs in the chain have
+- * corrected commit dates stored in the generation_data chunk.
+- */
+-static int validate_mixed_generation_chain(struct commit_graph *g)
+-{
+-	int read_generation_data = 1;
+-	struct commit_graph *p = g;
+-
+-	while (read_generation_data && p) {
+-		read_generation_data = p->read_generation_data;
+-		p = p->base_graph;
+-	}
+-
+-	if (read_generation_data)
+-		return 1;
+-
+-	while (g) {
+-		g->read_generation_data = 0;
+-		g = g->base_graph;
+-	}
+-
+-	return 0;
+-}
+-
+ struct commit_graph *read_commit_graph_one(struct repository *r,
+ 					   struct object_directory *odb)
+ {
+@@ -638,8 +640,6 @@ struct commit_graph *read_commit_graph_one(struct repository *r,
+ 	if (!g)
+ 		g = load_commit_graph_chain(r, odb);
+ 
+-	validate_mixed_generation_chain(g);
+-
+ 	return g;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

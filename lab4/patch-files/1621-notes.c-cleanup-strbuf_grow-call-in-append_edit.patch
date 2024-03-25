@@ -1,0 +1,58 @@
+From ef48fcc432610bc2215c256cfddde7a14a0d2af2 Mon Sep 17 00:00:00 2001
+From: Teng Long <dyroneteng@gmail.com>
+Date: Sat, 27 May 2023 15:57:48 +0800
+Subject: [PATCH 1621/2871] notes.c: cleanup 'strbuf_grow' call in
+ 'append_edit'
+
+Let's cleanup the unnecessary 'strbuf_grow' call in 'append_edit'. This
+"strbuf_grow(&d.buf, size + 1);" is prepared for insert a blank line if
+needed, but actually when inserting, "strbuf_insertstr(&d.buf, 0,
+"\n");" will do the "grow" for us.
+
+348f199b (builtin-notes: Refactor handling of -F option to allow
+combining -m and -F, 2010-02-13) added these to mimic the code
+introduced by 2347fae5 (builtin-notes: Add "append" subcommand for
+appending to note objects, 2010-02-13) that reads in previous note
+before the message.  And the resulting code with explicit sizing is
+carried to this day.
+
+In the context of reading an existing note in, exact sizing may have
+made sense, but because the resulting note needs cleansing with
+stripspace() when appending with this option, such an exact sizing
+does not buy us all that much in practice.
+
+It may help avoiding overallocation due to ALLOC_GROW() slop, but
+nobody can feed so many long messages for it to matter from the
+command line.
+
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Helped-by: Eric Sunshine <sunshine@sunshineco.com>
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/notes.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/builtin/notes.c b/builtin/notes.c
+index 4ff44f1e3d..c501c6eebb 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -219,7 +219,6 @@ static int parse_msg_arg(const struct option *opt, const char *arg, int unset)
+ 
+ 	BUG_ON_OPT_NEG(unset);
+ 
+-	strbuf_grow(&d->buf, strlen(arg) + 2);
+ 	if (d->buf.len)
+ 		strbuf_addch(&d->buf, '\n');
+ 	strbuf_addstr(&d->buf, arg);
+@@ -623,7 +622,6 @@ static int append_edit(int argc, const char **argv, const char *prefix)
+ 		char *prev_buf = repo_read_object_file(the_repository, note,
+ 						       &type, &size);
+ 
+-		strbuf_grow(&d.buf, size + 1);
+ 		if (d.buf.len && prev_buf && size)
+ 			strbuf_insertstr(&d.buf, 0, "\n");
+ 		if (prev_buf && size)
+-- 
+2.39.3 (Apple Git-145)
+

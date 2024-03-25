@@ -1,0 +1,78 @@
+From e624f206bc07201562619e2a9788e2b3762409fc Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 9 Nov 2023 09:05:38 +0100
+Subject: [PATCH 2373/2871] ci: split out logic to set up failed test artifacts
+
+We have some logic in place to create a directory with the output from
+failed tests, which will then subsequently be uploaded as CI artifacts.
+We're about to add support for GitLab CI, which will want to reuse the
+logic.
+
+Split the logic into a separate function so that it is reusable.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 38 +++++++++++++++++++++-----------------
+ 1 file changed, 21 insertions(+), 17 deletions(-)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 3938cad32c..9abecf18b0 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -131,6 +131,26 @@ handle_failed_tests () {
+ 	return 1
+ }
+ 
++create_failed_test_artifacts () {
++	mkdir -p t/failed-test-artifacts
++
++	for test_exit in t/test-results/*.exit
++	do
++		test 0 != "$(cat "$test_exit")" || continue
++
++		test_name="${test_exit%.exit}"
++		test_name="${test_name##*/}"
++		printf "\\e[33m\\e[1m=== Failed test: ${test_name} ===\\e[m\\n"
++		echo "The full logs are in the 'print test failures' step below."
++		echo "See also the 'failed-tests-*' artifacts attached to this run."
++		cat "t/test-results/$test_name.markup"
++
++		trash_dir="t/trash directory.$test_name"
++		cp "t/test-results/$test_name.out" t/failed-test-artifacts/
++		tar czf t/failed-test-artifacts/"$test_name".trash.tar.gz "$trash_dir"
++	done
++}
++
+ # GitHub Action doesn't set TERM, which is required by tput
+ export TERM=${TERM:-dumb}
+ 
+@@ -171,24 +191,8 @@ then
+ 	CC="${CC_PACKAGE:-${CC:-gcc}}"
+ 	DONT_SKIP_TAGS=t
+ 	handle_failed_tests () {
+-		mkdir -p t/failed-test-artifacts
+ 		echo "FAILED_TEST_ARTIFACTS=t/failed-test-artifacts" >>$GITHUB_ENV
+-
+-		for test_exit in t/test-results/*.exit
+-		do
+-			test 0 != "$(cat "$test_exit")" || continue
+-
+-			test_name="${test_exit%.exit}"
+-			test_name="${test_name##*/}"
+-			printf "\\e[33m\\e[1m=== Failed test: ${test_name} ===\\e[m\\n"
+-			echo "The full logs are in the 'print test failures' step below."
+-			echo "See also the 'failed-tests-*' artifacts attached to this run."
+-			cat "t/test-results/$test_name.markup"
+-
+-			trash_dir="t/trash directory.$test_name"
+-			cp "t/test-results/$test_name.out" t/failed-test-artifacts/
+-			tar czf t/failed-test-artifacts/"$test_name".trash.tar.gz "$trash_dir"
+-		done
++		create_failed_test_artifacts
+ 		return 1
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

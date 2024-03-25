@@ -1,0 +1,79 @@
+From 39bdd30377c18cf52da08441bb2cf2a354f0e5bb Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 7 Jul 2023 20:31:34 -0400
+Subject: [PATCH 1743/2871] fsck: suppress MIDX output with `--no-progress`
+
+In a similar spirit as the previous commit, address a bug where `git
+fsck` produces output when calling `git multi-pack-index verify` even
+when invoked with `--no-progress`.
+
+    $ git.compile fsck --connectivity-only --no-progress --no-dangling
+    Verifying OID order in multi-pack-index: 100% (605677/605677), done.
+    Sorting objects by packfile: 100% (605678/605678), done.
+    Verifying object offsets: 100% (605678/605678), done.
+
+The three lines produced by `git fsck` come from `git multi-pack-index
+verify`, but should be squelched due to `--no-progress`.
+
+The MIDX machinery learned to generate these progress messages as early
+as 430efb8a74b (midx: add progress indicators in multi-pack-index
+verify, 2019-03-21), but did not respect `--progress` or `--no-progress`
+until ad60096d1c8 (midx: honor the MIDX_PROGRESS flag in
+verify_midx_file, 2019-10-21).
+
+But the `git multi-pack-index verify` step was added to fsck in
+66ec0390e75 (fsck: verify multi-pack-index, 2018-09-13), pre-dating any
+of the above patches.
+
+Pass `--[no-]progress` as appropriate to ensure that we don't produce
+output when told not to.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsck.c              |  4 ++++
+ t/t5319-multi-pack-index.sh | 12 ++++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/builtin/fsck.c b/builtin/fsck.c
+index 915dc8b9b3..35ce68308c 100644
+--- a/builtin/fsck.c
++++ b/builtin/fsck.c
+@@ -1090,6 +1090,10 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
+ 			midx_verify.git_cmd = 1;
+ 			strvec_pushl(&midx_verify.args, "multi-pack-index",
+ 				     "verify", "--object-dir", odb->path, NULL);
++			if (show_progress)
++				strvec_push(&midx_verify.args, "--progress");
++			else
++				strvec_push(&midx_verify.args, "--no-progress");
+ 			if (run_command(&midx_verify))
+ 				errors_found |= ERROR_MULTI_PACK_INDEX;
+ 		}
+diff --git a/t/t5319-multi-pack-index.sh b/t/t5319-multi-pack-index.sh
+index 0883c7c6bd..1bcc02004d 100755
+--- a/t/t5319-multi-pack-index.sh
++++ b/t/t5319-multi-pack-index.sh
+@@ -485,6 +485,18 @@ test_expect_success 'git-fsck incorrect offset' '
+ 	git -c core.multiPackIndex=false fsck
+ '
+ 
++test_expect_success 'git fsck shows MIDX output with --progress' '
++	git fsck --progress 2>err &&
++	grep "Verifying OID order in multi-pack-index" err &&
++	grep "Verifying object offsets" err
++'
++
++test_expect_success 'git fsck suppresses MIDX output with --no-progress' '
++	git fsck --no-progress 2>err &&
++	! grep "Verifying OID order in multi-pack-index" err &&
++	! grep "Verifying object offsets" err
++'
++
+ test_expect_success 'corrupt MIDX is not reused' '
+ 	corrupt_midx_and_verify $MIDX_BYTE_OFFSET "\377" $objdir \
+ 		"incorrect object offset" &&
+-- 
+2.39.3 (Apple Git-145)
+

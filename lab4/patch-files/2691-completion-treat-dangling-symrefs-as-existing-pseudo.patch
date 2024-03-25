@@ -1,0 +1,56 @@
+From 020e0a087f2101182343936b8d58f0b4c96e96df Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 15 Jan 2024 11:36:15 +0100
+Subject: [PATCH 2691/2871] completion: treat dangling symrefs as existing
+ pseudorefs
+
+The `__git_pseudoref_exists ()` helper function back to git-rev-parse(1)
+in case the reftable backend is in use. This is not in the same spirit
+as the simple existence check that the "files" backend does though,
+because there we only check for the pseudo-ref to exist with `test -f`.
+With git-rev-parse(1) we not only check for existence, but also verify
+that the pseudo-ref resolves to an object, which may not be the case
+when the pseudo-ref points to an unborn branch.
+
+Fix this issue by using `git show-ref --exists` instead. Note that we do
+not have to silence stdout anymore as git-show-ref(1) will not print
+anything.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ t/t9902-completion.sh                  | 4 ++++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 54ce58f73d..6662db221d 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -148,7 +148,7 @@ __git_pseudoref_exists ()
+ 	# platforms.
+ 	if __git_eread "$__git_repo_path/HEAD" head; then
+ 		if [ "$head" == "ref: refs/heads/.invalid" ]; then
+-			__git rev-parse --verify --quiet "$ref" >/dev/null
++			__git show-ref --exists "$ref"
+ 			return $?
+ 		fi
+ 	fi
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index 56dc7343a2..35eb534fdd 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -2743,6 +2743,10 @@ test_expect_success '__git_pseudoref_exists' '
+ 		cd repo &&
+ 		sane_unset __git_repo_path &&
+ 
++		# HEAD should exist, even if it points to an unborn branch.
++		__git_pseudoref_exists HEAD >output 2>&1 &&
++		test_must_be_empty output &&
++
+ 		# HEAD points to an existing branch, so it should exist.
+ 		test_commit A &&
+ 		__git_pseudoref_exists HEAD >output 2>&1 &&
+-- 
+2.39.3 (Apple Git-145)
+

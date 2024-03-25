@@ -1,0 +1,54 @@
+From 853bd0d267da523ccd378d8e95f5c98d44c6f3b5 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 29 Nov 2023 08:25:09 +0100
+Subject: [PATCH 2479/2871] t5401: speed up creation of many branches
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+One of the tests in t5401 creates a bunch of branches by calling
+git-branch(1) for every one of them. This is quite inefficient and takes
+a comparatively long time even on Unix systems where spawning processes
+is comparatively fast. Refactor it to instead use git-update-ref(1),
+which leads to an almost 10-fold speedup:
+
+```
+Benchmark 1: ./t5401-update-hooks.sh (rev = HEAD)
+  Time (mean ± σ):     983.2 ms ±  97.6 ms    [User: 328.8 ms, System: 679.2 ms]
+  Range (min … max):   882.9 ms … 1078.0 ms    3 runs
+
+Benchmark 2: ./t5401-update-hooks.sh (rev = HEAD~)
+  Time (mean ± σ):      9.312 s ±  0.398 s    [User: 2.766 s, System: 6.617 s]
+  Range (min … max):    8.885 s …  9.674 s    3 runs
+
+Summary
+  ./t5401-update-hooks.sh (rev = HEAD) ran
+    9.47 ± 1.02 times faster than ./t5401-update-hooks.sh (rev = HEAD~)
+```
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5401-update-hooks.sh | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/t/t5401-update-hooks.sh b/t/t5401-update-hooks.sh
+index 001b7a17ad..8b8bc47dc0 100755
+--- a/t/t5401-update-hooks.sh
++++ b/t/t5401-update-hooks.sh
+@@ -133,10 +133,8 @@ test_expect_success 'pre-receive hook that forgets to read its input' '
+ 	EOF
+ 	rm -f victim.git/hooks/update victim.git/hooks/post-update &&
+ 
+-	for v in $(test_seq 100 999)
+-	do
+-		git branch branch_$v main || return
+-	done &&
++	printf "create refs/heads/branch_%d main\n" $(test_seq 100 999) >input &&
++	git update-ref --stdin <input &&
+ 	git push ./victim.git "+refs/heads/*:refs/heads/*"
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

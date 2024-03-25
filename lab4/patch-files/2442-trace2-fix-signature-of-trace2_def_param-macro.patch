@@ -1,0 +1,35 @@
+From abcdb978ea13010357ef2bf265f7bf0c55f96dbe Mon Sep 17 00:00:00 2001
+From: Jeff Hostetler <jeffhostetler@github.com>
+Date: Wed, 22 Nov 2023 19:18:34 +0000
+Subject: [PATCH 2442/2871] trace2: fix signature of trace2_def_param() macro
+
+Add `struct key_value_info` argument to `trace2_def_param()`.
+
+In dc90208497 (trace2: plumb config kvi, 2023-06-28) a `kvi`
+argument was added to `trace2_def_param_fl()` but the macro
+was not up updated. Let's fix that.
+
+Signed-off-by: Jeff Hostetler <jeffhostetler@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trace2.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/trace2.h b/trace2.h
+index 40d8c2e02a..1f0669bbd2 100644
+--- a/trace2.h
++++ b/trace2.h
+@@ -337,8 +337,8 @@ struct key_value_info;
+ void trace2_def_param_fl(const char *file, int line, const char *param,
+ 			 const char *value, const struct key_value_info *kvi);
+ 
+-#define trace2_def_param(param, value) \
+-	trace2_def_param_fl(__FILE__, __LINE__, (param), (value))
++#define trace2_def_param(param, value, kvi) \
++	trace2_def_param_fl(__FILE__, __LINE__, (param), (value), (kvi))
+ 
+ /*
+  * Tell trace2 about a newly instantiated repo object and assign
+-- 
+2.39.3 (Apple Git-145)
+

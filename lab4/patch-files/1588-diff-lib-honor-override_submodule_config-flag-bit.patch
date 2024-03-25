@@ -1,0 +1,83 @@
+From 5768478edc2bccb6a3d6200e430490573140bfa6 Mon Sep 17 00:00:00 2001
+From: Josip Sokcevic <sokcevic@google.com>
+Date: Wed, 14 Jun 2023 09:48:57 -0700
+Subject: [PATCH 1588/2871] diff-lib: honor override_submodule_config flag bit
+
+When `diff.ignoreSubmodules = all` is set and submodule commits are
+manually staged (e.g. via `git-update-index`), `git-commit` should
+record the commit  with updated submodules.
+
+`index_differs_from` is called from `prepare_to_commit` with flags set to
+`override_submodule_config = 1`. `index_differs_from` then merges the
+default diff flags and passed flags.
+
+When `diff.ignoreSubmodules` is set to "all", `flags` ends up having
+both `override_submodule_config` and `ignore_submodules` set to 1. This
+results in `git-commit` ignoring staged commits.
+
+This patch restores original `flags.ignore_submodule` if
+`flags.override_submodule_config` is set.
+
+Signed-off-by: Josip Sokcevic <sokcevic@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff-lib.c                  |  9 ++++++++-
+ t/t7406-submodule-update.sh | 23 +++++++++++++++++++++++
+ 2 files changed, 31 insertions(+), 1 deletion(-)
+
+diff --git a/diff-lib.c b/diff-lib.c
+index 60e979dc1b..1918517ebd 100644
+--- a/diff-lib.c
++++ b/diff-lib.c
+@@ -669,8 +669,15 @@ int index_differs_from(struct repository *r,
+ 	setup_revisions(0, NULL, &rev, &opt);
+ 	rev.diffopt.flags.quick = 1;
+ 	rev.diffopt.flags.exit_with_status = 1;
+-	if (flags)
++	if (flags) {
+ 		diff_flags_or(&rev.diffopt.flags, flags);
++		/*
++		 * Now that flags are merged, honor override_submodule_config
++		 * and ignore_submodules from passed flags.
++		 */
++		if (flags->override_submodule_config)
++			rev.diffopt.flags.ignore_submodules = flags->ignore_submodules;
++	}
+ 	rev.diffopt.ita_invisible_in_index = ita_invisible_in_index;
+ 	run_diff_index(&rev, 1);
+ 	has_changes = rev.diffopt.flags.has_changes;
+diff --git a/t/t7406-submodule-update.sh b/t/t7406-submodule-update.sh
+index f094e3d7f3..00651c25cb 100755
+--- a/t/t7406-submodule-update.sh
++++ b/t/t7406-submodule-update.sh
+@@ -1179,4 +1179,27 @@ test_expect_success 'submodule update --recursive skip submodules with strategy=
+ 	test_cmp expect.err actual.err
+ '
+ 
++add_submodule_commit_and_validate () {
++	HASH=$(git rev-parse HEAD) &&
++	git update-index --add --cacheinfo 160000,$HASH,sub &&
++	git commit -m "create submodule" &&
++	echo "160000 commit $HASH	sub" >expect &&
++	git ls-tree HEAD -- sub >actual &&
++	test_cmp expect actual
++}
++
++test_expect_success 'commit with staged submodule change' '
++	add_submodule_commit_and_validate
++'
++
++test_expect_success 'commit with staged submodule change with ignoreSubmodules dirty' '
++	test_config diff.ignoreSubmodules dirty &&
++	add_submodule_commit_and_validate
++'
++
++test_expect_success 'commit with staged submodule change with ignoreSubmodules all' '
++	test_config diff.ignoreSubmodules all &&
++	add_submodule_commit_and_validate
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,109 @@
+From 808e91956d1db707643c7f68c2b8fcc6f38a2d80 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:05:12 -0400
+Subject: [PATCH 0170/2871] mark unused parameters in trivial compat functions
+
+When a platform feature isn't available or in use, we sometimes
+conditionally compile empty or trivial functions to turn these into
+noops. We need to annotate their parameters so that -Wunused-parameters
+won't complain about them.
+
+Note that there are many more of these in compat/mingw.h, but we'll
+leave them for now, as there's some trickery required to get the UNUSED
+macro available there.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/nonblock.c |  2 +-
+ exec-cmd.c        |  2 +-
+ git-compat-util.h | 16 ++++++++++------
+ 3 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/compat/nonblock.c b/compat/nonblock.c
+index 9694ebdb1d..5b51195c32 100644
+--- a/compat/nonblock.c
++++ b/compat/nonblock.c
+@@ -41,7 +41,7 @@ int enable_pipe_nonblock(int fd)
+ 
+ #else
+ 
+-int enable_pipe_nonblock(int fd)
++int enable_pipe_nonblock(int fd UNUSED)
+ {
+ 	errno = ENOSYS;
+ 	return -1;
+diff --git a/exec-cmd.c b/exec-cmd.c
+index eeb2ee52b8..0232bbc990 100644
+--- a/exec-cmd.c
++++ b/exec-cmd.c
+@@ -252,7 +252,7 @@ static const char *system_prefix(void)
+  * This is called during initialization, but No work needs to be done here when
+  * runtime prefix is not being used.
+  */
+-void git_resolve_executable_dir(const char *argv0)
++void git_resolve_executable_dir(const char *argv0 UNUSED)
+ {
+ }
+ 
+diff --git a/git-compat-util.h b/git-compat-util.h
+index b90b64718e..fbefbb9adb 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -310,7 +310,9 @@ typedef unsigned long uintptr_t;
+ #ifdef PRECOMPOSE_UNICODE
+ #include "compat/precompose_utf8.h"
+ #else
+-static inline const char *precompose_argv_prefix(int argc, const char **argv, const char *prefix)
++static inline const char *precompose_argv_prefix(int argc UNUSED,
++						 const char **argv UNUSED,
++						 const char *prefix)
+ {
+ 	return prefix;
+ }
+@@ -335,7 +337,9 @@ struct itimerval {
+ #endif
+ 
+ #ifdef NO_SETITIMER
+-static inline int setitimer(int which, const struct itimerval *value, struct itimerval *newvalue) {
++static inline int setitimer(int which UNUSED,
++			    const struct itimerval *value UNUSED,
++			    struct itimerval *newvalue UNUSED) {
+ 	return 0; /* pretend success */
+ }
+ #endif
+@@ -420,7 +424,7 @@ int lstat_cache_aware_rmdir(const char *path);
+ #endif
+ 
+ #ifndef has_dos_drive_prefix
+-static inline int git_has_dos_drive_prefix(const char *path)
++static inline int git_has_dos_drive_prefix(const char *path UNUSED)
+ {
+ 	return 0;
+ }
+@@ -428,7 +432,7 @@ static inline int git_has_dos_drive_prefix(const char *path)
+ #endif
+ 
+ #ifndef skip_dos_drive_prefix
+-static inline int git_skip_dos_drive_prefix(char **path)
++static inline int git_skip_dos_drive_prefix(char **path UNUSED)
+ {
+ 	return 0;
+ }
+@@ -1463,11 +1467,11 @@ int open_nofollow(const char *path, int flags);
+ #endif
+ 
+ #ifndef _POSIX_THREAD_SAFE_FUNCTIONS
+-static inline void flockfile(FILE *fh)
++static inline void flockfile(FILE *fh UNUSED)
+ {
+ 	; /* nothing */
+ }
+-static inline void funlockfile(FILE *fh)
++static inline void funlockfile(FILE *fh UNUSED)
+ {
+ 	; /* nothing */
+ }
+-- 
+2.39.3 (Apple Git-145)
+

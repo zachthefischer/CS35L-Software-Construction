@@ -1,0 +1,37 @@
+From 3437f549dd28fde454977921ae355a0aa3d76011 Mon Sep 17 00:00:00 2001
+From: Johan Ruokangas <johan@latehours.net>
+Date: Tue, 18 Jul 2023 13:13:01 +0000
+Subject: [PATCH 1819/2871] gitignore.txt: use backticks instead of double
+ quotes
+
+Among four examples, only this one used "double quoted" sample
+patterns, but all others marked up the patterns in `monospace`.
+
+Signed-off-by: Johan Ruokangas <johan@latehours.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitignore.txt | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/gitignore.txt b/Documentation/gitignore.txt
+index 4c17f2356c..810041acd1 100644
+--- a/Documentation/gitignore.txt
++++ b/Documentation/gitignore.txt
+@@ -174,10 +174,10 @@ EXAMPLES
+    is not relevant  if there is already a middle slash in
+    the pattern.
+ 
+- - The pattern "foo/*", matches "foo/test.json"
+-   (a regular file), "foo/bar" (a directory), but it does not match
+-   "foo/bar/hello.c" (a regular file), as the asterisk in the
+-   pattern does not match "bar/hello.c" which has a slash in it.
++ - The pattern `foo/*`, matches `foo/test.json`
++   (a regular file), `foo/bar` (a directory), but it does not match
++   `foo/bar/hello.c` (a regular file), as the asterisk in the
++   pattern does not match `bar/hello.c` which has a slash in it.
+ 
+ --------------------------------------------------------------
+     $ git status
+-- 
+2.39.3 (Apple Git-145)
+

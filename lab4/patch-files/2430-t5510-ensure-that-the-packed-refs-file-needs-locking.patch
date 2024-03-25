@@ -1,0 +1,45 @@
+From b02c7646f4cc812a99ceb1264f95427d2d7996f8 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 14 Nov 2023 09:58:38 +0100
+Subject: [PATCH 2430/2871] t5510: ensure that the packed-refs file needs
+ locking
+
+One of the tests in t5510 asserts that a `git fetch --prune` detects
+failures to prune branches. This is done by locking the packed-refs
+file, which would then later lead to a locking issue when Git tries to
+rewrite the file to prune the branches from it.
+
+Interestingly though, we do not pack the about-to-be-pruned branch into
+the packed-refs file, so it never even contained that branch in the
+first place. While this is good enough right now because the pruning
+will always lock the file regardless of whether it contains the branch
+or not, this is a mere implementation detail. In fact, we're about to
+rewrite branch deletions to make use of the ref transaction interface,
+which knows to skip rewrites of the packed-refs file in the case where
+it does not contain the branches in the first place, and this will break
+the test.
+
+Prepare the test for that change by packing the refs before trying to
+prune them.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5510-fetch.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/t5510-fetch.sh b/t/t5510-fetch.sh
+index dcadd56d3a..79592a3b0a 100755
+--- a/t/t5510-fetch.sh
++++ b/t/t5510-fetch.sh
+@@ -169,6 +169,7 @@ test_expect_success REFFILES 'fetch --prune fails to delete branches' '
+ 	git clone . prune-fail &&
+ 	cd prune-fail &&
+ 	git update-ref refs/remotes/origin/extrabranch main &&
++	git pack-refs --all &&
+ 	: this will prevent --prune from locking packed-refs for deleting refs, but adding loose refs still succeeds  &&
+ 	>.git/packed-refs.new &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

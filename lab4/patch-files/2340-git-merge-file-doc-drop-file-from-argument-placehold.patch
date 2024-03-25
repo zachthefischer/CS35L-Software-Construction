@@ -1,0 +1,79 @@
+From 8077612ea12e80b20e307e279916710b99fe6362 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Wed, 1 Nov 2023 19:24:18 +0000
+Subject: [PATCH 2340/2871] git-merge-file doc: drop "-file" from argument
+ placeholders
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`git merge-file` takes three positional arguments. Each of them is
+documented as `<foo-file>`. In preparation for teaching this command to
+alternatively take three object IDs, make these placeholders a bit more
+generic by dropping the "-file" parts. Instead, clarify early that the
+three arguments are filenames. Even after the next commit, we can afford
+to present this file-centric view up front and in the general
+discussion, since it will remain the default one.
+
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-merge-file.txt | 21 +++++++++++----------
+ 1 file changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/Documentation/git-merge-file.txt b/Documentation/git-merge-file.txt
+index 7e9093fab6..bf0a18cf02 100644
+--- a/Documentation/git-merge-file.txt
++++ b/Documentation/git-merge-file.txt
+@@ -11,19 +11,20 @@ SYNOPSIS
+ [verse]
+ 'git merge-file' [-L <current-name> [-L <base-name> [-L <other-name>]]]
+ 	[--ours|--theirs|--union] [-p|--stdout] [-q|--quiet] [--marker-size=<n>]
+-	[--[no-]diff3] <current-file> <base-file> <other-file>
++	[--[no-]diff3] <current> <base> <other>
+ 
+ 
+ DESCRIPTION
+ -----------
+-'git merge-file' incorporates all changes that lead from the `<base-file>`
+-to `<other-file>` into `<current-file>`. The result ordinarily goes into
+-`<current-file>`. 'git merge-file' is useful for combining separate changes
+-to an original. Suppose `<base-file>` is the original, and both
+-`<current-file>` and `<other-file>` are modifications of `<base-file>`,
++Given three files `<current>`, `<base>` and `<other>`,
++'git merge-file' incorporates all changes that lead from `<base>`
++to `<other>` into `<current>`. The result ordinarily goes into
++`<current>`. 'git merge-file' is useful for combining separate changes
++to an original. Suppose `<base>` is the original, and both
++`<current>` and `<other>` are modifications of `<base>`,
+ then 'git merge-file' combines both changes.
+ 
+-A conflict occurs if both `<current-file>` and `<other-file>` have changes
++A conflict occurs if both `<current>` and `<other>` have changes
+ in a common segment of lines. If a conflict is found, 'git merge-file'
+ normally outputs a warning and brackets the conflict with lines containing
+ <<<<<<< and >>>>>>> markers. A typical conflict will look like this:
+@@ -36,8 +37,8 @@ normally outputs a warning and brackets the conflict with lines containing
+ 
+ If there are conflicts, the user should edit the result and delete one of
+ the alternatives.  When `--ours`, `--theirs`, or `--union` option is in effect,
+-however, these conflicts are resolved favouring lines from `<current-file>`,
+-lines from `<other-file>`, or lines from both respectively.  The length of the
++however, these conflicts are resolved favouring lines from `<current>`,
++lines from `<other>`, or lines from both respectively.  The length of the
+ conflict markers can be given with the `--marker-size` option.
+ 
+ The exit value of this program is negative on error, and the number of
+@@ -62,7 +63,7 @@ OPTIONS
+ 
+ -p::
+ 	Send results to standard output instead of overwriting
+-	`<current-file>`.
++	`<current>`.
+ 
+ -q::
+ 	Quiet; do not warn about conflicts.
+-- 
+2.39.3 (Apple Git-145)
+

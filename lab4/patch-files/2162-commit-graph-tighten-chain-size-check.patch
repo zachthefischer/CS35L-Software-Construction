@@ -1,0 +1,77 @@
+From 7754a565e2e78e4163dbf597bba5fc729cc3bbc7 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 28 Sep 2023 00:39:10 -0400
+Subject: [PATCH 2162/2871] commit-graph: tighten chain size check
+
+When we open a commit-graph-chain file, if it's smaller than a single
+entry, we just quietly treat that as ENOENT. That make some sense if the
+file is truly zero bytes, but it means that "commit-graph verify" will
+quietly ignore a file that contains garbage if that garbage happens to
+be short.
+
+Instead, let's only simulate ENOENT when the file is truly empty, and
+otherwise return EINVAL. The normal graph-loading routines don't care,
+but "commit-graph verify" will notice and complain about the difference.
+
+It's not entirely clear to me that the 0-is-ENOENT case actually happens
+in real life, so we could perhaps just eliminate this special-case
+altogether. But this is how we've always behaved, so I'm preserving it
+in the name of backwards compatibility (though again, it really only
+matters for "verify", as the regular routines are happy to load what
+they can).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c                | 10 ++++++++--
+ t/t5324-split-commit-graph.sh | 12 ++++++++++++
+ 2 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 8b29c6de24..b1d3e5bf94 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -548,9 +548,15 @@ int open_commit_graph_chain(const char *chain_file,
+ 		close(*fd);
+ 		return 0;
+ 	}
+-	if (st->st_size <= the_hash_algo->hexsz) {
++	if (st->st_size < the_hash_algo->hexsz) {
+ 		close(*fd);
+-		errno = ENOENT;
++		if (!st->st_size) {
++			/* treat empty files the same as missing */
++			errno = ENOENT;
++		} else {
++			warning("commit-graph chain file too small");
++			errno = EINVAL;
++		}
+ 		return 0;
+ 	}
+ 	return 1;
+diff --git a/t/t5324-split-commit-graph.sh b/t/t5324-split-commit-graph.sh
+index a5ac0440f1..be58545810 100755
+--- a/t/t5324-split-commit-graph.sh
++++ b/t/t5324-split-commit-graph.sh
+@@ -342,6 +342,18 @@ test_expect_success 'verify after commit-graph-chain corruption (tip)' '
+ 	)
+ '
+ 
++test_expect_success 'verify notices too-short chain file' '
++	git clone --no-hardlinks . verify-chain-short &&
++	(
++		cd verify-chain-short &&
++		git commit-graph verify &&
++		echo "garbage" >$graphdir/commit-graph-chain &&
++		test_must_fail git commit-graph verify 2>test_err &&
++		grep -v "^+" test_err >err &&
++		grep "commit-graph chain file too small" err
++	)
++'
++
+ test_expect_success 'verify across alternates' '
+ 	git clone --no-hardlinks . verify-alt &&
+ 	(
+-- 
+2.39.3 (Apple Git-145)
+

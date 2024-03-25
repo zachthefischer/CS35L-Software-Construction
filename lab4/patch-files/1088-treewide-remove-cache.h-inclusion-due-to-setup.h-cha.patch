@@ -1,0 +1,236 @@
+From 61a7b982647bb64779df9be66d9b13ecac811924 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 21 Mar 2023 06:26:06 +0000
+Subject: [PATCH 1088/2871] treewide: remove cache.h inclusion due to setup.h
+ changes
+
+By moving several declarations to setup.h, the previous patch made it
+possible to remove the include of cache.h in several source files.  Do
+so.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ line-log.c                                   | 1 -
+ path.c                                       | 2 +-
+ t/helper/test-advise.c                       | 1 -
+ t/helper/test-bloom.c                        | 3 +--
+ t/helper/test-config.c                       | 1 -
+ t/helper/test-pack-mtimes.c                  | 1 -
+ t/helper/test-partial-clone.c                | 3 +--
+ t/helper/test-proc-receive.c                 | 3 +--
+ t/helper/test-read-graph.c                   | 1 -
+ t/helper/test-ref-store.c                    | 1 -
+ t/helper/test-repository.c                   | 1 -
+ t/helper/test-revision-walking.c             | 1 -
+ t/helper/test-serve-v2.c                     | 1 -
+ t/helper/test-submodule-nested-repo-config.c | 1 -
+ t/helper/test-submodule.c                    | 1 -
+ t/helper/test-subprocess.c                   | 1 -
+ t/helper/test-userdiff.c                     | 1 -
+ worktree.c                                   | 2 +-
+ 18 files changed, 5 insertions(+), 21 deletions(-)
+
+diff --git a/line-log.c b/line-log.c
+index 84c8093c51..10c19daec4 100644
+--- a/line-log.c
++++ b/line-log.c
+@@ -1,7 +1,6 @@
+ #include "git-compat-util.h"
+ #include "alloc.h"
+ #include "line-range.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "tag.h"
+ #include "blob.h"
+diff --git a/path.c b/path.c
+index a170243497..dff215ac69 100644
+--- a/path.c
++++ b/path.c
+@@ -1,7 +1,7 @@
+ /*
+  * Utilities for paths and pathnames
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/t/helper/test-advise.c b/t/helper/test-advise.c
+index 4e6ed30afa..8a3fd0009a 100644
+--- a/t/helper/test-advise.c
++++ b/t/helper/test-advise.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "advice.h"
+ #include "config.h"
+ #include "setup.h"
+diff --git a/t/helper/test-bloom.c b/t/helper/test-bloom.c
+index e5754b8da6..d2b30d644d 100644
+--- a/t/helper/test-bloom.c
++++ b/t/helper/test-bloom.c
+@@ -1,7 +1,6 @@
+-#include "cache.h"
++#include "test-tool.h"
+ #include "bloom.h"
+ #include "hex.h"
+-#include "test-tool.h"
+ #include "commit.h"
+ #include "setup.h"
+ 
+diff --git a/t/helper/test-config.c b/t/helper/test-config.c
+index 5877188f3a..32d170ec30 100644
+--- a/t/helper/test-config.c
++++ b/t/helper/test-config.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "setup.h"
+ #include "string-list.h"
+diff --git a/t/helper/test-pack-mtimes.c b/t/helper/test-pack-mtimes.c
+index 75ca1505a3..0f3fbeec53 100644
+--- a/t/helper/test-pack-mtimes.c
++++ b/t/helper/test-pack-mtimes.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "strbuf.h"
+ #include "object-store.h"
+diff --git a/t/helper/test-partial-clone.c b/t/helper/test-partial-clone.c
+index cce496944a..362bd64a4c 100644
+--- a/t/helper/test-partial-clone.c
++++ b/t/helper/test-partial-clone.c
+@@ -1,6 +1,5 @@
+-#include "cache.h"
+-#include "hex.h"
+ #include "test-tool.h"
++#include "hex.h"
+ #include "repository.h"
+ #include "object-store.h"
+ #include "setup.h"
+diff --git a/t/helper/test-proc-receive.c b/t/helper/test-proc-receive.c
+index 7c8de7b562..f30022d222 100644
+--- a/t/helper/test-proc-receive.c
++++ b/t/helper/test-proc-receive.c
+@@ -1,11 +1,10 @@
+-#include "cache.h"
++#include "test-tool.h"
+ #include "connect.h"
+ #include "hex.h"
+ #include "parse-options.h"
+ #include "pkt-line.h"
+ #include "setup.h"
+ #include "sigchain.h"
+-#include "test-tool.h"
+ 
+ static const char *proc_receive_usage[] = {
+ 	"test-tool proc-receive [<options>]",
+diff --git a/t/helper/test-read-graph.c b/t/helper/test-read-graph.c
+index e21b0805f3..78965a6ebd 100644
+--- a/t/helper/test-read-graph.c
++++ b/t/helper/test-read-graph.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "commit-graph.h"
+ #include "repository.h"
+ #include "object-store.h"
+diff --git a/t/helper/test-ref-store.c b/t/helper/test-ref-store.c
+index 8717b95e84..d1192c8c03 100644
+--- a/t/helper/test-ref-store.c
++++ b/t/helper/test-ref-store.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "refs.h"
+ #include "setup.h"
+diff --git a/t/helper/test-repository.c b/t/helper/test-repository.c
+index 6774f6245f..bafd2a5bf9 100644
+--- a/t/helper/test-repository.c
++++ b/t/helper/test-repository.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "commit-graph.h"
+ #include "commit.h"
+ #include "config.h"
+diff --git a/t/helper/test-revision-walking.c b/t/helper/test-revision-walking.c
+index f2df433406..7750afb286 100644
+--- a/t/helper/test-revision-walking.c
++++ b/t/helper/test-revision-walking.c
+@@ -9,7 +9,6 @@
+  */
+ 
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "commit.h"
+ #include "diff.h"
+ #include "revision.h"
+diff --git a/t/helper/test-serve-v2.c b/t/helper/test-serve-v2.c
+index 7d590ab722..054cbcf5d8 100644
+--- a/t/helper/test-serve-v2.c
++++ b/t/helper/test-serve-v2.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+ #include "serve.h"
+diff --git a/t/helper/test-submodule-nested-repo-config.c b/t/helper/test-submodule-nested-repo-config.c
+index aaffd422d6..d31f5e48ab 100644
+--- a/t/helper/test-submodule-nested-repo-config.c
++++ b/t/helper/test-submodule-nested-repo-config.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "setup.h"
+ #include "submodule-config.h"
+ 
+diff --git a/t/helper/test-submodule.c b/t/helper/test-submodule.c
+index f18ca46dce..0e34581b20 100644
+--- a/t/helper/test-submodule.c
++++ b/t/helper/test-submodule.c
+@@ -1,6 +1,5 @@
+ #include "test-tool.h"
+ #include "test-tool-utils.h"
+-#include "cache.h"
+ #include "parse-options.h"
+ #include "remote.h"
+ #include "setup.h"
+diff --git a/t/helper/test-subprocess.c b/t/helper/test-subprocess.c
+index 65a355cc59..c344f1694d 100644
+--- a/t/helper/test-subprocess.c
++++ b/t/helper/test-subprocess.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "run-command.h"
+ #include "setup.h"
+ 
+diff --git a/t/helper/test-userdiff.c b/t/helper/test-userdiff.c
+index 0cd7ee12b7..680124a676 100644
+--- a/t/helper/test-userdiff.c
++++ b/t/helper/test-userdiff.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "setup.h"
+ #include "userdiff.h"
+ #include "config.h"
+diff --git a/worktree.c b/worktree.c
+index 7f0f04eab5..b5ee71c5eb 100644
+--- a/worktree.c
++++ b/worktree.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "environment.h"
+-- 
+2.39.3 (Apple Git-145)
+

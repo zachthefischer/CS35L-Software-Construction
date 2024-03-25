@@ -1,0 +1,88 @@
+From 84d689a810842c44d95ac759d39702dfa170093b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:33:30 -0400
+Subject: [PATCH 1718/2871] imap-send: use server conf argument in setup_curl()
+
+Our caller passes in an imap_server_conf struct, but we ignore it
+totally, and instead read the config directly from the global "server"
+variable. This works OK, since our sole caller will pass in that same
+global variable. But the intent seems to have been to use the passed-in
+variable, as otherwise it has no purpose (and many other functions use
+the same pattern).
+
+Let's use the passed-in value, which also silences a -Wunused-parameter
+warning.
+
+It would be nice if "server" was not a global here, as we could avoid
+making similar mistakes. But changing that would be a larger refactor,
+as it must be accessed as a global in a few spots (e.g., filling it in
+with the config callback).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ imap-send.c | 24 ++++++++++++------------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/imap-send.c b/imap-send.c
+index 7f5426177a..0afd88de44 100644
+--- a/imap-send.c
++++ b/imap-send.c
+@@ -1415,16 +1415,16 @@ static CURL *setup_curl(struct imap_server_conf *srvc, struct credential *cred)
+ 	if (!curl)
+ 		die("curl_easy_init failed");
+ 
+-	server_fill_credential(&server, cred);
+-	curl_easy_setopt(curl, CURLOPT_USERNAME, server.user);
+-	curl_easy_setopt(curl, CURLOPT_PASSWORD, server.pass);
++	server_fill_credential(srvc, cred);
++	curl_easy_setopt(curl, CURLOPT_USERNAME, srvc->user);
++	curl_easy_setopt(curl, CURLOPT_PASSWORD, srvc->pass);
+ 
+-	strbuf_addstr(&path, server.use_ssl ? "imaps://" : "imap://");
+-	strbuf_addstr(&path, server.host);
++	strbuf_addstr(&path, srvc->use_ssl ? "imaps://" : "imap://");
++	strbuf_addstr(&path, srvc->host);
+ 	if (!path.len || path.buf[path.len - 1] != '/')
+ 		strbuf_addch(&path, '/');
+ 
+-	uri_encoded_folder = curl_easy_escape(curl, server.folder, 0);
++	uri_encoded_folder = curl_easy_escape(curl, srvc->folder, 0);
+ 	if (!uri_encoded_folder)
+ 		die("failed to encode server folder");
+ 	strbuf_addstr(&path, uri_encoded_folder);
+@@ -1432,25 +1432,25 @@ static CURL *setup_curl(struct imap_server_conf *srvc, struct credential *cred)
+ 
+ 	curl_easy_setopt(curl, CURLOPT_URL, path.buf);
+ 	strbuf_release(&path);
+-	curl_easy_setopt(curl, CURLOPT_PORT, server.port);
++	curl_easy_setopt(curl, CURLOPT_PORT, srvc->port);
+ 
+-	if (server.auth_method) {
++	if (srvc->auth_method) {
+ #ifndef GIT_CURL_HAVE_CURLOPT_LOGIN_OPTIONS
+ 		warning("No LOGIN_OPTIONS support in this cURL version");
+ #else
+ 		struct strbuf auth = STRBUF_INIT;
+ 		strbuf_addstr(&auth, "AUTH=");
+-		strbuf_addstr(&auth, server.auth_method);
++		strbuf_addstr(&auth, srvc->auth_method);
+ 		curl_easy_setopt(curl, CURLOPT_LOGIN_OPTIONS, auth.buf);
+ 		strbuf_release(&auth);
+ #endif
+ 	}
+ 
+-	if (!server.use_ssl)
++	if (!srvc->use_ssl)
+ 		curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_TRY);
+ 
+-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, server.ssl_verify);
+-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, server.ssl_verify);
++	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, srvc->ssl_verify);
++	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, srvc->ssl_verify);
+ 
+ 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, fread_buffer);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

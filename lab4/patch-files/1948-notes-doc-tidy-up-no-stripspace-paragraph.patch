@@ -1,0 +1,38 @@
+From 3a6e1ad80bdf5d09cb484e77cc4bfffdd9a15bdf Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Wed, 16 Aug 2023 16:24:34 +0200
+Subject: [PATCH 1948/2871] notes doc: tidy up `--no-stripspace` paragraph
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Where we document the `--no-stripspace` option, remove a superfluous
+"For" to fix the grammar. Mark option names and command names using
+`backticks` to set them in monospace.
+
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-notes.txt | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-notes.txt b/Documentation/git-notes.txt
+index 9043274ce8..f8310e56a8 100644
+--- a/Documentation/git-notes.txt
++++ b/Documentation/git-notes.txt
+@@ -179,9 +179,9 @@ OPTIONS
+ --[no-]stripspace::
+ 	Strip leading and trailing whitespace from the note message.
+ 	Also strip out empty lines other than a single line between
+-	paragraphs. For lines starting with `#` will be stripped out
+-	in non-editor cases like "-m", "-F" and "-C", but not in
+-	editor case like "git notes edit", "-c", etc.
++	paragraphs. Lines starting with `#` will be stripped out
++	in non-editor cases like `-m`, `-F` and `-C`, but not in
++	editor case like `git notes edit`, `-c`, etc.
+ 
+ --ref <ref>::
+ 	Manipulate the notes tree in <ref>.  This overrides
+-- 
+2.39.3 (Apple Git-145)
+

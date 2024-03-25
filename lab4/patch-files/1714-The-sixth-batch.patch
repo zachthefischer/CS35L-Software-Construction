@@ -1,0 +1,40 @@
+From 9748a6820043d5815bee770ffa51647e0adc2cf0 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 29 Jun 2023 15:57:26 -0700
+Subject: [PATCH 1714/2871] The sixth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.42.0.txt | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.42.0.txt b/Documentation/RelNotes/2.42.0.txt
+index 85e078839c..310f899306 100644
+--- a/Documentation/RelNotes/2.42.0.txt
++++ b/Documentation/RelNotes/2.42.0.txt
+@@ -31,6 +31,10 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * "git worktree" learned to work better with sparse index feature.
+ 
++ * When the external merge driver is killed by a signal, its output
++   should not be trusted as a resolution with conflicts that is
++   proposed by the driver, but the code did.
++
+ 
+ Fixes since v2.41
+ -----------------
+@@ -117,6 +121,11 @@ Fixes since v2.41
+    between the way the code enumerates packfiles in the repository.
+    (merge 73320e49ad tb/collect-pack-filenames-fix later to maint).
+ 
++ * We create .pack and then .idx, we consider only packfiles that have
++   .idx usable (those with only .pack are not ready yet), so we should
++   remove .idx before removing .pack for consistency.
++   (merge 0dd1324a73 ds/remove-idx-before-pack later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 51f9d2e563 sa/doc-ls-remote later to maint).
+    (merge c6d26a9dda jk/format-patch-message-id-unleak later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,178 @@
+From 4074d3c7e1a3b44c5c02235799d798f8b2613333 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 31 Jan 2023 13:29:15 +0000
+Subject: [PATCH 0766/2871] clone: set fetch.bundleURI if appropriate
+
+Bundle providers may organize their bundle lists in a way that is
+intended to improve incremental fetches, not just initial clones.
+However, they do need to state that they have organized with that in
+mind, or else the client will not expect to save time by downloading
+bundles after the initial clone. This is done by specifying a
+bundle.heuristic value.
+
+There are two types of bundle lists: those at a static URI and those
+that are advertised from a Git remote over protocol v2.
+
+The new fetch.bundleURI config value applies for static bundle URIs that
+are not advertised over protocol v2. If the user specifies a static URI
+via 'git clone --bundle-uri', then Git can set this config as a reminder
+for future 'git fetch' operations to check the bundle list before
+connecting to the remote(s).
+
+For lists provided over protocol v2, we will want to take a different
+approach and create a property of the remote itself by creating a
+remote.<id>.* type config key. That is not implemented in this change.
+
+Later changes will update 'git fetch' to consume this option.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/fetch.txt |  8 +++++++
+ builtin/clone.c                |  6 +++++-
+ bundle-uri.c                   |  5 ++++-
+ bundle-uri.h                   |  8 ++++++-
+ t/t5558-clone-bundle-uri.sh    | 39 ++++++++++++++++++++++++++++++++++
+ 5 files changed, 63 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/config/fetch.txt b/Documentation/config/fetch.txt
+index cd65d236b4..244f44d460 100644
+--- a/Documentation/config/fetch.txt
++++ b/Documentation/config/fetch.txt
+@@ -96,3 +96,11 @@ fetch.writeCommitGraph::
+ 	merge and the write may take longer. Having an updated commit-graph
+ 	file helps performance of many Git commands, including `git merge-base`,
+ 	`git push -f`, and `git log --graph`. Defaults to false.
++
++fetch.bundleURI::
++	This value stores a URI for downloading Git object data from a bundle
++	URI before performing an incremental fetch from the origin Git server.
++	This is similar to how the `--bundle-uri` option behaves in
++	linkgit:git-clone[1]. `git clone --bundle-uri` will set the
++	`fetch.bundleURI` value if the supplied bundle URI contains a bundle
++	list that is organized for incremental fetches.
+diff --git a/builtin/clone.c b/builtin/clone.c
+index 430b2e981e..fa7f0ac42f 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -1248,12 +1248,16 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 	 * data from the --bundle-uri option.
+ 	 */
+ 	if (bundle_uri) {
++		int has_heuristic = 0;
++
+ 		/* At this point, we need the_repository to match the cloned repo. */
+ 		if (repo_init(the_repository, git_dir, work_tree))
+ 			warning(_("failed to initialize the repo, skipping bundle URI"));
+-		else if (fetch_bundle_uri(the_repository, bundle_uri))
++		else if (fetch_bundle_uri(the_repository, bundle_uri, &has_heuristic))
+ 			warning(_("failed to fetch objects from bundle URI '%s'"),
+ 				bundle_uri);
++		else if (has_heuristic)
++			git_config_set_gently("fetch.bundleuri", bundle_uri);
+ 	}
+ 
+ 	strvec_push(&transport_ls_refs_options.ref_prefixes, "HEAD");
+diff --git a/bundle-uri.c b/bundle-uri.c
+index af48938d24..7a1b6d94bf 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -736,7 +736,8 @@ static int unlink_bundle(struct remote_bundle_info *info, void *data)
+ 	return 0;
+ }
+ 
+-int fetch_bundle_uri(struct repository *r, const char *uri)
++int fetch_bundle_uri(struct repository *r, const char *uri,
++		     int *has_heuristic)
+ {
+ 	int result;
+ 	struct bundle_list list;
+@@ -756,6 +757,8 @@ int fetch_bundle_uri(struct repository *r, const char *uri)
+ 	result = unbundle_all_bundles(r, &list);
+ 
+ cleanup:
++	if (has_heuristic)
++		*has_heuristic = (list.heuristic != BUNDLE_HEURISTIC_NONE);
+ 	for_all_bundles_in_list(&list, unlink_bundle, NULL);
+ 	clear_bundle_list(&list);
+ 	clear_remote_bundle_info(&bundle, NULL);
+diff --git a/bundle-uri.h b/bundle-uri.h
+index ef32840bfa..6dbc780f66 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -124,8 +124,14 @@ int bundle_uri_parse_config_format(const char *uri,
+  * based on that information.
+  *
+  * Returns non-zero if no bundle information is found at the given 'uri'.
++ *
++ * If the pointer 'has_heuristic' is non-NULL, then the value it points to
++ * will be set to be non-zero if and only if the fetched list has a
++ * heuristic value. Such a value indicates that the list was designed for
++ * incremental fetches.
+  */
+-int fetch_bundle_uri(struct repository *r, const char *uri);
++int fetch_bundle_uri(struct repository *r, const char *uri,
++		     int *has_heuristic);
+ 
+ /**
+  * Given a bundle list that was already advertised (likely by the
+diff --git a/t/t5558-clone-bundle-uri.sh b/t/t5558-clone-bundle-uri.sh
+index 6f9417a0af..b2d15e141c 100755
+--- a/t/t5558-clone-bundle-uri.sh
++++ b/t/t5558-clone-bundle-uri.sh
+@@ -432,6 +432,8 @@ test_expect_success 'clone incomplete bundle list (http, creationToken)' '
+ 		--single-branch --branch=base --no-tags \
+ 		"$HTTPD_URL/smart/fetch.git" clone-token-http &&
+ 
++	test_cmp_config -C clone-token-http "$HTTPD_URL/bundle-list" fetch.bundleuri &&
++
+ 	cat >expect <<-EOF &&
+ 	$HTTPD_URL/bundle-list
+ 	$HTTPD_URL/bundle-1.bundle
+@@ -441,6 +443,43 @@ test_expect_success 'clone incomplete bundle list (http, creationToken)' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'http clone with bundle.heuristic creates fetch.bundleURI' '
++	test_when_finished rm -rf fetch-http-4 trace*.txt &&
++
++	cat >"$HTTPD_DOCUMENT_ROOT_PATH/bundle-list" <<-EOF &&
++	[bundle]
++		version = 1
++		mode = all
++		heuristic = creationToken
++
++	[bundle "bundle-1"]
++		uri = bundle-1.bundle
++		creationToken = 1
++	EOF
++
++	GIT_TRACE2_EVENT="$(pwd)/trace-clone.txt" \
++	git clone --single-branch --branch=base \
++		--bundle-uri="$HTTPD_URL/bundle-list" \
++		"$HTTPD_URL/smart/fetch.git" fetch-http-4 &&
++
++	test_cmp_config -C fetch-http-4 "$HTTPD_URL/bundle-list" fetch.bundleuri &&
++
++	cat >expect <<-EOF &&
++	$HTTPD_URL/bundle-list
++	$HTTPD_URL/bundle-1.bundle
++	EOF
++
++	test_remote_https_urls <trace-clone.txt >actual &&
++	test_cmp expect actual &&
++
++	# only received base ref from bundle-1
++	git -C fetch-http-4 for-each-ref --format="%(refname)" "refs/bundles/*" >refs &&
++	cat >expect <<-\EOF &&
++	refs/bundles/base
++	EOF
++	test_cmp expect refs
++'
++
+ # Do not add tests here unless they use the HTTP server, as they will
+ # not run unless the HTTP dependencies exist.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

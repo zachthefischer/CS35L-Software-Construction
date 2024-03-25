@@ -1,0 +1,163 @@
+From 49fd5511945977882ef2cd8b3c00ed25ac208512 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?SZEDER=20G=C3=A1bor?= <szeder.dev@gmail.com>
+Date: Sun, 19 Mar 2023 17:27:11 +0100
+Subject: [PATCH 1061/2871] treewide: include parse-options.h in source files
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The builtins 'ls-remote', 'pack-objects', 'receive-pack', 'reflog' and
+'send-pack' use parse_options(), but their source files don't directly
+include 'parse-options.h'.  Furthermore, the source files
+'diagnose.c', 'list-objects-filter-options.c', 'remote.c' and
+'send-pack.c' define option parsing callback functions, while
+'revision.c' defines an option parsing helper function, and thus need
+access to various fields in 'struct option' and 'struct
+parse_opt_ctx_t', but they don't directly include 'parse-options.h'
+either.  They all can still be built, of course, because they include
+one of the header files that does include 'parse-options.h' (though
+unnecessarily, see the next commit).
+
+Add those missing includes to these files, as our general rule is that
+"a C file must directly include the header files that declare the
+functions and the types it uses".
+
+Signed-off-by: SZEDER Gábor <szeder.dev@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-remote.c           | 1 +
+ builtin/pack-objects.c        | 1 +
+ builtin/receive-pack.c        | 1 +
+ builtin/reflog.c              | 1 +
+ builtin/send-pack.c           | 1 +
+ diagnose.c                    | 1 +
+ list-objects-filter-options.c | 1 +
+ remote.c                      | 1 +
+ revision.c                    | 1 +
+ send-pack.c                   | 1 +
+ 10 files changed, 10 insertions(+)
+
+diff --git a/builtin/ls-remote.c b/builtin/ls-remote.c
+index 6516177348..d8aa30fb4d 100644
+--- a/builtin/ls-remote.c
++++ b/builtin/ls-remote.c
+@@ -4,6 +4,7 @@
+ #include "ref-filter.h"
+ #include "remote.h"
+ #include "refs.h"
++#include "parse-options.h"
+ 
+ static const char * const ls_remote_usage[] = {
+ 	N_("git ls-remote [--heads] [--tags] [--refs] [--upload-pack=<exec>]\n"
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 74a167a180..476ecff264 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -37,6 +37,7 @@
+ #include "shallow.h"
+ #include "promisor-remote.h"
+ #include "pack-mtimes.h"
++#include "parse-options.h"
+ 
+ /*
+  * Objects we are going to pack are collected in the `to_pack` structure.
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index cd5c7a28ef..f85f72a183 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -30,6 +30,7 @@
+ #include "commit-reach.h"
+ #include "worktree.h"
+ #include "shallow.h"
++#include "parse-options.h"
+ 
+ static const char * const receive_pack_usage[] = {
+ 	N_("git receive-pack <git-dir>"),
+diff --git a/builtin/reflog.c b/builtin/reflog.c
+index 270681dcdf..9b000bb6bc 100644
+--- a/builtin/reflog.c
++++ b/builtin/reflog.c
+@@ -4,6 +4,7 @@
+ #include "reachable.h"
+ #include "worktree.h"
+ #include "reflog.h"
++#include "parse-options.h"
+ 
+ #define BUILTIN_REFLOG_SHOW_USAGE \
+ 	N_("git reflog [show] [<log-options>] [<ref>]")
+diff --git a/builtin/send-pack.c b/builtin/send-pack.c
+index 4c5d125fa0..15adc1ddcb 100644
+--- a/builtin/send-pack.c
++++ b/builtin/send-pack.c
+@@ -15,6 +15,7 @@
+ #include "gpg-interface.h"
+ #include "gettext.h"
+ #include "protocol.h"
++#include "parse-options.h"
+ 
+ static const char * const send_pack_usage[] = {
+ 	N_("git send-pack [--mirror] [--dry-run] [--force]\n"
+diff --git a/diagnose.c b/diagnose.c
+index 8f26569896..b7a29612da 100644
+--- a/diagnose.c
++++ b/diagnose.c
+@@ -7,6 +7,7 @@
+ #include "strvec.h"
+ #include "object-store.h"
+ #include "packfile.h"
++#include "parse-options.h"
+ 
+ struct archive_dir {
+ 	const char *path;
+diff --git a/list-objects-filter-options.c b/list-objects-filter-options.c
+index ee01bcd2cc..33134159d7 100644
+--- a/list-objects-filter-options.c
++++ b/list-objects-filter-options.c
+@@ -9,6 +9,7 @@
+ #include "promisor-remote.h"
+ #include "trace.h"
+ #include "url.h"
++#include "parse-options.h"
+ 
+ static int parse_combine_filter(
+ 	struct list_objects_filter_options *filter_options,
+diff --git a/remote.c b/remote.c
+index 60869beebe..c17827fa8e 100644
+--- a/remote.c
++++ b/remote.c
+@@ -15,6 +15,7 @@
+ #include "commit-reach.h"
+ #include "advice.h"
+ #include "connect.h"
++#include "parse-options.h"
+ 
+ enum map_direction { FROM_SRC, FROM_DST };
+ 
+diff --git a/revision.c b/revision.c
+index 21f5f572c2..4acc1c81b0 100644
+--- a/revision.c
++++ b/revision.c
+@@ -35,6 +35,7 @@
+ #include "json-writer.h"
+ #include "list-objects-filter-options.h"
+ #include "resolve-undo.h"
++#include "parse-options.h"
+ 
+ volatile show_early_output_fn_t show_early_output;
+ 
+diff --git a/send-pack.c b/send-pack.c
+index f2e19838c9..c87122d913 100644
+--- a/send-pack.c
++++ b/send-pack.c
+@@ -16,6 +16,7 @@
+ #include "gpg-interface.h"
+ #include "cache.h"
+ #include "shallow.h"
++#include "parse-options.h"
+ 
+ int option_parse_push_signed(const struct option *opt,
+ 			     const char *arg, int unset)
+-- 
+2.39.3 (Apple Git-145)
+

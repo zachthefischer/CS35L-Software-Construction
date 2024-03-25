@@ -1,0 +1,374 @@
+From 42943b950e12f2d3e56688ecef1b0502e162b436 Mon Sep 17 00:00:00 2001
+From: Tao Klerks <tao@klerks.biz>
+Date: Sat, 18 Mar 2023 15:27:43 +0000
+Subject: [PATCH 1201/2871] mergetool: new config guiDefault supports
+ auto-toggling gui by DISPLAY
+
+When no merge.tool or diff.tool is configured or manually selected, the
+selection of a default tool is sensitive to the DISPLAY variable; in a
+GUI session a gui-specific tool will be proposed if found, and
+otherwise a terminal-based one. This "GUI-optimizing" behavior is
+important because a GUI can make a huge difference to a user's ability
+to understand and correctly complete a non-trivial conflicting merge.
+
+Some time ago the merge.guitool and diff.guitool config options were
+introduced to enable users to configure both a GUI tool, and a non-GUI
+tool (with fallback if no GUI tool configured), in the same environment.
+
+Unfortunately, the --gui argument introduced to support the selection of
+the guitool is still explicit. When using configured tools, there is no
+equivalent of the no-tool-configured "propose a GUI tool if we are in a GUI
+environment" behavior.
+
+As proposed in <xmqqmtb8jsej.fsf@gitster.g>, introduce new configuration
+options, difftool.guiDefault and mergetool.guiDefault, supporting a special
+value "auto" which causes the corresponding tool or guitool to be selected
+depending on the presence of a non-empty DISPLAY value. Also support "true"
+to say "default to the guitool (unless --no-gui is passed on the
+commandline)", and "false" as the previous default behavior when these new
+configuration options are not specified.
+
+Signed-off-by: Tao Klerks <tao@klerks.biz>
+Acked-by: David Aguilar <davvid@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/difftool.txt  |  7 ++++
+ Documentation/config/mergetool.txt |  7 ++++
+ Documentation/git-difftool.txt     | 10 +++---
+ Documentation/git-mergetool.txt    |  9 +++---
+ builtin/difftool.c                 | 16 ++++++---
+ git-difftool--helper.sh            |  5 +++
+ git-mergetool--lib.sh              | 40 +++++++++++++++++++++++
+ git-mergetool.sh                   |  9 ++++--
+ t/t7610-mergetool.sh               | 38 ++++++++++++++++++++++
+ t/t7800-difftool.sh                | 52 ++++++++++++++++++++++++++++++
+ 10 files changed, 179 insertions(+), 14 deletions(-)
+
+diff --git a/Documentation/config/difftool.txt b/Documentation/config/difftool.txt
+index a3f8211210..447c40d85a 100644
+--- a/Documentation/config/difftool.txt
++++ b/Documentation/config/difftool.txt
+@@ -34,3 +34,10 @@ See the `--trust-exit-code` option in linkgit:git-difftool[1] for more details.
+ 
+ difftool.prompt::
+ 	Prompt before each invocation of the diff tool.
++
++difftool.guiDefault::
++	Set `true` to use the `diff.guitool` by default (equivalent to specifying
++	the `--gui` argument), or `auto` to select `diff.guitool` or `diff.tool`
++	depending on the presence of a `DISPLAY` environment variable value. The
++	default is `false`, where the `--gui` argument must be provided
++	explicitly for the `diff.guitool` to be used.
+diff --git a/Documentation/config/mergetool.txt b/Documentation/config/mergetool.txt
+index e779a122d8..56a7eeeffb 100644
+--- a/Documentation/config/mergetool.txt
++++ b/Documentation/config/mergetool.txt
+@@ -85,3 +85,10 @@ mergetool.writeToTemp::
+ 
+ mergetool.prompt::
+ 	Prompt before each invocation of the merge resolution program.
++
++mergetool.guiDefault::
++	Set `true` to use the `merge.guitool` by default (equivalent to
++	specifying the `--gui` argument), or `auto` to select `merge.guitool`
++	or `merge.tool` depending on the presence of a `DISPLAY` environment
++	variable value. The default is `false`, where the `--gui` argument
++	must be provided explicitly for the `merge.guitool` to be used.
+diff --git a/Documentation/git-difftool.txt b/Documentation/git-difftool.txt
+index 9d14c3c9f0..ac0ac6fa02 100644
+--- a/Documentation/git-difftool.txt
++++ b/Documentation/git-difftool.txt
+@@ -97,10 +97,12 @@ instead.  `--no-symlinks` is the default on Windows.
+ --[no-]gui::
+ 	When 'git-difftool' is invoked with the `-g` or `--gui` option
+ 	the default diff tool will be read from the configured
+-	`diff.guitool` variable instead of `diff.tool`. The `--no-gui`
+-	option can be used to override this setting. If `diff.guitool`
+-	is not set, we will fallback in the order of `merge.guitool`,
+-	`diff.tool`, `merge.tool` until a tool is found.
++	`diff.guitool` variable instead of `diff.tool`. This may be
++	selected automatically using the configuration variable
++	`difftool.guiDefault`. The `--no-gui` option can be used to
++	override these settings. If `diff.guitool` is not set, we will
++	fallback in the order of `merge.guitool`, `diff.tool`,
++	`merge.tool` until a tool is found.
+ 
+ --[no-]trust-exit-code::
+ 	'git-difftool' invokes a diff tool individually on each file.
+diff --git a/Documentation/git-mergetool.txt b/Documentation/git-mergetool.txt
+index c44e205629..07535f6576 100644
+--- a/Documentation/git-mergetool.txt
++++ b/Documentation/git-mergetool.txt
+@@ -85,12 +85,13 @@ success of the resolution after the custom tool has exited.
+ 	the default merge tool will be read from the configured
+ 	`merge.guitool` variable instead of `merge.tool`. If
+ 	`merge.guitool` is not set, we will fallback to the tool
+-	configured under `merge.tool`.
++	configured under `merge.tool`. This may be autoselected using
++	the configuration variable `mergetool.guiDefault`.
+ 
+ --no-gui::
+-	This overrides a previous `-g` or `--gui` setting and reads the
+-	default merge tool will be read from the configured `merge.tool`
+-	variable.
++	This overrides a previous `-g` or `--gui` setting or
++	`mergetool.guiDefault` configuration and reads the default merge
++	tool from the configured `merge.tool` variable.
+ 
+ -O<orderfile>::
+ 	Process files in the order specified in the
+diff --git a/builtin/difftool.c b/builtin/difftool.c
+index 01681d0fb8..5be3e941d2 100644
+--- a/builtin/difftool.c
++++ b/builtin/difftool.c
+@@ -685,7 +685,7 @@ static int run_file_diff(int prompt, const char *prefix,
+ 
+ int cmd_difftool(int argc, const char **argv, const char *prefix)
+ {
+-	int use_gui_tool = 0, dir_diff = 0, prompt = -1, symlinks = 0,
++	int use_gui_tool = -1, dir_diff = 0, prompt = -1, symlinks = 0,
+ 	    tool_help = 0, no_index = 0;
+ 	static char *difftool_cmd = NULL, *extcmd = NULL;
+ 	struct option builtin_difftool_options[] = {
+@@ -735,13 +735,21 @@ int cmd_difftool(int argc, const char **argv, const char *prefix)
+ 	} else if (dir_diff)
+ 		die(_("options '%s' and '%s' cannot be used together"), "--dir-diff", "--no-index");
+ 
+-	die_for_incompatible_opt3(use_gui_tool, "--gui",
++	die_for_incompatible_opt3(use_gui_tool == 1, "--gui",
+ 				  !!difftool_cmd, "--tool",
+ 				  !!extcmd, "--extcmd");
+ 
+-	if (use_gui_tool)
++	/*
++	 * Explicitly specified GUI option is forwarded to git-mergetool--lib.sh;
++	 * empty or unset means "use the difftool.guiDefault config or default to
++	 * false".
++	 */
++	if (use_gui_tool == 1)
+ 		setenv("GIT_MERGETOOL_GUI", "true", 1);
+-	else if (difftool_cmd) {
++	else if (use_gui_tool == 0)
++		setenv("GIT_MERGETOOL_GUI", "false", 1);
++
++	if (difftool_cmd) {
+ 		if (*difftool_cmd)
+ 			setenv("GIT_DIFF_TOOL", difftool_cmd, 1);
+ 		else
+diff --git a/git-difftool--helper.sh b/git-difftool--helper.sh
+index 992124cc67..e4e820e680 100755
+--- a/git-difftool--helper.sh
++++ b/git-difftool--helper.sh
+@@ -75,6 +75,11 @@ then
+ 		merge_tool="$GIT_DIFF_TOOL"
+ 	else
+ 		merge_tool="$(get_merge_tool)"
++		subshell_exit_status=$?
++		if test $subshell_exit_status -gt 1
++		then
++			exit $subshell_exit_status
++		fi
+ 	fi
+ fi
+ 
+diff --git a/git-mergetool--lib.sh b/git-mergetool--lib.sh
+index 9f99201bcc..1ff26170ff 100644
+--- a/git-mergetool--lib.sh
++++ b/git-mergetool--lib.sh
+@@ -97,7 +97,42 @@ merge_mode () {
+ 	test "$TOOL_MODE" = merge
+ }
+ 
++get_gui_default () {
++	if diff_mode
++	then
++		GUI_DEFAULT_KEY="difftool.guiDefault"
++	else
++		GUI_DEFAULT_KEY="mergetool.guiDefault"
++	fi
++	GUI_DEFAULT_CONFIG_LCASE=$(git config --default false --get "$GUI_DEFAULT_KEY" | tr 'A-Z' 'a-z')
++	if test "$GUI_DEFAULT_CONFIG_LCASE" = "auto"
++	then
++		if test -n "$DISPLAY"
++		then
++			GUI_DEFAULT=true
++		else
++			GUI_DEFAULT=false
++		fi
++	else
++		GUI_DEFAULT=$(git config --default false --bool --get "$GUI_DEFAULT_KEY")
++		subshell_exit_status=$?
++		if test $subshell_exit_status -ne 0
++		then
++			exit $subshell_exit_status
++		fi
++	fi
++	echo $GUI_DEFAULT
++}
++
+ gui_mode () {
++	if test -z "$GIT_MERGETOOL_GUI"
++	then
++		GIT_MERGETOOL_GUI=$(get_gui_default)
++		if test $? -ne 0
++		then
++			exit 2
++		fi
++	fi
+ 	test "$GIT_MERGETOOL_GUI" = true
+ }
+ 
+@@ -467,6 +502,11 @@ get_merge_tool () {
+ 	is_guessed=false
+ 	# Check if a merge tool has been configured
+ 	merge_tool=$(get_configured_merge_tool)
++	subshell_exit_status=$?
++	if test $subshell_exit_status -gt "1"
++	then
++		exit $subshell_exit_status
++	fi
+ 	# Try to guess an appropriate merge tool if no tool has been set.
+ 	if test -z "$merge_tool"
+ 	then
+diff --git a/git-mergetool.sh b/git-mergetool.sh
+index f751d9cfe2..8a922893f7 100755
+--- a/git-mergetool.sh
++++ b/git-mergetool.sh
+@@ -451,7 +451,7 @@ print_noop_and_exit () {
+ 
+ main () {
+ 	prompt=$(git config --bool mergetool.prompt)
+-	GIT_MERGETOOL_GUI=false
++	GIT_MERGETOOL_GUI=
+ 	guessed_merge_tool=false
+ 	orderfile=
+ 
+@@ -511,9 +511,14 @@ main () {
+ 
+ 	if test -z "$merge_tool"
+ 	then
+-		if ! merge_tool=$(get_merge_tool)
++		merge_tool=$(get_merge_tool)
++		subshell_exit_status=$?
++		if test $subshell_exit_status = 1
+ 		then
+ 			guessed_merge_tool=true
++		elif test $subshell_exit_status -gt 1
++		then
++			exit $subshell_exit_status
+ 		fi
+ 	fi
+ 	merge_keep_backup="$(git config --bool mergetool.keepBackup || echo true)"
+diff --git a/t/t7610-mergetool.sh b/t/t7610-mergetool.sh
+index 7b957022f1..22b3a85b3e 100755
+--- a/t/t7610-mergetool.sh
++++ b/t/t7610-mergetool.sh
+@@ -860,4 +860,42 @@ test_expect_success 'mergetool hideResolved' '
+ 	git commit -m "test resolved with mergetool"
+ '
+ 
++test_expect_success 'mergetool with guiDefault' '
++	test_config merge.guitool myguitool &&
++	test_config mergetool.myguitool.cmd "(printf \"gui \" && cat \"\$REMOTE\") >\"\$MERGED\"" &&
++	test_config mergetool.myguitool.trustExitCode true &&
++	test_when_finished "git reset --hard" &&
++	git checkout -b test$test_count branch1 &&
++	git submodule update -N &&
++	test_must_fail git merge main &&
++
++	test_config mergetool.guiDefault auto &&
++	DISPLAY=SOMETHING && export DISPLAY &&
++	yes "" | git mergetool both &&
++	yes "" | git mergetool file1 file1 &&
++
++	DISPLAY= && export DISPLAY &&
++	yes "" | git mergetool file2 "spaced name" &&
++
++	test_config mergetool.guiDefault true &&
++	yes "" | git mergetool subdir/file3 &&
++
++	yes "d" | git mergetool file11 &&
++	yes "d" | git mergetool file12 &&
++	yes "l" | git mergetool submod &&
++
++	echo "gui main updated" >expect &&
++	test_cmp expect file1 &&
++
++	echo "main new" >expect &&
++	test_cmp expect file2 &&
++
++	echo "gui main new sub" >expect &&
++	test_cmp expect subdir/file3 &&
++
++	echo "branch1 submodule" >expect &&
++	test_cmp expect submod/bar &&
++	git commit -m "branch1 resolved with mergetool"
++'
++
+ test_done
+diff --git a/t/t7800-difftool.sh b/t/t7800-difftool.sh
+index 24297e26ca..59d3847bf8 100755
+--- a/t/t7800-difftool.sh
++++ b/t/t7800-difftool.sh
+@@ -155,6 +155,58 @@ test_expect_success 'difftool honors --gui' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'difftool with guiDefault auto selects gui tool when there is DISPLAY' '
++	difftool_test_setup &&
++	test_config merge.tool bogus-tool &&
++	test_config diff.tool bogus-tool &&
++	test_config diff.guitool test-tool &&
++	test_config difftool.guiDefault auto &&
++	DISPLAY=SOMETHING && export DISPLAY &&
++
++	echo branch >expect &&
++	git difftool --no-prompt branch >actual &&
++	test_cmp expect actual
++'
++test_expect_success 'difftool with guiDefault auto selects regular tool when no DISPLAY' '
++	difftool_test_setup &&
++	test_config diff.guitool bogus-tool &&
++	test_config diff.tool test-tool &&
++	test_config difftool.guiDefault Auto &&
++	DISPLAY= && export DISPLAY &&
++
++	echo branch >expect &&
++	git difftool --no-prompt branch >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'difftool with guiDefault true selects gui tool' '
++	difftool_test_setup &&
++	test_config diff.tool bogus-tool &&
++	test_config diff.guitool test-tool &&
++	test_config difftool.guiDefault true &&
++
++	DISPLAY= && export DISPLAY &&
++	echo branch >expect &&
++	git difftool --no-prompt branch >actual &&
++	test_cmp expect actual &&
++
++	DISPLAY=Something && export DISPLAY &&
++	echo branch >expect &&
++	git difftool --no-prompt branch >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'difftool --no-gui trumps config guiDefault' '
++	difftool_test_setup &&
++	test_config diff.guitool bogus-tool &&
++	test_config diff.tool test-tool &&
++	test_config difftool.guiDefault true &&
++
++	echo branch >expect &&
++	git difftool --no-prompt --no-gui branch >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'difftool --gui last setting wins' '
+ 	difftool_test_setup &&
+ 	: >expect &&
+-- 
+2.39.3 (Apple Git-145)
+

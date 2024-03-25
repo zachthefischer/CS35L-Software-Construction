@@ -1,0 +1,153 @@
+From f4a8fde05781358558ea39b082cacb4204717753 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Sat, 8 Jul 2023 14:35:33 -0700
+Subject: [PATCH 1741/2871] dir: match "attr" pathspec magic with correct paths
+
+The match_pathspec_item() function takes "prefix" value, allowing a
+caller to chop off the common leading prefix of pathspec pattern
+strings from the path and only use the remainder of the path to
+match the pathspec patterns (after chopping the same leading prefix
+of them, of course).
+
+This "common leading prefix" optimization has two main features:
+
+ * discard the entries in the in-core index that are outside of the
+   common leading prefix; if you are doing "ls-files one/a one/b",
+   we know all matches must be from "one/", so first the code
+   discards all entries outside the "one/" directory from the
+   in-core index.  This allows us to work on a smaller dataset.
+
+ * allow skipping the comparison of the leading bytes when matching
+   pathspec with path.  When "ls-files" finds the path "one/a/1" in
+   the in-core index given "one/a" and "one/b" as the pathspec,
+   knowing that common leading prefix "one/" was found lets the
+   pathspec matchinery not to bother comparing "one/" part, and
+   allows it to feed "a/1" down, as long as the pathspec element
+   "one/a" gets corresponding adjustment to "a".
+
+When the "attr" pathspec magic is in effect, however, the current
+code breaks down.
+
+The attributes, other than the ones that are built-in and the ones
+that come from the $GIT_DIR/info/attributes file and the top-level
+.gitattributes file, are lazily read from the filesystem on-demand,
+as we encounter each path and ask if it matches the pathspec.  For
+example, if you say "git ls-files "(attr:label)sub/" in a repository
+with a file "sub/file" that is given the 'label' attribute in
+"sub/.gitattributes":
+
+ * The common prefix optimization finds that "sub/" is the common
+   prefix and prunes the in-core index so that it has only entries
+   inside that directory.  This is desirable.
+
+ * The code then walks the in-core index, finds "sub/file", and
+   eventually asks do_match_pathspec() if it matches the given
+   pathspec.
+
+ * do_match_pathspec() calls match_pathspec_item() _after_ stripping
+   the common prefix "sub/" from the path, giving it "file", plus
+   the length of the common prefix (4-bytes), so that the pathspec
+   element "(attr:label)sub/" can be treated as if it were "(attr:label)".
+
+The last one is what breaks the match in the current code, as the
+pathspec subsystem ends up asking the attribute subsystem to find
+the attribute attached to the path "file".  We need to ask about the
+attributes on "sub/file" when calling match_pathspec_attrs(); this
+can be done by looking at "prefix" bytes before the beginning of
+"name", which is the same trick already used by another piece of the
+code in the same match_pathspec_item() function.
+
+Unfortunately this was not discovered so far because the code works
+with slightly different arguments, e.g.
+
+ $ git ls-files "(attr:label)sub"
+ $ git ls-files "(attr:label)sub/" "no/such/dir/"
+
+would have reported "sub/file" as a path with the 'label' attribute
+just fine, because neither would trigger the common prefix
+optimization.
+
+Reported-by: Matthew Hughes <mhughes@uw.co.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ dir.c                          |  2 +-
+ t/t6135-pathspec-with-attrs.sh | 24 +++++++++++++++++++++++-
+ 2 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/dir.c b/dir.c
+index a7469df3ac..635d1b058c 100644
+--- a/dir.c
++++ b/dir.c
+@@ -374,7 +374,7 @@ static int match_pathspec_item(struct index_state *istate,
+ 		return 0;
+ 
+ 	if (item->attr_match_nr &&
+-	    !match_pathspec_attrs(istate, name, namelen, item))
++	    !match_pathspec_attrs(istate, name - prefix, namelen + prefix, item))
+ 		return 0;
+ 
+ 	/* If the match was just the prefix, we matched */
+diff --git a/t/t6135-pathspec-with-attrs.sh b/t/t6135-pathspec-with-attrs.sh
+index f63774094f..f70c395e75 100755
+--- a/t/t6135-pathspec-with-attrs.sh
++++ b/t/t6135-pathspec-with-attrs.sh
+@@ -65,7 +65,8 @@ test_expect_success 'setup .gitattributes' '
+ 	fileValue label=foo
+ 	fileWrongLabel label☺
+ 	EOF
+-	git add .gitattributes &&
++	echo fileSetLabel label1 >sub/.gitattributes &&
++	git add .gitattributes sub/.gitattributes &&
+ 	git commit -m "add attributes"
+ '
+ 
+@@ -157,6 +158,7 @@ test_expect_success 'check unspecified attr' '
+ 	fileC
+ 	fileNoLabel
+ 	fileWrongLabel
++	sub/.gitattributes
+ 	sub/fileA
+ 	sub/fileAB
+ 	sub/fileAC
+@@ -181,6 +183,7 @@ test_expect_success 'check unspecified attr (2)' '
+ 	HEAD:fileC
+ 	HEAD:fileNoLabel
+ 	HEAD:fileWrongLabel
++	HEAD:sub/.gitattributes
+ 	HEAD:sub/fileA
+ 	HEAD:sub/fileAB
+ 	HEAD:sub/fileAC
+@@ -200,6 +203,7 @@ test_expect_success 'check multiple unspecified attr' '
+ 	fileC
+ 	fileNoLabel
+ 	fileWrongLabel
++	sub/.gitattributes
+ 	sub/fileC
+ 	sub/fileNoLabel
+ 	sub/fileWrongLabel
+@@ -273,4 +277,22 @@ test_expect_success 'backslash cannot be used as a value' '
+ 	test_i18ngrep "for value matching" actual
+ '
+ 
++test_expect_success 'reading from .gitattributes in a subdirectory (1)' '
++	git ls-files ":(attr:label1)" >actual &&
++	test_write_lines "sub/fileSetLabel" >expect &&
++	test_cmp expect actual
++'
++
++test_expect_success 'reading from .gitattributes in a subdirectory (2)' '
++	git ls-files ":(attr:label1)sub" >actual &&
++	test_write_lines "sub/fileSetLabel" >expect &&
++	test_cmp expect actual
++'
++
++test_expect_success 'reading from .gitattributes in a subdirectory (3)' '
++	git ls-files ":(attr:label1)sub/" >actual &&
++	test_write_lines "sub/fileSetLabel" >expect &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

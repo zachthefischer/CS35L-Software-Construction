@@ -1,0 +1,44 @@
+From d9165bef5810df216e0eb4fac62d59cbf19446e4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 28 Feb 2023 17:13:27 +0100
+Subject: [PATCH 0978/2871] range-diff: avoid compiler warning when char is
+ unsigned
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 2b15969f61 (range-diff: let '--abbrev' option takes effect,
+2023-02-20), GCC 11.3 on Ubuntu 22.04 on aarch64 warns (and errors
+out if the make variable DEVELOPER is set):
+
+range-diff.c: In function ‘output_pair_header’:
+range-diff.c:388:20: error: comparison is always false due to limited range of data type [-Werror=type-limits]
+  388 |         if (abbrev < 0)
+      |                    ^
+cc1: all warnings being treated as errors
+
+That's because char is unsigned on that platform.  Use int instead, just
+like in struct diff_options, to copy the value faithfully.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ range-diff.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/range-diff.c b/range-diff.c
+index 086365dffb..4bd65ab749 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -383,7 +383,7 @@ static void output_pair_header(struct diff_options *diffopt,
+ 	const char *color_new = diff_get_color_opt(diffopt, DIFF_FILE_NEW);
+ 	const char *color_commit = diff_get_color_opt(diffopt, DIFF_COMMIT);
+ 	const char *color;
+-	char abbrev = diffopt->abbrev;
++	int abbrev = diffopt->abbrev;
+ 
+ 	if (abbrev < 0)
+ 		abbrev = DEFAULT_ABBREV;
+-- 
+2.39.3 (Apple Git-145)
+

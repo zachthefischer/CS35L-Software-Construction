@@ -1,0 +1,357 @@
+From d796cedbe8ca77310a7dabcafe60b040aa0e2b67 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Wed, 12 Oct 2022 12:52:32 +0000
+Subject: [PATCH 0086/2871] bundle-uri: unit test "key=value" parsing
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Create a new 'test-tool bundle-uri' test helper. This helper will assist
+in testing logic deep in the bundle URI feature.
+
+This change introduces the 'parse-key-values' subcommand, which parses
+an input file as a list of lines. These are fed into
+bundle_uri_parse_line() to test how we construct a 'struct bundle_list'
+from that data. The list is then output to stdout as if the key-value
+pairs were a Git config file.
+
+We use an input file instead of stdin because of a future change to
+parse in config-file format that works better as an input file.
+
+Co-authored-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile                    |   1 +
+ bundle-uri.c                |  33 ++++++++++
+ bundle-uri.h                |   3 +
+ t/helper/test-bundle-uri.c  |  70 +++++++++++++++++++++
+ t/helper/test-tool.c        |   1 +
+ t/helper/test-tool.h        |   1 +
+ t/t5750-bundle-uri-parse.sh | 121 ++++++++++++++++++++++++++++++++++++
+ t/test-lib-functions.sh     |  11 ++++
+ 8 files changed, 241 insertions(+)
+ create mode 100644 t/helper/test-bundle-uri.c
+ create mode 100755 t/t5750-bundle-uri-parse.sh
+
+diff --git a/Makefile b/Makefile
+index 7320bee9c9..4a19d9cb72 100644
+--- a/Makefile
++++ b/Makefile
+@@ -722,6 +722,7 @@ PROGRAMS += $(patsubst %.o,git-%$X,$(PROGRAM_OBJS))
+ TEST_BUILTINS_OBJS += test-advise.o
+ TEST_BUILTINS_OBJS += test-bitmap.o
+ TEST_BUILTINS_OBJS += test-bloom.o
++TEST_BUILTINS_OBJS += test-bundle-uri.o
+ TEST_BUILTINS_OBJS += test-chmtime.o
+ TEST_BUILTINS_OBJS += test-config.o
+ TEST_BUILTINS_OBJS += test-crontab.o
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 372e6fac5c..c02e7f62eb 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -66,6 +66,39 @@ int for_all_bundles_in_list(struct bundle_list *list,
+ 	return 0;
+ }
+ 
++static int summarize_bundle(struct remote_bundle_info *info, void *data)
++{
++	FILE *fp = data;
++	fprintf(fp, "[bundle \"%s\"]\n", info->id);
++	fprintf(fp, "\turi = %s\n", info->uri);
++	return 0;
++}
++
++void print_bundle_list(FILE *fp, struct bundle_list *list)
++{
++	const char *mode;
++
++	switch (list->mode) {
++	case BUNDLE_MODE_ALL:
++		mode = "all";
++		break;
++
++	case BUNDLE_MODE_ANY:
++		mode = "any";
++		break;
++
++	case BUNDLE_MODE_NONE:
++	default:
++		mode = "<unknown>";
++	}
++
++	fprintf(fp, "[bundle]\n");
++	fprintf(fp, "\tversion = %d\n", list->version);
++	fprintf(fp, "\tmode = %s\n", mode);
++
++	for_all_bundles_in_list(list, summarize_bundle, fp);
++}
++
+ /**
+  * Given a key-value pair, update the state of the given bundle list.
+  * Returns 0 if the key-value pair is understood. Returns -1 if the key
+diff --git a/bundle-uri.h b/bundle-uri.h
+index 9058346192..0e56ab2ae5 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -59,6 +59,9 @@ int for_all_bundles_in_list(struct bundle_list *list,
+ 			    bundle_iterator iter,
+ 			    void *data);
+ 
++struct FILE;
++void print_bundle_list(FILE *fp, struct bundle_list *list);
++
+ /**
+  * Fetch data from the given 'uri' and unbundle the bundle data found
+  * based on that information.
+diff --git a/t/helper/test-bundle-uri.c b/t/helper/test-bundle-uri.c
+new file mode 100644
+index 0000000000..0329c56544
+--- /dev/null
++++ b/t/helper/test-bundle-uri.c
+@@ -0,0 +1,70 @@
++#include "test-tool.h"
++#include "parse-options.h"
++#include "bundle-uri.h"
++#include "strbuf.h"
++#include "string-list.h"
++
++static int cmd__bundle_uri_parse(int argc, const char **argv)
++{
++	const char *key_value_usage[] = {
++		"test-tool bundle-uri parse-key-values <input>",
++		NULL
++	};
++	const char **usage = key_value_usage;
++	struct option options[] = {
++		OPT_END(),
++	};
++	struct strbuf sb = STRBUF_INIT;
++	struct bundle_list list;
++	int err = 0;
++	FILE *fp;
++
++	argc = parse_options(argc, argv, NULL, options, usage, 0);
++	if (argc != 1)
++		goto usage;
++
++	init_bundle_list(&list);
++	fp = fopen(argv[0], "r");
++	if (!fp)
++		die("failed to open '%s'", argv[0]);
++
++	while (strbuf_getline(&sb, fp) != EOF) {
++		if (bundle_uri_parse_line(&list, sb.buf))
++			err = error("bad line: '%s'", sb.buf);
++	}
++	strbuf_release(&sb);
++	fclose(fp);
++
++	print_bundle_list(stdout, &list);
++
++	clear_bundle_list(&list);
++
++	return !!err;
++
++usage:
++	usage_with_options(usage, options);
++}
++
++int cmd__bundle_uri(int argc, const char **argv)
++{
++	const char *usage[] = {
++		"test-tool bundle-uri <subcommand> [<options>]",
++		NULL
++	};
++	struct option options[] = {
++		OPT_END(),
++	};
++
++	argc = parse_options(argc, argv, NULL, options, usage,
++			     PARSE_OPT_STOP_AT_NON_OPTION |
++			     PARSE_OPT_KEEP_ARGV0);
++	if (argc == 1)
++		goto usage;
++
++	if (!strcmp(argv[1], "parse-key-values"))
++		return cmd__bundle_uri_parse(argc - 1, argv + 1);
++	error("there is no test-tool bundle-uri tool '%s'", argv[1]);
++
++usage:
++	usage_with_options(usage, options);
++}
+diff --git a/t/helper/test-tool.c b/t/helper/test-tool.c
+index 318fdbab0c..fbe2d9d810 100644
+--- a/t/helper/test-tool.c
++++ b/t/helper/test-tool.c
+@@ -17,6 +17,7 @@ static struct test_cmd cmds[] = {
+ 	{ "advise", cmd__advise_if_enabled },
+ 	{ "bitmap", cmd__bitmap },
+ 	{ "bloom", cmd__bloom },
++	{ "bundle-uri", cmd__bundle_uri },
+ 	{ "chmtime", cmd__chmtime },
+ 	{ "config", cmd__config },
+ 	{ "crontab", cmd__crontab },
+diff --git a/t/helper/test-tool.h b/t/helper/test-tool.h
+index bb79927163..b2aa1f39a8 100644
+--- a/t/helper/test-tool.h
++++ b/t/helper/test-tool.h
+@@ -7,6 +7,7 @@
+ int cmd__advise_if_enabled(int argc, const char **argv);
+ int cmd__bitmap(int argc, const char **argv);
+ int cmd__bloom(int argc, const char **argv);
++int cmd__bundle_uri(int argc, const char **argv);
+ int cmd__chmtime(int argc, const char **argv);
+ int cmd__config(int argc, const char **argv);
+ int cmd__crontab(int argc, const char **argv);
+diff --git a/t/t5750-bundle-uri-parse.sh b/t/t5750-bundle-uri-parse.sh
+new file mode 100755
+index 0000000000..fd142a66ad
+--- /dev/null
++++ b/t/t5750-bundle-uri-parse.sh
+@@ -0,0 +1,121 @@
++#!/bin/sh
++
++test_description="Test bundle-uri bundle_uri_parse_line()"
++
++TEST_NO_CREATE_REPO=1
++TEST_PASSES_SANITIZE_LEAK=true
++. ./test-lib.sh
++
++test_expect_success 'bundle_uri_parse_line() just URIs' '
++	cat >in <<-\EOF &&
++	bundle.one.uri=http://example.com/bundle.bdl
++	bundle.two.uri=https://example.com/bundle.bdl
++	bundle.three.uri=file:///usr/share/git/bundle.bdl
++	EOF
++
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++	[bundle "one"]
++		uri = http://example.com/bundle.bdl
++	[bundle "two"]
++		uri = https://example.com/bundle.bdl
++	[bundle "three"]
++		uri = file:///usr/share/git/bundle.bdl
++	EOF
++
++	test-tool bundle-uri parse-key-values in >actual 2>err &&
++	test_must_be_empty err &&
++	test_cmp_config_output expect actual
++'
++
++test_expect_success 'bundle_uri_parse_line() parsing edge cases: empty key or value' '
++	cat >in <<-\EOF &&
++	=bogus-value
++	bogus-key=
++	EOF
++
++	cat >err.expect <<-EOF &&
++	error: bundle-uri: line has empty key or value
++	error: bad line: '\''=bogus-value'\''
++	error: bundle-uri: line has empty key or value
++	error: bad line: '\''bogus-key='\''
++	EOF
++
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++	EOF
++
++	test_must_fail test-tool bundle-uri parse-key-values in >actual 2>err &&
++	test_cmp err.expect err &&
++	test_cmp_config_output expect actual
++'
++
++test_expect_success 'bundle_uri_parse_line() parsing edge cases: empty lines' '
++	cat >in <<-\EOF &&
++	bundle.one.uri=http://example.com/bundle.bdl
++
++	bundle.two.uri=https://example.com/bundle.bdl
++
++	bundle.three.uri=file:///usr/share/git/bundle.bdl
++	EOF
++
++	cat >err.expect <<-\EOF &&
++	error: bundle-uri: got an empty line
++	error: bad line: '\'''\''
++	error: bundle-uri: got an empty line
++	error: bad line: '\'''\''
++	EOF
++
++	# We fail, but try to continue parsing regardless
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++	[bundle "one"]
++		uri = http://example.com/bundle.bdl
++	[bundle "two"]
++		uri = https://example.com/bundle.bdl
++	[bundle "three"]
++		uri = file:///usr/share/git/bundle.bdl
++	EOF
++
++	test_must_fail test-tool bundle-uri parse-key-values in >actual 2>err &&
++	test_cmp err.expect err &&
++	test_cmp_config_output expect actual
++'
++
++test_expect_success 'bundle_uri_parse_line() parsing edge cases: duplicate lines' '
++	cat >in <<-\EOF &&
++	bundle.one.uri=http://example.com/bundle.bdl
++	bundle.two.uri=https://example.com/bundle.bdl
++	bundle.one.uri=https://example.com/bundle-2.bdl
++	bundle.three.uri=file:///usr/share/git/bundle.bdl
++	EOF
++
++	cat >err.expect <<-\EOF &&
++	error: bad line: '\''bundle.one.uri=https://example.com/bundle-2.bdl'\''
++	EOF
++
++	# We fail, but try to continue parsing regardless
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++	[bundle "one"]
++		uri = http://example.com/bundle.bdl
++	[bundle "two"]
++		uri = https://example.com/bundle.bdl
++	[bundle "three"]
++		uri = file:///usr/share/git/bundle.bdl
++	EOF
++
++	test_must_fail test-tool bundle-uri parse-key-values in >actual 2>err &&
++	test_cmp err.expect err &&
++	test_cmp_config_output expect actual
++'
++
++test_done
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index c6479f24eb..5d2f20983b 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1868,3 +1868,14 @@ test_is_magic_mtime () {
+ 	rm -f .git/test-mtime-actual
+ 	return $ret
+ }
++
++# Given two filenames, parse both using 'git config --list --file'
++# and compare the sorted output of those commands. Useful when
++# wanting to ignore whitespace differences and sorting concerns.
++test_cmp_config_output () {
++	git config --list --file="$1" >config-expect &&
++	git config --list --file="$2" >config-actual &&
++	sort config-expect >sorted-expect &&
++	sort config-actual >sorted-actual &&
++	test_cmp sorted-expect sorted-actual
++}
+-- 
+2.39.3 (Apple Git-145)
+

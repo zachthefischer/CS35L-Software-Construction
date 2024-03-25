@@ -1,0 +1,50 @@
+From 95b6ae9d747ed52912dec95fe397b11f0a5383ec Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Wed, 16 Aug 2023 16:24:33 +0200
+Subject: [PATCH 1947/2871] notes doc: split up run-on sentences
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When commit c4e2aa7d45 (notes.c: introduce "--[no-]stripspace" option,
+2023-05-27) mentioned the new `--no-stripspace` in the documentation for
+`-m` and `-F`, it created run-on sentences. It also used slightly
+different language in the two sections for no apparent reason. Split the
+sentences in two to improve readability, and while touching the two
+sites, make them more similar.
+
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-notes.txt | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-notes.txt b/Documentation/git-notes.txt
+index bc1bfa3791..9043274ce8 100644
+--- a/Documentation/git-notes.txt
++++ b/Documentation/git-notes.txt
+@@ -141,17 +141,16 @@ OPTIONS
+ 	If multiple `-m` options are given, their values
+ 	are concatenated as separate paragraphs.
+ 	Lines starting with `#` and empty lines other than a
+-	single line between paragraphs will be stripped out,
+-	if you wish to keep them verbatim, use `--no-stripspace`.
++	single line between paragraphs will be stripped out.
++	If you wish to keep them verbatim, use `--no-stripspace`.
+ 
+ -F <file>::
+ --file=<file>::
+ 	Take the note message from the given file.  Use '-' to
+ 	read the note message from the standard input.
+ 	Lines starting with `#` and empty lines other than a
+-	single line between paragraphs will be stripped out,
+-	if you wish to keep them verbatim, use with
+-	`--no-stripspace` option.
++	single line between paragraphs will be stripped out.
++	If you wish to keep them verbatim, use `--no-stripspace`.
+ 
+ -C <object>::
+ --reuse-message=<object>::
+-- 
+2.39.3 (Apple Git-145)
+

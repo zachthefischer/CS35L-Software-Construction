@@ -1,0 +1,149 @@
+From 7bc73e7b61e60cbc0730a4f0e938c482c459e000 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 31 Jan 2023 13:29:11 +0000
+Subject: [PATCH 0762/2871] t5558: add tests for creationToken heuristic
+
+As documented in the bundle URI design doc in 2da14fad8fe (docs:
+document bundle URI standard, 2022-08-09), the 'creationToken' member of
+a bundle URI allows a bundle provider to specify a total order on the
+bundles.
+
+Future changes will allow the Git client to understand these members and
+modify its behavior around downloading the bundles in that order. In the
+meantime, create tests that add creation tokens to the bundle list. For
+now, the Git client correctly ignores these unknown keys.
+
+Create a new test helper function, test_remote_https_urls, which filters
+GIT_TRACE2_EVENT output to extract a list of URLs passed to
+git-remote-https child processes. This can be used to verify the order
+of these requests as we implement the creationToken heuristic. For now,
+we need to sort the actual output since the current client does not have
+a well-defined order that it applies to the bundles.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5558-clone-bundle-uri.sh | 69 +++++++++++++++++++++++++++++++++++--
+ t/test-lib-functions.sh     |  8 +++++
+ 2 files changed, 75 insertions(+), 2 deletions(-)
+
+diff --git a/t/t5558-clone-bundle-uri.sh b/t/t5558-clone-bundle-uri.sh
+index 9155f31fa2..474432c8ac 100755
+--- a/t/t5558-clone-bundle-uri.sh
++++ b/t/t5558-clone-bundle-uri.sh
+@@ -285,6 +285,8 @@ test_expect_success 'clone HTTP bundle' '
+ '
+ 
+ test_expect_success 'clone bundle list (HTTP, no heuristic)' '
++	test_when_finished rm -f trace*.txt &&
++
+ 	cp clone-from/bundle-*.bundle "$HTTPD_DOCUMENT_ROOT_PATH/" &&
+ 	cat >"$HTTPD_DOCUMENT_ROOT_PATH/bundle-list" <<-EOF &&
+ 	[bundle]
+@@ -304,12 +306,26 @@ test_expect_success 'clone bundle list (HTTP, no heuristic)' '
+ 		uri = $HTTPD_URL/bundle-4.bundle
+ 	EOF
+ 
+-	git clone --bundle-uri="$HTTPD_URL/bundle-list" \
++	GIT_TRACE2_EVENT="$(pwd)/trace-clone.txt" \
++		git clone --bundle-uri="$HTTPD_URL/bundle-list" \
+ 		clone-from clone-list-http  2>err &&
+ 	! grep "Repository lacks these prerequisite commits" err &&
+ 
+ 	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
+-	git -C clone-list-http cat-file --batch-check <oids
++	git -C clone-list-http cat-file --batch-check <oids &&
++
++	cat >expect <<-EOF &&
++	$HTTPD_URL/bundle-1.bundle
++	$HTTPD_URL/bundle-2.bundle
++	$HTTPD_URL/bundle-3.bundle
++	$HTTPD_URL/bundle-4.bundle
++	$HTTPD_URL/bundle-list
++	EOF
++
++	# Sort the list, since the order is not well-defined
++	# without a heuristic.
++	test_remote_https_urls <trace-clone.txt | sort >actual &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'clone bundle list (HTTP, any mode)' '
+@@ -350,6 +366,55 @@ test_expect_success 'clone bundle list (HTTP, any mode)' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'clone bundle list (http, creationToken)' '
++	test_when_finished rm -f trace*.txt &&
++
++	cp clone-from/bundle-*.bundle "$HTTPD_DOCUMENT_ROOT_PATH/" &&
++	cat >"$HTTPD_DOCUMENT_ROOT_PATH/bundle-list" <<-EOF &&
++	[bundle]
++		version = 1
++		mode = all
++		heuristic = creationToken
++
++	[bundle "bundle-1"]
++		uri = bundle-1.bundle
++		creationToken = 1
++
++	[bundle "bundle-2"]
++		uri = bundle-2.bundle
++		creationToken = 2
++
++	[bundle "bundle-3"]
++		uri = bundle-3.bundle
++		creationToken = 3
++
++	[bundle "bundle-4"]
++		uri = bundle-4.bundle
++		creationToken = 4
++	EOF
++
++	GIT_TRACE2_EVENT="$(pwd)/trace-clone.txt" git \
++		clone --bundle-uri="$HTTPD_URL/bundle-list" \
++		"$HTTPD_URL/smart/fetch.git" clone-list-http-2 &&
++
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-list-http-2 cat-file --batch-check <oids &&
++
++	cat >expect <<-EOF &&
++	$HTTPD_URL/bundle-1.bundle
++	$HTTPD_URL/bundle-2.bundle
++	$HTTPD_URL/bundle-3.bundle
++	$HTTPD_URL/bundle-4.bundle
++	$HTTPD_URL/bundle-list
++	EOF
++
++	# Since the creationToken heuristic is not yet understood by the
++	# client, the order cannot be verified at this moment. Sort the
++	# list for consistent results.
++	test_remote_https_urls <trace-clone.txt | sort >actual &&
++	test_cmp expect actual
++'
++
+ # Do not add tests here unless they use the HTTP server, as they will
+ # not run unless the HTTP dependencies exist.
+ 
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 0fd7d4a200..087a3957a4 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1833,6 +1833,14 @@ test_region () {
+ 	return 0
+ }
+ 
++# Given a GIT_TRACE2_EVENT log over stdin, writes to stdout a list of URLs
++# sent to git-remote-https child processes.
++test_remote_https_urls() {
++	grep -e '"event":"child_start".*"argv":\["git-remote-https",".*"\]' |
++		sed -e 's/{"event":"child_start".*"argv":\["git-remote-https","//g' \
++		    -e 's/"\]}//g'
++}
++
+ # Print the destination of symlink(s) provided as arguments. Basically
+ # the same as the readlink command, but it's not available everywhere.
+ test_readlink () {
+-- 
+2.39.3 (Apple Git-145)
+

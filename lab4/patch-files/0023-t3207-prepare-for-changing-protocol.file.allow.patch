@@ -1,0 +1,29 @@
+From e175fb5767f90291d7156960f4a33d726175fff2 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 16:47:00 -0400
+Subject: [PATCH 0023/2871] t3207: prepare for changing protocol.file.allow
+
+Explicitly cloning over the "file://" protocol in t3207 in preparation
+for merging a security release which will change the default value of
+this configuration to be "user".
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t3207-branch-submodule.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/t3207-branch-submodule.sh b/t/t3207-branch-submodule.sh
+index cfde6b237f..fe72b24716 100755
+--- a/t/t3207-branch-submodule.sh
++++ b/t/t3207-branch-submodule.sh
+@@ -28,6 +28,7 @@ test_no_branch () {
+ }
+ 
+ test_expect_success 'setup superproject and submodule' '
++	git config --global protocol.file.allow always &&
+ 	mkdir test_dirs &&
+ 	(
+ 		cd test_dirs &&
+-- 
+2.39.3 (Apple Git-145)
+

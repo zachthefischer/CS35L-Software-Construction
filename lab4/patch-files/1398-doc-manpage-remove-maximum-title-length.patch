@@ -1,0 +1,55 @@
+From d832f2ac55365fab5f6631b9e3b7dbd140d32e3b Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Wed, 3 May 2023 11:16:58 -0600
+Subject: [PATCH 1398/2871] doc: manpage: remove maximum title length
+
+DocBook Stylesheets limit the size of the manpage titles for some
+reason.
+
+Even some of the longest git commands have no trouble fitting in 80
+character terminals, so it's not clear why we would want to limit titles
+to 20 characters, especially when modern terminals are much bigger.
+
+For example:
+
+  --- a/git-credential-cache--daemon.1
+  +++ b/git-credential-cache--daemon.1
+  @@ -1,4 +1,4 @@
+  -GIT-CREDENTIAL-CAC(1)             Git Manual             GIT-CREDENTIAL-CAC(1)
+  +GIT-CREDENTIAL-CACHE--DAEMON(1)   Git Manual   GIT-CREDENTIAL-CACHE--DAEMON(1)
+
+   NAME
+          git-credential-cache--daemon - Temporarily store user credentials in
+  @@ -24,4 +24,4 @@ DESCRIPTION
+   GIT
+          Part of the git(1) suite
+
+  -Git omitted                       2023-05-02             GIT-CREDENTIAL-CAC(1)
+  +Git omitted                       2023-05-02   GIT-CREDENTIAL-CACHE--DAEMON(1)
+
+Moreover, asciidoctor manpage backend doesn't limit the title length, so
+we probably want to do the same for docbook backends for consistency.
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/manpage-normal.xsl | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Documentation/manpage-normal.xsl b/Documentation/manpage-normal.xsl
+index a9c7ec69f4..e7aa5df2fc 100644
+--- a/Documentation/manpage-normal.xsl
++++ b/Documentation/manpage-normal.xsl
+@@ -8,6 +8,9 @@
+ <xsl:param name="man.output.quietly" select="1"/>
+ <xsl:param name="refentry.meta.get.quietly" select="1"/>
+ 
++<!-- unset maximum length of title -->
++<xsl:param name="man.th.title.max.length"/>
++
+ <!-- convert asciidoc callouts to man page format -->
+ <xsl:template match="co">
+ 	<xsl:value-of select="concat('\fB(',substring-after(@id,'-'),')\fR')"/>
+-- 
+2.39.3 (Apple Git-145)
+

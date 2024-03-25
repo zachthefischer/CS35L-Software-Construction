@@ -1,0 +1,93 @@
+From b8dbfd030ccc8e5be6b22bc28a342119504e0c2b Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Mon, 17 Oct 2022 13:17:40 +0000
+Subject: [PATCH 0152/2871] rebase: be stricter when reading state files
+ containing oids
+
+The state files for 'onto' and 'orig_head' should contain a full hex
+oid, change the reading functions from get_oid() to get_oid_hex() to
+reflect this. They should also name commits and not tags so add and use
+a function that looks up a commit from an oid like
+lookup_commit_reference() but without dereferencing tags.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c |  8 ++++----
+ commit.c         |  8 ++++++++
+ commit.h         | 13 +++++++++++++
+ 3 files changed, 25 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 70aa7c842f..4139562cdb 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -429,9 +429,9 @@ static int read_basic_state(struct rebase_options *opts)
+ 	opts->head_name = starts_with(head_name.buf, "refs/") ?
+ 		xstrdup(head_name.buf) : NULL;
+ 	strbuf_release(&head_name);
+-	if (get_oid(buf.buf, &oid))
+-		return error(_("could not get 'onto': '%s'"), buf.buf);
+-	opts->onto = lookup_commit_or_die(&oid, buf.buf);
++	if (get_oid_hex(buf.buf, &oid) ||
++	    !(opts->onto = lookup_commit_object(the_repository, &oid)))
++		return error(_("invalid onto: '%s'"), buf.buf);
+ 
+ 	/*
+ 	 * We always write to orig-head, but interactive rebase used to write to
+@@ -446,7 +446,7 @@ static int read_basic_state(struct rebase_options *opts)
+ 	} else if (!read_oneliner(&buf, state_dir_path("head", opts),
+ 				  READ_ONELINER_WARN_MISSING))
+ 		return -1;
+-	if (get_oid(buf.buf, &opts->orig_head))
++	if (get_oid_hex(buf.buf, &opts->orig_head))
+ 		return error(_("invalid orig-head: '%s'"), buf.buf);
+ 
+ 	if (file_exists(state_dir_path("quiet", opts)))
+diff --git a/commit.c b/commit.c
+index 1fb1b2ea90..874b3014b5 100644
+--- a/commit.c
++++ b/commit.c
+@@ -59,6 +59,14 @@ struct commit *lookup_commit_or_die(const struct object_id *oid, const char *ref
+ 	return c;
+ }
+ 
++struct commit *lookup_commit_object(struct repository *r,
++				    const struct object_id *oid)
++{
++	struct object *obj = parse_object(r, oid);
++	return obj ? object_as_type(obj, OBJ_COMMIT, 0) : NULL;
++
++}
++
+ struct commit *lookup_commit(struct repository *r, const struct object_id *oid)
+ {
+ 	struct object *obj = lookup_object(r, oid);
+diff --git a/commit.h b/commit.h
+index 21e4d25ce7..fa39202fa6 100644
+--- a/commit.h
++++ b/commit.h
+@@ -64,6 +64,19 @@ enum decoration_type {
+ void add_name_decoration(enum decoration_type type, const char *name, struct object *obj);
+ const struct name_decoration *get_name_decoration(const struct object *obj);
+ 
++/*
++ * Look up commit named by "oid" respecting replacement objects.
++ * Returns NULL if "oid" is not a commit or does not exist.
++ */
++struct commit *lookup_commit_object(struct repository *r, const struct object_id *oid);
++
++/*
++ * Look up commit named by "oid" without replacement objects or
++ * checking for object existence. Returns the requested commit if it
++ * is found in the object cache, NULL if "oid" is in the object cache
++ * but is not a commit and a newly allocated unparsed commit object if
++ * "oid" is not in the object cache.
++ */
+ struct commit *lookup_commit(struct repository *r, const struct object_id *oid);
+ struct commit *lookup_commit_reference(struct repository *r,
+ 				       const struct object_id *oid);
+-- 
+2.39.3 (Apple Git-145)
+

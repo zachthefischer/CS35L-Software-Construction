@@ -1,0 +1,139 @@
+From fd2da4b1ea871df317322f33e82cb3aa1f95ee10 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 18 Feb 2023 09:36:23 +0100
+Subject: [PATCH 0877/2871] archive: add --mtime
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Allow users to specify the modification time of archive entries.  The
+new option --mtime uses approxidate() to parse a time specification and
+overrides the default of using the current time for trees and the commit
+time for tags and commits.  It can be used to create a reproducible
+archive for a tree, or to use a specific mtime without creating a commit
+with GIT_COMMITTER_DATE set.
+
+This implementation doesn't support the negated form of the new option,
+i.e. --no-mtime is not accepted.  It is not possible to have no mtime at
+all.  We could use the Unix epoch or revert to the default behavior, but
+since negation is not necessary for the intended use it's left undecided
+for now.
+
+Requested-by: Raul E Rangel <rrangel@chromium.org>
+Suggested-by: demerphq <demerphq@gmail.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-archive.txt |  5 +++++
+ archive.c                     |  7 +++++++
+ archive.h                     |  1 +
+ t/t5000-tar-tree.sh           | 19 +++++++++++++++++++
+ 4 files changed, 32 insertions(+)
+
+diff --git a/Documentation/git-archive.txt b/Documentation/git-archive.txt
+index 60c040988b..6bab201d37 100644
+--- a/Documentation/git-archive.txt
++++ b/Documentation/git-archive.txt
+@@ -86,6 +86,11 @@ cases, write an untracked file and use `--add-file` instead.
+ 	Look for attributes in .gitattributes files in the working tree
+ 	as well (see <<ATTRIBUTES>>).
+ 
++--mtime=<time>::
++	Set modification time of archive entries.  Without this option
++	the committer time is used if `<tree-ish>` is a commit or tag,
++	and the current time if it is a tree.
++
+ <extra>::
+ 	This can be any options that the archiver backend understands.
+ 	See next section.
+diff --git a/archive.c b/archive.c
+index 81ff76fce9..122860b39d 100644
+--- a/archive.c
++++ b/archive.c
+@@ -472,6 +472,8 @@ static void parse_treeish_arg(const char **argv,
+ 		commit_oid = NULL;
+ 		archive_time = time(NULL);
+ 	}
++	if (ar_args->mtime_option)
++		archive_time = approxidate(ar_args->mtime_option);
+ 
+ 	tree = parse_tree_indirect(&oid);
+ 	if (!tree)
+@@ -586,6 +588,7 @@ static int parse_archive_args(int argc, const char **argv,
+ 	const char *remote = NULL;
+ 	const char *exec = NULL;
+ 	const char *output = NULL;
++	const char *mtime_option = NULL;
+ 	int compression_level = -1;
+ 	int verbose = 0;
+ 	int i;
+@@ -607,6 +610,9 @@ static int parse_archive_args(int argc, const char **argv,
+ 		OPT_BOOL(0, "worktree-attributes", &worktree_attributes,
+ 			N_("read .gitattributes in working directory")),
+ 		OPT__VERBOSE(&verbose, N_("report archived files on stderr")),
++		{ OPTION_STRING, 0, "mtime", &mtime_option, N_("time"),
++		  N_("set modification time of archive entries"),
++		  PARSE_OPT_NONEG },
+ 		OPT_NUMBER_CALLBACK(&compression_level,
+ 			N_("set compression level"), number_callback),
+ 		OPT_GROUP(""),
+@@ -668,6 +674,7 @@ static int parse_archive_args(int argc, const char **argv,
+ 	args->base = base;
+ 	args->baselen = strlen(base);
+ 	args->worktree_attributes = worktree_attributes;
++	args->mtime_option = mtime_option;
+ 
+ 	return argc;
+ }
+diff --git a/archive.h b/archive.h
+index 08bed3ed3a..7178e2a9a2 100644
+--- a/archive.h
++++ b/archive.h
+@@ -16,6 +16,7 @@ struct archiver_args {
+ 	struct tree *tree;
+ 	const struct object_id *commit_oid;
+ 	const struct commit *commit;
++	const char *mtime_option;
+ 	timestamp_t time;
+ 	struct pathspec pathspec;
+ 	unsigned int verbose : 1;
+diff --git a/t/t5000-tar-tree.sh b/t/t5000-tar-tree.sh
+index eb3214bc17..918a2fc7c6 100755
+--- a/t/t5000-tar-tree.sh
++++ b/t/t5000-tar-tree.sh
+@@ -105,6 +105,18 @@ check_added() {
+ 	'
+ }
+ 
++check_mtime() {
++	dir=$1
++	path_in_archive=$2
++	mtime=$3
++
++	test_expect_success " validate mtime of $path_in_archive" '
++		test-tool chmtime --get $dir/$path_in_archive >actual.mtime &&
++		echo $mtime >expect.mtime &&
++		test_cmp expect.mtime actual.mtime
++	'
++}
++
+ test_expect_success 'setup' '
+ 	test_oid_cache <<-EOF
+ 	obj sha1:19f9c8273ec45a8938e6999cb59b3ff66739902a
+@@ -174,6 +186,13 @@ test_expect_success 'git archive' '
+ 
+ check_tar b
+ 
++test_expect_success 'git archive --mtime' '
++	git archive --mtime=2002-02-02T02:02:02-0200 HEAD >with_mtime.tar
++'
++
++check_tar with_mtime
++check_mtime with_mtime a/a 1012622522
++
+ test_expect_success 'git archive --prefix=prefix/' '
+ 	git archive --prefix=prefix/ HEAD >with_prefix.tar
+ '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,45 @@
+From 1260914190ad737029de6f4f61851180a4ccce56 Mon Sep 17 00:00:00 2001
+From: Chandra Pratap <chandrapratap3519@gmail.com>
+Date: Wed, 10 Jan 2024 12:54:17 +0000
+Subject: [PATCH 2666/2871] t4129: prevent loss of exit code due to the use of
+ pipes
+
+Piping the output of git commands like git-ls-files to another
+command (grep in this case) hides the exit code returned by
+these commands. Prevent this by storing the output of git-ls-files
+to a temporary file and then "grep-ping" from that file. Replace
+grep with test_grep as the latter is more verbose when it fails.
+
+Signed-off-by: Chandra Pratap <chandrapratap3519@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4129-apply-samemode.sh | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/t/t4129-apply-samemode.sh b/t/t4129-apply-samemode.sh
+index e7a7295f1b..2775bfadd8 100755
+--- a/t/t4129-apply-samemode.sh
++++ b/t/t4129-apply-samemode.sh
+@@ -41,7 +41,8 @@ test_expect_success FILEMODE 'same mode (index only)' '
+ 	chmod +x file &&
+ 	git add file &&
+ 	git apply --cached patch-0.txt &&
+-	git ls-files -s file | grep "^100755"
++	git ls-files -s file >ls-files-output &&
++	test_grep "^100755" ls-files-output
+ '
+ 
+ test_expect_success FILEMODE 'mode update (no index)' '
+@@ -60,7 +61,8 @@ test_expect_success FILEMODE 'mode update (with index)' '
+ test_expect_success FILEMODE 'mode update (index only)' '
+ 	git reset --hard &&
+ 	git apply --cached patch-1.txt &&
+-	git ls-files -s file | grep "^100755"
++	git ls-files -s file >ls-files-output &&
++	test_grep "^100755" ls-files-output
+ '
+ 
+ test_expect_success FILEMODE 'empty mode is rejected' '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,43 @@
+From aa0275a2c030c9c03f7934340ce1496d8796954e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?SZEDER=20G=C3=A1bor?= <szeder.dev@gmail.com>
+Date: Sun, 19 Mar 2023 17:56:47 +0100
+Subject: [PATCH 1064/2871] parse-options.h: rename _OPT_CONTAINS_OR_WITH()'s
+ parameters
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Rename the 'help' parameter as it matches one of the fields in 'struct
+option', and, while at it, rename all other parameters to the usual
+one-letter name used in similar macro definitions.
+
+Furthermore, put all parameters in the replacement list between
+parentheses, like all other OPT_* macros do.
+
+Signed-off-by: SZEDER Gábor <szeder.dev@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/parse-options.h b/parse-options.h
+index 34f8caf369..7e99322bab 100644
+--- a/parse-options.h
++++ b/parse-options.h
+@@ -381,9 +381,9 @@ int parse_opt_tracking_mode(const struct option *, const char *, int);
+ 	{ OPTION_CALLBACK, (s), (l), (v), (a), (h), (f), parse_opt_passthru }
+ #define OPT_PASSTHRU_ARGV(s, l, v, a, h, f) \
+ 	{ OPTION_CALLBACK, (s), (l), (v), (a), (h), (f), parse_opt_passthru_argv }
+-#define _OPT_CONTAINS_OR_WITH(name, variable, help, flag) \
+-	{ OPTION_CALLBACK, 0, name, (variable), N_("commit"), (help), \
+-	  PARSE_OPT_LASTARG_DEFAULT | flag, \
++#define _OPT_CONTAINS_OR_WITH(l, v, h, f) \
++	{ OPTION_CALLBACK, 0, (l), (v), N_("commit"), (h), \
++	  PARSE_OPT_LASTARG_DEFAULT | (f), \
+ 	  parse_opt_commits, (intptr_t) "HEAD" \
+ 	}
+ #define OPT_CONTAINS(v, h) _OPT_CONTAINS_OR_WITH("contains", v, h, PARSE_OPT_NONEG)
+-- 
+2.39.3 (Apple Git-145)
+

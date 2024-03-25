@@ -1,0 +1,29 @@
+From 00432a36e20f86338774e5daf8c7fb2eff0beda8 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 15 Jun 2023 02:53:43 +0000
+Subject: [PATCH 1591/2871] doc: trailer: swap verb order
+
+This matches the order already used in the NAME section.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 35faf83789..da8fec7d5f 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -14,7 +14,7 @@ SYNOPSIS
+ 
+ DESCRIPTION
+ -----------
+-Parse or add 'trailer' lines that look similar to RFC 822 e-mail
++Add or parse 'trailer' lines that look similar to RFC 822 e-mail
+ headers, at the end of the otherwise free-form part of a commit
+ message.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

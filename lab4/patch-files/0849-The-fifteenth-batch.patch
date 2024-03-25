@@ -1,0 +1,41 @@
+From 23c56f7bd5f1667f8b793d796bf30e39545920f6 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 9 Feb 2023 14:40:34 -0800
+Subject: [PATCH 0849/2871] The fifteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index 3f4d282cb5..edbbe7d049 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -211,6 +211,17 @@ Fixes since v2.39
+    tags to notice non-PGP signatures.
+    (merge a9cad02538 gm/request-pull-with-non-pgp-signed-tags later to maint).
+ 
++ * Remove support for MSys, which now lags way behind MSys2.
++   (merge 2987407f3c hj/remove-msys-support later to maint).
++
++ * Fix use of CreateThread() API call made early in the windows
++   start-up code.
++   (merge 592bcab61b sk/winansi-createthread-fix later to maint).
++
++ * "git pack-objects" learned to release delta-island bitmap data when
++   it is done using it, saving peak heap memory usage.
++   (merge 647982bb71 ew/free-island-marks later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 77e04b2ed4 rs/t4205-do-not-exit-in-test-script later to maint).
+    (merge faebba436e rs/plug-pattern-list-leak-in-lof later to maint).
+@@ -245,3 +256,5 @@ Fixes since v2.39
+    (merge 70661d288b ar/markup-em-dash later to maint).
+    (merge e750951e74 en/ls-files-doc-update later to maint).
+    (merge 4f542975d1 mh/doc-credential-cache-only-in-core later to maint).
++   (merge 3a2ebaebc7 gc/index-format-doc later to maint).
++   (merge b08edf709d jk/httpd-test-updates later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,56 @@
+From bd6cc1d9eccfe2bd364fac91246583e9b6d712c0 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 23 Dec 2023 17:14:52 +0000
+Subject: [PATCH 2601/2871] blame.h: remove unnecessary includes
+
+The unnecessary include in the header transitively pulled in some
+other headers actually needed by source files, though.  Have those
+source files explicitly include the headers they need.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ blame.c | 2 ++
+ blame.h | 3 ---
+ 2 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/blame.c b/blame.c
+index 141756975b..1a16d4eb6a 100644
+--- a/blame.c
++++ b/blame.c
+@@ -3,6 +3,7 @@
+ #include "object-store-ll.h"
+ #include "cache-tree.h"
+ #include "mergesort.h"
++#include "commit.h"
+ #include "convert.h"
+ #include "diff.h"
+ #include "diffcore.h"
+@@ -10,6 +11,7 @@
+ #include "hex.h"
+ #include "path.h"
+ #include "read-cache.h"
++#include "revision.h"
+ #include "setup.h"
+ #include "tag.h"
+ #include "trace2.h"
+diff --git a/blame.h b/blame.h
+index 31ddc85f19..5b4e47d44c 100644
+--- a/blame.h
++++ b/blame.h
+@@ -1,12 +1,9 @@
+ #ifndef BLAME_H
+ #define BLAME_H
+ 
+-#include "commit.h"
+ #include "oidset.h"
+ #include "xdiff-interface.h"
+-#include "revision.h"
+ #include "prio-queue.h"
+-#include "diff.h"
+ 
+ #define PICKAXE_BLAME_MOVE		01
+ #define PICKAXE_BLAME_COPY		02
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,38 @@
+From aab89be2eb6ca51eefeb8c8066f673f447058856 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 10 Oct 2023 11:38:56 -0700
+Subject: [PATCH 2273/2871] The sixteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index 494e13e827..b90aeed132 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -83,6 +83,9 @@ UI, Workflows & Features
+  * "git for-each-ref" and friends learned to apply mailmap to
+    authorname and other fields.
+ 
++ * "git repack" machinery learns to pay attention to the "--filter="
++   option.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -111,6 +114,10 @@ Performance, Internal Implementation, Development Support etc.
+  * The code to keep track of existing packs in the repository while
+    repacking has been refactored.
+ 
++ * The "streaming" interface used for bulk-checkin codepath has been
++   narrowed to take only blob objects for now, with no real loss of
++   functionality.
++
+ 
+ Fixes since v2.42
+ -----------------
+-- 
+2.39.3 (Apple Git-145)
+

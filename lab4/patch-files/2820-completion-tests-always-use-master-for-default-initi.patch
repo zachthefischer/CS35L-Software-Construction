@@ -1,0 +1,40 @@
+From db489ea4f368656d7b0d5702f0bcc06779ea89d0 Mon Sep 17 00:00:00 2001
+From: Britton Leo Kerin <britton.kerin@gmail.com>
+Date: Tue, 6 Feb 2024 12:50:42 -0900
+Subject: [PATCH 2820/2871] completion: tests: always use 'master' for default
+ initial branch name
+
+The default initial branch name can normally be configured using the
+GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME environment variable.  However,
+when testing e.g. <rev> completion it's convenient to know the
+exact initial branch name that will be used.
+
+To achieve that without too much trouble it is considered sufficient
+to force the default initial branch name to 'master' for all of
+t9902-completion.sh.
+
+Signed-off-by: Britton Leo Kerin <britton.kerin@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9902-completion.sh | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index aa9a614de3..a5d4e900a2 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -5,6 +5,11 @@
+ 
+ test_description='test bash completion'
+ 
++# Override environment and always use master for the default initial branch
++# name for these tests, so that rev completion candidates are as expected.
++GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
++export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
++
+ . ./lib-bash.sh
+ 
+ complete ()
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,30 @@
+From 59f2f80280860e9796661876b4a2cd673448898d Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 16:47:00 -0400
+Subject: [PATCH 0025/2871] t5537: prepare for changing protocol.file.allow
+
+Explicitly cloning over the "file://" protocol in t5537 in preparation
+for merging a security release which will change the default value of
+this configuration to be "user".
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t5537-fetch-shallow.sh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/t/t5537-fetch-shallow.sh b/t/t5537-fetch-shallow.sh
+index 92948de7a0..9573a2655e 100755
+--- a/t/t5537-fetch-shallow.sh
++++ b/t/t5537-fetch-shallow.sh
+@@ -162,6 +162,8 @@ test_expect_success 'fetch --update-shallow' '
+ '
+ 
+ test_expect_success 'fetch --update-shallow into a repo with submodules' '
++	test_config_global protocol.file.allow always &&
++
+ 	git init a-submodule &&
+ 	test_commit -C a-submodule foo &&
+ 	git init repo-with-sub &&
+-- 
+2.39.3 (Apple Git-145)
+

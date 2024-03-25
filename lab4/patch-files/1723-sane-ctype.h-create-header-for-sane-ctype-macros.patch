@@ -1,0 +1,165 @@
+From 1890ce84bd7b2b199f422246d557dc2f2668ef17 Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Wed, 5 Jul 2023 17:09:21 +0000
+Subject: [PATCH 1723/2871] sane-ctype.h: create header for sane-ctype macros
+
+Splitting these macros from git-compat-util.h cleans up the file and
+allows future third-party sources to not use these overrides if they do
+not wish to.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-compat-util.h | 62 +-------------------------------------------
+ sane-ctype.h      | 66 +++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 67 insertions(+), 61 deletions(-)
+ create mode 100644 sane-ctype.h
+
+diff --git a/git-compat-util.h b/git-compat-util.h
+index f8e68baf29..2151d8b437 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -1153,67 +1153,7 @@ static inline size_t xsize_t(off_t len)
+ /* in ctype.c, for kwset users */
+ extern const unsigned char tolower_trans_tbl[256];
+ 
+-/* Sane ctype - no locale, and works with signed chars */
+-#undef isascii
+-#undef isspace
+-#undef isdigit
+-#undef isalpha
+-#undef isalnum
+-#undef isprint
+-#undef islower
+-#undef isupper
+-#undef tolower
+-#undef toupper
+-#undef iscntrl
+-#undef ispunct
+-#undef isxdigit
+-
+-extern const unsigned char sane_ctype[256];
+-extern const signed char hexval_table[256];
+-#define GIT_SPACE 0x01
+-#define GIT_DIGIT 0x02
+-#define GIT_ALPHA 0x04
+-#define GIT_GLOB_SPECIAL 0x08
+-#define GIT_REGEX_SPECIAL 0x10
+-#define GIT_PATHSPEC_MAGIC 0x20
+-#define GIT_CNTRL 0x40
+-#define GIT_PUNCT 0x80
+-#define sane_istest(x,mask) ((sane_ctype[(unsigned char)(x)] & (mask)) != 0)
+-#define isascii(x) (((x) & ~0x7f) == 0)
+-#define isspace(x) sane_istest(x,GIT_SPACE)
+-#define isdigit(x) sane_istest(x,GIT_DIGIT)
+-#define isalpha(x) sane_istest(x,GIT_ALPHA)
+-#define isalnum(x) sane_istest(x,GIT_ALPHA | GIT_DIGIT)
+-#define isprint(x) ((x) >= 0x20 && (x) <= 0x7e)
+-#define islower(x) sane_iscase(x, 1)
+-#define isupper(x) sane_iscase(x, 0)
+-#define is_glob_special(x) sane_istest(x,GIT_GLOB_SPECIAL)
+-#define is_regex_special(x) sane_istest(x,GIT_GLOB_SPECIAL | GIT_REGEX_SPECIAL)
+-#define iscntrl(x) (sane_istest(x,GIT_CNTRL))
+-#define ispunct(x) sane_istest(x, GIT_PUNCT | GIT_REGEX_SPECIAL | \
+-		GIT_GLOB_SPECIAL | GIT_PATHSPEC_MAGIC)
+-#define isxdigit(x) (hexval_table[(unsigned char)(x)] != -1)
+-#define tolower(x) sane_case((unsigned char)(x), 0x20)
+-#define toupper(x) sane_case((unsigned char)(x), 0)
+-#define is_pathspec_magic(x) sane_istest(x,GIT_PATHSPEC_MAGIC)
+-
+-static inline int sane_case(int x, int high)
+-{
+-	if (sane_istest(x, GIT_ALPHA))
+-		x = (x & ~0x20) | high;
+-	return x;
+-}
+-
+-static inline int sane_iscase(int x, int is_lower)
+-{
+-	if (!sane_istest(x, GIT_ALPHA))
+-		return 0;
+-
+-	if (is_lower)
+-		return (x & 0x20) != 0;
+-	else
+-		return (x & 0x20) == 0;
+-}
++#include "sane-ctype.h"
+ 
+ /*
+  * Like skip_prefix, but compare case-insensitively. Note that the comparison
+diff --git a/sane-ctype.h b/sane-ctype.h
+new file mode 100644
+index 0000000000..cbea1b299b
+--- /dev/null
++++ b/sane-ctype.h
+@@ -0,0 +1,66 @@
++#ifndef SANE_CTYPE_H
++#define SANE_CTYPE_H
++
++/* Sane ctype - no locale, and works with signed chars */
++#undef isascii
++#undef isspace
++#undef isdigit
++#undef isalpha
++#undef isalnum
++#undef isprint
++#undef islower
++#undef isupper
++#undef tolower
++#undef toupper
++#undef iscntrl
++#undef ispunct
++#undef isxdigit
++
++extern const unsigned char sane_ctype[256];
++extern const signed char hexval_table[256];
++#define GIT_SPACE 0x01
++#define GIT_DIGIT 0x02
++#define GIT_ALPHA 0x04
++#define GIT_GLOB_SPECIAL 0x08
++#define GIT_REGEX_SPECIAL 0x10
++#define GIT_PATHSPEC_MAGIC 0x20
++#define GIT_CNTRL 0x40
++#define GIT_PUNCT 0x80
++#define sane_istest(x,mask) ((sane_ctype[(unsigned char)(x)] & (mask)) != 0)
++#define isascii(x) (((x) & ~0x7f) == 0)
++#define isspace(x) sane_istest(x,GIT_SPACE)
++#define isdigit(x) sane_istest(x,GIT_DIGIT)
++#define isalpha(x) sane_istest(x,GIT_ALPHA)
++#define isalnum(x) sane_istest(x,GIT_ALPHA | GIT_DIGIT)
++#define isprint(x) ((x) >= 0x20 && (x) <= 0x7e)
++#define islower(x) sane_iscase(x, 1)
++#define isupper(x) sane_iscase(x, 0)
++#define is_glob_special(x) sane_istest(x,GIT_GLOB_SPECIAL)
++#define is_regex_special(x) sane_istest(x,GIT_GLOB_SPECIAL | GIT_REGEX_SPECIAL)
++#define iscntrl(x) (sane_istest(x,GIT_CNTRL))
++#define ispunct(x) sane_istest(x, GIT_PUNCT | GIT_REGEX_SPECIAL | \
++		GIT_GLOB_SPECIAL | GIT_PATHSPEC_MAGIC)
++#define isxdigit(x) (hexval_table[(unsigned char)(x)] != -1)
++#define tolower(x) sane_case((unsigned char)(x), 0x20)
++#define toupper(x) sane_case((unsigned char)(x), 0)
++#define is_pathspec_magic(x) sane_istest(x,GIT_PATHSPEC_MAGIC)
++
++static inline int sane_case(int x, int high)
++{
++	if (sane_istest(x, GIT_ALPHA))
++		x = (x & ~0x20) | high;
++	return x;
++}
++
++static inline int sane_iscase(int x, int is_lower)
++{
++	if (!sane_istest(x, GIT_ALPHA))
++		return 0;
++
++	if (is_lower)
++		return (x & 0x20) != 0;
++	else
++		return (x & 0x20) == 0;
++}
++
++#endif
+-- 
+2.39.3 (Apple Git-145)
+

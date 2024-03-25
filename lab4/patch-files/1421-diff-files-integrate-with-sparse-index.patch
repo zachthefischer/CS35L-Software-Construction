@@ -1,0 +1,113 @@
+From 8c30be9176784b5e4fbfc2ca6e8275c13cbf6e4a Mon Sep 17 00:00:00 2001
+From: Shuqi Liang <cheskaqiqi@gmail.com>
+Date: Tue, 9 May 2023 15:42:41 -0400
+Subject: [PATCH 1421/2871] diff-files: integrate with sparse index
+
+Remove full index requirement for `git diff-files`. Refactor the
+ensure_expanded and ensure_not_expanded functions by introducing a
+common helper function, ensure_index_state. Add test to ensure the index
+is no expanded in `git diff-files`.
+
+The `p2000` tests demonstrate a ~96% execution time reduction for 'git
+diff-files' and a ~97% execution time reduction for 'git diff-files'
+for a file using a sparse index:
+
+Test                                               before  after
+-----------------------------------------------------------------------
+2000.94: git diff-files (full-v3)                  0.09    0.08 -11.1%
+2000.95: git diff-files (full-v4)                  0.09    0.09 +0.0%
+2000.96: git diff-files (sparse-v3)                0.52    0.02 -96.2%
+2000.97: git diff-files (sparse-v4)                0.51    0.02 -96.1%
+2000.98: git diff-files -- f2/f4/a (full-v3)       0.06    0.07 +16.7%
+2000.99: git diff-files -- f2/f4/a (full-v4)       0.08    0.08 +0.0%
+2000.100: git diff-files -- f2/f4/a (sparse-v3)    0.46    0.01 -97.8%
+2000.101: git diff-files -- f2/f4/a (sparse-v4)    0.51    0.02 -96.1%
+
+Signed-off-by: Shuqi Liang <cheskaqiqi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/diff-files.c                     |  4 ++++
+ t/perf/p2000-sparse-operations.sh        |  2 ++
+ t/t1092-sparse-checkout-compatibility.sh | 27 ++++++++++++++++++++++--
+ 3 files changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/diff-files.c b/builtin/diff-files.c
+index dc991f753b..360464e6ef 100644
+--- a/builtin/diff-files.c
++++ b/builtin/diff-files.c
+@@ -27,6 +27,10 @@ int cmd_diff_files(int argc, const char **argv, const char *prefix)
+ 		usage(diff_files_usage);
+ 
+ 	git_config(git_diff_basic_config, NULL); /* no "diff" UI options */
++
++	prepare_repo_settings(the_repository);
++	the_repository->settings.command_requires_full_index = 0;
++
+ 	repo_init_revisions(the_repository, &rev, prefix);
+ 	rev.abbrev = 0;
+ 
+diff --git a/t/perf/p2000-sparse-operations.sh b/t/perf/p2000-sparse-operations.sh
+index 60d1de0662..901cc493ef 100755
+--- a/t/perf/p2000-sparse-operations.sh
++++ b/t/perf/p2000-sparse-operations.sh
+@@ -129,5 +129,7 @@ test_perf_on_all git grep --cached bogus -- "f2/f1/f1/*"
+ test_perf_on_all git write-tree
+ test_perf_on_all git describe --dirty
+ test_perf_on_all 'echo >>new && git describe --dirty'
++test_perf_on_all git diff-files
++test_perf_on_all git diff-files -- $SPARSE_CONE/a
+ 
+ test_done
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index b06b522030..e58bfbfcb4 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -1377,7 +1377,7 @@ test_expect_success 'index.sparse disabled inline uses full index' '
+ 	! test_region index ensure_full_index trace2.txt
+ '
+ 
+-ensure_not_expanded () {
++run_sparse_index_trace2 () {
+ 	rm -f trace2.txt &&
+ 	if test -z "$WITHOUT_UNTRACKED_TXT"
+ 	then
+@@ -1397,7 +1397,16 @@ ensure_not_expanded () {
+ 			git -C sparse-index "$@" \
+ 			>sparse-index-out \
+ 			2>sparse-index-error || return 1
+-	fi &&
++	fi
++}
++
++ensure_expanded () {
++	run_sparse_index_trace2 "$@" &&
++	test_region index ensure_full_index trace2.txt
++}
++
++ensure_not_expanded () {
++	run_sparse_index_trace2 "$@" &&
+ 	test_region ! index ensure_full_index trace2.txt
+ }
+ 
+@@ -2147,4 +2156,18 @@ test_expect_success 'diff-files with pathspec outside sparse definition' '
+ 	test_all_match git diff-files -- "folder*/a"
+ '
+ 
++test_expect_success 'sparse index is not expanded: diff-files' '
++	init_repos &&
++
++	write_script edit-contents <<-\EOF &&
++	echo text >>"$1"
++	EOF
++
++	run_on_all ../edit-contents deep/a &&
++
++	ensure_not_expanded diff-files &&
++	ensure_not_expanded diff-files -- deep/a &&
++	ensure_not_expanded diff-files -- "deep/*"
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

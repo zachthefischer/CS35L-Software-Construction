@@ -1,0 +1,86 @@
+From 6692d45477dd80adf026b513a10a6d98de802811 Mon Sep 17 00:00:00 2001
+From: Jeff Hostetler <jeffhostetler@github.com>
+Date: Thu, 1 Dec 2022 23:32:14 +0000
+Subject: [PATCH 0481/2871] fsmonitor: fix race seen in t7527
+
+Fix racy tests in t7527 by forcing the use of cookie files during all
+types of queries.  There were originaly observed on M1 macs with file
+system encryption enabled.
+
+There were a series of simple tests, such as "edit some files" and
+"create some files", that started the daemon with GIT_TRACE_FSMONITOR
+enabled so that the daemon would emit "event: <path>" messages to the
+trace log.  The test would make worktree modifications and then grep
+the log file to confirm it contained the expected trace messages.
+The greps would occasionally racily-fail.  The expected messages
+were always present in the log file, just not yet always present
+when the greps ran.
+
+NEEDSWORK: One could argue that the tests should use the `test-tool
+fsmonitor-client query` and search for the expected pathnames in the
+output rather than grepping the trace log, but I'll leave that for a
+later exercise.
+
+The racy tests called `test-tool fsmonitor-client query --token 0`
+before grepping the log file.  (Presumably to introduce a small delay
+and/or to let the daemon sync with the file system following the last
+modification, but that was not always sufficient and hence the race.)
+
+When the query arg is just "0", the daemon treated it as a V1
+(aka timestamp-relative request) and responded with a "trivial
+response" and a new token, but without trying to catch up to the
+the file system event stream.  So the "event: <path>" messages
+may or may not yet be in the log file when the grep commands
+started.
+
+FWIW, if the tests had sent `--token builtin:0:0` instead, it would
+have forced a slightly different code path in the daemon that would
+cause the daemon to use a cookie file and let it catch up with the
+file system event stream.  I did not see any test failures with this
+change.
+
+Instead of modifying the test, I updated the fsmonitor--daemon to
+always use a cookie file and catch up to the file system on any
+query operation, regardless of the format of the request token.
+This is safer.
+
+FWIW, I think the effect of the race was limited to the test.
+Commands like `git status` would always do a full scan when getting a
+trivial response.  The fact that the daemon was slighly behind the
+file system when it generated the response token would cause a second
+`git status` to get a few extra paths that the client would have to
+examine, but it would not be missing paths.
+
+FWIW, I also think that an earlier version of the code always did
+the cookie file for all types of queries, but it was optimized out
+during a round of reviews or rework and we didn't notice the race.
+
+Signed-off-by: Jeff Hostetler <jeffhostetler@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsmonitor--daemon.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/builtin/fsmonitor--daemon.c b/builtin/fsmonitor--daemon.c
+index 46be55a461..1133db0175 100644
+--- a/builtin/fsmonitor--daemon.c
++++ b/builtin/fsmonitor--daemon.c
+@@ -708,6 +708,7 @@ static int do_handle_client(struct fsmonitor_daemon_state *state,
+ 				  "fsmonitor: unsupported V1 protocol '%s'"),
+ 				 command);
+ 		do_trivial = 1;
++		do_cookie = 1;
+ 
+ 	} else {
+ 		/* We have "builtin:*" */
+@@ -717,6 +718,7 @@ static int do_handle_client(struct fsmonitor_daemon_state *state,
+ 					 "fsmonitor: invalid V2 protocol token '%s'",
+ 					 command);
+ 			do_trivial = 1;
++			do_cookie = 1;
+ 
+ 		} else {
+ 			/*
+-- 
+2.39.3 (Apple Git-145)
+

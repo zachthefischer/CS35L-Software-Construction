@@ -1,0 +1,27 @@
+From 6a38b0a0dc4e874bb3b1fb2bfe5aa04b140f9a96 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:26 +0000
+Subject: [PATCH 1664/2871] completion: complete --break-rewrites
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 90fe292459..f07b00b9c6 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1753,7 +1753,7 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--diff-algorithm=
+ 			--submodule --submodule= --ignore-submodules
+ 			--indent-heuristic --no-indent-heuristic
+-			--textconv --no-textconv
++			--textconv --no-textconv --break-rewrites
+ 			--patch --no-patch
+ 			--anchored=
+ "
+-- 
+2.39.3 (Apple Git-145)
+

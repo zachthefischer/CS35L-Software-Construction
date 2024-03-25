@@ -1,0 +1,29 @@
+From 6d1bfcdd2a14ac8e04fa269bbadbb3688e52a3a6 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Sun, 21 Jan 2024 04:07:50 +0000
+Subject: [PATCH 2739/2871] completion: complete --encoding
+
+The option --encoding is supported by 'git log' and 'git show', so add
+it to __git_log_show_options.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index ccb17f4ad7..a7ae2cbe55 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2096,6 +2096,7 @@ __git_log_shortlog_options="
+ # Options accepted by log and show
+ __git_log_show_options="
+ 	--diff-merges --diff-merges= --no-diff-merges --dd --remerge-diff
++	--encoding=
+ "
+ 
+ __git_diff_merges_opts="off none on first-parent 1 separate m combined c dense-combined cc remerge r"
+-- 
+2.39.3 (Apple Git-145)
+

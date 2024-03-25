@@ -1,0 +1,65 @@
+From 4973726c5dfbaebdab95dab52b4c05b2a637d3fb Mon Sep 17 00:00:00 2001
+From: Philip Oakley <philipoakley@iee.email>
+Date: Sat, 29 Oct 2022 17:41:10 +0100
+Subject: [PATCH 0274/2871] glossary: add "commit graph" description
+
+Git has an additional "commit graph" capability that supplements the
+normal commit object's directed acyclic graph (DAG). The supplemental
+commit graph file is designed for speed of access.
+
+Describe the commit graph both from the normative DAG view point and
+from the commit graph file perspective.
+
+Also, clarify the link between the branch ref and branch tip
+by linking to the `ref` glossary entry, matching this commit graph
+entry.
+
+The commit-graph file is also distinguished by its hyphenation.
+
+Subsequent commit catches the few cases where the hyphenation of
+commit-graph was missing.
+
+Signed-off-by: Philip Oakley <philipoakley@iee.email>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/glossary-content.txt | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/glossary-content.txt b/Documentation/glossary-content.txt
+index 947ac49606..a526710278 100644
+--- a/Documentation/glossary-content.txt
++++ b/Documentation/glossary-content.txt
+@@ -20,7 +20,7 @@
+ [[def_branch]]branch::
+ 	A "branch" is a line of development.  The most recent
+ 	<<def_commit,commit>> on a branch is referred to as the tip of
+-	that branch.  The tip of the branch is referenced by a branch
++	that branch.  The tip of the branch is <<def_ref,referenced>> by a branch
+ 	<<def_head,head>>, which moves forward as additional development
+ 	is done on the branch.  A single Git
+ 	<<def_repository,repository>> can track an arbitrary number of
+@@ -75,6 +75,21 @@ state in the Git history, by creating a new commit representing the current
+ state of the <<def_index,index>> and advancing <<def_HEAD,HEAD>>
+ to point at the new commit.
+ 
++[[def_commit_graph_general]]commit graph concept, representations and usage::
++	A synonym for the <<def_DAG,DAG>> structure formed by the commits
++	in the object database, <<def_ref,referenced>> by branch tips,
++	using their <<def_chain,chain>> of linked commits.
++	This structure is the definitive commit graph. The
++	graph can be represented in other ways, e.g. the
++	<<def_commit_graph_file,"commit-graph" file>>.
++
++[[def_commit_graph_file]]commit-graph file::
++	The "commit-graph" (normally hyphenated) file is a supplemental
++	representation of the <<def_commit_graph_general,commit graph>>
++	which accelerates commit graph walks. The "commit-graph" file is
++	stored either in the .git/objects/info directory or in the info
++	directory of an alternate object database.
++
+ [[def_commit_object]]commit object::
+ 	An <<def_object,object>> which contains the information about a
+ 	particular <<def_revision,revision>>, such as <<def_parent,parents>>, committer,
+-- 
+2.39.3 (Apple Git-145)
+

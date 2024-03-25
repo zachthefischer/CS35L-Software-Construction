@@ -1,0 +1,98 @@
+From d8e08f0717c17b2ee629c50844c34adc83575ad0 Mon Sep 17 00:00:00 2001
+From: Britton Leo Kerin <britton.kerin@gmail.com>
+Date: Tue, 6 Feb 2024 12:50:48 -0900
+Subject: [PATCH 2826/2871] completion: bisect: recognize but do not complete
+ view subcommand
+
+The "view" alias for the visualize subcommand is neither completed nor
+recognized.  It's undesirable to complete it because it's first letters
+are the same as for visualize, making completion less rather than more
+efficient without adding much in the way of interface discovery.
+However, it needs to be recognized in order to enable log option
+completion for it.
+
+Recognize but do not complete the view command by creating and using
+separate lists of completable_subcommands and all_subcommands.  Add
+tests.
+
+Signed-off-by: Britton Leo Kerin <britton.kerin@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 15 +++++++++++----
+ t/t9902-completion.sh                  | 24 ++++++++++++++++++++++++
+ 2 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 5337ae4ce2..0734debc11 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1462,12 +1462,19 @@ _git_bisect ()
+ 	# more usual bad/new/good/old because git bisect gives a good error
+ 	# message if these are given when not in use, and that's better than
+ 	# silent refusal to complete if the user is confused.
+-	local subcommands="start bad new $term_bad good old $term_good terms skip reset visualize replay log run help"
+-	local subcommand="$(__git_find_on_cmdline "$subcommands")"
++	#
++	# We want to recognize 'view' but not complete it, because it overlaps
++	# with 'visualize' too much and is just an alias for it.
++	#
++	local completable_subcommands="start bad new $term_bad good old $term_good terms skip reset visualize replay log run help"
++	local all_subcommands="$completable_subcommands view"
++
++	local subcommand="$(__git_find_on_cmdline "$all_subcommands")"
++
+ 	if [ -z "$subcommand" ]; then
+ 		__git_find_repo_path
+ 		if [ -f "$__git_repo_path"/BISECT_START ]; then
+-			__gitcomp "$subcommands"
++			__gitcomp "$completable_subcommands"
+ 		else
+ 			__gitcomp "replay start"
+ 		fi
+@@ -1490,7 +1497,7 @@ _git_bisect ()
+ 		__gitcomp "--term-good --term-old --term-bad --term-new"
+ 		return
+ 		;;
+-	visualize)
++	visualize|view)
+ 		__git_complete_log_opts
+ 		return
+ 		;;
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index b989388e7e..70557eb684 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -1376,6 +1376,30 @@ test_expect_success 'git-bisect - git-log options to visualize subcommand are ca
+ 	)
+ '
+ 
++test_expect_success 'git-bisect - view subcommand is not a candidate' '
++	(
++		cd git-bisect &&
++		test_completion "git bisect vi" <<-\EOF
++		visualize Z
++		EOF
++	)
++'
++
++test_expect_success 'git-bisect - existing view subcommand is recognized and enables completion of git-log options' '
++	(
++		cd git-bisect &&
++		# The completion used for git-log and here does not complete
++		# every git-log option, so rather than hope to stay in sync
++		# with exactly what it does we will just spot-test here.
++		test_completion "git bisect view --sta" <<-\EOF &&
++		--stat Z
++		EOF
++		test_completion "git bisect view --summar" <<-\EOF
++		--summary Z
++		EOF
++	)
++'
++
+ test_expect_success 'git checkout - completes refs and unique remote branches for DWIM' '
+ 	test_completion "git checkout " <<-\EOF
+ 	HEAD Z
+-- 
+2.39.3 (Apple Git-145)
+

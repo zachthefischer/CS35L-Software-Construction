@@ -1,0 +1,26 @@
+From f66ad35508e31c80fb0a7c235bdadfb76fc8ffaf Mon Sep 17 00:00:00 2001
+From: Daniel Santos <dacs.git@brilhante.top>
+Date: Mon, 13 Mar 2023 09:25:33 +0000
+Subject: [PATCH 1190/2871] l10n: TEAMS: Update pt_PT repo link
+
+Signed-off-by: Daniel Santos <dacs.git@brilhante.top>
+---
+ po/TEAMS | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/po/TEAMS b/po/TEAMS
+index 5a63397655..eebac80cca 100644
+--- a/po/TEAMS
++++ b/po/TEAMS
+@@ -51,7 +51,7 @@ Repository:	https://github.com/Arusekk/git-po
+ Leader:		Arusekk <arek_koz@o2.pl>
+ 
+ Language:	pt_PT (Portuguese - Portugal)
+-Repository:	https://codeberg.org/git-pt/Git-PO-pt_PT/
++Repository:	https://gitlab.com/alexandre1985/git-pt/
+ Leader:		Daniel Santos <dacs.git@brilhante.top>
+ 
+ Language:	ru (Russian)
+-- 
+2.39.3 (Apple Git-145)
+

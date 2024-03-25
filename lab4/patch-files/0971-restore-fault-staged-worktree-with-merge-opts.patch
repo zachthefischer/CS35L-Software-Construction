@@ -1,0 +1,96 @@
+From ee8a88826af1137f0b192caa39b016032ac96af2 Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Sun, 26 Feb 2023 18:43:54 +0000
+Subject: [PATCH 0971/2871] restore: fault --staged --worktree with merge opts
+
+The 'restore' command already rejects the --merge, --conflict, --ours
+and --theirs options when combined with --staged, but accepts them when
+--worktree is added as well.
+
+Unfortunately that doesn't appear to do anything useful. The --ours and
+--theirs options seem to be ignored when both --staged and --worktree
+are given, whereas with --merge or --conflict, the command has the same
+effect as if the --staged option wasn't present.
+
+So reject those options with '--staged --worktree' as well, using
+opts->accept_ref to distinguish restore from checkout.
+
+Add test for both '--staged' and '--staged --worktree'.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/checkout.c | 31 ++++++++++++++++++++++---------
+ t/t2070-restore.sh | 16 ++++++++++++++++
+ 2 files changed, 38 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index 2a132392fb..25d269e2f8 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -487,15 +487,28 @@ static int checkout_paths(const struct checkout_opts *opts,
+ 		die(_("'%s' must be used when '%s' is not specified"),
+ 		    "--worktree", "--source");
+ 
+-	if (opts->checkout_index && !opts->checkout_worktree &&
+-	    opts->writeout_stage)
+-		die(_("'%s' or '%s' cannot be used with %s"),
+-		    "--ours", "--theirs", "--staged");
+-
+-	if (opts->checkout_index && !opts->checkout_worktree &&
+-	    opts->merge)
+-		die(_("'%s' or '%s' cannot be used with %s"),
+-		    "--merge", "--conflict", "--staged");
++	/*
++	 * Reject --staged option to the restore command when combined with
++	 * merge-related options. Use the accept_ref flag to distinguish it
++	 * from the checkout command, which does not accept --staged anyway.
++	 *
++	 * `restore --ours|--theirs --worktree --staged` could mean resolving
++	 * conflicted paths to one side in both the worktree and the index,
++	 * but does not currently.
++	 *
++	 * `restore --merge|--conflict=<style>` already recreates conflicts
++	 * in both the worktree and the index, so adding --staged would be
++	 * meaningless.
++	 */
++	if (!opts->accept_ref && opts->checkout_index) {
++		if (opts->writeout_stage)
++			die(_("'%s' or '%s' cannot be used with %s"),
++			    "--ours", "--theirs", "--staged");
++
++		if (opts->merge)
++			die(_("'%s' or '%s' cannot be used with %s"),
++			    "--merge", "--conflict", "--staged");
++	}
+ 
+ 	if (opts->patch_mode) {
+ 		const char *patch_mode;
+diff --git a/t/t2070-restore.sh b/t/t2070-restore.sh
+index 7c43ddf1d9..c5d19dd973 100755
+--- a/t/t2070-restore.sh
++++ b/t/t2070-restore.sh
+@@ -137,4 +137,20 @@ test_expect_success 'restore --staged invalidates cache tree for deletions' '
+ 	test_must_fail git rev-parse HEAD:new1
+ '
+ 
++test_expect_success 'restore with merge options rejects --staged' '
++	for opts in \
++		"--staged --ours" \
++		"--staged --theirs" \
++		"--staged --merge" \
++		"--staged --conflict=diff3" \
++		"--staged --worktree --ours" \
++		"--staged --worktree --theirs" \
++		"--staged --worktree --merge" \
++		"--staged --worktree --conflict=zdiff3"
++	do
++		test_must_fail git restore $opts . 2>err &&
++		grep "cannot be used with --staged" err || return
++	done
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

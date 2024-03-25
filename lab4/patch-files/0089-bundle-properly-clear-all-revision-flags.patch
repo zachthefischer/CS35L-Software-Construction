@@ -1,0 +1,116 @@
+From c96060b0cef79c9d76eb97965e700beb9651f35b Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 12 Oct 2022 12:52:35 +0000
+Subject: [PATCH 0089/2871] bundle: properly clear all revision flags
+
+The verify_bundle() method checks two things for a bundle's
+prerequisites:
+
+ 1. Are these objects in the object store?
+ 2. Are these objects reachable from our references?
+
+In this second question, multiple uses of verify_bundle() in the same
+process can report an invalid bundle even though it is correct. The
+reason is due to not clearing all of the commit marks on the commits
+previously walked.
+
+The revision walk machinery was first introduced in-process by
+fb9a54150d3 (git-bundle: avoid fork() in verify_bundle(), 2007-02-22).
+This implementation used "-1" as the set of flags to clear. The next
+meaningful change came in 2b064697a5b (revision traversal: retire
+BOUNDARY_SHOW, 2007-03-05), which introduced the PREREQ_MARK flag
+instead of a flag normally controlled by the revision-walk machinery.
+
+In 86a0a408b90 (commit: factor out
+clear_commit_marks_for_object_array, 2011-10-01), the loop over the
+array of commits was replaced with a new
+clear_commit_marks_for_object_array(), but simultaneously the "-1" value
+was replaced with "ALL_REV_FLAGS", which stopped un-setting the
+PREREQ_MARK flag. This means that if multiple commits were marked by the
+PREREQ_MARK in a previous run of verify_bundle(), then this loop could
+terminate early due to 'i' going to zero:
+
+	while (i && (commit = get_revision(&revs)))
+		if (commit->object.flags & PREREQ_MARK)
+			i--;
+
+The flag clearing work was changed again in 63647391e6c (bundle: avoid
+using the rev_info flag leak_pending, 2017-12-25), but that was only
+cosmetic and did not change the behavior.
+
+It may seem that it would be sufficient to add the PREREQ_MARK flag to
+the clear_commit_marks() call in its current location. However, we
+actually need to do it in the "cleanup:" step, since the first loop
+checking "Are these objects in the object store?" might add the
+PREREQ_MARK flag to some objects and then terminate without performing a
+walk due to one missing object. By clearing the flags in all cases, we
+avoid this issue when running verify_bundle() multiple times in the same
+process.
+
+Moving this loop to the cleanup step alone would cause a segfault when
+running 'git bundle verify' outside of a repository, but this is because
+of that error condition using "goto cleanup" when returning is perfectly
+safe. Nothing has been initialized at that point, so we can return
+immediately without causing any leaks.
+
+This behavior is verified carefully by a test that will be added soon
+when Git learns to download bundle lists in a 'git clone --bundle-uri'
+command.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle.c | 23 ++++++++++-------------
+ 1 file changed, 10 insertions(+), 13 deletions(-)
+
+diff --git a/bundle.c b/bundle.c
+index 0208e6d90d..c277f3b936 100644
+--- a/bundle.c
++++ b/bundle.c
+@@ -202,10 +202,8 @@ int verify_bundle(struct repository *r,
+ 	int i, ret = 0, req_nr;
+ 	const char *message = _("Repository lacks these prerequisite commits:");
+ 
+-	if (!r || !r->objects || !r->objects->odb) {
+-		ret = error(_("need a repository to verify a bundle"));
+-		goto cleanup;
+-	}
++	if (!r || !r->objects || !r->objects->odb)
++		return error(_("need a repository to verify a bundle"));
+ 
+ 	repo_init_revisions(r, &revs, NULL);
+ 	for (i = 0; i < p->nr; i++) {
+@@ -250,15 +248,6 @@ int verify_bundle(struct repository *r,
+ 		error("%s %s", oid_to_hex(oid), name);
+ 	}
+ 
+-	/* Clean up objects used, as they will be reused. */
+-	for (i = 0; i < p->nr; i++) {
+-		struct string_list_item *e = p->items + i;
+-		struct object_id *oid = e->util;
+-		commit = lookup_commit_reference_gently(r, oid, 1);
+-		if (commit)
+-			clear_commit_marks(commit, ALL_REV_FLAGS);
+-	}
+-
+ 	if (verbose) {
+ 		struct string_list *r;
+ 
+@@ -287,6 +276,14 @@ int verify_bundle(struct repository *r,
+ 				  list_objects_filter_spec(&header->filter));
+ 	}
+ cleanup:
++	/* Clean up objects used, as they will be reused. */
++	for (i = 0; i < p->nr; i++) {
++		struct string_list_item *e = p->items + i;
++		struct object_id *oid = e->util;
++		commit = lookup_commit_reference_gently(r, oid, 1);
++		if (commit)
++			clear_commit_marks(commit, ALL_REV_FLAGS | PREREQ_MARK);
++	}
+ 	release_revisions(&revs);
+ 	return ret;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

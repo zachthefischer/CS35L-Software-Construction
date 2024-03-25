@@ -1,0 +1,72 @@
+From 796abac7e11ffb0ac140e93f4649bb0264f35025 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:50 +0000
+Subject: [PATCH 0747/2871] rebase: add coverage of other incompatible options
+
+The git-rebase manual noted several sets of incompatible options, but
+we were missing tests for a few of these.  Further, we were missing
+code checks for one of these, which could result in command line
+options being silently ignored.
+
+Also, note that adding a check for autosquash means that using
+--whitespace=fix together with the config setting rebase.autosquash=true
+will trigger an error.  A subsequent commit will improve the error
+message.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c                       |  3 +++
+ t/t3422-rebase-incompatible-options.sh | 15 +++++++++++++++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 05b130bfae..d6b20a6a53 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1511,6 +1511,9 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	if (options.update_refs)
+ 		imply_merge(&options, "--update-refs");
+ 
++	if (options.autosquash)
++		imply_merge(&options, "--autosquash");
++
+ 	if (options.type == REBASE_UNSPECIFIED) {
+ 		if (!strcmp(options.default_backend, "merge"))
+ 			imply_merge(&options, "--merge");
+diff --git a/t/t3422-rebase-incompatible-options.sh b/t/t3422-rebase-incompatible-options.sh
+index 826f3b94ae..6a17b571ec 100755
+--- a/t/t3422-rebase-incompatible-options.sh
++++ b/t/t3422-rebase-incompatible-options.sh
+@@ -50,6 +50,11 @@ test_rebase_am_only () {
+ 		test_must_fail git rebase $opt --strategy-option=ours A
+ 	"
+ 
++	test_expect_success "$opt incompatible with --autosquash" "
++		git checkout B^0 &&
++		test_must_fail git rebase $opt --autosquash A
++	"
++
+ 	test_expect_success "$opt incompatible with --interactive" "
+ 		git checkout B^0 &&
+ 		test_must_fail git rebase $opt --interactive A
+@@ -60,6 +65,16 @@ test_rebase_am_only () {
+ 		test_must_fail git rebase $opt --exec 'true' A
+ 	"
+ 
++	test_expect_success "$opt incompatible with --keep-empty" "
++		git checkout B^0 &&
++		test_must_fail git rebase $opt --keep-empty A
++	"
++
++	test_expect_success "$opt incompatible with --empty=..." "
++		git checkout B^0 &&
++		test_must_fail git rebase $opt --empty=ask A
++	"
++
+ 	test_expect_success "$opt incompatible with --no-reapply-cherry-picks" "
+ 		git checkout B^0 &&
+ 		test_must_fail git rebase $opt --no-reapply-cherry-picks A
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,92 @@
+From fa1033accc71edf978eb80043a6a35d7529e7209 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:19:00 +0000
+Subject: [PATCH 2754/2871] t5312: move reffiles specific tests to t0601
+
+Move a few tests into t0601 since they specifically test the packed-refs
+file and thus are specific to the reffiles backend.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0601-reffiles-pack-refs.sh | 30 ++++++++++++++++++++++++++++++
+ t/t5312-prune-corruption.sh   | 26 --------------------------
+ 2 files changed, 30 insertions(+), 26 deletions(-)
+
+diff --git a/t/t0601-reffiles-pack-refs.sh b/t/t0601-reffiles-pack-refs.sh
+index 37de284b86..c309d2bae8 100755
+--- a/t/t0601-reffiles-pack-refs.sh
++++ b/t/t0601-reffiles-pack-refs.sh
+@@ -328,4 +328,34 @@ test_expect_success 'refs/worktree must not be packed' '
+ 	test_path_is_file .git/worktrees/wt2/refs/worktree/foo
+ '
+ 
++# we do not want to count on running pack-refs to
++# actually pack it, as it is perfectly reasonable to
++# skip processing a broken ref
++test_expect_success 'create packed-refs file with broken ref' '
++	test_tick && git commit --allow-empty -m one &&
++	recoverable=$(git rev-parse HEAD) &&
++	test_tick && git commit --allow-empty -m two &&
++	missing=$(git rev-parse HEAD) &&
++	rm -f .git/refs/heads/main &&
++	cat >.git/packed-refs <<-EOF &&
++	$missing refs/heads/main
++	$recoverable refs/heads/other
++	EOF
++	echo $missing >expect &&
++	git rev-parse refs/heads/main >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'pack-refs does not silently delete broken packed ref' '
++	git pack-refs --all --prune &&
++	git rev-parse refs/heads/main >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'pack-refs does not drop broken refs during deletion' '
++	git update-ref -d refs/heads/other &&
++	git rev-parse refs/heads/main >actual &&
++	test_cmp expect actual
++'
++
+ test_done
+diff --git a/t/t5312-prune-corruption.sh b/t/t5312-prune-corruption.sh
+index 230cb38712..d8d2e30468 100755
+--- a/t/t5312-prune-corruption.sh
++++ b/t/t5312-prune-corruption.sh
+@@ -111,30 +111,4 @@ test_expect_success 'pack-refs does not silently delete broken loose ref' '
+ 	test_cmp expect actual
+ '
+ 
+-# we do not want to count on running pack-refs to
+-# actually pack it, as it is perfectly reasonable to
+-# skip processing a broken ref
+-test_expect_success REFFILES 'create packed-refs file with broken ref' '
+-	rm -f .git/refs/heads/main &&
+-	cat >.git/packed-refs <<-EOF &&
+-	$missing refs/heads/main
+-	$recoverable refs/heads/other
+-	EOF
+-	echo $missing >expect &&
+-	git rev-parse refs/heads/main >actual &&
+-	test_cmp expect actual
+-'
+-
+-test_expect_success REFFILES 'pack-refs does not silently delete broken packed ref' '
+-	git pack-refs --all --prune &&
+-	git rev-parse refs/heads/main >actual &&
+-	test_cmp expect actual
+-'
+-
+-test_expect_success REFFILES  'pack-refs does not drop broken refs during deletion' '
+-	git update-ref -d refs/heads/other &&
+-	git rev-parse refs/heads/main >actual &&
+-	test_cmp expect actual
+-'
+-
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

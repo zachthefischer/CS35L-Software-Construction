@@ -1,0 +1,36 @@
+From 1d94abfe1eedb3f0a9de74ba59483ef8f10b352c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 3 Oct 2023 16:30:44 -0400
+Subject: [PATCH 2190/2871] commit-graph: free graph struct that was not added
+ to chain
+
+When reading the graph chain file, we open (and allocate) each
+individual slice it mentions and then add them to a linked-list chain.
+But if adding to the chain fails (e.g., because the base-graph chunk it
+contains didn't match what we expected), we leave the function without
+freeing the graph struct that caused the failure, leaking it.
+
+We can fix it by calling free_graph_commit().
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 2c72a554c2..4aa2f294f1 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -566,6 +566,8 @@ static struct commit_graph *load_commit_graph_chain(struct repository *r,
+ 				if (add_graph_to_chain(g, graph_chain, oids, i)) {
+ 					graph_chain = g;
+ 					valid = 1;
++				} else {
++					free_commit_graph(g);
+ 				}
+ 
+ 				break;
+-- 
+2.39.3 (Apple Git-145)
+

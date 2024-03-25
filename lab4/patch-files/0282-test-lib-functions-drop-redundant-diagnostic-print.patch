@@ -1,0 +1,54 @@
+From cc8f95c04205b254154d89c17054aa963f31ad0b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Mon, 31 Oct 2022 19:00:48 +0100
+Subject: [PATCH 0282/2871] test-lib-functions: drop redundant diagnostic print
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`test_path_is_missing` was introduced back in 2caf20c52b ("test-lib:
+user-friendly alternatives to test [-d|-f|-e]", 2010-08-10). It took the
+path that was supposed to be missing, as well as an optional "diagnosis"
+that would be echoed if the path was found to be alive.
+
+Commit 45a2686441 ("test-lib-functions: remove bug-inducing
+"diagnostics" helper param", 2021-02-12) dropped this diagnostic
+functionality from several `test_path_is_foo` helpers, but note how it
+tweaked the README entry on `test_path_is_missing` without actually
+adjusting its implementation.
+
+Commit e7884b353b ("test-lib-functions: assert correct parameter count",
+2021-02-12) then followed up by asserting that we get just a single
+argument.
+
+This history leaves us in a state where we assert that we have exactly
+one argument, then go on to anyway check for arguments, echoing them
+all. It's clear that we can simplify this code. We should also note that
+we run `ls -ld "$1"`, so printing the filename a second time doesn't
+really buy us anything. Thus, we can drop the whole `if` block as
+redundant.
+
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/test-lib-functions.sh | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 29d914a12b..796093a7b3 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -921,10 +921,6 @@ test_path_is_missing () {
+ 	then
+ 		echo "Path exists:"
+ 		ls -ld "$1"
+-		if test $# -ge 1
+-		then
+-			echo "$*"
+-		fi
+ 		false
+ 	fi
+ }
+-- 
+2.39.3 (Apple Git-145)
+

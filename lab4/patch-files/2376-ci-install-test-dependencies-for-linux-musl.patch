@@ -1,0 +1,91 @@
+From 0d3911ad73514850a79af478d62a94c754892d12 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 9 Nov 2023 09:05:50 +0100
+Subject: [PATCH 2376/2871] ci: install test dependencies for linux-musl
+
+The linux-musl CI job executes tests on Alpine Linux, which is based on
+musl libc instead of glibc. We're missing some test dependencies though,
+which causes us to skip a subset of tests.
+
+Install these test dependencies to increase our test coverage on this
+platform. There are still some missing test dependecies, but these do
+not have a corresponding package in the Alpine repositories:
+
+    - p4 and p4d, both parts of the Perforce version control system.
+
+    - cvsps, which generates patch sets for CVS.
+
+    - Subversion and the SVN::Core Perl library, the latter of which is
+      not available in the Alpine repositories. While the tool itself is
+      available, all Subversion-related tests are skipped without the
+      SVN::Core Perl library anyway.
+
+The Apache2-based tests require a bit more care though. For one, the
+module path is different on Alpine Linux, which requires us to add it to
+the list of known module paths to detect it. But second, the WebDAV
+module on Alpine Linux is broken because it does not bundle the default
+database backend [1]. We thus need to skip the WebDAV-based tests on
+Alpine Linux for now.
+
+[1]: https://gitlab.alpinelinux.org/alpine/aports/-/issues/13112
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/install-docker-dependencies.sh |  4 +++-
+ t/lib-httpd.sh                    | 17 ++++++++++++++++-
+ 2 files changed, 19 insertions(+), 2 deletions(-)
+
+diff --git a/ci/install-docker-dependencies.sh b/ci/install-docker-dependencies.sh
+index d0bc19d3bb..6e84528368 100755
+--- a/ci/install-docker-dependencies.sh
++++ b/ci/install-docker-dependencies.sh
+@@ -17,7 +17,9 @@ linux32)
+ 	;;
+ linux-musl)
+ 	apk add --update build-base curl-dev openssl-dev expat-dev gettext \
+-		pcre2-dev python3 musl-libintl perl-utils ncurses >/dev/null
++		pcre2-dev python3 musl-libintl perl-utils ncurses \
++		apache2 apache2-http2 apache2-proxy apache2-ssl apache2-webdav apr-util-dbd_sqlite3 \
++		bash cvs gnupg perl-cgi perl-dbd-sqlite >/dev/null
+ 	;;
+ pedantic)
+ 	dnf -yq update >/dev/null &&
+diff --git a/t/lib-httpd.sh b/t/lib-httpd.sh
+index 2fb1b2ae56..9ea74927c4 100644
+--- a/t/lib-httpd.sh
++++ b/t/lib-httpd.sh
+@@ -67,7 +67,8 @@ for DEFAULT_HTTPD_MODULE_PATH in '/usr/libexec/apache2' \
+ 				 '/usr/lib/apache2/modules' \
+ 				 '/usr/lib64/httpd/modules' \
+ 				 '/usr/lib/httpd/modules' \
+-				 '/usr/libexec/httpd'
++				 '/usr/libexec/httpd' \
++				 '/usr/lib/apache2'
+ do
+ 	if test -d "$DEFAULT_HTTPD_MODULE_PATH"
+ 	then
+@@ -127,6 +128,20 @@ else
+ 		"Could not identify web server at '$LIB_HTTPD_PATH'"
+ fi
+ 
++if test -n "$LIB_HTTPD_DAV" && test -f /etc/os-release
++then
++	case "$(grep "^ID=" /etc/os-release | cut -d= -f2-)" in
++	alpine)
++		# The WebDAV module in Alpine Linux is broken at least up to
++		# Alpine v3.16 as the default DBM driver is missing.
++		#
++		# https://gitlab.alpinelinux.org/alpine/aports/-/issues/13112
++		test_skip_or_die GIT_TEST_HTTPD \
++			"Apache WebDAV module does not have default DBM backend driver"
++		;;
++	esac
++fi
++
+ install_script () {
+ 	write_script "$HTTPD_ROOT_PATH/$1" <"$TEST_PATH/$1"
+ }
+-- 
+2.39.3 (Apple Git-145)
+

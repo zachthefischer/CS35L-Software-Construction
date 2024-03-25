@@ -1,0 +1,160 @@
+From 8876ea83a74b45046c3dabdd5f55f07852bb98ae Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:41:55 -0700
+Subject: [PATCH 1232/2871] object.h: move some inline functions and defines
+ from cache.h
+
+The object_type() inline function is very tied to the enum object_type
+declaration within object.h, and just seemed to make more sense to live
+there.  That makes S_ISGITLINK and some other defines make sense to go
+with it, as well as the create_ce_mode() and canon_mode() inline
+functions.  Move all these inline functions and defines from cache.h to
+object.h.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h  | 42 ------------------------------------------
+ object.h | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 44 insertions(+), 42 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 89987cca22..394e8d0125 100644
+--- a/cache.h
++++ b/cache.h
+@@ -28,18 +28,6 @@
+ #define DTYPE(de)	DT_UNKNOWN
+ #endif
+ 
+-/* unknown mode (impossible combination S_IFIFO|S_IFCHR) */
+-#define S_IFINVALID     0030000
+-
+-/*
+- * A "directory link" is a link to another git directory.
+- *
+- * The value 0160000 is not normally a valid mode, and
+- * also just happens to be S_IFDIR + S_IFLNK
+- */
+-#define S_IFGITLINK	0160000
+-#define S_ISGITLINK(m)	(((m) & S_IFMT) == S_IFGITLINK)
+-
+ /*
+  * Some mode bits are also used internally for computations.
+  *
+@@ -155,8 +143,6 @@ struct cache_entry {
+ #error "CE_EXTENDED_FLAGS out of range"
+ #endif
+ 
+-#define S_ISSPARSEDIR(m) ((m) == S_IFDIR)
+-
+ /* Forward structure decls */
+ struct pathspec;
+ struct child_process;
+@@ -197,17 +183,6 @@ static inline unsigned create_ce_flags(unsigned stage)
+ #define ce_mark_uptodate(ce) ((ce)->ce_flags |= CE_UPTODATE)
+ #define ce_intent_to_add(ce) ((ce)->ce_flags & CE_INTENT_TO_ADD)
+ 
+-#define ce_permissions(mode) (((mode) & 0100) ? 0755 : 0644)
+-static inline unsigned int create_ce_mode(unsigned int mode)
+-{
+-	if (S_ISLNK(mode))
+-		return S_IFLNK;
+-	if (S_ISSPARSEDIR(mode))
+-		return S_IFDIR;
+-	if (S_ISDIR(mode) || S_ISGITLINK(mode))
+-		return S_IFGITLINK;
+-	return S_IFREG | ce_permissions(mode);
+-}
+ static inline unsigned int ce_mode_from_stat(const struct cache_entry *ce,
+ 					     unsigned int mode)
+ {
+@@ -234,16 +209,6 @@ static inline int ce_to_dtype(const struct cache_entry *ce)
+ 	else
+ 		return DT_UNKNOWN;
+ }
+-static inline unsigned int canon_mode(unsigned int mode)
+-{
+-	if (S_ISREG(mode))
+-		return S_IFREG | ce_permissions(mode);
+-	if (S_ISLNK(mode))
+-		return S_IFLNK;
+-	if (S_ISDIR(mode))
+-		return S_IFDIR;
+-	return S_IFGITLINK;
+-}
+ 
+ static inline int ce_path_match(struct index_state *istate,
+ 				const struct cache_entry *ce,
+@@ -414,13 +379,6 @@ void prefetch_cache_entries(const struct index_state *istate,
+ extern struct index_state the_index;
+ #endif
+ 
+-static inline enum object_type object_type(unsigned int mode)
+-{
+-	return S_ISDIR(mode) ? OBJ_TREE :
+-		S_ISGITLINK(mode) ? OBJ_COMMIT :
+-		OBJ_BLOB;
+-}
+-
+ #define INIT_DB_QUIET 0x0001
+ #define INIT_DB_EXIST_OK 0x0002
+ 
+diff --git a/object.h b/object.h
+index fc45b158da..96e52e24fb 100644
+--- a/object.h
++++ b/object.h
+@@ -101,6 +101,50 @@ enum object_type {
+ 	OBJ_MAX
+ };
+ 
++/* unknown mode (impossible combination S_IFIFO|S_IFCHR) */
++#define S_IFINVALID     0030000
++
++/*
++ * A "directory link" is a link to another git directory.
++ *
++ * The value 0160000 is not normally a valid mode, and
++ * also just happens to be S_IFDIR + S_IFLNK
++ */
++#define S_IFGITLINK	0160000
++#define S_ISGITLINK(m)	(((m) & S_IFMT) == S_IFGITLINK)
++
++#define S_ISSPARSEDIR(m) ((m) == S_IFDIR)
++
++static inline enum object_type object_type(unsigned int mode)
++{
++	return S_ISDIR(mode) ? OBJ_TREE :
++		S_ISGITLINK(mode) ? OBJ_COMMIT :
++		OBJ_BLOB;
++}
++
++#define ce_permissions(mode) (((mode) & 0100) ? 0755 : 0644)
++static inline unsigned int create_ce_mode(unsigned int mode)
++{
++	if (S_ISLNK(mode))
++		return S_IFLNK;
++	if (S_ISSPARSEDIR(mode))
++		return S_IFDIR;
++	if (S_ISDIR(mode) || S_ISGITLINK(mode))
++		return S_IFGITLINK;
++	return S_IFREG | ce_permissions(mode);
++}
++
++static inline unsigned int canon_mode(unsigned int mode)
++{
++	if (S_ISREG(mode))
++		return S_IFREG | ce_permissions(mode);
++	if (S_ISLNK(mode))
++		return S_IFLNK;
++	if (S_ISDIR(mode))
++		return S_IFDIR;
++	return S_IFGITLINK;
++}
++
+ /*
+  * The object type is stored in 3 bits.
+  */
+-- 
+2.39.3 (Apple Git-145)
+

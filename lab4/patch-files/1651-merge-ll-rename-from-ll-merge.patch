@@ -1,0 +1,227 @@
+From 6723899932eb5b6436e9bac65ffc9b6e644c7fee Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:34:04 +0000
+Subject: [PATCH 1651/2871] merge-ll: rename from ll-merge
+
+A long term (but rather minor) pet-peeve of mine was the name
+ll-merge.[ch].  I thought it made it harder to realize what stuff was
+related to merging when I was working on the merge machinery and trying
+to improve it.
+
+Further, back in d1cbe1e6d8a ("hash-ll.h: split out of hash.h to remove
+dependency on repository.h", 2023-04-22), we have split the portions of
+hash.h that do not depend upon repository.h into a "hash-ll.h" (due to
+the recommendation to use "ll" for "low-level" in its name[1], but which
+I used as a suffix precisely because of my distaste for "ll-merge").
+When we discussed adding additional "*-ll.h" files, a request was made
+that we use "ll" consistently as either a prefix or a suffix.  Since it
+is already in use as both a prefix and a suffix, the only way to do so
+is to rename some files.
+
+Besides my distaste for the ll-merge.[ch] name, let me also note that
+the files
+  ll-fsmonitor.h, ll-hash.h, ll-merge.h, ll-object-store.h, ll-read-cache.h
+would have essentially nothing to do with each other and make no sense
+to group.  But giving them the common "ll-" prefix would group them.  Using
+"-ll" as a suffix thus seems just much more logical to me.  Rename
+ll-merge.[ch] to merge-ll.[ch] to achieve this consistency, and to
+ensure we get a more logical grouping of files.
+
+[1] https://lore.kernel.org/git/kl6lsfcu1g8w.fsf@chooglen-macbookpro.roam.corp.google.com/
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/technical/api-merge.txt | 4 ++--
+ Makefile                              | 2 +-
+ apply.c                               | 2 +-
+ builtin/checkout.c                    | 2 +-
+ convert.c                             | 2 +-
+ diff.c                                | 2 +-
+ merge-blobs.c                         | 2 +-
+ ll-merge.c => merge-ll.c              | 2 +-
+ ll-merge.h => merge-ll.h              | 0
+ merge-ort.c                           | 2 +-
+ merge-recursive.c                     | 2 +-
+ notes-merge.c                         | 2 +-
+ rerere.c                              | 2 +-
+ 13 files changed, 13 insertions(+), 13 deletions(-)
+ rename ll-merge.c => merge-ll.c (99%)
+ rename ll-merge.h => merge-ll.h (100%)
+
+diff --git a/Documentation/technical/api-merge.txt b/Documentation/technical/api-merge.txt
+index 487d4d83ff..c2ba01828c 100644
+--- a/Documentation/technical/api-merge.txt
++++ b/Documentation/technical/api-merge.txt
+@@ -28,9 +28,9 @@ and `diff.c` for examples.
+ 
+ * `struct ll_merge_options`
+ 
+-Check ll-merge.h for details.
++Check merge-ll.h for details.
+ 
+ Low-level (single file) merge
+ -----------------------------
+ 
+-Check ll-merge.h for details.
++Check merge-ll.h for details.
+diff --git a/Makefile b/Makefile
+index e62db9460d..fb541dedc9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1051,7 +1051,6 @@ LIB_OBJS += linear-assignment.o
+ LIB_OBJS += list-objects-filter-options.o
+ LIB_OBJS += list-objects-filter.o
+ LIB_OBJS += list-objects.o
+-LIB_OBJS += ll-merge.o
+ LIB_OBJS += lockfile.o
+ LIB_OBJS += log-tree.o
+ LIB_OBJS += ls-refs.o
+@@ -1060,6 +1059,7 @@ LIB_OBJS += mailmap.o
+ LIB_OBJS += match-trees.o
+ LIB_OBJS += mem-pool.o
+ LIB_OBJS += merge-blobs.o
++LIB_OBJS += merge-ll.o
+ LIB_OBJS += merge-ort.o
+ LIB_OBJS += merge-ort-wrappers.o
+ LIB_OBJS += merge-recursive.o
+diff --git a/apply.c b/apply.c
+index 801f2bcc99..2f66f93fec 100644
+--- a/apply.c
++++ b/apply.c
+@@ -21,7 +21,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "xdiff-interface.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "lockfile.h"
+ #include "name-hash.h"
+ #include "object-name.h"
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index 716dcd4cae..11e2359c54 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -13,7 +13,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "hook.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "lockfile.h"
+ #include "mem-pool.h"
+ #include "merge-recursive.h"
+diff --git a/convert.c b/convert.c
+index 89aeb9e72b..572d7123a9 100644
+--- a/convert.c
++++ b/convert.c
+@@ -15,7 +15,7 @@
+ #include "sub-process.h"
+ #include "trace.h"
+ #include "utf8.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "wrapper.h"
+ 
+ /*
+diff --git a/diff.c b/diff.c
+index 7fb9abe891..d02fbf507e 100644
+--- a/diff.c
++++ b/diff.c
+@@ -26,7 +26,7 @@
+ #include "submodule.h"
+ #include "hashmap.h"
+ #include "mem-pool.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "string-list.h"
+ #include "strvec.h"
+ #include "graph.h"
+diff --git a/merge-blobs.c b/merge-blobs.c
+index 5632ff6abb..40c48e3eba 100644
+--- a/merge-blobs.c
++++ b/merge-blobs.c
+@@ -1,7 +1,7 @@
+ #include "git-compat-util.h"
+ #include "run-command.h"
+ #include "xdiff-interface.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "blob.h"
+ #include "merge-blobs.h"
+ #include "object-store.h"
+diff --git a/ll-merge.c b/merge-ll.c
+similarity index 99%
+rename from ll-merge.c
+rename to merge-ll.c
+index 07ec16e8e5..740b8c6bfd 100644
+--- a/ll-merge.c
++++ b/merge-ll.c
+@@ -10,7 +10,7 @@
+ #include "attr.h"
+ #include "xdiff-interface.h"
+ #include "run-command.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "quote.h"
+ #include "strbuf.h"
+ #include "wrapper.h"
+diff --git a/ll-merge.h b/merge-ll.h
+similarity index 100%
+rename from ll-merge.h
+rename to merge-ll.h
+diff --git a/merge-ort.c b/merge-ort.c
+index 587eea9801..d88178dddf 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -30,7 +30,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "entry.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "match-trees.h"
+ #include "mem-pool.h"
+ #include "object-name.h"
+diff --git a/merge-recursive.c b/merge-recursive.c
+index 527dbbd010..35e1e7e1be 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -20,7 +20,7 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "lockfile.h"
+ #include "match-trees.h"
+ #include "name-hash.h"
+diff --git a/notes-merge.c b/notes-merge.c
+index 4b328d852c..4be11a0155 100644
+--- a/notes-merge.c
++++ b/notes-merge.c
+@@ -12,7 +12,7 @@
+ #include "diffcore.h"
+ #include "hex.h"
+ #include "xdiff-interface.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "dir.h"
+ #include "notes.h"
+ #include "notes-merge.h"
+diff --git a/rerere.c b/rerere.c
+index 35b9785d57..3584fecb07 100644
+--- a/rerere.c
++++ b/rerere.c
+@@ -12,7 +12,7 @@
+ #include "xdiff-interface.h"
+ #include "dir.h"
+ #include "resolve-undo.h"
+-#include "ll-merge.h"
++#include "merge-ll.h"
+ #include "attr.h"
+ #include "path.h"
+ #include "pathspec.h"
+-- 
+2.39.3 (Apple Git-145)
+

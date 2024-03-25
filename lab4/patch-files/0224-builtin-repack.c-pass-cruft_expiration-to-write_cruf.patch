@@ -1,0 +1,72 @@
+From eddad3686080553bb1e6ffa6d9394912f9427823 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Oct 2022 14:43:06 -0400
+Subject: [PATCH 0224/2871] builtin/repack.c: pass "cruft_expiration" to
+ `write_cruft_pack`
+
+`builtin/repack.c`'s `write_cruft_pack()` is used to generate the cruft
+pack when `--cruft` is supplied. It uses a static variable
+"cruft_expiration" which is filled in by option parsing.
+
+A future patch will add an `--expire-to` option which allows `git
+repack` to write a cruft pack containing the pruned objects out to a
+separate repository. In order to implement this functionality, some
+callers will have to pass a value for `cruft_expiration` different than
+the one filled out by option parsing.
+
+Prepare for this by teaching `write_cruft_pack` to take a
+"cruft_expiration" parameter, instead of reading a single static
+variable.
+
+The (sole) existing caller of `write_cruft_pack()` will pass the value
+for "cruft_expiration" filled in by option parsing, retaining existing
+behavior. This means that we can make the variable local to
+`cmd_repack()`, and eliminate the static declaration.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 0a7bd57636..1184e8c257 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -32,7 +32,6 @@ static int write_bitmaps = -1;
+ static int use_delta_islands;
+ static int run_update_server_info = 1;
+ static char *packdir, *packtmp_name, *packtmp;
+-static char *cruft_expiration;
+ 
+ static const char *const git_repack_usage[] = {
+ 	N_("git repack [<options>]"),
+@@ -664,6 +663,7 @@ static int write_midx_included_packs(struct string_list *include,
+ 
+ static int write_cruft_pack(const struct pack_objects_args *args,
+ 			    const char *pack_prefix,
++			    const char *cruft_expiration,
+ 			    struct string_list *names,
+ 			    struct string_list *existing_packs,
+ 			    struct string_list *existing_kept_packs)
+@@ -746,6 +746,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 	struct pack_objects_args cruft_po_args = {NULL};
+ 	int geometric_factor = 0;
+ 	int write_midx = 0;
++	const char *cruft_expiration = NULL;
+ 
+ 	struct option builtin_repack_options[] = {
+ 		OPT_BIT('a', NULL, &pack_everything,
+@@ -985,7 +986,8 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 		cruft_po_args.local = po_args.local;
+ 		cruft_po_args.quiet = po_args.quiet;
+ 
+-		ret = write_cruft_pack(&cruft_po_args, pack_prefix, &names,
++		ret = write_cruft_pack(&cruft_po_args, pack_prefix,
++				       cruft_expiration, &names,
+ 				       &existing_nonkept_packs,
+ 				       &existing_kept_packs);
+ 		if (ret)
+-- 
+2.39.3 (Apple Git-145)
+

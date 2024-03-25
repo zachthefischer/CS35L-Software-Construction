@@ -1,0 +1,151 @@
+From 50c37ee839f0c6842816dec0764d0592b5d048b2 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:46 +0000
+Subject: [PATCH 1633/2871] add: modify add_files_to_cache() to avoid globals
+
+The function add_files_to_cache() is used by all three of builtin/{add,
+checkout, commit}.c.  That suggests this is common library code, and
+should be moved somewhere else, like read-cache.c.  However, the
+function and its helpers made use of two global variables that made
+straight code movement difficult:
+  * the_index
+  * include_sparse
+The latter was perhaps more problematic since it was only accessible in
+builtin/add.c but was still affecting builtin/checkout.c and
+builtin/commit.c without this fact being very clear from the code.  I'm
+not sure if the other two callers would want to add a `--sparse` flag
+similar to add.c to get non-default behavior, but exposing this
+dependence will help if we ever decide we do want to add such a flag.
+
+Modify add_files_to_cache() and its helpers to accept the necessary
+arguments instead of relying on globals.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/add.c      | 22 +++++++++++++++-------
+ builtin/checkout.c |  2 +-
+ builtin/commit.c   |  3 ++-
+ cache.h            |  4 +++-
+ 4 files changed, 21 insertions(+), 10 deletions(-)
+
+diff --git a/builtin/add.c b/builtin/add.c
+index 76cc026a68..a526eff734 100644
+--- a/builtin/add.c
++++ b/builtin/add.c
+@@ -37,6 +37,8 @@ static int include_sparse;
+ static const char *pathspec_from_file;
+ 
+ struct update_callback_data {
++	struct index_state *index;
++	int include_sparse;
+ 	int flags;
+ 	int add_errors;
+ };
+@@ -100,7 +102,8 @@ static void update_callback(struct diff_queue_struct *q,
+ 		struct diff_filepair *p = q->queue[i];
+ 		const char *path = p->one->path;
+ 
+-		if (!include_sparse && !path_in_sparse_checkout(path, &the_index))
++		if (!data->include_sparse &&
++		    !path_in_sparse_checkout(path, data->index))
+ 			continue;
+ 
+ 		switch (fix_unmerged_status(p, data)) {
+@@ -108,7 +111,7 @@ static void update_callback(struct diff_queue_struct *q,
+ 			die(_("unexpected diff status %c"), p->status);
+ 		case DIFF_STATUS_MODIFIED:
+ 		case DIFF_STATUS_TYPE_CHANGED:
+-			if (add_file_to_index(&the_index, path,	data->flags)) {
++			if (add_file_to_index(data->index, path, data->flags)) {
+ 				if (!(data->flags & ADD_CACHE_IGNORE_ERRORS))
+ 					die(_("updating files failed"));
+ 				data->add_errors++;
+@@ -118,7 +121,7 @@ static void update_callback(struct diff_queue_struct *q,
+ 			if (data->flags & ADD_CACHE_IGNORE_REMOVAL)
+ 				break;
+ 			if (!(data->flags & ADD_CACHE_PRETEND))
+-				remove_file_from_index(&the_index, path);
++				remove_file_from_index(data->index, path);
+ 			if (data->flags & (ADD_CACHE_PRETEND|ADD_CACHE_VERBOSE))
+ 				printf(_("remove '%s'\n"), path);
+ 			break;
+@@ -126,16 +129,19 @@ static void update_callback(struct diff_queue_struct *q,
+ 	}
+ }
+ 
+-int add_files_to_cache(const char *prefix,
+-		       const struct pathspec *pathspec, int flags)
++int add_files_to_cache(struct repository *repo, const char *prefix,
++		       const struct pathspec *pathspec, int include_sparse,
++		       int flags)
+ {
+ 	struct update_callback_data data;
+ 	struct rev_info rev;
+ 
+ 	memset(&data, 0, sizeof(data));
++	data.index = repo->index;
++	data.include_sparse = include_sparse;
+ 	data.flags = flags;
+ 
+-	repo_init_revisions(the_repository, &rev, prefix);
++	repo_init_revisions(repo, &rev, prefix);
+ 	setup_revisions(0, NULL, &rev, NULL);
+ 	if (pathspec)
+ 		copy_pathspec(&rev.prune_data, pathspec);
+@@ -640,7 +646,9 @@ int cmd_add(int argc, const char **argv, const char *prefix)
+ 	if (add_renormalize)
+ 		exit_status |= renormalize_tracked_files(&pathspec, flags);
+ 	else
+-		exit_status |= add_files_to_cache(prefix, &pathspec, flags);
++		exit_status |= add_files_to_cache(the_repository, prefix,
++						  &pathspec, include_sparse,
++						  flags);
+ 
+ 	if (add_new_files)
+ 		exit_status |= add_files(&dir, flags);
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index 715eeb5048..d6765c9dbd 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -861,7 +861,7 @@ static int merge_working_tree(const struct checkout_opts *opts,
+ 			 * entries in the index.
+ 			 */
+ 
+-			add_files_to_cache(NULL, NULL, 0);
++			add_files_to_cache(the_repository, NULL, NULL, 0, 0);
+ 			init_merge_options(&o, the_repository);
+ 			o.verbosity = 0;
+ 			work = write_in_core_index_as_tree(the_repository);
+diff --git a/builtin/commit.c b/builtin/commit.c
+index 9ab57ea1aa..f3a1d3eb73 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -447,7 +447,8 @@ static const char *prepare_index(const char **argv, const char *prefix,
+ 	if (all || (also && pathspec.nr)) {
+ 		repo_hold_locked_index(the_repository, &index_lock,
+ 				       LOCK_DIE_ON_ERROR);
+-		add_files_to_cache(also ? prefix : NULL, &pathspec, 0);
++		add_files_to_cache(the_repository, also ? prefix : NULL,
++				   &pathspec, 0, 0);
+ 		refresh_cache_or_die(refresh_flags);
+ 		cache_tree_update(&the_index, WRITE_TREE_SILENT);
+ 		if (write_locked_index(&the_index, &index_lock, 0))
+diff --git a/cache.h b/cache.h
+index 8b2eb52f04..02d69c24cd 100644
+--- a/cache.h
++++ b/cache.h
+@@ -554,7 +554,9 @@ int cmp_cache_name_compare(const void *a_, const void *b_);
+  * return 0 if success, 1 - if addition of a file failed and
+  * ADD_FILES_IGNORE_ERRORS was specified in flags
+  */
+-int add_files_to_cache(const char *prefix, const struct pathspec *pathspec, int flags);
++int add_files_to_cache(struct repository *repo, const char *prefix,
++		       const struct pathspec *pathspec, int include_sparse,
++		       int flags);
+ 
+ /* diff.c */
+ extern int diff_auto_refresh_index;
+-- 
+2.39.3 (Apple Git-145)
+

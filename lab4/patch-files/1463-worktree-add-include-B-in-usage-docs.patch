@@ -1,0 +1,44 @@
+From b71f919dda784fdf90901f1a2d848ccd22a49eb0 Mon Sep 17 00:00:00 2001
+From: Jacob Abel <jacobabel@nullpo.dev>
+Date: Wed, 17 May 2023 21:48:21 +0000
+Subject: [PATCH 1463/2871] worktree add: include -B in usage docs
+
+Document `-B` next to where `-b` is already documented to bring the
+usage docs in line with other commands such as git checkout.
+
+Signed-off-by: Jacob Abel <jacobabel@nullpo.dev>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-worktree.txt | 2 +-
+ builtin/worktree.c             | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-worktree.txt b/Documentation/git-worktree.txt
+index 063d6eeb99..b9c12779f1 100644
+--- a/Documentation/git-worktree.txt
++++ b/Documentation/git-worktree.txt
+@@ -10,7 +10,7 @@ SYNOPSIS
+ --------
+ [verse]
+ 'git worktree add' [-f] [--detach] [--checkout] [--lock [--reason <string>]]
+-		   [-b <new-branch>] <path> [<commit-ish>]
++		   [(-b | -B) <new-branch>] <path> [<commit-ish>]
+ 'git worktree list' [-v | --porcelain [-z]]
+ 'git worktree lock' [--reason <string>] <worktree>
+ 'git worktree move' <worktree> <new-path>
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 39e9e5c9ce..d1b4b53f2c 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -22,7 +22,7 @@
+ 
+ #define BUILTIN_WORKTREE_ADD_USAGE \
+ 	N_("git worktree add [-f] [--detach] [--checkout] [--lock [--reason <string>]]\n" \
+-	   "                 [-b <new-branch>] <path> [<commit-ish>]")
++	   "                 [(-b | -B) <new-branch>] <path> [<commit-ish>]")
+ #define BUILTIN_WORKTREE_LIST_USAGE \
+ 	N_("git worktree list [-v | --porcelain [-z]]")
+ #define BUILTIN_WORKTREE_LOCK_USAGE \
+-- 
+2.39.3 (Apple Git-145)
+

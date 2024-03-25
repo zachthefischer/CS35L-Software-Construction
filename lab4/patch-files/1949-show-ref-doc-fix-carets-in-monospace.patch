@@ -1,0 +1,44 @@
+From 18c4aac0dd33eca76607b54d347932d6ec655056 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Wed, 16 Aug 2023 16:24:35 +0200
+Subject: [PATCH 1949/2871] show-ref doc: fix carets in monospace
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When commit 00bf685975 (show-ref doc: update for internal consistency,
+2023-05-19) switched from double quotes to backticks around our {caret}
+macro, we started rendering "{caret}" literally. Fix this by replacing
+by a "^" character.
+
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-show-ref.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-show-ref.txt b/Documentation/git-show-ref.txt
+index 44c7387d78..2fe274b8fa 100644
+--- a/Documentation/git-show-ref.txt
++++ b/Documentation/git-show-ref.txt
+@@ -47,7 +47,7 @@ OPTIONS
+ -d::
+ --dereference::
+ 
+-	Dereference tags into object IDs as well. They will be shown with `{caret}{}`
++	Dereference tags into object IDs as well. They will be shown with `^{}`
+ 	appended.
+ 
+ -s::
+@@ -78,7 +78,7 @@ OPTIONS
+ 	Make `git show-ref` act as a filter that reads refs from stdin of the
+ 	form `^(?:<anything>\s)?<refname>(?:\^{})?$`
+ 	and performs the following actions on each:
+-	(1) strip `{caret}{}` at the end of line if any;
++	(1) strip `^{}` at the end of line if any;
+ 	(2) ignore if pattern is provided and does not head-match refname;
+ 	(3) warn if refname is not a well-formed refname and skip;
+ 	(4) ignore if refname is a ref that exists in the local repository;
+-- 
+2.39.3 (Apple Git-145)
+

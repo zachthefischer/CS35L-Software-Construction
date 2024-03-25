@@ -1,0 +1,81 @@
+From 288e3c4e3b54b9712c10b6cee51c908664471393 Mon Sep 17 00:00:00 2001
+From: "Chris. Webster" <chris@webstech.net>
+Date: Tue, 20 Dec 2022 00:35:45 +0000
+Subject: [PATCH 0585/2871] ci (check-whitespace): suggest fixes for errors
+
+Make the errors more visible by adding them to the job summary and
+display the git commands that will usually fix the problem.
+
+Signed-off-by: Chris. Webster <chris@webstech.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/check-whitespace.yml | 37 +++++++++++++++++++-------
+ 1 file changed, 28 insertions(+), 9 deletions(-)
+
+diff --git a/.github/workflows/check-whitespace.yml b/.github/workflows/check-whitespace.yml
+index ad3466ad16..a0871489b2 100644
+--- a/.github/workflows/check-whitespace.yml
++++ b/.github/workflows/check-whitespace.yml
+@@ -20,31 +20,50 @@ jobs:
+     - name: git log --check
+       id: check_out
+       run: |
+-        log=
++        problems=()
+         commit=
+-        while read dash etc
++        commitText=
++        lastcommit=
++        while read dash sha etc
+         do
+           case "${dash}" in
+           "---")
+-            commit="${etc}"
++            if test -z "${commit}"
++            then
++              lastcommit=${sha}
++            fi
++            commit="${sha}"
++            commitText="${sha} ${etc}"
+             ;;
+           "")
+             ;;
+           *)
+             if test -n "${commit}"
+             then
+-              log="${log}\n${commit}"
++              problems+=("" "--- ${commitText}")
+               echo ""
+-              echo "--- ${commit}"
++              echo "--- ${commitText}"
++              commit=
+             fi
+-            commit=
+-            log="${log}\n${dash} ${etc}"
+-            echo "${dash} ${etc}"
++            problems+=("${dash} ${sha} ${etc}")
++            echo "${problems[-1]}"
+             ;;
+           esac
+         done <<< $(git log --check --pretty=format:"---% h% s" ${{github.event.pull_request.base.sha}}..)
+ 
+-        if test -n "${log}"
++        if test ${#problems[*]} -gt 0
+         then
++          if test -z "${commit}"
++          then
++            lastcommit=${{github.event.pull_request.base.sha}}
++          fi
++          echo "A whitespace issue was found in one or more of the commits." >$GITHUB_STEP_SUMMARY
++          echo "" >>$GITHUB_STEP_SUMMARY
++          echo "Run \`git rebase --whitespace=fix ${lastcommit}\` and \`git push --force\` to correct the problem." >>$GITHUB_STEP_SUMMARY
++          for i in "${problems[@]}"
++          do
++            echo "${i}" >>$GITHUB_STEP_SUMMARY
++          done
++
+           exit 2
+         fi
+-- 
+2.39.3 (Apple Git-145)
+

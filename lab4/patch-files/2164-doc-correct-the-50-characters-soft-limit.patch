@@ -1,0 +1,35 @@
+From c2c349a15c0430a2ef9f858d69d095a00693379c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E8=B0=A2=E8=87=B4=E9=82=A6=20=28XIE=20Zhibang=29?=
+ <Yeking@Red54.com>
+Date: Thu, 28 Sep 2023 09:59:15 +0000
+Subject: [PATCH 2164/2871] doc: correct the 50 characters soft limit
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The soft limit of the first line of the commit message should be
+"no more than 50 characters" or "50 characters or less", but not
+"less than 50 character".
+
+Signed-off-by: 谢致邦 (XIE Zhibang) <Yeking@Red54.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-commit.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-commit.txt b/Documentation/git-commit.txt
+index 225c6c9f2e..a6cef5d820 100644
+--- a/Documentation/git-commit.txt
++++ b/Documentation/git-commit.txt
+@@ -541,7 +541,7 @@ DISCUSSION
+ ----------
+ 
+ Though not required, it's a good idea to begin the commit message
+-with a single short (less than 50 character) line summarizing the
++with a single short (no more than 50 characters) line summarizing the
+ change, followed by a blank line and then a more thorough description.
+ The text up to the first blank line in a commit message is treated
+ as the commit title, and that title is used throughout Git.
+-- 
+2.39.3 (Apple Git-145)
+

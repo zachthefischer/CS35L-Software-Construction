@@ -1,0 +1,141 @@
+From 75cf39b1178f5e6c2830bf3e81521828bb0171ff Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Tue, 14 Nov 2023 21:43:37 +0000
+Subject: [PATCH 2414/2871] rebase: fully ignore rebase.autoSquash without -i
+
+Setting the rebase.autoSquash config variable to true implies a couple
+of restrictions: it prevents preemptive fast-forwarding and it triggers
+conflicts with apply backend options. However, it only actually results
+in auto-squashing when combined with the --interactive (or -i) option,
+due to code in run_specific_rebase() that disables auto-squashing unless
+the REBASE_INTERACTIVE_EXPLICIT flag is set.
+
+Doing autosquashing for rebase.autoSquash without --interactive would be
+problematic in terms of backward compatibility, but conversely, there is
+no need for the aforementioned restrictions without --interactive.
+
+So drop the options.config_autosquash check from the conditions for
+clearing allow_preemptive_ff, as the case where it is combined with
+--interactive is already covered by the REBASE_INTERACTIVE_EXPLICIT
+flag check above it.
+
+Also drop the "apply options are incompatible with rebase.autoSquash"
+error, because it is unreachable if it is restricted to --interactive,
+as apply options already cause an error when used with --interactive.
+Drop the tests for the error from t3422-rebase-incompatible-options.sh,
+which has separate tests for the conflicts of --interactive with apply
+options.
+
+When neither --autosquash nor --no-autosquash are given, only set
+options.autosquash to true if rebase.autosquash is combined with
+--interactive.
+
+Don't initialize options.config_autosquash to -1, as there is no need to
+distinguish between rebase.autoSquash being unset or explicitly set to
+false.
+
+Finally, amend the rebase.autoSquash documentation to say it only
+affects interactive mode.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/rebase.txt        |  4 +++-
+ builtin/rebase.c                       | 13 ++++++-------
+ t/t3422-rebase-incompatible-options.sh | 12 ------------
+ 3 files changed, 9 insertions(+), 20 deletions(-)
+
+diff --git a/Documentation/config/rebase.txt b/Documentation/config/rebase.txt
+index 9c248accec..d59576dbb2 100644
+--- a/Documentation/config/rebase.txt
++++ b/Documentation/config/rebase.txt
+@@ -9,7 +9,9 @@ rebase.stat::
+ 	rebase. False by default.
+ 
+ rebase.autoSquash::
+-	If set to true enable `--autosquash` option by default.
++	If set to true, enable the `--autosquash` option of
++	linkgit:git-rebase[1] by default for interactive mode.
++	This can be overridden with the `--no-autosquash` option.
+ 
+ rebase.autoStash::
+ 	When set to true, automatically create a temporary stash entry
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 043c65dccd..a73de7892b 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -149,7 +149,6 @@ struct rebase_options {
+ 		.reapply_cherry_picks = -1,             \
+ 		.allow_empty_message = 1,               \
+ 		.autosquash = -1,                       \
+-		.config_autosquash = -1,                \
+ 		.rebase_merges = -1,                    \
+ 		.config_rebase_merges = -1,             \
+ 		.update_refs = -1,                      \
+@@ -1405,7 +1404,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	if ((options.flags & REBASE_INTERACTIVE_EXPLICIT) ||
+ 	    (options.action != ACTION_NONE) ||
+ 	    (options.exec.nr > 0) ||
+-	    (options.autosquash == -1 && options.config_autosquash == 1) ||
+ 	    options.autosquash == 1) {
+ 		allow_preemptive_ff = 0;
+ 	}
+@@ -1508,8 +1506,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 			if (is_merge(&options))
+ 				die(_("apply options and merge options "
+ 					  "cannot be used together"));
+-			else if (options.autosquash == -1 && options.config_autosquash == 1)
+-				die(_("apply options are incompatible with rebase.autoSquash.  Consider adding --no-autosquash"));
+ 			else if (options.rebase_merges == -1 && options.config_rebase_merges == 1)
+ 				die(_("apply options are incompatible with rebase.rebaseMerges.  Consider adding --no-rebase-merges"));
+ 			else if (options.update_refs == -1 && options.config_update_refs == 1)
+@@ -1529,10 +1525,13 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	options.rebase_merges = (options.rebase_merges >= 0) ? options.rebase_merges :
+ 				((options.config_rebase_merges >= 0) ? options.config_rebase_merges : 0);
+ 
+-	if (options.autosquash == 1)
++	if (options.autosquash == 1) {
+ 		imply_merge(&options, "--autosquash");
+-	options.autosquash = (options.autosquash >= 0) ? options.autosquash :
+-			     ((options.config_autosquash >= 0) ? options.config_autosquash : 0);
++	} else if (options.autosquash == -1) {
++		options.autosquash =
++			options.config_autosquash &&
++			(options.flags & REBASE_INTERACTIVE_EXPLICIT);
++	}
+ 
+ 	if (options.type == REBASE_UNSPECIFIED) {
+ 		if (!strcmp(options.default_backend, "merge"))
+diff --git a/t/t3422-rebase-incompatible-options.sh b/t/t3422-rebase-incompatible-options.sh
+index 2eba00bdf5..b40f26250b 100755
+--- a/t/t3422-rebase-incompatible-options.sh
++++ b/t/t3422-rebase-incompatible-options.sh
+@@ -100,12 +100,6 @@ test_rebase_am_only () {
+ 		test_must_fail git rebase $opt --root A
+ 	"
+ 
+-	test_expect_success "$opt incompatible with rebase.autosquash" "
+-		git checkout B^0 &&
+-		test_must_fail git -c rebase.autosquash=true rebase $opt A 2>err &&
+-		grep -e --no-autosquash err
+-	"
+-
+ 	test_expect_success "$opt incompatible with rebase.rebaseMerges" "
+ 		git checkout B^0 &&
+ 		test_must_fail git -c rebase.rebaseMerges=true rebase $opt A 2>err &&
+@@ -118,12 +112,6 @@ test_rebase_am_only () {
+ 		grep -e --no-update-refs err
+ 	"
+ 
+-	test_expect_success "$opt okay with overridden rebase.autosquash" "
+-		test_when_finished \"git reset --hard B^0\" &&
+-		git checkout B^0 &&
+-		git -c rebase.autosquash=true rebase --no-autosquash $opt A
+-	"
+-
+ 	test_expect_success "$opt okay with overridden rebase.rebaseMerges" "
+ 		test_when_finished \"git reset --hard B^0\" &&
+ 		git checkout B^0 &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,101 @@
+From c1166ca0e23d60629e0e7babd4eb4be64f578286 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 13 Dec 2022 06:11:57 -0500
+Subject: [PATCH 0555/2871] blob: drop unused parts of parse_blob_buffer()
+
+Our parse_blob_buffer() takes a ptr/len combo, just like
+parse_tree_buffer(), etc, and returns success or failure. But it doesn't
+actually do anything with them; we just set the "parsed" flag in the
+object and return success, without even looking at the contents.
+
+There could be some value to keeping these unused parameters:
+
+  - it's consistent with the parse functions for other object types. But
+    we already lost that consistency in 837d395a5c (Replace parse_blob()
+    with an explanatory comment, 2010-01-18).
+
+  - As the comment from 837d395a5c explains, callers are supposed to
+    make sure they have the object content available. So in theory
+    asking for these parameters could serve as a signal. But there are
+    only two callers, and one of them always passes NULL (after doing a
+    streaming check of the object hash).
+
+    This shows that there aren't likely to be a lot of callers (since
+    everyone either uses the type-generic parse functions, or handles
+    blobs individually), and that they need to take special care anyway
+    (because we usually want to avoid loading whole blobs in memory if
+    we can avoid it).
+
+So let's just drop these unused parameters, and likewise the useless
+return value. While we're touching the header file, let's move the
+declaration of parse_blob_buffer() right below that explanatory comment,
+where it's more likely to be seen by people looking for the function.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ blob.c   | 3 +--
+ blob.h   | 3 +--
+ object.c | 5 ++---
+ 3 files changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/blob.c b/blob.c
+index 182718aba9..8f83523b0c 100644
+--- a/blob.c
++++ b/blob.c
+@@ -13,8 +13,7 @@ struct blob *lookup_blob(struct repository *r, const struct object_id *oid)
+ 	return object_as_type(obj, OBJ_BLOB, 0);
+ }
+ 
+-int parse_blob_buffer(struct blob *item, void *buffer, unsigned long size)
++void parse_blob_buffer(struct blob *item)
+ {
+ 	item->object.parsed = 1;
+-	return 0;
+ }
+diff --git a/blob.h b/blob.h
+index 1664872055..74555c90c4 100644
+--- a/blob.h
++++ b/blob.h
+@@ -11,8 +11,6 @@ struct blob {
+ 
+ struct blob *lookup_blob(struct repository *r, const struct object_id *oid);
+ 
+-int parse_blob_buffer(struct blob *item, void *buffer, unsigned long size);
+-
+ /**
+  * Blobs do not contain references to other objects and do not have
+  * structured data that needs parsing. However, code may use the
+@@ -21,5 +19,6 @@ int parse_blob_buffer(struct blob *item, void *buffer, unsigned long size);
+  * parse_blob_buffer() is used (by object.c) to flag that the object
+  * has been read successfully from the database.
+  **/
++void parse_blob_buffer(struct blob *item);
+ 
+ #endif /* BLOB_H */
+diff --git a/object.c b/object.c
+index 682b852a46..344087de4d 100644
+--- a/object.c
++++ b/object.c
+@@ -212,8 +212,7 @@ struct object *parse_object_buffer(struct repository *r, const struct object_id
+ 	if (type == OBJ_BLOB) {
+ 		struct blob *blob = lookup_blob(r, oid);
+ 		if (blob) {
+-			if (parse_blob_buffer(blob, buffer, size))
+-				return NULL;
++			parse_blob_buffer(blob);
+ 			obj = &blob->object;
+ 		}
+ 	} else if (type == OBJ_TREE) {
+@@ -292,7 +291,7 @@ struct object *parse_object_with_flags(struct repository *r,
+ 			error(_("hash mismatch %s"), oid_to_hex(oid));
+ 			return NULL;
+ 		}
+-		parse_blob_buffer(lookup_blob(r, oid), NULL, 0);
++		parse_blob_buffer(lookup_blob(r, oid));
+ 		return lookup_object(r, oid);
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

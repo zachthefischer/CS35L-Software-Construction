@@ -1,0 +1,38 @@
+From 065135fc0bf3c859fcf63abe2e413ccc32a9cc50 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 16 Jul 2023 10:17:35 +0200
+Subject: [PATCH 1812/2871] t6300: fix setup with GPGSSH but without GPG
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In a test introduced by 26c9c03f0a (ref-filter: add new "signature"
+atom, 2023-06-04) the file named "file" is added by a setup step that
+requires GPG and modified by a second setup step that requires GPGSSH.
+Systems lacking the first prerequisite skip the initial setup step and
+then "git commit -a" in the second one doesn't find the modified file.
+Add it explicitly.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6300-for-each-ref.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 6e6ec852b5..1180c3254c 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1584,7 +1584,8 @@ test_expect_success GPGSSH 'setup for signature atom using ssh' '
+ 	test_config user.signingkey "${GPGSSH_KEY_PRIMARY}" &&
+ 	echo "8" >file &&
+ 	test_tick &&
+-	git commit -a -S -m "file: 8" &&
++	git add file &&
++	git commit -S -m "file: 8" &&
+ 	git tag eighth-signed-ssh
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

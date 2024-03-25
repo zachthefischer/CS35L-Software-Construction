@@ -1,0 +1,50 @@
+From eef65c716ceb23fd4570d1a0dfbd84d7b5f1e039 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:35 +0000
+Subject: [PATCH 0921/2871] Remove unnecessary includes of builtin.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff-no-index.c   | 1 -
+ merge-recursive.c | 1 -
+ send-pack.c       | 2 +-
+ 3 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/diff-no-index.c b/diff-no-index.c
+index 05fafd0019..a3cf358baf 100644
+--- a/diff-no-index.c
++++ b/diff-no-index.c
+@@ -13,7 +13,6 @@
+ #include "diffcore.h"
+ #include "revision.h"
+ #include "log-tree.h"
+-#include "builtin.h"
+ #include "parse-options.h"
+ #include "string-list.h"
+ #include "dir.h"
+diff --git a/merge-recursive.c b/merge-recursive.c
+index ee144676b7..89731f4090 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -10,7 +10,6 @@
+ #include "alloc.h"
+ #include "attr.h"
+ #include "blob.h"
+-#include "builtin.h"
+ #include "cache-tree.h"
+ #include "commit.h"
+ #include "commit-reach.h"
+diff --git a/send-pack.c b/send-pack.c
+index 954104673f..423a5cfe22 100644
+--- a/send-pack.c
++++ b/send-pack.c
+@@ -1,4 +1,4 @@
+-#include "builtin.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "commit.h"
+ #include "hex.h"
+-- 
+2.39.3 (Apple Git-145)
+

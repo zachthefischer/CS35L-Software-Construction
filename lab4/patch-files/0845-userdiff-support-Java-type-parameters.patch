@@ -1,0 +1,149 @@
+From 39226a8dacc866417be19b0a95b45e82d5975a84 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Wed, 8 Feb 2023 00:42:57 +0100
+Subject: [PATCH 0845/2871] userdiff: support Java type parameters
+
+A class or interface in Java can have type parameters following the name
+in the declared type, surrounded by angle brackets (paired less than and
+greater than signs).[2]   The type parameters -- `A` and `B` in the
+examples -- may follow the class name immediately:
+
+    public class ParameterizedClass<A, B> {
+    }
+
+or may be separated by whitespace:
+
+    public class SpaceBeforeTypeParameters <A, B> {
+    }
+
+A part of the builtin userdiff pattern for Java matches declarations of
+classes, enums, and interfaces.  The regular expression requires at
+least one whitespace character after the name of the declared type.
+This disallows matching for opening angle bracket of type parameters
+immediately after the name of the type.  Mandatory whitespace after the
+name of the type also disallows using the pattern in repositories with a
+fairly common code style that puts braces for the body of a class on
+separate lines:
+
+    class WithLineBreakBeforeOpeningBrace
+    {
+    }
+
+Support matching Java code in more diverse code styles and declarations
+of classes and interfaces with type parameters immediately following the
+name of the type in the builtin userdiff pattern for Java.  Do so by
+just matching anything until the end of the line after the keywords for
+the kind of type being declared.
+
+[1] Since Java 5 released in 2004.
+[2] Detailed description is available in the Java Language
+    Specification, sections "Type Variables" and "Parameterized Types":
+    https://docs.oracle.com/javase/specs/jls/se17/html/jls-4.html#jls-4.4
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Reviewed-by: Johannes Sixt <j6t@kdbg.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4018/java-class-brace-on-separate-line       | 6 ++++++
+ t/t4018/java-class-space-before-type-parameters | 6 ++++++
+ t/t4018/java-class-type-parameters              | 6 ++++++
+ t/t4018/java-class-type-parameters-implements   | 6 ++++++
+ t/t4018/java-interface-type-parameters          | 6 ++++++
+ t/t4018/java-interface-type-parameters-extends  | 6 ++++++
+ userdiff.c                                      | 2 +-
+ 7 files changed, 37 insertions(+), 1 deletion(-)
+ create mode 100644 t/t4018/java-class-brace-on-separate-line
+ create mode 100644 t/t4018/java-class-space-before-type-parameters
+ create mode 100644 t/t4018/java-class-type-parameters
+ create mode 100644 t/t4018/java-class-type-parameters-implements
+ create mode 100644 t/t4018/java-interface-type-parameters
+ create mode 100644 t/t4018/java-interface-type-parameters-extends
+
+diff --git a/t/t4018/java-class-brace-on-separate-line b/t/t4018/java-class-brace-on-separate-line
+new file mode 100644
+index 0000000000..8795acd4cf
+--- /dev/null
++++ b/t/t4018/java-class-brace-on-separate-line
+@@ -0,0 +1,6 @@
++class RIGHT
++{
++    static int ONE;
++    static int TWO;
++    static int ChangeMe;
++}
+diff --git a/t/t4018/java-class-space-before-type-parameters b/t/t4018/java-class-space-before-type-parameters
+new file mode 100644
+index 0000000000..0bdef1dfbe
+--- /dev/null
++++ b/t/t4018/java-class-space-before-type-parameters
+@@ -0,0 +1,6 @@
++class RIGHT <TYPE, PARAMS, AFTER, SPACE> {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    private A ChangeMe;
++}
+diff --git a/t/t4018/java-class-type-parameters b/t/t4018/java-class-type-parameters
+new file mode 100644
+index 0000000000..579aa7af21
+--- /dev/null
++++ b/t/t4018/java-class-type-parameters
+@@ -0,0 +1,6 @@
++class RIGHT<A, B> {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    private A ChangeMe;
++}
+diff --git a/t/t4018/java-class-type-parameters-implements b/t/t4018/java-class-type-parameters-implements
+new file mode 100644
+index 0000000000..b8038b1866
+--- /dev/null
++++ b/t/t4018/java-class-type-parameters-implements
+@@ -0,0 +1,6 @@
++class RIGHT<A, B> implements List<A> {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    private A ChangeMe;
++}
+diff --git a/t/t4018/java-interface-type-parameters b/t/t4018/java-interface-type-parameters
+new file mode 100644
+index 0000000000..a4baa1ae68
+--- /dev/null
++++ b/t/t4018/java-interface-type-parameters
+@@ -0,0 +1,6 @@
++interface RIGHT<A, B> {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    public B foo(A ChangeMe);
++}
+diff --git a/t/t4018/java-interface-type-parameters-extends b/t/t4018/java-interface-type-parameters-extends
+new file mode 100644
+index 0000000000..31d7fb3244
+--- /dev/null
++++ b/t/t4018/java-interface-type-parameters-extends
+@@ -0,0 +1,6 @@
++interface RIGHT<A, B> extends Function<A, B> {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    public B foo(A ChangeMe);
++}
+diff --git a/userdiff.c b/userdiff.c
+index d71b82feb7..bc5f3ed4c3 100644
+--- a/userdiff.c
++++ b/userdiff.c
+@@ -171,7 +171,7 @@ PATTERNS("html",
+ PATTERNS("java",
+ 	 "!^[ \t]*(catch|do|for|if|instanceof|new|return|switch|throw|while)\n"
+ 	 /* Class, enum, and interface declarations */
+-	 "^[ \t]*(([a-z]+[ \t]+)*(class|enum|interface)[ \t]+[A-Za-z][A-Za-z0-9_$]*[ \t]+.*)$\n"
++	 "^[ \t]*(([a-z]+[ \t]+)*(class|enum|interface)[ \t]+.*)$\n"
+ 	 /* Method definitions; note that constructor signatures are not */
+ 	 /* matched because they are indistinguishable from method calls. */
+ 	 "^[ \t]*(([A-Za-z_<>&][][?&<>.,A-Za-z_0-9]*[ \t]+)+[A-Za-z_][A-Za-z_0-9]*[ \t]*\\([^;]*)$",
+-- 
+2.39.3 (Apple Git-145)
+

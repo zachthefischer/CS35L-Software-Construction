@@ -1,0 +1,169 @@
+From 7854bf49604484a7276b96d312b9daf7d15c7b34 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 26 Nov 2023 12:57:43 +0100
+Subject: [PATCH 2470/2871] i18n: factorize even more 'incompatible options'
+ messages
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Continue the work of 12909b6b8a (i18n: turn "options are incompatible"
+into "cannot be used together", 2022-01-05) and a699367bb8 (i18n:
+factorize more 'incompatible options' messages, 2022-01-31) to use the
+same parameterized error message for reporting incompatible command line
+options.  This reduces the number of strings to translate and makes the
+UI slightly more consistent.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clone.c                  | 4 +++-
+ builtin/merge-tree.c             | 3 ++-
+ parse-options.c                  | 3 ++-
+ revision.c                       | 4 ++--
+ t/t0040-parse-options.sh         | 8 ++++----
+ t/t1006-cat-file.sh              | 2 +-
+ t/t4301-merge-tree-write-tree.sh | 2 +-
+ t/t5606-clone-options.sh         | 2 +-
+ 8 files changed, 16 insertions(+), 12 deletions(-)
+
+diff --git a/builtin/clone.c b/builtin/clone.c
+index c6357af949..45a5070268 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -965,7 +965,9 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 	}
+ 
+ 	if (bundle_uri && deepen)
+-		die(_("--bundle-uri is incompatible with --depth, --shallow-since, and --shallow-exclude"));
++		die(_("options '%s' and '%s' cannot be used together"),
++		    "--bundle-uri",
++		    "--depth/--shallow-since/--shallow-exclude");
+ 
+ 	repo_name = argv[0];
+ 
+diff --git a/builtin/merge-tree.c b/builtin/merge-tree.c
+index a35e0452d6..a4aa6013c5 100644
+--- a/builtin/merge-tree.c
++++ b/builtin/merge-tree.c
+@@ -577,7 +577,8 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 		if (o.mode == MODE_TRIVIAL)
+ 			die(_("--trivial-merge is incompatible with all other options"));
+ 		if (merge_base)
+-			die(_("--merge-base is incompatible with --stdin"));
++			die(_("options '%s' and '%s' cannot be used together"),
++			    "--merge-base", "--stdin");
+ 		line_termination = '\0';
+ 		while (strbuf_getline_lf(&buf, stdin) != EOF) {
+ 			struct strbuf **split;
+diff --git a/parse-options.c b/parse-options.c
+index e0c94b0546..c3955847f4 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -279,7 +279,8 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
+ 
+ 	opt_name = optnamearg(opt, arg, flags);
+ 	other_opt_name = optnamearg(elem->opt, elem->arg, elem->flags);
+-	error(_("%s is incompatible with %s"), opt_name, other_opt_name);
++	error(_("options '%s' and '%s' cannot be used together"),
++	      opt_name, other_opt_name);
+ 	free(opt_name);
+ 	free(other_opt_name);
+ 	return -1;
+diff --git a/revision.c b/revision.c
+index 00d5c29bfc..b2861474b1 100644
+--- a/revision.c
++++ b/revision.c
+@@ -2384,8 +2384,8 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
+ 		revs->left_right = 1;
+ 	} else if (!strcmp(arg, "--left-only")) {
+ 		if (revs->right_only)
+-			die("--left-only is incompatible with --right-only"
+-			    " or --cherry");
++			die(_("options '%s' and '%s' cannot be used together"),
++			    "--left-only", "--right-only/--cherry");
+ 		revs->left_only = 1;
+ 	} else if (!strcmp(arg, "--right-only")) {
+ 		if (revs->left_only)
+diff --git a/t/t0040-parse-options.sh b/t/t0040-parse-options.sh
+index 8fdef88b65..ec974867e4 100755
+--- a/t/t0040-parse-options.sh
++++ b/t/t0040-parse-options.sh
+@@ -376,7 +376,7 @@ test_expect_success 'OPT_CMDMODE() detects incompatibility (1)' '
+ 	test_must_be_empty output &&
+ 	test_grep "mode1" output.err &&
+ 	test_grep "mode2" output.err &&
+-	test_grep "is incompatible with" output.err
++	test_grep "cannot be used together" output.err
+ '
+ 
+ test_expect_success 'OPT_CMDMODE() detects incompatibility (2)' '
+@@ -384,7 +384,7 @@ test_expect_success 'OPT_CMDMODE() detects incompatibility (2)' '
+ 	test_must_be_empty output &&
+ 	test_grep "mode2" output.err &&
+ 	test_grep "set23" output.err &&
+-	test_grep "is incompatible with" output.err
++	test_grep "cannot be used together" output.err
+ '
+ 
+ test_expect_success 'OPT_CMDMODE() detects incompatibility (3)' '
+@@ -392,7 +392,7 @@ test_expect_success 'OPT_CMDMODE() detects incompatibility (3)' '
+ 	test_must_be_empty output &&
+ 	test_grep "mode2" output.err &&
+ 	test_grep "set23" output.err &&
+-	test_grep "is incompatible with" output.err
++	test_grep "cannot be used together" output.err
+ '
+ 
+ test_expect_success 'OPT_CMDMODE() detects incompatibility (4)' '
+@@ -401,7 +401,7 @@ test_expect_success 'OPT_CMDMODE() detects incompatibility (4)' '
+ 	test_must_be_empty output &&
+ 	test_grep "mode2" output.err &&
+ 	test_grep "mode34.3" output.err &&
+-	test_grep "is incompatible with" output.err
++	test_grep "cannot be used together" output.err
+ '
+ 
+ test_expect_success 'OPT_COUNTUP() with PARSE_OPT_NODASH works' '
+diff --git a/t/t1006-cat-file.sh b/t/t1006-cat-file.sh
+index d73a0be1b9..271c5e4fd3 100755
+--- a/t/t1006-cat-file.sh
++++ b/t/t1006-cat-file.sh
+@@ -6,7 +6,7 @@ test_description='git cat-file'
+ 
+ test_cmdmode_usage () {
+ 	test_expect_code 129 "$@" 2>err &&
+-	grep "^error:.*is incompatible with" err
++	grep "^error: .* cannot be used together" err
+ }
+ 
+ for switches in \
+diff --git a/t/t4301-merge-tree-write-tree.sh b/t/t4301-merge-tree-write-tree.sh
+index b2c8a43fce..12ac436873 100755
+--- a/t/t4301-merge-tree-write-tree.sh
++++ b/t/t4301-merge-tree-write-tree.sh
+@@ -887,7 +887,7 @@ test_expect_success '--stdin with both a successful and a conflicted merge' '
+ test_expect_success '--merge-base is incompatible with --stdin' '
+ 	test_must_fail git merge-tree --merge-base=side1 --stdin 2>expect &&
+ 
+-	grep "^fatal: --merge-base is incompatible with --stdin" expect
++	grep "^fatal: .*merge-base.*stdin.* cannot be used together" expect
+ '
+ 
+ # specify merge-base as parent of branch2
+diff --git a/t/t5606-clone-options.sh b/t/t5606-clone-options.sh
+index fc4bbd9daf..a400bcca62 100755
+--- a/t/t5606-clone-options.sh
++++ b/t/t5606-clone-options.sh
+@@ -64,7 +64,7 @@ test_expect_success 'disallows --bundle-uri with shallow options' '
+ 	for option in --depth=1 --shallow-since=01-01-2000 --shallow-exclude=HEAD
+ 	do
+ 		test_must_fail git clone --bundle-uri=bundle $option from to 2>err &&
+-		grep "bundle-uri is incompatible" err || return 1
++		grep "bundle-uri.* cannot be used together" err || return 1
+ 	done
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,176 @@
+From 2e0d30d928dbb8899ebae749ceeb257e634d57f7 Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Tue, 19 Sep 2023 22:26:50 +0200
+Subject: [PATCH 2138/2871] range-diff: treat notes like `log`
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently, `range-diff` shows the default notes if no notes-related
+arguments are given. This is also how `log` behaves. But unlike
+`range-diff`, `log` does *not* show the default notes if
+`--notes=<custom>` are given. In other words, this:
+
+    git log --notes=custom
+
+is equivalent to this:
+
+    git log --no-notes --notes=custom
+
+While:
+
+    git range-diff --notes=custom
+
+acts like this:
+
+    git log --notes --notes-custom
+
+This can’t be how the user expects `range-diff` to behave given that the
+man page for `range-diff` under `--[no-]notes[=<ref>]` says:
+
+> This flag is passed to the `git log` program (see git-log(1)) that
+> generates the patches.
+
+This behavior also affects `format-patch` since it uses `range-diff` for
+the cover letter. Unlike `log`, though, `format-patch` is not supposed
+to show the default notes if no notes-related arguments are given.[1]
+But this promise is broken when the range-diff happens to have something
+to say about the changes to the default notes, since that will be shown
+in the cover letter.
+
+Remedy this by introducing `--show-notes-by-default` that `range-diff` can
+use to tell the `log` subprocess what to do.
+
+§ Authors
+
+• Fix by Johannes
+• Tests by Kristoffer
+
+† 1: See e.g. 66b2ed09c2 (Fix "log" family not to be too agressive about
+    showing notes, 2010-01-20).
+
+Co-authored-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/pretty-options.txt |  4 ++++
+ range-diff.c                     |  2 +-
+ revision.c                       |  7 +++++++
+ revision.h                       |  1 +
+ t/t3206-range-diff.sh            | 28 ++++++++++++++++++++++++++++
+ 5 files changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/pretty-options.txt b/Documentation/pretty-options.txt
+index dc685be363..335395b727 100644
+--- a/Documentation/pretty-options.txt
++++ b/Documentation/pretty-options.txt
+@@ -87,6 +87,10 @@ being displayed. Examples: "--notes=foo" will show only notes from
+ 	"--notes --notes=foo --no-notes --notes=bar" will only show notes
+ 	from "refs/notes/bar".
+ 
++--show-notes-by-default::
++	Show the default notes unless options for displaying specific
++	notes are given.
++
+ --show-notes[=<ref>]::
+ --[no-]standard-notes::
+ 	These options are deprecated. Use the above --notes/--no-notes
+diff --git a/range-diff.c b/range-diff.c
+index 2e86063491..56f6870ff9 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -60,7 +60,7 @@ static int read_patches(const char *range, struct string_list *list,
+ 		     "--output-indicator-context=#",
+ 		     "--no-abbrev-commit",
+ 		     "--pretty=medium",
+-		     "--notes",
++		     "--show-notes-by-default",
+ 		     NULL);
+ 	strvec_push(&cp.args, range);
+ 	if (other_arg)
+diff --git a/revision.c b/revision.c
+index 2f4c53ea20..49d385257a 100644
+--- a/revision.c
++++ b/revision.c
+@@ -2484,6 +2484,8 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
+ 		revs->break_bar = xstrdup(optarg);
+ 		revs->track_linear = 1;
+ 		revs->track_first_time = 1;
++	} else if (!strcmp(arg, "--show-notes-by-default")) {
++		revs->show_notes_by_default = 1;
+ 	} else if (skip_prefix(arg, "--show-notes=", &optarg) ||
+ 		   skip_prefix(arg, "--notes=", &optarg)) {
+ 		if (starts_with(arg, "--show-notes=") &&
+@@ -3054,6 +3056,11 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
+ 	if (revs->expand_tabs_in_log < 0)
+ 		revs->expand_tabs_in_log = revs->expand_tabs_in_log_default;
+ 
++	if (!revs->show_notes_given && revs->show_notes_by_default) {
++		enable_default_display_notes(&revs->notes_opt, &revs->show_notes);
++		revs->show_notes_given = 1;
++	}
++
+ 	return left;
+ }
+ 
+diff --git a/revision.h b/revision.h
+index 82ab400139..50091bbd13 100644
+--- a/revision.h
++++ b/revision.h
+@@ -253,6 +253,7 @@ struct rev_info {
+ 			shown_dashes:1,
+ 			show_merge:1,
+ 			show_notes_given:1,
++			show_notes_by_default:1,
+ 			show_signature:1,
+ 			pretty_given:1,
+ 			abbrev_commit:1,
+diff --git a/t/t3206-range-diff.sh b/t/t3206-range-diff.sh
+index b5f4d6a653..b33afa1c6a 100755
+--- a/t/t3206-range-diff.sh
++++ b/t/t3206-range-diff.sh
+@@ -662,6 +662,20 @@ test_expect_success 'range-diff with multiple --notes' '
+ 	test_cmp expect actual
+ '
+ 
++# `range-diff` should act like `log` with regards to notes
++test_expect_success 'range-diff with --notes=custom does not show default notes' '
++	git notes add -m "topic note" topic &&
++	git notes add -m "unmodified note" unmodified &&
++	git notes --ref=custom add -m "topic note" topic &&
++	git notes --ref=custom add -m "unmodified note" unmodified &&
++	test_when_finished git notes remove topic unmodified &&
++	test_when_finished git notes --ref=custom remove topic unmodified &&
++	git range-diff --notes=custom main..topic main..unmodified \
++		>actual &&
++	! grep "## Notes ##" actual &&
++	grep "## Notes (custom) ##" actual
++'
++
+ test_expect_success 'format-patch --range-diff does not compare notes by default' '
+ 	git notes add -m "topic note" topic &&
+ 	git notes add -m "unmodified note" unmodified &&
+@@ -679,6 +693,20 @@ test_expect_success 'format-patch --range-diff does not compare notes by default
+ 	! grep "note" 0000-*
+ '
+ 
++test_expect_success 'format-patch --notes=custom --range-diff only compares custom notes' '
++	git notes add -m "topic note" topic &&
++	git notes --ref=custom add -m "topic note (custom)" topic &&
++	git notes add -m "unmodified note" unmodified &&
++	git notes --ref=custom add -m "unmodified note (custom)" unmodified &&
++	test_when_finished git notes remove topic unmodified &&
++	test_when_finished git notes --ref=custom remove topic unmodified &&
++	git format-patch --notes=custom --cover-letter --range-diff=$prev \
++		main..unmodified >actual &&
++	test_when_finished "rm 000?-*" &&
++	grep "## Notes (custom) ##" 0000-* &&
++	! grep "## Notes ##" 0000-*
++'
++
+ test_expect_success 'format-patch --range-diff with --no-notes' '
+ 	git notes add -m "topic note" topic &&
+ 	git notes add -m "unmodified note" unmodified &&
+-- 
+2.39.3 (Apple Git-145)
+

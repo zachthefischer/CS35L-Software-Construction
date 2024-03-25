@@ -1,0 +1,54 @@
+From 06a668cb90a6e8628f295adb6177855bb0a85a4a Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Thu, 19 Jan 2023 22:05:38 +0000
+Subject: [PATCH 0724/2871] fetch: fix duplicate remote parallel fetch bug
+
+Fetching in parallel from a remote group with a duplicated remote results
+in the following:
+
+error: cannot lock ref '<ref>': is at <oid> but expected <oid>
+
+This doesn't happen in serial since fetching from the same remote that
+has already been fetched from is a noop. Therefore, remove any duplicated
+remotes after remote groups are parsed.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c          | 1 +
+ t/t5506-remote-groups.sh | 9 +++++++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 7378cafeec..12978622d5 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -2228,6 +2228,7 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 			argv++;
+ 		}
+ 	}
++	string_list_remove_duplicates(&list, 0);
+ 
+ 	if (negotiate_only) {
+ 		struct oidset acked_commits = OIDSET_INIT;
+diff --git a/t/t5506-remote-groups.sh b/t/t5506-remote-groups.sh
+index 5bac03ede8..0e176175a3 100755
+--- a/t/t5506-remote-groups.sh
++++ b/t/t5506-remote-groups.sh
+@@ -99,4 +99,13 @@ test_expect_success 'updating remote name updates that remote' '
+ 	! repo_fetched two
+ '
+ 
++test_expect_success 'updating group in parallel with a duplicate remote does not fail (fetch)' '
++	mark fetch-group-duplicate &&
++	update_repo one &&
++	git config --add remotes.duplicate one &&
++	git config --add remotes.duplicate one &&
++	git -c fetch.parallel=2 remote update duplicate &&
++	repo_fetched one
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

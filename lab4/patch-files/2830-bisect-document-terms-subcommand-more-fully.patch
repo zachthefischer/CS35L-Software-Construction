@@ -1,0 +1,44 @@
+From 47ac5f6e1a0125965f6907dc55c130615cf131e1 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 7 Feb 2024 13:44:35 -0800
+Subject: [PATCH 2830/2871] bisect: document "terms" subcommand more fully
+
+The documentation for "git bisect terms", although it did not hide
+any information, was a bit incomplete and forced readers to fill in
+the blanks to get the complete picture.
+
+Acked-by: Matthieu Moy <git@matthieu-moy.fr>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-bisect.txt | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-bisect.txt b/Documentation/git-bisect.txt
+index fbb39fbdf5..3d813f9c77 100644
+--- a/Documentation/git-bisect.txt
++++ b/Documentation/git-bisect.txt
+@@ -20,7 +20,7 @@ on the subcommand:
+ 		  [--no-checkout] [--first-parent] [<bad> [<good>...]] [--] [<paths>...]
+  git bisect (bad|new|<term-new>) [<rev>]
+  git bisect (good|old|<term-old>) [<rev>...]
+- git bisect terms [--term-good | --term-bad]
++ git bisect terms [--term-(good|old) | --term-(bad|new)]
+  git bisect skip [(<rev>|<range>)...]
+  git bisect reset [<commit>]
+  git bisect (visualize|view)
+@@ -165,8 +165,10 @@ To get a reminder of the currently used terms, use
+ git bisect terms
+ ------------------------------------------------
+ 
+-You can get just the old (respectively new) term with `git bisect terms
+---term-old` or `git bisect terms --term-good`.
++You can get just the old term with `git bisect terms --term-old`
++or `git bisect terms --term-good`; `git bisect terms --term-new`
++and `git bisect terms --term-bad` can be used to learn how to call
++the commits more recent than the sought change.
+ 
+ If you would like to use your own terms instead of "bad"/"good" or
+ "new"/"old", you can choose any names you like (except existing bisect
+-- 
+2.39.3 (Apple Git-145)
+

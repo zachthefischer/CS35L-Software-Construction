@@ -1,0 +1,41 @@
+From bfb5f57bb33c864c162c13667b2d02b573a179f3 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 15 Jun 2023 02:53:42 +0000
+Subject: [PATCH 1590/2871] doc: trailer: fix grammar
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 4b97f812be..35faf83789 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -14,7 +14,7 @@ SYNOPSIS
+ 
+ DESCRIPTION
+ -----------
+-Help parsing or adding 'trailers' lines, that look similar to RFC 822 e-mail
++Parse or add 'trailer' lines that look similar to RFC 822 e-mail
+ headers, at the end of the otherwise free-form part of a commit
+ message.
+ 
+@@ -249,10 +249,10 @@ for the same <token>, 'trailer.<token>.cmd' is used and
+ 'trailer.<token>.command' is ignored.
+ 
+ trailer.<token>.cmd::
+-	This option can be used to specify a shell command that will be called:
++	This option can be used to specify a shell command that will be called
+ 	once to automatically add a trailer with the specified <token>, and then
+-	each time a '--trailer <token>=<value>' argument to modify the <value> of
+-	the trailer that this option would produce.
++	called each time a '--trailer <token>=<value>' argument is specified to
++	modify the <value> of the trailer that this option would produce.
+ +
+ When the specified command is first called to add a trailer
+ with the specified <token>, the behavior is as if a special
+-- 
+2.39.3 (Apple Git-145)
+

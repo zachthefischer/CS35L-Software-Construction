@@ -1,0 +1,44 @@
+From fff1594fa77372ea7a51f6b445267f23fdbf3089 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Matthias=20A=C3=9Fhauer?= <mha1993@live.de>
+Date: Fri, 4 Aug 2023 04:08:44 +0000
+Subject: [PATCH 1887/2871] docs: update when `git bisect visualize` uses
+ `gitk`
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This check has involved more environment variables than just `DISPLAY` since
+508e84a790 (bisect view: check for MinGW32 and MacOSX in addition to X11,
+2008-02-14), so let's update the documentation accordingly.
+
+Signed-off-by: Matthias Aßhauer <mha1993@live.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-bisect.txt | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-bisect.txt b/Documentation/git-bisect.txt
+index fbb39fbdf5..7872dba3ae 100644
+--- a/Documentation/git-bisect.txt
++++ b/Documentation/git-bisect.txt
+@@ -204,9 +204,14 @@ as an alternative to `visualize`):
+ $ git bisect visualize
+ ------------
+ 
+-If the `DISPLAY` environment variable is not set, 'git log' is used
+-instead.  You can also give command-line options such as `-p` and
+-`--stat`.
++Git detects a graphical environment through various environment variables:
++`DISPLAY`, which is set in X Window System environments on Unix systems.
++`SESSIONNAME`, which is set under Cygwin in interactive desktop sessions.
++`MSYSTEM`, which is set under Msys2 and Git for Windows.
++`SECURITYSESSIONID`, which may be set on macOS in interactive desktop sessions.
++
++If none of these environment variables is set, 'git log' is used instead.
++You can also give command-line options such as `-p` and `--stat`.
+ 
+ ------------
+ $ git bisect visualize --stat
+-- 
+2.39.3 (Apple Git-145)
+

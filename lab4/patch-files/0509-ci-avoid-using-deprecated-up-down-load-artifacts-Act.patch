@@ -1,0 +1,100 @@
+From 1f398446c34f4c68fc43e1d93f5a9f5407f8fb2f Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 7 Dec 2022 14:34:39 +0000
+Subject: [PATCH 0509/2871] ci: avoid using deprecated {up,down}load-artifacts
+ Action
+
+The deprecated versions of these Actions still use node.js 12 whereas
+workflows will need to use node.js 16 to avoid problems going forward.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 22 ++++++++++++++--------
+ 1 file changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 831f4df56c..739e0f89cd 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -94,7 +94,7 @@ jobs:
+     - name: zip up tracked files
+       run: git archive -o artifacts/tracked.tar.gz HEAD
+     - name: upload tracked files and build artifacts
+-      uses: actions/upload-artifact@v2
++      uses: actions/upload-artifact@v3
+       with:
+         name: windows-artifacts
+         path: artifacts
+@@ -108,7 +108,7 @@ jobs:
+         nr: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+     steps:
+     - name: download tracked files and build artifacts
+-      uses: actions/download-artifact@v2
++      uses: actions/download-artifact@v3
+       with:
+         name: windows-artifacts
+         path: ${{github.workspace}}
+@@ -125,7 +125,7 @@ jobs:
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+-      uses: actions/upload-artifact@v2
++      uses: actions/upload-artifact@v3
+       with:
+         name: failed-tests-windows
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+@@ -177,7 +177,7 @@ jobs:
+     - name: zip up tracked files
+       run: git archive -o artifacts/tracked.tar.gz HEAD
+     - name: upload tracked files and build artifacts
+-      uses: actions/upload-artifact@v2
++      uses: actions/upload-artifact@v3
+       with:
+         name: vs-artifacts
+         path: artifacts
+@@ -192,7 +192,7 @@ jobs:
+     steps:
+     - uses: git-for-windows/setup-git-for-windows-sdk@v1
+     - name: download tracked files and build artifacts
+-      uses: actions/download-artifact@v2
++      uses: actions/download-artifact@v3
+       with:
+         name: vs-artifacts
+         path: ${{github.workspace}}
+@@ -210,7 +210,7 @@ jobs:
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+-      uses: actions/upload-artifact@v2
++      uses: actions/upload-artifact@v3
+       with:
+         name: failed-tests-windows
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+@@ -267,7 +267,7 @@ jobs:
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+-      uses: actions/upload-artifact@v2
++      uses: actions/upload-artifact@v3
+       with:
+         name: failed-tests-${{matrix.vector.jobname}}
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+@@ -299,7 +299,13 @@ jobs:
+       shell: bash
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+-      if: failure() && env.FAILED_TEST_ARTIFACTS != ''
++      if: failure() && env.FAILED_TEST_ARTIFACTS != '' && matrix.vector.jobname != 'linux32'
++      uses: actions/upload-artifact@v3
++      with:
++        name: failed-tests-${{matrix.vector.jobname}}
++        path: ${{env.FAILED_TEST_ARTIFACTS}}
++    - name: Upload failed tests' directories
++      if: failure() && env.FAILED_TEST_ARTIFACTS != '' && matrix.vector.jobname == 'linux32'
+       uses: actions/upload-artifact@v1
+       with:
+         name: failed-tests-${{matrix.vector.jobname}}
+-- 
+2.39.3 (Apple Git-145)
+

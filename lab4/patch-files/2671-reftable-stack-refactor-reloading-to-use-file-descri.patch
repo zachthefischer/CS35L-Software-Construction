@@ -1,0 +1,75 @@
+From c5b5d5fbbc43364a3d3c0aedf9e984a0ffe04537 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 11 Jan 2024 11:06:43 +0100
+Subject: [PATCH 2671/2871] reftable/stack: refactor reloading to use file
+ descriptor
+
+We're about to introduce a stat(3P)-based caching mechanism to reload
+the list of stacks only when it has changed. In order to avoid race
+conditions this requires us to have a file descriptor available that we
+can use to call fstat(3P) on.
+
+Prepare for this by converting the code to use `fd_read_lines()` so that
+we have the file descriptor readily available.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c | 21 ++++++++++++++++++---
+ 1 file changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index bf869a6772..b1ee247601 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -308,6 +308,7 @@ static int reftable_stack_reload_maybe_reuse(struct reftable_stack *st,
+ 	struct timeval deadline;
+ 	int64_t delay = 0;
+ 	int tries = 0, err;
++	int fd = -1;
+ 
+ 	err = gettimeofday(&deadline, NULL);
+ 	if (err < 0)
+@@ -329,9 +330,19 @@ static int reftable_stack_reload_maybe_reuse(struct reftable_stack *st,
+ 		if (tries > 3 && tv_cmp(&now, &deadline) >= 0)
+ 			goto out;
+ 
+-		err = read_lines(st->list_file, &names);
+-		if (err < 0)
+-			goto out;
++		fd = open(st->list_file, O_RDONLY);
++		if (fd < 0) {
++			if (errno != ENOENT) {
++				err = REFTABLE_IO_ERROR;
++				goto out;
++			}
++
++			names = reftable_calloc(sizeof(char *));
++		} else {
++			err = fd_read_lines(fd, &names);
++			if (err < 0)
++				goto out;
++		}
+ 
+ 		err = reftable_stack_reload_once(st, names, reuse_open);
+ 		if (!err)
+@@ -356,12 +367,16 @@ static int reftable_stack_reload_maybe_reuse(struct reftable_stack *st,
+ 		names = NULL;
+ 		free_names(names_after);
+ 		names_after = NULL;
++		close(fd);
++		fd = -1;
+ 
+ 		delay = delay + (delay * rand()) / RAND_MAX + 1;
+ 		sleep_millisec(delay);
+ 	}
+ 
+ out:
++	if (fd >= 0)
++		close(fd);
+ 	free_names(names);
+ 	free_names(names_after);
+ 	return err;
+-- 
+2.39.3 (Apple Git-145)
+

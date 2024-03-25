@@ -1,0 +1,64 @@
+From 82dc42cbd1c4576c2fd879996d9e73a86434769a Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Wed, 9 Aug 2023 19:15:32 +0200
+Subject: [PATCH 1913/2871] sequencer: simplify allocation of result array in
+ todo_list_rearrange_squash()
+
+The operation doesn't change the number of elements in the array, so we do
+not need to allocate the result piecewise.
+
+This moves the re-assignment of todo_list->alloc at the end slighly up,
+so it's right after the newly added assert which also refers to `nr`
+(and which indeed should come first). Also, the value is more likely to
+be still in a register at that point.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index adc9cfb4df..be6edd5016 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -6233,7 +6233,7 @@ static int skip_fixupish(const char *subject, const char **p) {
+ int todo_list_rearrange_squash(struct todo_list *todo_list)
+ {
+ 	struct hashmap subject2item;
+-	int rearranged = 0, *next, *tail, i, nr = 0, alloc = 0;
++	int rearranged = 0, *next, *tail, i, nr = 0;
+ 	char **subjects;
+ 	struct commit_todo_item commit_todo;
+ 	struct todo_item *items = NULL;
+@@ -6345,6 +6345,8 @@ int todo_list_rearrange_squash(struct todo_list *todo_list)
+ 	}
+ 
+ 	if (rearranged) {
++		ALLOC_ARRAY(items, todo_list->nr);
++
+ 		for (i = 0; i < todo_list->nr; i++) {
+ 			enum todo_command command = todo_list->items[i].command;
+ 			int cur = i;
+@@ -6357,16 +6359,15 @@ int todo_list_rearrange_squash(struct todo_list *todo_list)
+ 				continue;
+ 
+ 			while (cur >= 0) {
+-				ALLOC_GROW(items, nr + 1, alloc);
+ 				items[nr++] = todo_list->items[cur];
+ 				cur = next[cur];
+ 			}
+ 		}
+ 
++		assert(nr == todo_list->nr);
++		todo_list->alloc = nr;
+ 		FREE_AND_NULL(todo_list->items);
+ 		todo_list->items = items;
+-		todo_list->nr = nr;
+-		todo_list->alloc = alloc;
+ 	}
+ 
+ 	free(next);
+-- 
+2.39.3 (Apple Git-145)
+

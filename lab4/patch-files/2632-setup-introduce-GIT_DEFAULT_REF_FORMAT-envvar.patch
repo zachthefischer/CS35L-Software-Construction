@@ -1,0 +1,90 @@
+From aa19619a9835a9558630c25a5b8f361343af75ce Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 29 Dec 2023 08:26:52 +0100
+Subject: [PATCH 2632/2871] setup: introduce GIT_DEFAULT_REF_FORMAT envvar
+
+Introduce a new GIT_DEFAULT_REF_FORMAT environment variable that lets
+users control the default ref format used by both git-init(1) and
+git-clone(1). This is modeled after GIT_DEFAULT_OBJECT_FORMAT, which
+does the same thing for the repository's object format.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git.txt |  5 +++++
+ setup.c               |  7 +++++++
+ t/t0001-init.sh       | 18 ++++++++++++++++++
+ 3 files changed, 30 insertions(+)
+
+diff --git a/Documentation/git.txt b/Documentation/git.txt
+index 4698d7a42b..0ab19eef3b 100644
+--- a/Documentation/git.txt
++++ b/Documentation/git.txt
+@@ -556,6 +556,11 @@ double-quotes and respecting backslash escapes. E.g., the value
+ 	is always used. The default is "sha1".
+ 	See `--object-format` in linkgit:git-init[1].
+ 
++`GIT_DEFAULT_REF_FORMAT`::
++	If this variable is set, the default reference backend format for new
++	repositories will be set to this value. The default is "files".
++	See `--ref-format` in linkgit:git-init[1].
++
+ Git Commits
+ ~~~~~~~~~~~
+ `GIT_AUTHOR_NAME`::
+diff --git a/setup.c b/setup.c
+index fb1413cabd..1ab1a66bcb 100644
+--- a/setup.c
++++ b/setup.c
+@@ -2164,12 +2164,19 @@ static void validate_hash_algorithm(struct repository_format *repo_fmt, int hash
+ static void validate_ref_storage_format(struct repository_format *repo_fmt,
+ 					unsigned int format)
+ {
++	const char *name = getenv("GIT_DEFAULT_REF_FORMAT");
++
+ 	if (repo_fmt->version >= 0 &&
+ 	    format != REF_STORAGE_FORMAT_UNKNOWN &&
+ 	    format != repo_fmt->ref_storage_format) {
+ 		die(_("attempt to reinitialize repository with different reference storage format"));
+ 	} else if (format != REF_STORAGE_FORMAT_UNKNOWN) {
+ 		repo_fmt->ref_storage_format = format;
++	} else if (name) {
++		format = ref_storage_format_by_name(name);
++		if (format == REF_STORAGE_FORMAT_UNKNOWN)
++			die(_("unknown ref storage format '%s'"), name);
++		repo_fmt->ref_storage_format = format;
+ 	}
+ }
+ 
+diff --git a/t/t0001-init.sh b/t/t0001-init.sh
+index 38b3e4c39e..30ce752cc1 100755
+--- a/t/t0001-init.sh
++++ b/t/t0001-init.sh
+@@ -558,6 +558,24 @@ test_expect_success DEFAULT_REPO_FORMAT 'extensions.refStorage with unknown back
+ 	grep "invalid value for ${SQ}extensions.refstorage${SQ}: ${SQ}garbage${SQ}" err
+ '
+ 
++test_expect_success DEFAULT_REPO_FORMAT 'init with GIT_DEFAULT_REF_FORMAT=files' '
++	test_when_finished "rm -rf refformat" &&
++	GIT_DEFAULT_REF_FORMAT=files git init refformat &&
++	echo 0 >expect &&
++	git -C refformat config core.repositoryformatversion >actual &&
++	test_cmp expect actual &&
++	test_must_fail git -C refformat config extensions.refstorage
++'
++
++test_expect_success 'init with GIT_DEFAULT_REF_FORMAT=garbage' '
++	test_when_finished "rm -rf refformat" &&
++	cat >expect <<-EOF &&
++	fatal: unknown ref storage format ${SQ}garbage${SQ}
++	EOF
++	test_must_fail env GIT_DEFAULT_REF_FORMAT=garbage git init refformat 2>err &&
++	test_cmp expect err
++'
++
+ test_expect_success MINGW 'core.hidedotfiles = false' '
+ 	git config --global core.hidedotfiles false &&
+ 	rm -rf newdir &&
+-- 
+2.39.3 (Apple Git-145)
+

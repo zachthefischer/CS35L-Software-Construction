@@ -1,0 +1,127 @@
+From e1f74dd58b77fe9bc5ed196221642395cf8951d0 Mon Sep 17 00:00:00 2001
+From: Britton Leo Kerin <britton.kerin@gmail.com>
+Date: Tue, 6 Feb 2024 12:50:43 -0900
+Subject: [PATCH 2821/2871] completion: bisect: complete bad, new, old, and
+ help subcommands
+
+The bad, new, old and help subcommands to git-bisect(1) are not
+completed.
+
+Add the bad, new, old, and help subcommands to the appropriate lists
+such that the commands and their possible ref arguments are completed.
+Add tests.
+
+Signed-off-by: Britton Leo Kerin <britton.kerin@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash |  4 +-
+ t/t9902-completion.sh                  | 71 ++++++++++++++++++++++++++
+ 2 files changed, 73 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 185b47d802..06d0b156e7 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1449,7 +1449,7 @@ _git_bisect ()
+ {
+ 	__git_has_doubledash && return
+ 
+-	local subcommands="start bad good skip reset visualize replay log run"
++	local subcommands="start bad new good old skip reset visualize replay log run help"
+ 	local subcommand="$(__git_find_on_cmdline "$subcommands")"
+ 	if [ -z "$subcommand" ]; then
+ 		__git_find_repo_path
+@@ -1462,7 +1462,7 @@ _git_bisect ()
+ 	fi
+ 
+ 	case "$subcommand" in
+-	bad|good|reset|skip|start)
++	bad|new|good|old|reset|skip|start)
+ 		__git_complete_refs
+ 		;;
+ 	*)
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index a5d4e900a2..7388c892cf 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -1264,6 +1264,77 @@ test_expect_success 'git switch - with no options, complete local branches and u
+ 	EOF
+ '
+ 
++test_expect_success 'git bisect - when not bisecting, complete only replay and start subcommands' '
++	test_completion "git bisect " <<-\EOF
++	replay Z
++	start Z
++	EOF
++'
++
++test_expect_success 'setup for git-bisect tests requiring a repo' '
++	git init git-bisect &&
++	(
++		cd git-bisect &&
++		echo "initial contents" >file &&
++		git add file &&
++		git commit -am "Initial commit" &&
++		git tag initial &&
++		echo "new line" >>file &&
++		git commit -am "First change" &&
++		echo "another new line" >>file &&
++		git commit -am "Second change" &&
++		git tag final
++	)
++'
++
++test_expect_success 'git bisect - start subcommand arguments before double-dash are completed as revs' '
++	(
++		cd git-bisect &&
++		test_completion "git bisect start " <<-\EOF
++		HEAD Z
++		final Z
++		initial Z
++		master Z
++		EOF
++	)
++'
++
++# Note that these arguments are <pathspec>s, which in practice the fallback
++# completion (not the git completion) later ends up completing as paths.
++test_expect_success 'git bisect - start subcommand arguments after double-dash are not completed' '
++	(
++		cd git-bisect &&
++		test_completion "git bisect start final initial -- " ""
++	)
++'
++
++test_expect_success 'setup for git-bisect tests requiring ongoing bisection' '
++	(
++		cd git-bisect &&
++		git bisect start --term-new=custom_new --term-old=custom_old final initial
++	)
++'
++
++test_expect_success 'git-bisect - when bisecting all subcommands are candidates' '
++	(
++		cd git-bisect &&
++		test_completion "git bisect " <<-\EOF
++		start Z
++		bad Z
++		new Z
++		good Z
++		old Z
++		skip Z
++		reset Z
++		visualize Z
++		replay Z
++		log Z
++		run Z
++		help Z
++		EOF
++	)
++'
++
+ test_expect_success 'git checkout - completes refs and unique remote branches for DWIM' '
+ 	test_completion "git checkout " <<-\EOF
+ 	HEAD Z
+-- 
+2.39.3 (Apple Git-145)
+

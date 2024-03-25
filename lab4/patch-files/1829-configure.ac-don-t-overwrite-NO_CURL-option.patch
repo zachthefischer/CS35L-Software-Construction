@@ -1,0 +1,40 @@
+From 92d8f00a1118b47fed5806b0830cdccf810500d3 Mon Sep 17 00:00:00 2001
+From: Andreas Herrmann <aherrmann@suse.de>
+Date: Wed, 19 Jul 2023 16:29:56 +0200
+Subject: [PATCH 1829/2871] configure.ac: don't overwrite NO_CURL option
+
+Even if 'configure --with-curl=no' was run, curl support is used,
+because library detection overwrites it. Avoid this overwrite.
+Configure should obey what the user has specified.
+
+Signed-off-by: Andreas Herrmann <aherrmann@suse.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ configure.ac | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 62cc8197f8..e85e215f14 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -546,6 +546,8 @@ fi
+ # git-http-push are not built, and you cannot use http:// and https://
+ # transports.
+ 
++if test -z "$NO_CURL"; then
++
+ GIT_STASH_FLAGS($CURLDIR)
+ 
+ AC_CHECK_LIB([curl], [curl_global_init],
+@@ -554,6 +556,8 @@ AC_CHECK_LIB([curl], [curl_global_init],
+ 
+ GIT_UNSTASH_FLAGS($CURLDIR)
+ 
++fi
++
+ GIT_CONF_SUBST([NO_CURL])
+ 
+ if test -z "$NO_CURL"; then
+-- 
+2.39.3 (Apple Git-145)
+

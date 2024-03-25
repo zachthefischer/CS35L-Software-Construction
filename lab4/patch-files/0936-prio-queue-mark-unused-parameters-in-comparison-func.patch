@@ -1,0 +1,71 @@
+From 1758712248ab134a99cf73dcb62c115d955697d8 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:27 -0500
+Subject: [PATCH 0936/2871] prio-queue: mark unused parameters in comparison
+ functions
+
+The prio_queue_compare_fn interface has a void pointer to allow callers
+to pass arbitrary data, but most comparison functions don't need it.
+Mark those cases to make -Wunused-parameter happy.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit.c                   | 6 ++++--
+ negotiator/skipping.c      | 2 +-
+ t/helper/test-prio-queue.c | 2 +-
+ 3 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/commit.c b/commit.c
+index e433c33bb0..0606d16e3a 100644
+--- a/commit.c
++++ b/commit.c
+@@ -801,7 +801,8 @@ int compare_commits_by_author_date(const void *a_, const void *b_,
+ 	return 0;
+ }
+ 
+-int compare_commits_by_gen_then_commit_date(const void *a_, const void *b_, void *unused)
++int compare_commits_by_gen_then_commit_date(const void *a_, const void *b_,
++					    void *unused UNUSED)
+ {
+ 	const struct commit *a = a_, *b = b_;
+ 	const timestamp_t generation_a = commit_graph_generation(a),
+@@ -821,7 +822,8 @@ int compare_commits_by_gen_then_commit_date(const void *a_, const void *b_, void
+ 	return 0;
+ }
+ 
+-int compare_commits_by_commit_date(const void *a_, const void *b_, void *unused)
++int compare_commits_by_commit_date(const void *a_, const void *b_,
++				   void *unused UNUSED)
+ {
+ 	const struct commit *a = a_, *b = b_;
+ 	/* newer commits with larger date first */
+diff --git a/negotiator/skipping.c b/negotiator/skipping.c
+index 0f5ac48e87..4867efc5f5 100644
+--- a/negotiator/skipping.c
++++ b/negotiator/skipping.c
+@@ -50,7 +50,7 @@ struct data {
+ 	int non_common_revs;
+ };
+ 
+-static int compare(const void *a_, const void *b_, void *unused)
++static int compare(const void *a_, const void *b_, void *data UNUSED)
+ {
+ 	const struct entry *a = a_;
+ 	const struct entry *b = b_;
+diff --git a/t/helper/test-prio-queue.c b/t/helper/test-prio-queue.c
+index 133b5e6f4a..496c7be07d 100644
+--- a/t/helper/test-prio-queue.c
++++ b/t/helper/test-prio-queue.c
+@@ -2,7 +2,7 @@
+ #include "cache.h"
+ #include "prio-queue.h"
+ 
+-static int intcmp(const void *va, const void *vb, void *data)
++static int intcmp(const void *va, const void *vb, void *data UNUSED)
+ {
+ 	const int *a = va, *b = vb;
+ 	return *a - *b;
+-- 
+2.39.3 (Apple Git-145)
+

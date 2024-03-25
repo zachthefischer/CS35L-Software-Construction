@@ -1,0 +1,40 @@
+From b2c51b75902acfbb8ab8ac9aadc919bf5a447c1b Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Mon, 20 Mar 2023 11:26:48 +0000
+Subject: [PATCH 1067/2871] for-each-ref: explicitly test no matches
+
+The for-each-ref builtin can take a list of ref patterns, but if none
+match, it still succeeds (but with no output). Add an explicit test that
+demonstrates that behavior.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6300-for-each-ref.sh | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index a58053a54c..6614469d2d 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1501,4 +1501,17 @@ test_expect_success 'git for-each-ref --stdin: matches' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'git for-each-ref with non-existing refs' '
++	cat >in <<-EOF &&
++	refs/heads/this-ref-does-not-exist
++	refs/tags/bogus
++	EOF
++
++	git for-each-ref --format="%(refname)" --stdin <in >actual &&
++	test_must_be_empty actual &&
++
++	xargs git for-each-ref --format="%(refname)" <in >actual &&
++	test_must_be_empty actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

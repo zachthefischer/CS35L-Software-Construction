@@ -1,0 +1,43 @@
+From a62712696e76eddebf9b5e0ecf2c9040558584bb Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:11:21 -0500
+Subject: [PATCH 2497/2871] setup: handle NULL value when parsing extensions
+
+The "partialclone" extension config records a string, and hence it is an
+error to have an implicit bool like:
+
+  [extensions]
+  partialclone
+
+in your config. We should recognize and reject this, rather than
+segfaulting (which is the current behavior). Note that it's OK to use
+config_error_nonbool() here, even though the return value is an enum. We
+explicitly document EXTENSION_ERROR as -1 for compatibility with
+error(), etc.
+
+This is the only extension value that has this problem. Most of the
+others are bools that interpret this value naturally. The exception is
+extensions.objectformat, which does correctly check for NULL.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ setup.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/setup.c b/setup.c
+index fc592dc6dd..50131be7cc 100644
+--- a/setup.c
++++ b/setup.c
+@@ -559,6 +559,8 @@ static enum extension_result handle_extension_v0(const char *var,
+ 			data->precious_objects = git_config_bool(var, value);
+ 			return EXTENSION_OK;
+ 		} else if (!strcmp(ext, "partialclone")) {
++			if (!value)
++				return config_error_nonbool(var);
+ 			data->partial_clone = xstrdup(value);
+ 			return EXTENSION_OK;
+ 		} else if (!strcmp(ext, "worktreeconfig")) {
+-- 
+2.39.3 (Apple Git-145)
+

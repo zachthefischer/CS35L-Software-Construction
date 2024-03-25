@@ -1,0 +1,66 @@
+From aa43619bdf690c8ed44746030552a35244f97af7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:37:55 +0200
+Subject: [PATCH 1892/2871] t1502, docs: disallow --no-help
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+"git rev-parse --parseopt" handles the built-in options -h and --help,
+but not --no-help.  Make test definitions and documentation examples
+more realistic by disabling negation.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rev-parse.txt | 2 +-
+ t/t1502-rev-parse-parseopt.sh   | 6 +++---
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-rev-parse.txt b/Documentation/git-rev-parse.txt
+index f26a7591e3..6e8ff9ace1 100644
+--- a/Documentation/git-rev-parse.txt
++++ b/Documentation/git-rev-parse.txt
+@@ -398,7 +398,7 @@ some-command [<options>] <args>...
+ 
+ some-command does foo and bar!
+ --
+-h,help    show the help
++h,help!   show the help
+ 
+ foo       some nifty option --foo
+ bar=      some cool option --bar with an argument
+diff --git a/t/t1502-rev-parse-parseopt.sh b/t/t1502-rev-parse-parseopt.sh
+index dd811b7fb4..0cdc6eb8b3 100755
+--- a/t/t1502-rev-parse-parseopt.sh
++++ b/t/t1502-rev-parse-parseopt.sh
+@@ -9,7 +9,7 @@ test_expect_success 'setup optionspec' '
+ |
+ |some-command does foo and bar!
+ |--
+-|h,help    show the help
++|h,help!   show the help
+ |
+ |foo       some nifty option --foo
+ |bar=      some cool option --bar with an argument
+@@ -288,7 +288,7 @@ test_expect_success 'test --parseopt help output: "wrapped" options normal "or:"
+ 	|    [--another-option]
+ 	|cmd [--yet-another-option]
+ 	|--
+-	|h,help    show the help
++	|h,help!   show the help
+ 	EOF
+ 
+ 	sed -e "s/^|//" >expect <<-\END_EXPECT &&
+@@ -322,7 +322,7 @@ test_expect_success 'test --parseopt help output: multi-line blurb after empty l
+ 	|line
+ 	|blurb
+ 	|--
+-	|h,help    show the help
++	|h,help!   show the help
+ 	EOF
+ 
+ 	sed -e "s/^|//" >expect <<-\END_EXPECT &&
+-- 
+2.39.3 (Apple Git-145)
+

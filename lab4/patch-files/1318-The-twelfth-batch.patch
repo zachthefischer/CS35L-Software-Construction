@@ -1,0 +1,42 @@
+From 7580f92ffa970b9484ac214f7b53cec5e26ca4bc Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 21 Apr 2023 14:57:45 -0700
+Subject: [PATCH 1318/2871] The twelfth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.41.0.txt | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.41.0.txt b/Documentation/RelNotes/2.41.0.txt
+index d6721eb5c6..abbaff3095 100644
+--- a/Documentation/RelNotes/2.41.0.txt
++++ b/Documentation/RelNotes/2.41.0.txt
+@@ -65,6 +65,10 @@ UI, Workflows & Features
+    has symbolic links inside its $GIT_DIR; an error message when that
+    happens has been updated.
+ 
++ * "git branch --format=..." and "git format-patch --format=..."
++   learns "--omit-empty" to hide refs that whose formatting result
++   becomes an empty string from the output.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -229,6 +233,13 @@ Fixes since v2.40
+  * Code clean-up to replace a hardcoded constant with a CPP macro.
+    (merge c870de6502 rs/get-tar-commit-id-use-defined-const later to maint).
+ 
++ * Doc build simplification.
++   (merge 9a09ed3229 fc/doc-stop-using-manversion later to maint).
++
++ * "git archive" run from a subdirectory mishandled attributes and
++   paths outside the current directory.
++   (merge 92b1dd1b9e rs/archive-from-subdirectory-fixes later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge f7111175df as/doc-markup-fix later to maint).
+    (merge 90ff7c9898 fc/test-aggregation-clean-up later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

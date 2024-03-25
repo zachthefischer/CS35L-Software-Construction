@@ -1,0 +1,60 @@
+From f4c5778b2dca447ae130cfab6cc9b7b614e7ec43 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 18 Sep 2023 18:31:48 -0400
+Subject: [PATCH 2132/2871] fsmonitor: mark some maybe-unused parameters
+
+There's a bit of conditionally-compiled code in fsmonitor, so some
+function parameters may be unused depending on the build options:
+
+  - in fsmonitor--daemon.c's try_to_run_foreground_daemon(), we take a
+    detach_console argument, but it's only used on Windows. This seems
+    intentional (and not mistakenly missing other platforms) based on
+    the discussion in c284e27ba7 (fsmonitor--daemon: implement 'start'
+    command, 2022-03-25), which introduced it.
+
+  - in fsmonitor-setting.c's check_for_incompatible(), we pass the "ipc"
+    flag down to the system-specific fsm_os__incompatible() helper. But
+    we can only do so if our platform has such a helper.
+
+In both cases we can mark the argument as MAYBE_UNUSED. That annotates
+it enough to suppress the compiler's -Wunused-parameter warning, but
+without making it impossible to use the variable, as a regular UNUSED
+annotation would.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsmonitor--daemon.c | 2 +-
+ fsmonitor-settings.c        | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/fsmonitor--daemon.c b/builtin/fsmonitor--daemon.c
+index 7e99c4d61b..7c4130c981 100644
+--- a/builtin/fsmonitor--daemon.c
++++ b/builtin/fsmonitor--daemon.c
+@@ -1412,7 +1412,7 @@ static int fsmonitor_run_daemon(void)
+ 	return err;
+ }
+ 
+-static int try_to_run_foreground_daemon(int detach_console)
++static int try_to_run_foreground_daemon(int detach_console MAYBE_UNUSED)
+ {
+ 	/*
+ 	 * Technically, we don't need to probe for an existing daemon
+diff --git a/fsmonitor-settings.c b/fsmonitor-settings.c
+index b62acf44ae..a6a9e6bc19 100644
+--- a/fsmonitor-settings.c
++++ b/fsmonitor-settings.c
+@@ -62,7 +62,8 @@ static enum fsmonitor_reason check_remote(struct repository *r)
+ }
+ #endif
+ 
+-static enum fsmonitor_reason check_for_incompatible(struct repository *r, int ipc)
++static enum fsmonitor_reason check_for_incompatible(struct repository *r,
++						    int ipc MAYBE_UNUSED)
+ {
+ 	if (!r->worktree) {
+ 		/*
+-- 
+2.39.3 (Apple Git-145)
+

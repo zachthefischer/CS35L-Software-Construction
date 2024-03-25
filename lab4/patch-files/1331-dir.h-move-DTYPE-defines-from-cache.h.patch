@@ -1,0 +1,64 @@
+From 592fc5b3495bf4ff17252d31109f1d9c0134684b Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:18 +0000
+Subject: [PATCH 1331/2871] dir.h: move DTYPE defines from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h | 14 --------------
+ dir.h   | 15 +++++++++++++++
+ 2 files changed, 15 insertions(+), 14 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 6955745ccc..ad741e70bc 100644
+--- a/cache.h
++++ b/cache.h
+@@ -10,20 +10,6 @@
+ #include "object.h"
+ #include "statinfo.h"
+ 
+-#if defined(DT_UNKNOWN) && !defined(NO_D_TYPE_IN_DIRENT)
+-#define DTYPE(de)	((de)->d_type)
+-#else
+-#undef DT_UNKNOWN
+-#undef DT_DIR
+-#undef DT_REG
+-#undef DT_LNK
+-#define DT_UNKNOWN	0
+-#define DT_DIR		1
+-#define DT_REG		2
+-#define DT_LNK		3
+-#define DTYPE(de)	DT_UNKNOWN
+-#endif
+-
+ /*
+  * Some mode bits are also used internally for computations.
+  *
+diff --git a/dir.h b/dir.h
+index 3d6c87387e..79b85a01ee 100644
+--- a/dir.h
++++ b/dir.h
+@@ -640,4 +640,19 @@ static inline int starts_with_dot_dot_slash_native(const char *const path)
+ 
+ 	return path_match_flags(path, what | PATH_MATCH_NATIVE);
+ }
++
++#if defined(DT_UNKNOWN) && !defined(NO_D_TYPE_IN_DIRENT)
++#define DTYPE(de)	((de)->d_type)
++#else
++#undef DT_UNKNOWN
++#undef DT_DIR
++#undef DT_REG
++#undef DT_LNK
++#define DT_UNKNOWN	0
++#define DT_DIR		1
++#define DT_REG		2
++#define DT_LNK		3
++#define DTYPE(de)	DT_UNKNOWN
++#endif
++
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

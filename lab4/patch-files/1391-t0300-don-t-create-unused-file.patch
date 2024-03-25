@@ -1,0 +1,38 @@
+From ed5288cff22b280f83987ab521fbe451f603213c Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Mon, 17 Apr 2023 21:10:39 +0200
+Subject: [PATCH 1391/2871] t0300: don't create unused file
+
+Test 'credential config with partial URLs' in t0300-credentials.sh
+contains three "git credential fill" invocations.  For two of the
+invocations, the test asserts presence or absence of string "yep" in the
+standard output.  For the third test it checks for an error message in
+standard error.
+
+Don't redirect standard output of "git credential" to file "stdout" in
+t0300-credentials.sh to avoid creating an unnecessary file when only
+standard error is checked.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0300-credentials.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t0300-credentials.sh b/t/t0300-credentials.sh
+index c66d91e82d..b8612ede95 100755
+--- a/t/t0300-credentials.sh
++++ b/t/t0300-credentials.sh
+@@ -808,7 +808,7 @@ test_expect_success 'credential config with partial URLs' '
+ 
+ 	git -c credential.$partial.helper=yep \
+ 		-c credential.with%0anewline.username=uh-oh \
+-		credential fill <stdin >stdout 2>stderr &&
++		credential fill <stdin 2>stderr &&
+ 	test_i18ngrep "skipping credential lookup for key" stderr
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

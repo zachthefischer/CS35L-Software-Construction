@@ -1,0 +1,36 @@
+From 53ded839aee86e3544c3e035385fe2ada33180b1 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 20 Dec 2023 22:59:24 -0800
+Subject: [PATCH 2611/2871] sparse-checkout: use default patterns for 'set'
+ only !stdin
+
+"git sparse-checkout set ---no-cone" uses default patterns when none
+is given from the command line, but it should do so ONLY when
+--stdin is not being used.  Right now, add_patterns_from_input()
+called when reading from the standard input is sloppy and does not
+check if there are extra command line parameters that the command
+will silently ignore, but that will change soon and not setting this
+unnecessary and unused default patterns start to matter when it gets
+fixed.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/sparse-checkout.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/sparse-checkout.c b/builtin/sparse-checkout.c
+index 5c8ffb1f75..2ce1c53d01 100644
+--- a/builtin/sparse-checkout.c
++++ b/builtin/sparse-checkout.c
+@@ -835,7 +835,7 @@ static int sparse_checkout_set(int argc, const char **argv, const char *prefix)
+ 	 * non-cone mode, if nothing is specified, manually select just the
+ 	 * top-level directory (much as 'init' would do).
+ 	 */
+-	if (!core_sparse_checkout_cone && argc == 0) {
++	if (!core_sparse_checkout_cone && !set_opts.use_stdin && argc == 0) {
+ 		argv = default_patterns;
+ 		argc = default_patterns_nr;
+ 	} else {
+-- 
+2.39.3 (Apple Git-145)
+

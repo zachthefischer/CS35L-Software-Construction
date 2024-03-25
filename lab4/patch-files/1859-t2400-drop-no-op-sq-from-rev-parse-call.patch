@@ -1,0 +1,27 @@
+From 9111ea1cbeba0861ea1c90e16bea980be4910d8c Mon Sep 17 00:00:00 2001
+From: Jacob Abel <jacobabel@nullpo.dev>
+Date: Wed, 26 Jul 2023 21:42:18 +0000
+Subject: [PATCH 1859/2871] t2400: drop no-op `--sq` from rev-parse call
+
+Signed-off-by: Jacob Abel <jacobabel@nullpo.dev>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2400-worktree-add.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index 0ac468e69e..e106540c6d 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -995,7 +995,7 @@ test_dwim_orphan () {
+ 					grep "$invalid_ref_regex" actual &&
+ 					! grep "$orphan_hint" actual
+ 				else
+-					headpath=$(git $dashc_args rev-parse --sq --path-format=absolute --git-path HEAD) &&
++					headpath=$(git $dashc_args rev-parse --path-format=absolute --git-path HEAD) &&
+ 					headcontents=$(cat "$headpath") &&
+ 					grep "HEAD points to an invalid (or orphaned) reference" actual &&
+ 					grep "HEAD path:\s*.$headpath." actual &&
+-- 
+2.39.3 (Apple Git-145)
+

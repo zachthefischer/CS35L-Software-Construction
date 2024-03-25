@@ -1,0 +1,139 @@
+From 86b008ee61ccf800f613d7de382bd9e3b6bbaa6f Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 16:58:38 -0400
+Subject: [PATCH 2253/2871] t: add library for munging chunk-format files
+
+When testing corruption of files using the chunk format (like
+commit-graphs and midx files), it's helpful to be able to modify bytes
+in specific chunks. This requires being able both to read the
+table-of-contents (to find the chunk to modify) but also to adjust it
+(to account for size changes in the offsets of subsequent chunks).
+
+We have some tests already which corrupt chunk files, but they have some
+downsides:
+
+  1. They are very brittle, as they manually compute the expected size
+     of a particular instance of the file (e.g., see the definitions
+     starting with NUM_OBJECTS in t5319).
+
+  2. Because they rely on manual offsets and don't read the
+     table-of-contents, they're limited to overwriting bytes. But there
+     are many interesting corruptions that involve changing the sizes of
+     chunks (especially smaller-than-expected ones).
+
+This patch adds a perl script which makes such corruptions easy. We'll
+use it in subsequent patches.
+
+Note that we could get by with just a big "perl -e" inside the helper
+function. I chose to put it in a separate script for two reasons. One,
+so we don't have to worry about the extra layer of shell quoting. And
+two, the script is kind of big, and running the tests with "-x" would
+repeatedly dump it into the log output.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-chunk.sh                    | 17 ++++++++
+ t/lib-chunk/corrupt-chunk-file.pl | 66 +++++++++++++++++++++++++++++++
+ 2 files changed, 83 insertions(+)
+ create mode 100644 t/lib-chunk.sh
+ create mode 100644 t/lib-chunk/corrupt-chunk-file.pl
+
+diff --git a/t/lib-chunk.sh b/t/lib-chunk.sh
+new file mode 100644
+index 0000000000..a7cd9c3c6d
+--- /dev/null
++++ b/t/lib-chunk.sh
+@@ -0,0 +1,17 @@
++# Shell library for working with "chunk" files (commit-graph, midx, etc).
++
++# corrupt_chunk_file <fn> <chunk> <offset> <bytes>
++#
++# Corrupt a chunk-based file (like a commit-graph) by overwriting the bytes
++# found in the chunk specified by the 4-byte <chunk> identifier. If <offset> is
++# "clear", replace the chunk entirely. Otherwise, overwrite data <offset> bytes
++# into the chunk.
++#
++# The <bytes> are interpreted as pairs of hex digits (so "000000FE" would be
++# big-endian 254).
++corrupt_chunk_file () {
++	fn=$1; shift
++	perl "$TEST_DIRECTORY"/lib-chunk/corrupt-chunk-file.pl \
++		"$@" <"$fn" >"$fn.tmp" &&
++	mv "$fn.tmp" "$fn"
++}
+diff --git a/t/lib-chunk/corrupt-chunk-file.pl b/t/lib-chunk/corrupt-chunk-file.pl
+new file mode 100644
+index 0000000000..cd6d386fef
+--- /dev/null
++++ b/t/lib-chunk/corrupt-chunk-file.pl
+@@ -0,0 +1,66 @@
++#!/usr/bin/perl
++
++my ($chunk, $seek, $bytes) = @ARGV;
++$bytes =~ s/../chr(hex($&))/ge;
++
++binmode STDIN;
++binmode STDOUT;
++
++# A few helpers to read bytes, or read and copy them to the
++# output.
++sub get {
++	my $n = shift;
++	return unless $n;
++	read(STDIN, my $buf, $n)
++		or die "read error or eof: $!\n";
++	return $buf;
++}
++sub copy {
++	my $buf = get(@_);
++	print $buf;
++	return $buf;
++}
++
++# read until we find table-of-contents entry for chunk;
++# note that we cheat a bit by assuming 4-byte alignment and
++# that no ToC entry will accidentally look like a header.
++#
++# If we don't find the entry, copy() will hit EOF and exit
++# (which should cause the caller to fail the test).
++while (copy(4) ne $chunk) { }
++my $offset = unpack("Q>", copy(8));
++
++# In clear mode, our length will change. So figure out
++# the length by comparing to the offset of the next chunk, and
++# then adjust that offset (and all subsequent) ones.
++my $len;
++if ($seek eq "clear") {
++	my $id;
++	do {
++		$id = copy(4);
++		my $next = unpack("Q>", get(8));
++		if (!defined $len) {
++			$len = $next - $offset;
++		}
++		print pack("Q>", $next - $len + length($bytes));
++	} while (unpack("N", $id));
++}
++
++# and now copy up to our existing chunk data
++copy($offset - tell(STDIN));
++if ($seek eq "clear") {
++	# if clearing, skip past existing data
++	get($len);
++} else {
++	# otherwise, copy up to the requested offset,
++	# and skip past the overwritten bytes
++	copy($seek);
++	get(length($bytes));
++}
++
++# now write out the requested bytes, along
++# with any other remaining data
++print $bytes;
++while (read(STDIN, my $buf, 4096)) {
++	print $buf;
++}
+-- 
+2.39.3 (Apple Git-145)
+

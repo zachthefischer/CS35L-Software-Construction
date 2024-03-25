@@ -1,0 +1,127 @@
+From dbe33c5ad02aa9a6141abccf0821b49c46df2891 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:06 +0000
+Subject: [PATCH 2220/2871] documentation: fix apostrophe usage
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/index.txt     | 2 +-
+ Documentation/config/pack.txt      | 2 +-
+ Documentation/config/submodule.txt | 2 +-
+ Documentation/git-mktag.txt        | 2 +-
+ Documentation/git-rm.txt           | 2 +-
+ Documentation/gitprotocol-pack.txt | 2 +-
+ Documentation/pull-fetch-param.txt | 2 +-
+ Documentation/technical/rerere.txt | 2 +-
+ 8 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/Documentation/config/index.txt b/Documentation/config/index.txt
+index 23c7985eb4..3eff420360 100644
+--- a/Documentation/config/index.txt
++++ b/Documentation/config/index.txt
+@@ -23,7 +23,7 @@ index.threads::
+ 	Specifies the number of threads to spawn when loading the index.
+ 	This is meant to reduce index load time on multiprocessor machines.
+ 	Specifying 0 or 'true' will cause Git to auto-detect the number of
+-	CPU's and set the number of threads accordingly. Specifying 1 or
++	CPUs and set the number of threads accordingly. Specifying 1 or
+ 	'false' will disable multithreading. Defaults to 'true'.
+ 
+ index.version::
+diff --git a/Documentation/config/pack.txt b/Documentation/config/pack.txt
+index dcd4c871b3..6308f21e03 100644
+--- a/Documentation/config/pack.txt
++++ b/Documentation/config/pack.txt
+@@ -74,7 +74,7 @@ pack.threads::
+ 	warning. This is meant to reduce packing time on multiprocessor
+ 	machines. The required amount of memory for the delta search window
+ 	is however multiplied by the number of threads.
+-	Specifying 0 will cause Git to auto-detect the number of CPU's
++	Specifying 0 will cause Git to auto-detect the number of CPUs
+ 	and set the number of threads accordingly.
+ 
+ pack.indexVersion::
+diff --git a/Documentation/config/submodule.txt b/Documentation/config/submodule.txt
+index 665419fa13..0672d99117 100644
+--- a/Documentation/config/submodule.txt
++++ b/Documentation/config/submodule.txt
+@@ -35,7 +35,7 @@ submodule.<name>.ignore::
+ 	a submodule as modified. When set to "all", it will never be considered
+ 	modified (but it will nonetheless show up in the output of status and
+ 	commit when it has been staged), "dirty" will ignore all changes
+-	to the submodules work tree and
++	to the submodule's work tree and
+ 	takes only differences between the HEAD of the submodule and the commit
+ 	recorded in the superproject into account. "untracked" will additionally
+ 	let submodules with modified tracked files in their work tree show up.
+diff --git a/Documentation/git-mktag.txt b/Documentation/git-mktag.txt
+index b2a2e80d42..cd8fe9169e 100644
+--- a/Documentation/git-mktag.txt
++++ b/Documentation/git-mktag.txt
+@@ -14,7 +14,7 @@ SYNOPSIS
+ DESCRIPTION
+ -----------
+ 
+-Reads a tag contents on standard input and creates a tag object. The
++Reads a tag's contents on standard input and creates a tag object. The
+ output is the new tag's <object> identifier.
+ 
+ This command is mostly equivalent to linkgit:git-hash-object[1]
+diff --git a/Documentation/git-rm.txt b/Documentation/git-rm.txt
+index 81bc23f3cd..363a26934f 100644
+--- a/Documentation/git-rm.txt
++++ b/Documentation/git-rm.txt
+@@ -163,7 +163,7 @@ will be staged (unless --cached or -n are used).
+ 
+ A submodule is considered up to date when the HEAD is the same as
+ recorded in the index, no tracked files are modified and no untracked
+-files that aren't ignored are present in the submodules work tree.
++files that aren't ignored are present in the submodule's work tree.
+ Ignored files are deemed expendable and won't stop a submodule's work
+ tree from being removed.
+ 
+diff --git a/Documentation/gitprotocol-pack.txt b/Documentation/gitprotocol-pack.txt
+index dd4108b7a3..01391cb300 100644
+--- a/Documentation/gitprotocol-pack.txt
++++ b/Documentation/gitprotocol-pack.txt
+@@ -137,7 +137,7 @@ an absolute path in the remote filesystem.
+ 		    v
+     ssh user@example.com "git-upload-pack '/project.git'"
+ 
+-In a "user@host:path" format URI, its relative to the user's home
++In a "user@host:path" format URI, it's relative to the user's home
+ directory, because the Git client will run:
+ 
+      git clone user@example.com:project.git
+diff --git a/Documentation/pull-fetch-param.txt b/Documentation/pull-fetch-param.txt
+index 95a7390b2c..26bf06d991 100644
+--- a/Documentation/pull-fetch-param.txt
++++ b/Documentation/pull-fetch-param.txt
+@@ -71,7 +71,7 @@ refspec (or `--force`).
+ Unlike when pushing with linkgit:git-push[1], any updates outside of
+ `refs/{tags,heads}/*` will be accepted without `+` in the refspec (or
+ `--force`), whether that's swapping e.g. a tree object for a blob, or
+-a commit for another commit that's doesn't have the previous commit as
++a commit for another commit that doesn't have the previous commit as
+ an ancestor etc.
+ +
+ Unlike when pushing with linkgit:git-push[1], there is no
+diff --git a/Documentation/technical/rerere.txt b/Documentation/technical/rerere.txt
+index be58f1bee3..3f9259cb1e 100644
+--- a/Documentation/technical/rerere.txt
++++ b/Documentation/technical/rerere.txt
+@@ -76,7 +76,7 @@ examples would both result in the following normalized conflict:
+ Sorting hunks
+ ~~~~~~~~~~~~~
+ 
+-As before, lets imagine that a common ancestor had a file with line A
++As before, let's imagine that a common ancestor had a file with line A
+ its early part, and line X in its late part.  And then four branches
+ are forked that do these things:
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,33 @@
+From faebba436e6d8a274acfc5a3cc3fd4b6c2495d80 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Thu, 1 Dec 2022 18:49:41 +0100
+Subject: [PATCH 0480/2871] list-objects-filter: plug pattern_list leak
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+filter_sparse_oid__init() uses add_patterns_from_blob_to_list() to
+populate the struct pattern_list member of struct filter_sparse_data.
+Release it in the complementing filter_sparse_free().
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ list-objects-filter.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/list-objects-filter.c b/list-objects-filter.c
+index 1c1ee3d1bb..9e5fc15ef7 100644
+--- a/list-objects-filter.c
++++ b/list-objects-filter.c
+@@ -514,6 +514,7 @@ static enum list_objects_filter_result filter_sparse(
+ static void filter_sparse_free(void *filter_data)
+ {
+ 	struct filter_sparse_data *d = filter_data;
++	clear_pattern_list(&d->pl);
+ 	free(d->array_frame);
+ 	free(d);
+ }
+-- 
+2.39.3 (Apple Git-145)
+

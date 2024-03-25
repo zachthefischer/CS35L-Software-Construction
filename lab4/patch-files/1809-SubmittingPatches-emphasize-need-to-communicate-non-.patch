@@ -1,0 +1,49 @@
+From 5c98149ce4d5f57f5376fc38e512dade77a96f8b Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Fri, 14 Jul 2023 06:01:32 +0000
+Subject: [PATCH 1809/2871] SubmittingPatches: emphasize need to communicate
+ non-default starting points
+
+The phrase
+
+    and unless it targets the `master` branch (which is the default),
+    mark your patches as such.
+
+is tightly packed with several things happening in just two lines of
+text. It also feels like it is not that important because of the terse
+treatment. This is a problem because (1) it has the potential to confuse
+new contributors, and (2) it may be glossed over for those skimming the
+docs.
+
+Emphasize and elaborate on this guidance by promoting it to its own
+separate paragraph.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index f1d1446764..40467372c0 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -318,9 +318,12 @@ or include any extra files which do not relate to what your patch
+ is trying to achieve. Make sure to review
+ your patch after generating it, to ensure accuracy.  Before
+ sending out, please make sure it cleanly applies to the starting point you
+-have chosen in the "Choose a starting point" section,
+-and unless it targets the `master` branch (which is the default),
+-mark your patches as such.
++have chosen in the "Choose a starting point" section.
++
++NOTE: From the perspective of those reviewing your patch, the `master`
++branch is the default expected starting point.  So if you have chosen a
++different starting point, please communicate this choice in your cover
++letter.
+ 
+ 
+ [[send-patches]]
+-- 
+2.39.3 (Apple Git-145)
+

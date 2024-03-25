@@ -1,0 +1,57 @@
+From 1b274c98341ef17f3bbfe80f603f629e7c950668 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:11:32 -0500
+Subject: [PATCH 2501/2871] trailer: handle NULL value when parsing
+ trailer-specific config
+
+When parsing the "key", "command", and "cmd" trailer config, we just
+make a copy of the value string.  If we see an implicit bool like:
+
+  [trailer "foo"]
+  key
+
+we'll segfault trying to copy a NULL pointer. We can fix this with the
+usual config_error_nonbool() check.
+
+I split this out from the other vanilla cases, because at first glance
+it looks like a better fix here would be to move the NULL check out of
+the switch statement. But it would change the behavior of other keys
+like trailer.*.ifExists, where an implicit bool is interpreted as
+EXISTS_DEFAULT.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trailer.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/trailer.c b/trailer.c
+index b0e2ec224a..e4b08ed267 100644
+--- a/trailer.c
++++ b/trailer.c
+@@ -553,16 +553,22 @@ static int git_trailer_config(const char *conf_key, const char *value,
+ 	case TRAILER_KEY:
+ 		if (conf->key)
+ 			warning(_("more than one %s"), conf_key);
++		if (!value)
++			return config_error_nonbool(conf_key);
+ 		conf->key = xstrdup(value);
+ 		break;
+ 	case TRAILER_COMMAND:
+ 		if (conf->command)
+ 			warning(_("more than one %s"), conf_key);
++		if (!value)
++			return config_error_nonbool(conf_key);
+ 		conf->command = xstrdup(value);
+ 		break;
+ 	case TRAILER_CMD:
+ 		if (conf->cmd)
+ 			warning(_("more than one %s"), conf_key);
++		if (!value)
++			return config_error_nonbool(conf_key);
+ 		conf->cmd = xstrdup(value);
+ 		break;
+ 	case TRAILER_WHERE:
+-- 
+2.39.3 (Apple Git-145)
+

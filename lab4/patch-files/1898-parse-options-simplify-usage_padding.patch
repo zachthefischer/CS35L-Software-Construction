@@ -1,0 +1,55 @@
+From 311c8ff11cebef1219e110743d9a57cb9831ab06 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:52:42 +0200
+Subject: [PATCH 1898/2871] parse-options: simplify usage_padding()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+c512643e67 (short help: allow a gap smaller than USAGE_GAP, 2023-07-18)
+effectively did away with the two-space gap between options and their
+description; one space is enough now.  Incorporate USAGE_GAP into
+USAGE_OPTS_WIDTH, merge the two cases with enough space on the line and
+incorporate the newline into the format for the remaining case.  The
+output remains the same.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c | 17 +++++------------
+ 1 file changed, 5 insertions(+), 12 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index 4a8d380ceb..b00d868816 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1025,21 +1025,14 @@ static int usage_indent(FILE *outfile)
+ 	return fprintf(outfile, "    ");
+ }
+ 
+-#define USAGE_OPTS_WIDTH 24
+-#define USAGE_GAP         2
++#define USAGE_OPTS_WIDTH 26
+ 
+ static void usage_padding(FILE *outfile, size_t pos)
+ {
+-	int pad;
+-	if (pos == USAGE_OPTS_WIDTH + 1)
+-		pad = -1;
+-	else if (pos <= USAGE_OPTS_WIDTH)
+-		pad = USAGE_OPTS_WIDTH - pos;
+-	else {
+-		fputc('\n', outfile);
+-		pad = USAGE_OPTS_WIDTH;
+-	}
+-	fprintf(outfile, "%*s", pad + USAGE_GAP, "");
++	if (pos < USAGE_OPTS_WIDTH)
++		fprintf(outfile, "%*s", USAGE_OPTS_WIDTH - (int)pos, "");
++	else
++		fprintf(outfile, "\n%*s", USAGE_OPTS_WIDTH, "");
+ }
+ 
+ static const struct option *find_option_by_long_name(const struct option *opts,
+-- 
+2.39.3 (Apple Git-145)
+

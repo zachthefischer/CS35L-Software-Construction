@@ -1,0 +1,171 @@
+From c93c3d2fa42bec64948441cb339d78e2044ff9a3 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 31 Jan 2023 13:29:12 +0000
+Subject: [PATCH 0763/2871] bundle-uri: parse bundle.heuristic=creationToken
+
+The bundle.heuristic value communicates that the bundle list is
+organized to make use of the bundle.<id>.creationToken values that may
+be provided in the bundle list. Those values will create a total order
+on the bundles, allowing the Git client to download them in a specific
+order and even remember previously-downloaded bundles by storing the
+maximum creation token value.
+
+Before implementing any logic that parses or uses the
+bundle.<id>.creationToken values, teach Git to parse the
+bundle.heuristic value from a bundle list. We can use 'test-tool
+bundle-uri' to print the heuristic value and verify that the parsing
+works correctly.
+
+As an extra precaution, create the internal 'heuristics' array to be a
+list of (enum, string) pairs so we can iterate through the array entries
+carefully, regardless of the enum values.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/bundle.txt |  7 +++++++
+ bundle-uri.c                    | 34 +++++++++++++++++++++++++++++++++
+ bundle-uri.h                    | 14 ++++++++++++++
+ t/t5750-bundle-uri-parse.sh     | 19 ++++++++++++++++++
+ 4 files changed, 74 insertions(+)
+
+diff --git a/Documentation/config/bundle.txt b/Documentation/config/bundle.txt
+index daa21eb674..3faae38685 100644
+--- a/Documentation/config/bundle.txt
++++ b/Documentation/config/bundle.txt
+@@ -15,6 +15,13 @@ bundle.mode::
+ 	complete understanding of the bundled information (`all`) or if any one
+ 	of the listed bundle URIs is sufficient (`any`).
+ 
++bundle.heuristic::
++	If this string-valued key exists, then the bundle list is designed to
++	work well with incremental `git fetch` commands. The heuristic signals
++	that there are additional keys available for each bundle that help
++	determine which subset of bundles the client should download. The
++	only value currently understood is `creationToken`.
++
+ bundle.<id>.*::
+ 	The `bundle.<id>.*` keys are used to describe a single item in the
+ 	bundle list, grouped under `<id>` for identification purposes.
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 36268dda17..36ec542718 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -9,6 +9,14 @@
+ #include "config.h"
+ #include "remote.h"
+ 
++static struct {
++	enum bundle_list_heuristic heuristic;
++	const char *name;
++} heuristics[BUNDLE_HEURISTIC__COUNT] = {
++	{ BUNDLE_HEURISTIC_NONE, ""},
++	{ BUNDLE_HEURISTIC_CREATIONTOKEN, "creationToken" },
++};
++
+ static int compare_bundles(const void *hashmap_cmp_fn_data,
+ 			   const struct hashmap_entry *he1,
+ 			   const struct hashmap_entry *he2,
+@@ -100,6 +108,17 @@ void print_bundle_list(FILE *fp, struct bundle_list *list)
+ 	fprintf(fp, "\tversion = %d\n", list->version);
+ 	fprintf(fp, "\tmode = %s\n", mode);
+ 
++	if (list->heuristic) {
++		int i;
++		for (i = 0; i < BUNDLE_HEURISTIC__COUNT; i++) {
++			if (heuristics[i].heuristic == list->heuristic) {
++				printf("\theuristic = %s\n",
++				       heuristics[list->heuristic].name);
++				break;
++			}
++		}
++	}
++
+ 	for_all_bundles_in_list(list, summarize_bundle, fp);
+ }
+ 
+@@ -142,6 +161,21 @@ static int bundle_list_update(const char *key, const char *value,
+ 			return 0;
+ 		}
+ 
++		if (!strcmp(subkey, "heuristic")) {
++			int i;
++			for (i = 0; i < BUNDLE_HEURISTIC__COUNT; i++) {
++				if (heuristics[i].heuristic &&
++				    heuristics[i].name &&
++				    !strcmp(value, heuristics[i].name)) {
++					list->heuristic = heuristics[i].heuristic;
++					return 0;
++				}
++			}
++
++			/* Ignore unknown heuristics. */
++			return 0;
++		}
++
+ 		/* Ignore other unknown global keys. */
+ 		return 0;
+ 	}
+diff --git a/bundle-uri.h b/bundle-uri.h
+index d5e89f1671..2e44a50a90 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -52,6 +52,14 @@ enum bundle_list_mode {
+ 	BUNDLE_MODE_ANY
+ };
+ 
++enum bundle_list_heuristic {
++	BUNDLE_HEURISTIC_NONE = 0,
++	BUNDLE_HEURISTIC_CREATIONTOKEN,
++
++	/* Must be last. */
++	BUNDLE_HEURISTIC__COUNT
++};
++
+ /**
+  * A bundle_list contains an unordered set of remote_bundle_info structs,
+  * as well as information about the bundle listing, such as version and
+@@ -75,6 +83,12 @@ struct bundle_list {
+ 	 * advertised by the bundle list at that location.
+ 	 */
+ 	char *baseURI;
++
++	/**
++	 * A list can have a heuristic, which helps reduce the number of
++	 * downloaded bundles.
++	 */
++	enum bundle_list_heuristic heuristic;
+ };
+ 
+ void init_bundle_list(struct bundle_list *list);
+diff --git a/t/t5750-bundle-uri-parse.sh b/t/t5750-bundle-uri-parse.sh
+index 7b4f930e53..6fc92a9c0d 100755
+--- a/t/t5750-bundle-uri-parse.sh
++++ b/t/t5750-bundle-uri-parse.sh
+@@ -250,4 +250,23 @@ test_expect_success 'parse config format edge cases: empty key or value' '
+ 	test_cmp_config_output expect actual
+ '
+ 
++test_expect_success 'parse config format: creationToken heuristic' '
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++		heuristic = creationToken
++	[bundle "one"]
++		uri = http://example.com/bundle.bdl
++	[bundle "two"]
++		uri = https://example.com/bundle.bdl
++	[bundle "three"]
++		uri = file:///usr/share/git/bundle.bdl
++	EOF
++
++	test-tool bundle-uri parse-config expect >actual 2>err &&
++	test_must_be_empty err &&
++	test_cmp_config_output expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

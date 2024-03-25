@@ -1,0 +1,63 @@
+From 8300d15d5ecea1e41b2b1d381238ccaaec501dd4 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 15 Feb 2023 05:58:33 +0000
+Subject: [PATCH 0868/2871] t7510: add a test case that does not need gpg
+
+This test case not only increases test coverage in setups without
+working gpg, but also prepares for verifying that the error message of
+`gpg.program` is shown upon failure.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7510-signed-commit.sh | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/t/t7510-signed-commit.sh b/t/t7510-signed-commit.sh
+index 8593b7e3cb..24dc3ef0a2 100755
+--- a/t/t7510-signed-commit.sh
++++ b/t/t7510-signed-commit.sh
+@@ -387,4 +387,40 @@ test_expect_success GPG 'verify-commit verifies multiply signed commits' '
+ 	! grep "BAD signature from" actual
+ '
+ 
++test_expect_success 'custom `gpg.program`' '
++	write_script fake-gpg <<-\EOF &&
++	args="$*"
++
++	# skip uninteresting options
++	while case "$1" in
++	--status-fd=*|--keyid-format=*) ;; # skip
++	*) break;;
++	esac; do shift; done
++
++	case "$1" in
++	-bsau)
++		cat >sign.file
++		echo "[GNUPG:] SIG_CREATED $args" >&2
++		echo "-----BEGIN PGP MESSAGE-----"
++		echo "$args"
++		echo "-----END PGP MESSAGE-----"
++		;;
++	--verify)
++		cat "$2" >verify.file
++		exit 0
++		;;
++	*)
++		echo "Unhandled args: $*" >&2
++		exit 1
++		;;
++	esac
++	EOF
++
++	test_config gpg.program "$(pwd)/fake-gpg" &&
++	git commit -S --allow-empty -m signed-commit &&
++	test_path_exists sign.file &&
++	git show --show-signature &&
++	test_path_exists verify.file
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

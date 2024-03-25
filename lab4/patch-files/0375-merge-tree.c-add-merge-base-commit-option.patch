@@ -1,0 +1,185 @@
+From 66265a693e8deb3ab86577eb7f69940410044081 Mon Sep 17 00:00:00 2001
+From: Kyle Zhao <kylezhao@tencent.com>
+Date: Fri, 11 Nov 2022 23:45:13 +0000
+Subject: [PATCH 0375/2871] merge-tree.c: add --merge-base=<commit> option
+
+This patch will give our callers more flexibility to use `git merge-tree`,
+such as:
+
+    git merge-tree --write-tree --merge-base=branch^ HEAD branch
+
+This does a merge of HEAD and branch, but uses branch^ as the merge-base.
+
+And the reason why using an option flag instead of a positional argument
+is to allow additional commits passed to merge-tree to be handled via an
+octopus merge in the future.
+
+Signed-off-by: Kyle Zhao <kylezhao@tencent.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/git-merge-tree.txt |  4 +++
+ builtin/merge-tree.c             | 46 ++++++++++++++++++++++++--------
+ t/t4301-merge-tree-write-tree.sh | 27 +++++++++++++++++++
+ 3 files changed, 66 insertions(+), 11 deletions(-)
+
+diff --git a/Documentation/git-merge-tree.txt b/Documentation/git-merge-tree.txt
+index 04bcc416e6..d9dacb2ce5 100644
+--- a/Documentation/git-merge-tree.txt
++++ b/Documentation/git-merge-tree.txt
+@@ -64,6 +64,10 @@ OPTIONS
+ 	share no common history.  This flag can be given to override that
+ 	check and make the merge proceed anyway.
+ 
++--merge-base=<commit>::
++	Instead of finding the merge-bases for <branch1> and <branch2>,
++	specify a merge-base for the merge.
++
+ [[OUTPUT]]
+ OUTPUT
+ ------
+diff --git a/builtin/merge-tree.c b/builtin/merge-tree.c
+index fe853aa8f9..62c6d43cdb 100644
+--- a/builtin/merge-tree.c
++++ b/builtin/merge-tree.c
+@@ -3,6 +3,7 @@
+ #include "tree-walk.h"
+ #include "xdiff-interface.h"
+ #include "help.h"
++#include "commit.h"
+ #include "commit-reach.h"
+ #include "merge-ort.h"
+ #include "object-store.h"
+@@ -406,6 +407,7 @@ struct merge_tree_options {
+ };
+ 
+ static int real_merge(struct merge_tree_options *o,
++		      const char *merge_base,
+ 		      const char *branch1, const char *branch2,
+ 		      const char *prefix)
+ {
+@@ -432,16 +434,31 @@ static int real_merge(struct merge_tree_options *o,
+ 	opt.branch1 = branch1;
+ 	opt.branch2 = branch2;
+ 
+-	/*
+-	 * Get the merge bases, in reverse order; see comment above
+-	 * merge_incore_recursive in merge-ort.h
+-	 */
+-	merge_bases = get_merge_bases(parent1, parent2);
+-	if (!merge_bases && !o->allow_unrelated_histories)
+-		die(_("refusing to merge unrelated histories"));
+-	merge_bases = reverse_commit_list(merge_bases);
++	if (merge_base) {
++		struct commit *base_commit;
++		struct tree *base_tree, *parent1_tree, *parent2_tree;
++
++		base_commit = lookup_commit_reference_by_name(merge_base);
++		if (!base_commit)
++			die(_("could not lookup commit %s"), merge_base);
++
++		opt.ancestor = merge_base;
++		base_tree = get_commit_tree(base_commit);
++		parent1_tree = get_commit_tree(parent1);
++		parent2_tree = get_commit_tree(parent2);
++		merge_incore_nonrecursive(&opt, base_tree, parent1_tree, parent2_tree, &result);
++	} else {
++		/*
++		 * Get the merge bases, in reverse order; see comment above
++		 * merge_incore_recursive in merge-ort.h
++		 */
++		merge_bases = get_merge_bases(parent1, parent2);
++		if (!merge_bases && !o->allow_unrelated_histories)
++			die(_("refusing to merge unrelated histories"));
++		merge_bases = reverse_commit_list(merge_bases);
++		merge_incore_recursive(&opt, merge_bases, parent1, parent2, &result);
++	}
+ 
+-	merge_incore_recursive(&opt, merge_bases, parent1, parent2, &result);
+ 	if (result.clean < 0)
+ 		die(_("failure to merge"));
+ 
+@@ -487,6 +504,7 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 	struct merge_tree_options o = { .show_messages = -1 };
+ 	int expected_remaining_argc;
+ 	int original_argc;
++	const char *merge_base = NULL;
+ 
+ 	const char * const merge_tree_usage[] = {
+ 		N_("git merge-tree [--write-tree] [<options>] <branch1> <branch2>"),
+@@ -515,6 +533,10 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 			   &o.use_stdin,
+ 			   N_("perform multiple merges, one per line of input"),
+ 			   PARSE_OPT_NONEG),
++		OPT_STRING(0, "merge-base",
++			   &merge_base,
++			   N_("commit"),
++			   N_("specify a merge-base for the merge")),
+ 		OPT_END()
+ 	};
+ 
+@@ -529,6 +551,8 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 
+ 		if (o.mode == MODE_TRIVIAL)
+ 			die(_("--trivial-merge is incompatible with all other options"));
++		if (merge_base)
++			die(_("--merge-base is incompatible with --stdin"));
+ 		line_termination = '\0';
+ 		while (strbuf_getline_lf(&buf, stdin) != EOF) {
+ 			struct strbuf **split;
+@@ -538,7 +562,7 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 			if (!split[0] || !split[1] || split[2])
+ 				die(_("malformed input line: '%s'."), buf.buf);
+ 			strbuf_rtrim(split[0]);
+-			result = real_merge(&o, split[0]->buf, split[1]->buf, prefix);
++			result = real_merge(&o, merge_base, split[0]->buf, split[1]->buf, prefix);
+ 			if (result < 0)
+ 				die(_("merging cannot continue; got unclean result of %d"), result);
+ 			strbuf_list_free(split);
+@@ -581,7 +605,7 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 
+ 	/* Do the relevant type of merge */
+ 	if (o.mode == MODE_REAL)
+-		return real_merge(&o, argv[0], argv[1], prefix);
++		return real_merge(&o, merge_base, argv[0], argv[1], prefix);
+ 	else
+ 		return trivial_merge(argv[0], argv[1], argv[2]);
+ }
+diff --git a/t/t4301-merge-tree-write-tree.sh b/t/t4301-merge-tree-write-tree.sh
+index cac85591b5..6db96ccbaa 100755
+--- a/t/t4301-merge-tree-write-tree.sh
++++ b/t/t4301-merge-tree-write-tree.sh
+@@ -860,4 +860,31 @@ test_expect_success '--stdin with both a successful and a conflicted merge' '
+ 	test_cmp expect actual
+ '
+ 
++# specify merge-base as parent of branch2
++# git merge-tree --write-tree --merge-base=c2 c1 c3
++#   Commit c1: add file1
++#   Commit c2: add file2 after c1
++#   Commit c3: add file3 after c2
++#   Expected: add file3, and file2 does NOT appear
++
++test_expect_success 'specify merge-base as parent of branch2' '
++	# Setup
++	test_when_finished "rm -rf base-b2-p" &&
++	git init base-b2-p &&
++	test_commit -C base-b2-p c1 file1 &&
++	test_commit -C base-b2-p c2 file2 &&
++	test_commit -C base-b2-p c3 file3 &&
++
++	# Testing
++	TREE_OID=$(git -C base-b2-p merge-tree --write-tree --merge-base=c2 c1 c3) &&
++
++	q_to_tab <<-EOF >expect &&
++	100644 blob $(git -C base-b2-p rev-parse c1:file1)Qfile1
++	100644 blob $(git -C base-b2-p rev-parse c3:file3)Qfile3
++	EOF
++
++	git -C base-b2-p ls-tree $TREE_OID >actual &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

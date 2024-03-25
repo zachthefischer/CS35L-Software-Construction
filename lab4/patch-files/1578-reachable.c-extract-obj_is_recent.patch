@@ -1,0 +1,50 @@
+From 01e9ca4a40e04cceeed01da05bed182556daa005 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 7 Jun 2023 18:58:12 -0400
+Subject: [PATCH 1578/2871] reachable.c: extract `obj_is_recent()`
+
+When enumerating objects in order to add recent ones (i.e. those whose
+mtime is strictly newer than the cutoff) as tips of a reachability
+traversal, `add_recent_object()` discards objects which do not meet the
+recency criteria.
+
+The subsequent commit will make checking whether or not an object is
+recent also consult the list of hooks in `pack.recentHook`. Isolate this
+check in its own function to keep the additional complexity outside of
+`add_recent_object()`.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reachable.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/reachable.c b/reachable.c
+index 55bb114353..7a42da5d39 100644
+--- a/reachable.c
++++ b/reachable.c
+@@ -69,6 +69,12 @@ struct recent_data {
+ 	int ignore_in_core_kept_packs;
+ };
+ 
++static int obj_is_recent(const struct object_id *oid, timestamp_t mtime,
++			 struct recent_data *data)
++{
++	return mtime > data->timestamp;
++}
++
+ static void add_recent_object(const struct object_id *oid,
+ 			      struct packed_git *pack,
+ 			      off_t offset,
+@@ -78,7 +84,7 @@ static void add_recent_object(const struct object_id *oid,
+ 	struct object *obj;
+ 	enum object_type type;
+ 
+-	if (mtime <= data->timestamp)
++	if (!obj_is_recent(oid, mtime, data))
+ 		return;
+ 
+ 	/*
+-- 
+2.39.3 (Apple Git-145)
+

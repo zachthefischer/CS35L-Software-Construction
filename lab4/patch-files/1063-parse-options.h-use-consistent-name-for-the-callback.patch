@@ -1,0 +1,46 @@
+From ab0845b38263e694686ce5b72be81c31c06c00cc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?SZEDER=20G=C3=A1bor?= <szeder.dev@gmail.com>
+Date: Sun, 19 Mar 2023 17:56:46 +0100
+Subject: [PATCH 1063/2871] parse-options.h: use consistent name for the
+ callback parameters
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In the various OPT_* macros the 'f' parameter is usually used to
+specify flags, while the 'cb' parameter is used to specify a callback
+function.  OPT_CALLBACK and OPT_NUMBER_CALLBACKS, however, are
+inconsistent with the rest, as they use 'f' to specify their callback
+function.
+
+Rename their callback macro parameters to 'cb' to avoid the
+inconsistency.
+
+Signed-off-by: SZEDER Gábor <szeder.dev@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/parse-options.h b/parse-options.h
+index 50d852f299..34f8caf369 100644
+--- a/parse-options.h
++++ b/parse-options.h
+@@ -199,10 +199,10 @@ struct option {
+ #define OPT_EXPIRY_DATE(s, l, v, h) \
+ 	{ OPTION_CALLBACK, (s), (l), (v), N_("expiry-date"),(h), 0,	\
+ 	  parse_opt_expiry_date_cb }
+-#define OPT_CALLBACK(s, l, v, a, h, f) OPT_CALLBACK_F(s, l, v, a, h, 0, f)
+-#define OPT_NUMBER_CALLBACK(v, h, f) \
++#define OPT_CALLBACK(s, l, v, a, h, cb) OPT_CALLBACK_F(s, l, v, a, h, 0, cb)
++#define OPT_NUMBER_CALLBACK(v, h, cb) \
+ 	{ OPTION_NUMBER, 0, NULL, (v), NULL, (h), \
+-	  PARSE_OPT_NOARG | PARSE_OPT_NONEG, (f) }
++	  PARSE_OPT_NOARG | PARSE_OPT_NONEG, (cb) }
+ #define OPT_FILENAME(s, l, v, h)    { OPTION_FILENAME, (s), (l), (v), \
+ 				       N_("file"), (h) }
+ #define OPT_COLOR_FLAG(s, l, v, h) \
+-- 
+2.39.3 (Apple Git-145)
+

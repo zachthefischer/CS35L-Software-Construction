@@ -1,0 +1,63 @@
+From 95494c6f61e489b92533577fab1160889a1d7d98 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 6 Dec 2022 15:07:46 +0000
+Subject: [PATCH 0503/2871] t0021: use Windows-friendly `pwd`
+
+In Git for Windows, when passing paths from shell scripts to regular
+Win32 executables, thanks to the MSYS2 runtime a somewhat magic path
+conversion happens that lets the shell script think that there is a file
+at `/git/Makefile` and the Win32 process it spawned thinks that the
+shell script said `C:/git-sdk-64/git/Makefile` instead.
+
+This conversion is documented in detail over here:
+https://www.msys2.org/docs/filesystem-paths/#automatic-unix-windows-path-conversion
+
+As all automatic conversions, there are gaps. For example, to avoid
+mistaking command-line options like `/LOG=log.txt` (which are quite
+common in the Windows world) from being mistaken for a Unix-style
+absolute path, the MSYS2 runtime specifically exempts arguments
+containing a `=` character from that conversion.
+
+We are about to change `test_cmp` to use `git diff --no-index`, which
+involves spawning precisely such a Win32 process.
+
+In combination, this would cause a failure in `t0021-conversion.sh`
+where we pass an absolute path containing an equal character to the
+`test_cmp` function.
+
+Seeing as the Unix tools like `cp` and `diff` that are used by Git's
+test suite in the Git for Windows SDK (thanks to the MSYS2 project)
+understand both Unix-style as well as Windows-style paths, we can stave
+off this problem by simply switching to Windows-style paths and
+side-stepping the need for any automatic path conversion.
+
+Note: The `PATH` variable is obviously special, as it is colon-separated
+in the MSYS2 Bash used by Git for Windows, and therefore _cannot_
+contain absolute Windows-style paths, lest the colon after the drive
+letter is mistaken for a path separator. Therefore, we need to be
+careful to keep the Unix-style when modifying the `PATH` variable.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0021-conversion.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t0021-conversion.sh b/t/t0021-conversion.sh
+index abecd75e4e..46abbeed68 100755
+--- a/t/t0021-conversion.sh
++++ b/t/t0021-conversion.sh
+@@ -8,8 +8,8 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-terminal.sh
+ 
+-TEST_ROOT="$PWD"
+-PATH=$TEST_ROOT:$PATH
++PATH=$PWD:$PATH
++TEST_ROOT="$(pwd)"
+ 
+ write_script <<\EOF "$TEST_ROOT/rot13.sh"
+ tr \
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,83 @@
+From 8a7f0b666fc749166421669fba62b1000321bd26 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 8 Apr 2023 11:35:24 +0200
+Subject: [PATCH 1210/2871] date: remove approxidate_relative()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When 29f4332e66 (Quit passing 'now' to date code, 2019-09-11) removed
+its timeval parameter, approxidate_relative() became equivalent to
+approxidate().  Convert its last two call sites and remove the redundant
+function.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ date.c               | 14 --------------
+ date.h               |  1 -
+ t/helper/test-date.c |  4 ++--
+ 3 files changed, 2 insertions(+), 17 deletions(-)
+
+diff --git a/date.c b/date.c
+index 6f45eeb356..923e62cfd2 100644
+--- a/date.c
++++ b/date.c
+@@ -1365,20 +1365,6 @@ static timestamp_t approxidate_str(const char *date,
+ 	return (timestamp_t)update_tm(&tm, &now, 0);
+ }
+ 
+-timestamp_t approxidate_relative(const char *date)
+-{
+-	struct timeval tv;
+-	timestamp_t timestamp;
+-	int offset;
+-	int errors = 0;
+-
+-	if (!parse_date_basic(date, &timestamp, &offset))
+-		return timestamp;
+-
+-	get_time(&tv);
+-	return approxidate_str(date, (const struct timeval *) &tv, &errors);
+-}
+-
+ timestamp_t approxidate_careful(const char *date, int *error_ret)
+ {
+ 	struct timeval tv;
+diff --git a/date.h b/date.h
+index 5d4eaba0a9..6136212a19 100644
+--- a/date.h
++++ b/date.h
+@@ -68,7 +68,6 @@ int parse_expiry_date(const char *date, timestamp_t *timestamp);
+ void datestamp(struct strbuf *out);
+ #define approxidate(s) approxidate_careful((s), NULL)
+ timestamp_t approxidate_careful(const char *, int *);
+-timestamp_t approxidate_relative(const char *date);
+ int date_overflows(timestamp_t date);
+ time_t tm_to_time_t(const struct tm *tm);
+ #endif
+diff --git a/t/helper/test-date.c b/t/helper/test-date.c
+index 45951b1df8..80ffe9fec4 100644
+--- a/t/helper/test-date.c
++++ b/t/helper/test-date.c
+@@ -81,7 +81,7 @@ static void parse_approxidate(const char **argv)
+ {
+ 	for (; *argv; argv++) {
+ 		timestamp_t t;
+-		t = approxidate_relative(*argv);
++		t = approxidate(*argv);
+ 		printf("%s -> %s\n", *argv, show_date(t, 0, DATE_MODE(ISO8601)));
+ 	}
+ }
+@@ -90,7 +90,7 @@ static void parse_approx_timestamp(const char **argv)
+ {
+ 	for (; *argv; argv++) {
+ 		timestamp_t t;
+-		t = approxidate_relative(*argv);
++		t = approxidate(*argv);
+ 		printf("%s -> %"PRItime"\n", *argv, t);
+ 	}
+ }
+-- 
+2.39.3 (Apple Git-145)
+

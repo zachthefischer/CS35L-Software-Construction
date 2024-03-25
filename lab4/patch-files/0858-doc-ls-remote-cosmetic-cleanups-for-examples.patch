@@ -1,0 +1,46 @@
+From baebde7d19a9281242f4542267b70e2565f63886 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 10 Feb 2023 21:44:13 -0500
+Subject: [PATCH 0858/2871] doc/ls-remote: cosmetic cleanups for examples
+
+There are effectively three example commands and their output, but
+they're smushed together with no extra whitespace. Let's add some blank
+lines to make them more readable.
+
+Likewise, the first example uses "./." to refer to the path of the
+current repository, which is somewhat distracting. That may have been
+necessary back in 2005 when it was added, but we can just say "." these
+days.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-ls-remote.txt | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/git-ls-remote.txt b/Documentation/git-ls-remote.txt
+index 492e573856..f17567945f 100644
+--- a/Documentation/git-ls-remote.txt
++++ b/Documentation/git-ls-remote.txt
+@@ -95,15 +95,17 @@ EXAMPLES
+ --------
+ 
+ ----
+-$ git ls-remote --tags ./.
++$ git ls-remote --tags .
+ d6602ec5194c87b0fc87103ca4d67251c76f233a	refs/tags/v0.99
+ f25a265a342aed6041ab0cc484224d9ca54b6f41	refs/tags/v0.99.1
+ 7ceca275d047c90c0c7d5afb13ab97efdf51bd6e	refs/tags/v0.99.3
+ c5db5456ae3b0873fc659c19fafdde22313cc441	refs/tags/v0.99.2
+ 0918385dbd9656cab0d1d81ba7453d49bbc16250	refs/tags/junio-gpg-pub
++
+ $ git ls-remote http://www.kernel.org/pub/scm/git/git.git master seen rc
+ 5fe978a5381f1fbad26a80e682ddd2a401966740	refs/heads/master
+ c781a84b5204fb294c9ccc79f8b3baceeb32c061	refs/heads/seen
++
+ $ git remote add korg http://www.kernel.org/pub/scm/git/git.git
+ $ git ls-remote --tags korg v\*
+ d6602ec5194c87b0fc87103ca4d67251c76f233a	refs/tags/v0.99
+-- 
+2.39.3 (Apple Git-145)
+

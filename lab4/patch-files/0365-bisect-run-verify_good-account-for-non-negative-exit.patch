@@ -1,0 +1,52 @@
+From 8962f8f8887c15b3e55ebc348a2490290a55d8a5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=90o=C3=A0n=20Tr=E1=BA=A7n=20C=C3=B4ng=20Danh?=
+ <congdanhqx@gmail.com>
+Date: Thu, 10 Nov 2022 23:36:40 +0700
+Subject: [PATCH 0365/2871] bisect-run: verify_good: account for non-negative
+ exit status
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Some system never reports negative exit code at all, they reports them
+as bigger-than-128 instead.  We take extra care for those systems in the
+later check for normal 'do_bisect_run' loop.
+
+Let's check it here, too.
+
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/bisect--helper.c    | 2 +-
+ t/t6030-bisect-porcelain.sh | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/bisect--helper.c b/builtin/bisect--helper.c
+index 180c2faa7f..e214190599 100644
+--- a/builtin/bisect--helper.c
++++ b/builtin/bisect--helper.c
+@@ -1211,7 +1211,7 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ 		if (is_first_run && (res == 126 || res == 127)) {
+ 			int rc = verify_good(terms, command.buf);
+ 			is_first_run = 0;
+-			if (rc < 0) {
++			if (rc < 0 || 128 <= rc) {
+ 				error(_("unable to verify %s on good"
+ 					" revision"), command.buf);
+ 				res = BISECT_FAILED;
+diff --git a/t/t6030-bisect-porcelain.sh b/t/t6030-bisect-porcelain.sh
+index 34fd45a48e..03d99b22f1 100755
+--- a/t/t6030-bisect-porcelain.sh
++++ b/t/t6030-bisect-porcelain.sh
+@@ -347,7 +347,7 @@ test_expect_success 'git bisect run: negative exit code' "
+ 	test_cmp expect actual
+ "
+ 
+-test_expect_failure 'git bisect run: unable to verify on good' "
++test_expect_success 'git bisect run: unable to verify on good' "
+ 	write_script fail.sh <<-'EOF' &&
+ 	head=\$(git rev-parse --verify HEAD)
+ 	good=\$(git rev-parse --verify $HASH1)
+-- 
+2.39.3 (Apple Git-145)
+

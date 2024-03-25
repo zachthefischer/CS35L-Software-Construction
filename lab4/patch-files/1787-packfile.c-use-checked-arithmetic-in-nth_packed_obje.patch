@@ -1,0 +1,50 @@
+From a519abca02eeca7dce864717b9664c62a124e1c0 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:32 -0400
+Subject: [PATCH 1787/2871] packfile.c: use checked arithmetic in
+ `nth_packed_object_offset()`
+
+In a similar spirit as the previous commits, ensure that we use
+`st_add()` or `st_mult()` when computing values that may overflow the
+32-bit unsigned limit.
+
+Note that in each of these instances, we prevent 32-bit overflow
+already since we have explicit casts to `size_t`.
+
+So this code is OK as-is, but let's clarify it by using the `st_xyz()`
+helpers to make it obvious that we are performing the relevant
+computations using 64 bits.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ packfile.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/packfile.c b/packfile.c
+index efe4a22c63..70837b0d26 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -1948,14 +1948,15 @@ off_t nth_packed_object_offset(const struct packed_git *p, uint32_t n)
+ 	const unsigned int hashsz = the_hash_algo->rawsz;
+ 	index += 4 * 256;
+ 	if (p->index_version == 1) {
+-		return ntohl(*((uint32_t *)(index + (hashsz + 4) * (size_t)n)));
++		return ntohl(*((uint32_t *)(index + st_mult(hashsz + 4, n))));
+ 	} else {
+ 		uint32_t off;
+-		index += 8 + (size_t)p->num_objects * (hashsz + 4);
+-		off = ntohl(*((uint32_t *)(index + 4 * n)));
++		index += st_add(8, st_mult(p->num_objects, hashsz + 4));
++		off = ntohl(*((uint32_t *)(index + st_mult(4, n))));
+ 		if (!(off & 0x80000000))
+ 			return off;
+-		index += (size_t)p->num_objects * 4 + (off & 0x7fffffff) * 8;
++		index += st_add(st_mult(p->num_objects, 4),
++				st_mult(off & 0x7fffffff, 8));
+ 		check_pack_index_ptr(p, index);
+ 		return get_be64(index);
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

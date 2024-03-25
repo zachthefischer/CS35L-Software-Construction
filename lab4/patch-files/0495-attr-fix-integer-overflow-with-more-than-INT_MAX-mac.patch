@@ -1,0 +1,72 @@
+From e1e12e97ac73ded85f7d000da1063a774b3cc14f Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 1 Dec 2022 15:45:36 +0100
+Subject: [PATCH 0495/2871] attr: fix integer overflow with more than INT_MAX
+ macros
+
+Attributes have a field that tracks the position in the `all_attrs`
+array they're stored inside. This field gets set via `hashmap_get_size`
+when adding the attribute to the global map of attributes. But while the
+field is of type `int`, the value returned by `hashmap_get_size` is an
+`unsigned int`. It can thus happen that the value overflows, where we
+would now dereference teh `all_attrs` array at an out-of-bounds value.
+
+We do have a sanity check for this overflow via an assert that verifies
+the index matches the new hashmap's size. But asserts are not a proper
+mechanism to detect against any such overflows as they may not in fact
+be compiled into production code.
+
+Fix this by using an `unsigned int` to track the index and convert the
+assert to a call `die()`.
+
+Reported-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ attr.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/attr.c b/attr.c
+index 98c231d675..d1faf69083 100644
+--- a/attr.c
++++ b/attr.c
+@@ -28,7 +28,7 @@ static const char git_attr__unknown[] = "(builtin)unknown";
+ #endif
+ 
+ struct git_attr {
+-	int attr_nr; /* unique attribute number */
++	unsigned int attr_nr; /* unique attribute number */
+ 	char name[FLEX_ARRAY]; /* attribute name */
+ };
+ 
+@@ -226,8 +226,8 @@ static const struct git_attr *git_attr_internal(const char *name, size_t namelen
+ 		a->attr_nr = hashmap_get_size(&g_attr_hashmap.map);
+ 
+ 		attr_hashmap_add(&g_attr_hashmap, a->name, namelen, a);
+-		assert(a->attr_nr ==
+-		       (hashmap_get_size(&g_attr_hashmap.map) - 1));
++		if (a->attr_nr != hashmap_get_size(&g_attr_hashmap.map) - 1)
++			die(_("unable to add additional attribute"));
+ 	}
+ 
+ 	hashmap_unlock(&g_attr_hashmap);
+@@ -1064,7 +1064,7 @@ static void determine_macros(struct all_attrs_item *all_attrs,
+ 		for (i = stack->num_matches; i > 0; i--) {
+ 			const struct match_attr *ma = stack->attrs[i - 1];
+ 			if (ma->is_macro) {
+-				int n = ma->u.attr->attr_nr;
++				unsigned int n = ma->u.attr->attr_nr;
+ 				if (!all_attrs[n].macro) {
+ 					all_attrs[n].macro = ma;
+ 				}
+@@ -1116,7 +1116,7 @@ void git_check_attr(const struct index_state *istate,
+ 	collect_some_attrs(istate, path, check);
+ 
+ 	for (i = 0; i < check->nr; i++) {
+-		size_t n = check->items[i].attr->attr_nr;
++		unsigned int n = check->items[i].attr->attr_nr;
+ 		const char *value = check->all_attrs[n].value;
+ 		if (value == ATTR__UNKNOWN)
+ 			value = ATTR__UNSET;
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,192 @@
+From 26ae8da683bd2a054c5807ff676336df43b40b03 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Mon, 28 Aug 2023 13:52:25 +0000
+Subject: [PATCH 1996/2871] setup: add discover_git_directory_reason()
+
+There are many reasons why discovering a Git directory may fail. In
+particular, 8959555cee7 (setup_git_directory(): add an owner check for
+the top-level directory, 2022-03-02) added ownership checks as a
+security precaution.
+
+Callers attempting to set up a Git directory may want to inform the user
+about the reason for the failure. For that, expose the enum
+discovery_result from within setup.c and move it into cache.h where
+discover_git_directory() is defined.
+
+I initially wanted to change the return type of discover_git_directory()
+to be this enum, but several callers rely upon the "zero means success".
+The two problems with this are:
+
+1. The zero value of the enum is actually GIT_DIR_NONE, so nonpositive
+   results are errors.
+
+2. There are multiple successful states; positive results are
+   successful.
+
+It is worth noting that GIT_DIR_NONE is not returned, so we remove this
+option from the enum. We must be careful to keep the successful reasons
+as positive values, so they are given explicit positive values.
+
+Instead of updating all callers immediately, add a new method,
+discover_git_directory_reason(), and convert discover_git_directory() to
+be a thin shim on top of it.
+
+One thing that is important to note is that discover_git_directory()
+previously returned -1 on error, so let's continue that into the future.
+There is only one caller (in scalar.c) that depends on that signedness
+instead of a non-zero check, so clean that up, too.
+
+Because there are extra checks that discover_git_directory_reason() does
+after setup_git_directory_gently_1(), there are other modes that can be
+returned for failure states. Add these modes to the enum, but be sure to
+explicitly add them as BUG() states in the switch of
+setup_git_directory_gently().
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ setup.c | 34 ++++++++++++----------------------
+ setup.h | 35 ++++++++++++++++++++++++++++++++---
+ 2 files changed, 44 insertions(+), 25 deletions(-)
+
+diff --git a/setup.c b/setup.c
+index 458582207e..a5938fdc59 100644
+--- a/setup.c
++++ b/setup.c
+@@ -1212,19 +1212,6 @@ static const char *allowed_bare_repo_to_string(
+ 	return NULL;
+ }
+ 
+-enum discovery_result {
+-	GIT_DIR_NONE = 0,
+-	GIT_DIR_EXPLICIT,
+-	GIT_DIR_DISCOVERED,
+-	GIT_DIR_BARE,
+-	/* these are errors */
+-	GIT_DIR_HIT_CEILING = -1,
+-	GIT_DIR_HIT_MOUNT_POINT = -2,
+-	GIT_DIR_INVALID_GITFILE = -3,
+-	GIT_DIR_INVALID_OWNERSHIP = -4,
+-	GIT_DIR_DISALLOWED_BARE = -5,
+-};
+-
+ /*
+  * We cannot decide in this function whether we are in the work tree or
+  * not, since the config can only be read _after_ this function was called.
+@@ -1376,21 +1363,23 @@ static enum discovery_result setup_git_directory_gently_1(struct strbuf *dir,
+ 	}
+ }
+ 
+-int discover_git_directory(struct strbuf *commondir,
+-			   struct strbuf *gitdir)
++enum discovery_result discover_git_directory_reason(struct strbuf *commondir,
++						    struct strbuf *gitdir)
+ {
+ 	struct strbuf dir = STRBUF_INIT, err = STRBUF_INIT;
+ 	size_t gitdir_offset = gitdir->len, cwd_len;
+ 	size_t commondir_offset = commondir->len;
+ 	struct repository_format candidate = REPOSITORY_FORMAT_INIT;
++	enum discovery_result result;
+ 
+ 	if (strbuf_getcwd(&dir))
+-		return -1;
++		return GIT_DIR_CWD_FAILURE;
+ 
+ 	cwd_len = dir.len;
+-	if (setup_git_directory_gently_1(&dir, gitdir, NULL, 0) <= 0) {
++	result = setup_git_directory_gently_1(&dir, gitdir, NULL, 0);
++	if (result <= 0) {
+ 		strbuf_release(&dir);
+-		return -1;
++		return result;
+ 	}
+ 
+ 	/*
+@@ -1420,7 +1409,7 @@ int discover_git_directory(struct strbuf *commondir,
+ 		strbuf_setlen(commondir, commondir_offset);
+ 		strbuf_setlen(gitdir, gitdir_offset);
+ 		clear_repository_format(&candidate);
+-		return -1;
++		return GIT_DIR_INVALID_FORMAT;
+ 	}
+ 
+ 	/* take ownership of candidate.partial_clone */
+@@ -1429,7 +1418,7 @@ int discover_git_directory(struct strbuf *commondir,
+ 	candidate.partial_clone = NULL;
+ 
+ 	clear_repository_format(&candidate);
+-	return 0;
++	return result;
+ }
+ 
+ const char *setup_git_directory_gently(int *nongit_ok)
+@@ -1511,10 +1500,11 @@ const char *setup_git_directory_gently(int *nongit_ok)
+ 		}
+ 		*nongit_ok = 1;
+ 		break;
+-	case GIT_DIR_NONE:
++	case GIT_DIR_CWD_FAILURE:
++	case GIT_DIR_INVALID_FORMAT:
+ 		/*
+ 		 * As a safeguard against setup_git_directory_gently_1 returning
+-		 * this value, fallthrough to BUG. Otherwise it is possible to
++		 * these values, fallthrough to BUG. Otherwise it is possible to
+ 		 * set startup_info->have_repository to 1 when we did nothing to
+ 		 * find a repository.
+ 		 */
+diff --git a/setup.h b/setup.h
+index 4c1ca9d0c9..71cedc3cb8 100644
+--- a/setup.h
++++ b/setup.h
+@@ -42,16 +42,45 @@ const char *resolve_gitdir_gently(const char *suspect, int *return_error_code);
+ #define resolve_gitdir(path) resolve_gitdir_gently((path), NULL)
+ 
+ void setup_work_tree(void);
++
++/*
++ * discover_git_directory_reason() is similar to discover_git_directory(),
++ * except it returns an enum value instead. It is important to note that
++ * a zero-valued return here is actually GIT_DIR_NONE, which is different
++ * from discover_git_directory.
++ */
++enum discovery_result {
++	GIT_DIR_EXPLICIT = 1,
++	GIT_DIR_DISCOVERED = 2,
++	GIT_DIR_BARE = 3,
++	/* these are errors */
++	GIT_DIR_HIT_CEILING = -1,
++	GIT_DIR_HIT_MOUNT_POINT = -2,
++	GIT_DIR_INVALID_GITFILE = -3,
++	GIT_DIR_INVALID_OWNERSHIP = -4,
++	GIT_DIR_DISALLOWED_BARE = -5,
++	GIT_DIR_INVALID_FORMAT = -6,
++	GIT_DIR_CWD_FAILURE = -7,
++};
++enum discovery_result discover_git_directory_reason(struct strbuf *commondir,
++						    struct strbuf *gitdir);
++
+ /*
+  * Find the commondir and gitdir of the repository that contains the current
+  * working directory, without changing the working directory or other global
+  * state. The result is appended to commondir and gitdir.  If the discovered
+  * gitdir does not correspond to a worktree, then 'commondir' and 'gitdir' will
+  * both have the same result appended to the buffer.  The return value is
+- * either 0 upon success and non-zero if no repository was found.
++ * either 0 upon success and -1 if no repository was found.
+  */
+-int discover_git_directory(struct strbuf *commondir,
+-			   struct strbuf *gitdir);
++static inline int discover_git_directory(struct strbuf *commondir,
++					 struct strbuf *gitdir)
++{
++	if (discover_git_directory_reason(commondir, gitdir) <= 0)
++		return -1;
++	return 0;
++}
++
+ const char *setup_git_directory_gently(int *);
+ const char *setup_git_directory(void);
+ char *prefix_path(const char *prefix, int len, const char *path);
+-- 
+2.39.3 (Apple Git-145)
+

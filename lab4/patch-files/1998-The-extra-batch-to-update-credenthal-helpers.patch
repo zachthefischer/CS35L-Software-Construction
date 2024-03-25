@@ -1,0 +1,38 @@
+From 5dc72c0fbcbccf7dbb42e470e55dafbd2afdf343 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 28 Aug 2023 09:52:28 -0700
+Subject: [PATCH 1998/2871] The extra batch to update credenthal helpers
+
+These two topics did not see much interest and reviews while they
+were on 'next'; let's "inflict" them to the general public and see
+if anybody screams, which is much less nicer way than to merge
+only topics that are well reviewed down in an orderly manner, but
+that is the only thing we can do to these topics without any
+development community help.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index 02309b675f..6cad659605 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -15,6 +15,13 @@ UI, Workflows & Features
+  * "git cmd -h" learned to signal which options can be negated by
+    listing such options like "--[no-]opt".
+ 
++ * The way authentication related data other than passwords (e.g.
++   oath token and password expiration data) are stored in libsecret
++   keyrings has been rethought.
++
++ * Update two credential helpers to correctly match which credential
++   to erase; they dropped not the ones with stale password.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

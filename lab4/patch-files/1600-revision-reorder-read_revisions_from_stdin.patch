@@ -1,0 +1,102 @@
+From cc8045018d0ba6c9b94d3f0010f27c342d0d4111 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 15 Jun 2023 16:39:51 +0200
+Subject: [PATCH 1600/2871] revision: reorder `read_revisions_from_stdin()`
+
+Reorder `read_revisions_from_stdin()` so that we can start using
+`handle_revision_pseudo_opt()` without a forward declaration in a
+subsequent commit.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ revision.c | 66 +++++++++++++++++++++++++++---------------------------
+ 1 file changed, 33 insertions(+), 33 deletions(-)
+
+diff --git a/revision.c b/revision.c
+index b33cc1d106..cc22ccd76e 100644
+--- a/revision.c
++++ b/revision.c
+@@ -2195,39 +2195,6 @@ static void read_pathspec_from_stdin(struct strbuf *sb,
+ 		strvec_push(prune, sb->buf);
+ }
+ 
+-static void read_revisions_from_stdin(struct rev_info *revs,
+-				      struct strvec *prune)
+-{
+-	struct strbuf sb;
+-	int seen_dashdash = 0;
+-	int save_warning;
+-
+-	save_warning = warn_on_object_refname_ambiguity;
+-	warn_on_object_refname_ambiguity = 0;
+-
+-	strbuf_init(&sb, 1000);
+-	while (strbuf_getline(&sb, stdin) != EOF) {
+-		int len = sb.len;
+-		if (!len)
+-			break;
+-		if (sb.buf[0] == '-') {
+-			if (len == 2 && sb.buf[1] == '-') {
+-				seen_dashdash = 1;
+-				break;
+-			}
+-			die("options not supported in --stdin mode");
+-		}
+-		if (handle_revision_arg(sb.buf, revs, 0,
+-					REVARG_CANNOT_BE_FILENAME))
+-			die("bad revision '%s'", sb.buf);
+-	}
+-	if (seen_dashdash)
+-		read_pathspec_from_stdin(&sb, prune);
+-
+-	strbuf_release(&sb);
+-	warn_on_object_refname_ambiguity = save_warning;
+-}
+-
+ static void add_grep(struct rev_info *revs, const char *ptn, enum grep_pat_token what)
+ {
+ 	append_grep_pattern(&revs->grep_filter, ptn, "command line", 0, what);
+@@ -2816,6 +2783,39 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ 	return 1;
+ }
+ 
++static void read_revisions_from_stdin(struct rev_info *revs,
++				      struct strvec *prune)
++{
++	struct strbuf sb;
++	int seen_dashdash = 0;
++	int save_warning;
++
++	save_warning = warn_on_object_refname_ambiguity;
++	warn_on_object_refname_ambiguity = 0;
++
++	strbuf_init(&sb, 1000);
++	while (strbuf_getline(&sb, stdin) != EOF) {
++		int len = sb.len;
++		if (!len)
++			break;
++		if (sb.buf[0] == '-') {
++			if (len == 2 && sb.buf[1] == '-') {
++				seen_dashdash = 1;
++				break;
++			}
++			die("options not supported in --stdin mode");
++		}
++		if (handle_revision_arg(sb.buf, revs, 0,
++					REVARG_CANNOT_BE_FILENAME))
++			die("bad revision '%s'", sb.buf);
++	}
++	if (seen_dashdash)
++		read_pathspec_from_stdin(&sb, prune);
++
++	strbuf_release(&sb);
++	warn_on_object_refname_ambiguity = save_warning;
++}
++
+ static void NORETURN diagnose_missing_default(const char *def)
+ {
+ 	int flags;
+-- 
+2.39.3 (Apple Git-145)
+

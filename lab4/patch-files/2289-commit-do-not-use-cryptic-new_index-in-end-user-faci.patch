@@ -1,0 +1,68 @@
+From a060705d94461fdaa9512217d584bcb7fe3a109a Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 17 Oct 2023 20:08:51 -0700
+Subject: [PATCH 2289/2871] commit: do not use cryptic "new_index" in end-user
+ facing messages
+
+These error messages say "new_index" as if that spelling has some
+significance to the end users (e.g. the file "$GIT_DIR/new_index"
+has some issues), but that is not the case at all.  The i18n folks
+were made to include the word literally in the translated messages,
+which was not a good idea at all.  Spell it "new index", as we are
+just telling the users that we failed to create a new index file.
+The term is expected to be translated to the end-users' languages,
+not left as if it were a literal file name.
+
+This dates all the way back to the first re-implemenation of "git
+commit" command in C (the scripted version did not have such wording
+in its error messages), in f5bbc322 (Port git commit to C.,
+2007-11-08).
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/commit.c b/builtin/commit.c
+index 985a0445b7..7abd566bc7 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -446,7 +446,7 @@ static const char *prepare_index(const char **argv, const char *prefix,
+ 		refresh_cache_or_die(refresh_flags);
+ 		cache_tree_update(&the_index, WRITE_TREE_SILENT);
+ 		if (write_locked_index(&the_index, &index_lock, 0))
+-			die(_("unable to write new_index file"));
++			die(_("unable to write new index file"));
+ 		commit_style = COMMIT_NORMAL;
+ 		ret = get_lock_file_path(&index_lock);
+ 		goto out;
+@@ -470,7 +470,7 @@ static const char *prepare_index(const char **argv, const char *prefix,
+ 			cache_tree_update(&the_index, WRITE_TREE_SILENT);
+ 		if (write_locked_index(&the_index, &index_lock,
+ 				       COMMIT_LOCK | SKIP_IF_UNCHANGED))
+-			die(_("unable to write new_index file"));
++			die(_("unable to write new index file"));
+ 		commit_style = COMMIT_AS_IS;
+ 		ret = get_index_file();
+ 		goto out;
+@@ -518,7 +518,7 @@ static const char *prepare_index(const char **argv, const char *prefix,
+ 	refresh_index(&the_index, REFRESH_QUIET, NULL, NULL, NULL);
+ 	cache_tree_update(&the_index, WRITE_TREE_SILENT);
+ 	if (write_locked_index(&the_index, &index_lock, 0))
+-		die(_("unable to write new_index file"));
++		die(_("unable to write new index file"));
+ 
+ 	hold_lock_file_for_update(&false_lock,
+ 				  git_path("next-index-%"PRIuMAX,
+@@ -1852,7 +1852,7 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
+ 
+ 	if (commit_index_files())
+ 		die(_("repository has been updated, but unable to write\n"
+-		      "new_index file. Check that disk is not full and quota is\n"
++		      "new index file. Check that disk is not full and quota is\n"
+ 		      "not exceeded, and then \"git restore --staged :/\" to recover."));
+ 
+ 	git_test_write_commit_graph_or_die();
+-- 
+2.39.3 (Apple Git-145)
+

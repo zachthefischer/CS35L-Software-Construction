@@ -1,0 +1,36 @@
+Running $ git branch reveals that the branches of the eggert SEASnet repository are:
+  maint
+* master
+  next
+  seen
+  todo
+and the branch of the local repository is just:
+* master
+
+The remote repository has additional "remote tracking branches", maint, next, seen, and todo. Having a remote repository allows multiple developers to contribute separately to one workflow. "A maintainer can add a repository as remote, test the changes locally, and merge them into their branch, and push back to their repository"
+
+
+ALSO
+Running $ git branch -a to reveal the remote tracking branches as well as the local file.
+The eggert repository looks like:
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/jch
+  remotes/origin/main
+  remotes/origin/maint
+  remotes/origin/master
+  remotes/origin/next
+  remotes/origin/seen
+  remotes/origin/todo
+and the local repository looks like:
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/jch
+  remotes/origin/maint
+  remotes/origin/master
+  remotes/origin/next
+  remotes/origin/seen
+  remotes/origin/todo
+
+These are the same except for the eggert repository's
+  remotes/origin/main
+
+

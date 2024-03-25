@@ -1,0 +1,98 @@
+From fc134b41ce2ee7b2a98a988db6eeb109e11a2831 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 4 Jan 2024 09:21:53 +0100
+Subject: [PATCH 2655/2871] git-prompt: stop manually parsing HEAD with unknown
+ ref formats
+
+We're manually parsing the HEAD reference in git-prompt to figure out
+whether it is a symbolic or direct reference. This makes it intimately
+tied to the on-disk format we use to store references and will stop
+working once we gain additional reference backends in the Git project.
+
+Ideally, we would refactor the code to exclusively use plumbing tools to
+read refs such that we do not have to care about the on-disk format at
+all. Unfortunately though, spawning processes can be quite expensive on
+some systems like Windows. As the Git prompt logic may be executed quite
+frequently we try very hard to spawn as few processes as possible. This
+refactoring is thus out of question for now.
+
+Instead, condition the logic on the repository's ref format: if the repo
+uses the the "files" backend we can continue to use the old logic and
+read the respective files from disk directly. If it's anything else,
+then we use git-symbolic-ref(1) to read the value of HEAD.
+
+This change makes the Git prompt compatible with the upcoming "reftable"
+format.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-prompt.sh | 31 ++++++++++++++++++++++++-------
+ 1 file changed, 24 insertions(+), 7 deletions(-)
+
+diff --git a/contrib/completion/git-prompt.sh b/contrib/completion/git-prompt.sh
+index 2c030050ae..71f179cba3 100644
+--- a/contrib/completion/git-prompt.sh
++++ b/contrib/completion/git-prompt.sh
+@@ -408,7 +408,7 @@ __git_ps1 ()
+ 
+ 	local repo_info rev_parse_exit_code
+ 	repo_info="$(git rev-parse --git-dir --is-inside-git-dir \
+-		--is-bare-repository --is-inside-work-tree \
++		--is-bare-repository --is-inside-work-tree --show-ref-format \
+ 		--short HEAD 2>/dev/null)"
+ 	rev_parse_exit_code="$?"
+ 
+@@ -421,6 +421,8 @@ __git_ps1 ()
+ 		short_sha="${repo_info##*$'\n'}"
+ 		repo_info="${repo_info%$'\n'*}"
+ 	fi
++	local ref_format="${repo_info##*$'\n'}"
++	repo_info="${repo_info%$'\n'*}"
+ 	local inside_worktree="${repo_info##*$'\n'}"
+ 	repo_info="${repo_info%$'\n'*}"
+ 	local bare_repo="${repo_info##*$'\n'}"
+@@ -479,12 +481,25 @@ __git_ps1 ()
+ 			b="$(git symbolic-ref HEAD 2>/dev/null)"
+ 		else
+ 			local head=""
+-			if ! __git_eread "$g/HEAD" head; then
+-				return $exit
+-			fi
+-			# is it a symbolic ref?
+-			b="${head#ref: }"
+-			if [ "$head" = "$b" ]; then
++
++			case "$ref_format" in
++			files)
++				if ! __git_eread "$g/HEAD" head; then
++					return $exit
++				fi
++
++				if [[ $head == "ref: "* ]]; then
++					head="${head#ref: }"
++				else
++					head=""
++				fi
++				;;
++			*)
++				head="$(git symbolic-ref HEAD 2>/dev/null)"
++				;;
++			esac
++
++			if test -z "$head"; then
+ 				detached=yes
+ 				b="$(
+ 				case "${GIT_PS1_DESCRIBE_STYLE-}" in
+@@ -502,6 +517,8 @@ __git_ps1 ()
+ 
+ 				b="$short_sha..."
+ 				b="($b)"
++			else
++				b="$head"
+ 			fi
+ 		fi
+ 	fi
+-- 
+2.39.3 (Apple Git-145)
+

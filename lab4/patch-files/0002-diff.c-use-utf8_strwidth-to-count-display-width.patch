@@ -1,0 +1,202 @@
+From 12fc4ad89e23af642a8614371ff80bc67cb3315d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Torsten=20B=C3=B6gershausen?= <tboegi@web.de>
+Date: Wed, 14 Sep 2022 17:13:33 +0200
+Subject: [PATCH 0002/2871] diff.c: use utf8_strwidth() to count display width
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When unicode filenames (encoded in UTF-8) are used, the visible width
+on the screen is not the same as strlen().
+
+For example, `git log --stat` may produce an output like this:
+
+[snip the header]
+
+ Arger.txt  | 1 +
+ Ärger.txt | 1 +
+ 2 files changed, 2 insertions(+)
+
+A side note: the original report was about cyrillic filenames.
+After some investigations it turned out that
+a) This is not a problem with "ambiguous characters" in unicode
+b) The same problem exists for all unicode code points (so we
+  can use Latin based Umlauts for demonstrations below)
+
+The 'Ä' takes the same space on the screen as the 'A'.
+But needs one more byte in memory, so the the `git log --stat` output
+for "Arger.txt" (!) gets mis-aligned:
+The maximum length is derived from "Ärger.txt", 10 bytes in memory,
+9 positions on the screen. That is why "Arger.txt" gets one extra ' '
+for aligment, it needs 9 bytes in memory.
+If there was a file "Ö", it would be correctly aligned by chance,
+but "Öhö" would not.
+
+The solution is of course, to use utf8_strwidth() instead of strlen()
+when dealing with the width on screen.
+
+And then there is another problem, code like this:
+strbuf_addf(&out, "%-*s", len, name);
+(or using the underlying snprintf() function) does not align the
+buffer to a minimum of len measured in screen-width, but uses the
+memory count.
+
+One could be tempted to wish that snprintf() was UTF-8 aware.
+That doesn't seem to be the case anywhere (tested on Linux and Mac),
+probably snprintf() uses the "bytes in memory"/strlen() approach to be
+compatible with older versions and this will never change.
+
+The basic idea is to change code in diff.c like this
+strbuf_addf(&out, "%-*s", len, name);
+
+into something like this:
+int padding = len - utf8_strwidth(name);
+if (padding < 0)
+	padding = 0;
+strbuf_addf(&out, " %s%*s", name, padding, "");
+
+The real change is slighty bigger, as it, as well, integrates two calls
+of strbuf_addf() into one.
+
+Tests:
+Two things need to be tested:
+ - The calculation of the maximum width
+ - The calculation of padding
+
+The name "textfile" is changed into "tëxtfilë", both have a width of 8.
+If strlen() was used, to get the maximum width, the shorter "binfile" would
+have been mis-aligned:
+ binfile    | [snip]
+ tëxtfilë | [snip]
+
+If only "binfile" would be renamed into "binfilë":
+ binfilë | [snip]
+ textfile | [snip]
+
+In order to verify that the width is calculated correctly everywhere,
+"binfile" is renamed into "binfilë", giving 1 bytes more in strlen()
+"tëxtfile" is renamed into "tëxtfilë", 2 byte more in strlen().
+
+The updated t4012-diff-binary.sh checks the correct aligment:
+ binfilë  | [snip]
+ tëxtfilë | [snip]
+
+Reported-by: Alexander Meshcheryakov <alexander.s.m@gmail.com>
+Helped-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Torsten Bögershausen <tboegi@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                 | 27 ++++++++++++++++-----------
+ t/t4012-diff-binary.sh | 14 +++++++-------
+ 2 files changed, 23 insertions(+), 18 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index ef7159968b..2751cae131 100644
+--- a/diff.c
++++ b/diff.c
+@@ -2622,7 +2622,7 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 			continue;
+ 		}
+ 		fill_print_name(file);
+-		len = strlen(file->print_name);
++		len = utf8_strwidth(file->print_name);
+ 		if (max_len < len)
+ 			max_len = len;
+ 
+@@ -2736,7 +2736,7 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 		char *name = file->print_name;
+ 		uintmax_t added = file->added;
+ 		uintmax_t deleted = file->deleted;
+-		int name_len;
++		int name_len, padding;
+ 
+ 		if (!file->is_interesting && (added + deleted == 0))
+ 			continue;
+@@ -2745,7 +2745,7 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 		 * "scale" the filename
+ 		 */
+ 		len = name_width;
+-		name_len = strlen(name);
++		name_len = utf8_strwidth(name);
+ 		if (name_width < name_len) {
+ 			char *slash;
+ 			prefix = "...";
+@@ -2755,10 +2755,14 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 			if (slash)
+ 				name = slash;
+ 		}
++		padding = len - utf8_strwidth(name);
++		if (padding < 0)
++			padding = 0;
+ 
+ 		if (file->is_binary) {
+-			strbuf_addf(&out, " %s%-*s |", prefix, len, name);
+-			strbuf_addf(&out, " %*s", number_width, "Bin");
++			strbuf_addf(&out, " %s%s%*s | %*s",
++				    prefix, name, padding, "",
++				    number_width, "Bin");
+ 			if (!added && !deleted) {
+ 				strbuf_addch(&out, '\n');
+ 				emit_diff_symbol(options, DIFF_SYMBOL_STATS_LINE,
+@@ -2778,8 +2782,9 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 			continue;
+ 		}
+ 		else if (file->is_unmerged) {
+-			strbuf_addf(&out, " %s%-*s |", prefix, len, name);
+-			strbuf_addstr(&out, " Unmerged\n");
++			strbuf_addf(&out, " %s%s%*s | %*s",
++				    prefix, name, padding, "",
++				    number_width, "Unmerged");
+ 			emit_diff_symbol(options, DIFF_SYMBOL_STATS_LINE,
+ 					 out.buf, out.len, 0);
+ 			strbuf_reset(&out);
+@@ -2805,10 +2810,10 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 				add = total - del;
+ 			}
+ 		}
+-		strbuf_addf(&out, " %s%-*s |", prefix, len, name);
+-		strbuf_addf(&out, " %*"PRIuMAX"%s",
+-			number_width, added + deleted,
+-			added + deleted ? " " : "");
++		strbuf_addf(&out, " %s%s%*s | %*"PRIuMAX"%s",
++			    prefix, name, padding, "",
++			    number_width, added + deleted,
++			    added + deleted ? " " : "");
+ 		show_graph(&out, '+', add, add_c, reset);
+ 		show_graph(&out, '-', del, del_c, reset);
+ 		strbuf_addch(&out, '\n');
+diff --git a/t/t4012-diff-binary.sh b/t/t4012-diff-binary.sh
+index c509143c81..c64d9d2f40 100755
+--- a/t/t4012-diff-binary.sh
++++ b/t/t4012-diff-binary.sh
+@@ -113,20 +113,20 @@ test_expect_success 'diff --no-index with binary creation' '
+ '
+ 
+ cat >expect <<EOF
+- binfile  |   Bin 0 -> 1026 bytes
+- textfile | 10000 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ binfilë  |   Bin 0 -> 1026 bytes
++ tëxtfilë | 10000 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ EOF
+ 
+ test_expect_success 'diff --stat with binary files and big change count' '
+-	printf "\01\00%1024d" 1 >binfile &&
+-	git add binfile &&
++	printf "\01\00%1024d" 1 >binfilë &&
++	git add binfilë &&
+ 	i=0 &&
+ 	while test $i -lt 10000; do
+ 		echo $i &&
+ 		i=$(($i + 1)) || return 1
+-	done >textfile &&
+-	git add textfile &&
+-	git diff --cached --stat binfile textfile >output &&
++	done >tëxtfilë &&
++	git add tëxtfilë &&
++	git -c core.quotepath=false diff --cached --stat binfilë tëxtfilë >output &&
+ 	grep " | " output >actual &&
+ 	test_cmp expect actual
+ '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,92 @@
+From 9eac5954e81037f282ace2efff7110af3440dc19 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 1 Jun 2023 13:41:06 -0400
+Subject: [PATCH 1543/2871] diff: factor out --follow pathspec check
+
+In --follow mode, we require exactly one pathspec. We check this
+condition in two places:
+
+  - in diff_setup_done(), we complain if --follow is used with an
+    inapropriate pathspec
+
+  - in git-log's revision "tweak" function, we enable log.follow only if
+    the pathspec allows it
+
+The duplication isn't a big deal right now, since the logic is so
+simple. But in preparation for it becoming more complex, let's pull it
+into a shared function.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c |  2 +-
+ diff.c        | 14 ++++++++++++--
+ diff.h        |  7 +++++++
+ 3 files changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index a70fba198f..06e3a1a946 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -856,7 +856,7 @@ static void log_setup_revisions_tweak(struct rev_info *rev,
+ 				      struct setup_revision_opt *opt)
+ {
+ 	if (rev->diffopt.flags.default_follow_renames &&
+-	    rev->prune_data.nr == 1)
++	    diff_check_follow_pathspec(&rev->prune_data, 0))
+ 		rev->diffopt.flags.follow_renames = 1;
+ 
+ 	if (rev->first_parent_only)
+diff --git a/diff.c b/diff.c
+index 469e18aed2..dc9f21a9dc 100644
+--- a/diff.c
++++ b/diff.c
+@@ -4721,6 +4721,16 @@ unsigned diff_filter_bit(char status)
+ 	return filter_bit[(int) status];
+ }
+ 
++int diff_check_follow_pathspec(struct pathspec *ps, int die_on_error)
++{
++	if (ps->nr != 1) {
++		if (die_on_error)
++			die(_("--follow requires exactly one pathspec"));
++		return 0;
++	}
++	return 1;
++}
++
+ void diff_setup_done(struct diff_options *options)
+ {
+ 	unsigned check_mask = DIFF_FORMAT_NAME |
+@@ -4828,8 +4838,8 @@ void diff_setup_done(struct diff_options *options)
+ 
+ 	options->diff_path_counter = 0;
+ 
+-	if (options->flags.follow_renames && options->pathspec.nr != 1)
+-		die(_("--follow requires exactly one pathspec"));
++	if (options->flags.follow_renames)
++		diff_check_follow_pathspec(&options->pathspec, 1);
+ 
+ 	if (!options->use_color || external_diff())
+ 		options->color_moved = 0;
+diff --git a/diff.h b/diff.h
+index 8d770b1d57..31e7db9ab0 100644
+--- a/diff.h
++++ b/diff.h
+@@ -542,6 +542,13 @@ void repo_diff_setup(struct repository *, struct diff_options *);
+ struct option *add_diff_options(const struct option *, struct diff_options *);
+ int diff_opt_parse(struct diff_options *, const char **, int, const char *);
+ void diff_setup_done(struct diff_options *);
++
++/*
++ * Returns true if the pathspec can work with --follow mode. If die_on_error is
++ * set, die() with a specific error message rather than returning false.
++ */
++int diff_check_follow_pathspec(struct pathspec *ps, int die_on_error);
++
+ int git_config_rename(const char *var, const char *value);
+ 
+ #define DIFF_DETECT_RENAME	1
+-- 
+2.39.3 (Apple Git-145)
+

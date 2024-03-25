@@ -1,0 +1,68 @@
+From 5fafe8c95f100a622e5ecc9b5428bd7c0c2168f0 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 28 Aug 2023 18:53:04 -0400
+Subject: [PATCH 2002/2871] leak tests: mark t5583-push-branches.sh as
+ leak-free
+
+When t5583-push-branches.sh was originally introduced via 425b4d7f47
+(push: introduce '--branches' option, 2023-05-06), it was not leak-free.
+In fact, the test did not even run correctly until 022fbb655d (t5583:
+fix shebang line, 2023-05-12), but after applying that patch, we see a
+failure at t5583.8:
+
+    ==2529087==ERROR: LeakSanitizer: detected memory leaks
+
+    Direct leak of 384 byte(s) in 1 object(s) allocated from:
+        #0 0x7fb536330986 in __interceptor_realloc ../../../../src/libsanitizer/lsan/lsan_interceptors.cpp:98
+        #1 0x55e07606cbf9 in xrealloc wrapper.c:140
+        #2 0x55e075fb6cb3 in prio_queue_put prio-queue.c:42
+        #3 0x55e075ec81cb in get_reachable_subset commit-reach.c:917
+        #4 0x55e075fe9cce in add_missing_tags remote.c:1518
+        #5 0x55e075fea1e4 in match_push_refs remote.c:1665
+        #6 0x55e076050a8e in transport_push transport.c:1378
+        #7 0x55e075e2eb74 in push_with_options builtin/push.c:401
+        #8 0x55e075e2edb0 in do_push builtin/push.c:458
+        #9 0x55e075e2ff7a in cmd_push builtin/push.c:702
+        #10 0x55e075d8aaf0 in run_builtin git.c:452
+        #11 0x55e075d8af08 in handle_builtin git.c:706
+        #12 0x55e075d8b12c in run_argv git.c:770
+        #13 0x55e075d8b6a0 in cmd_main git.c:905
+        #14 0x55e075e81f07 in main common-main.c:60
+        #15 0x7fb5360ab6c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+        #16 0x7fb5360ab784 in __libc_start_main_impl ../csu/libc-start.c:360
+        #17 0x55e075d88f40 in _start (git+0x1ff40) (BuildId: 38ad998b85a535e786129979443630d025ec2453)
+
+    SUMMARY: LeakSanitizer: 384 byte(s) leaked in 1 allocation(s).
+
+This leak was addressed independently via 68b51172e3 (commit-reach: fix
+memory leak in get_reachable_subset(), 2023-06-03), which makes t5583
+leak-free.
+
+But t5583 was not in the tree when 68b51172e3 was written, and the two
+only met after the latter was merged back in via 693bde461c (Merge
+branch 'mh/commit-reach-get-reachable-plug-leak', 2023-06-20).
+
+At that point, t5583 was leak-free. Let's mark it as such accordingly.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5583-push-branches.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/t5583-push-branches.sh b/t/t5583-push-branches.sh
+index e7e1b6dab6..320f49c753 100755
+--- a/t/t5583-push-branches.sh
++++ b/t/t5583-push-branches.sh
+@@ -5,6 +5,7 @@ test_description='check the consisitency of behavior of --all and --branches'
+ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ delete_refs() {
+-- 
+2.39.3 (Apple Git-145)
+

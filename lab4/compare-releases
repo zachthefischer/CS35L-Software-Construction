@@ -1,0 +1,6 @@
+#!/bin/bash
+
+git diff $(git rev-parse "$1") $(git rev-parse "$2")
+#diff between two commits
+#git rev-parse "$1" gets the commit hash for the first argument
+#git rev-parse "$2" gets the commit hash for the second argument

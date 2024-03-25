@@ -1,0 +1,105 @@
+From 652a6b15bc1cd0f837bc969e87fd31f3e88413f6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:43:04 +0200
+Subject: [PATCH 1896/2871] parse-options: factor out usage_indent() and
+ usage_padding()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Extract functions for printing spaces before and after options.  We'll
+need them in the next commit.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c | 39 ++++++++++++++++++++++++---------------
+ 1 file changed, 24 insertions(+), 15 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index b750bf91cd..4b76fc81e9 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1020,9 +1020,28 @@ static int usage_argh(const struct option *opts, FILE *outfile)
+ 	return utf8_fprintf(outfile, s, opts->argh ? _(opts->argh) : _("..."));
+ }
+ 
++static int usage_indent(FILE *outfile)
++{
++	return fprintf(outfile, "    ");
++}
++
+ #define USAGE_OPTS_WIDTH 24
+ #define USAGE_GAP         2
+ 
++static void usage_padding(FILE *outfile, size_t pos)
++{
++	int pad;
++	if (pos == USAGE_OPTS_WIDTH + 1)
++		pad = -1;
++	else if (pos <= USAGE_OPTS_WIDTH)
++		pad = USAGE_OPTS_WIDTH - pos;
++	else {
++		fputc('\n', outfile);
++		pad = USAGE_OPTS_WIDTH;
++	}
++	fprintf(outfile, "%*s", pad + USAGE_GAP, "");
++}
++
+ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t *ctx,
+ 							 const char * const *usagestr,
+ 							 const struct option *opts,
+@@ -1108,7 +1127,6 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 
+ 	for (; opts->type != OPTION_END; opts++) {
+ 		size_t pos;
+-		int pad;
+ 		const char *cp, *np;
+ 
+ 		if (opts->type == OPTION_SUBCOMMAND)
+@@ -1128,7 +1146,7 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 			need_newline = 0;
+ 		}
+ 
+-		pos = fprintf(outfile, "    ");
++		pos = usage_indent(outfile);
+ 		if (opts->short_name) {
+ 			if (opts->flags & PARSE_OPT_NODASH)
+ 				pos += fprintf(outfile, "%c", opts->short_name);
+@@ -1152,16 +1170,8 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 		    !(opts->flags & PARSE_OPT_NOARG))
+ 			pos += usage_argh(opts, outfile);
+ 
+-		if (pos == USAGE_OPTS_WIDTH + 1)
+-			pad = -1;
+-		else if (pos <= USAGE_OPTS_WIDTH)
+-			pad = USAGE_OPTS_WIDTH - pos;
+-		else {
+-			fputc('\n', outfile);
+-			pad = USAGE_OPTS_WIDTH;
+-		}
+ 		if (opts->type == OPTION_ALIAS) {
+-			fprintf(outfile, "%*s", pad + USAGE_GAP, "");
++			usage_padding(outfile, pos);
+ 			fprintf_ln(outfile, _("alias of --%s"),
+ 				   (const char *)opts->value);
+ 			continue;
+@@ -1169,12 +1179,11 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 
+ 		for (cp = _(opts->help); *cp; cp = np) {
+ 			np = strchrnul(cp, '\n');
+-			fprintf(outfile,
+-				"%*s%.*s\n", pad + USAGE_GAP, "",
+-				(int)(np - cp), cp);
++			usage_padding(outfile, pos);
++			fprintf(outfile, "%.*s\n", (int)(np - cp), cp);
+ 			if (*np)
+ 				np++;
+-			pad = USAGE_OPTS_WIDTH;
++			pos = 0;
+ 		}
+ 	}
+ 	fputc('\n', outfile);
+-- 
+2.39.3 (Apple Git-145)
+

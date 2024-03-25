@@ -1,0 +1,31 @@
+From d9fcaeece2ff946dc3648a22252a92c5400fabe0 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 16:47:00 -0400
+Subject: [PATCH 0044/2871] t5537: prepare for changing protocol.file.allow
+
+Explicitly cloning over the "file://" protocol in t5537 in preparation
+for merging a security release which will change the default value of
+this configuration to be "user".
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t5537-fetch-shallow.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/t/t5537-fetch-shallow.sh b/t/t5537-fetch-shallow.sh
+index 10e9a7ff26..dc7a824254 100755
+--- a/t/t5537-fetch-shallow.sh
++++ b/t/t5537-fetch-shallow.sh
+@@ -175,7 +175,8 @@ test_expect_success 'fetch --update-shallow into a repo with submodules' '
+ test_expect_success 'fetch --update-shallow a commit that is also a shallow point into a repo with submodules' '
+ 	test_when_finished "rm -rf repo-with-sub" &&
+ 	git init repo-with-sub &&
+-	git -C repo-with-sub submodule add ../a-submodule a-submodule &&
++	git -c protocol.file.allow=always -C repo-with-sub \
++		submodule add ../a-submodule a-submodule &&
+ 	git -C repo-with-sub commit -m "added submodule" &&
+ 
+ 	SHALLOW=$(cat shallow/.git/shallow) &&
+-- 
+2.39.3 (Apple Git-145)
+

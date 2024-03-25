@@ -1,0 +1,68 @@
+From a0da6deeec16e3a141476dd63d644ed2428476d8 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 19 Dec 2022 14:50:14 +0000
+Subject: [PATCH 0584/2871] ci: only run win+VS build & tests in Git for
+ Windows' fork
+
+It has been a frequent matter of contention that the win+VS jobs not
+only take a long time to run, but are also more easily broken than the
+other jobs (because they do not use the same `Makefile`-based builds as
+all other jobs), and to make matters worse, these breakages are also
+much harder to diagnose and fix than other jobs', especially for
+contributors who are happy to stay away from Windows.
+
+The purpose of these win+VS jobs is to maintain the CMake-based build
+of Git, with the target audience being Visual Studio users on Windows
+who are typically quite unfamiliar with `make` and POSIX shell
+scripting, but the benefit of whose expertise we want for the Git
+project nevertheless.
+
+The CMake support was introduced for that specific purpose, and already
+early on concerns were raised that it would put an undue burden on
+contributors to ensure that these jobs pass in CI, when they do not have
+access to Windows machines (nor want to have that).
+
+This developer's initial hope was that it would be enough to fix win+VS
+failures and provide the changes to be squashed into contributors'
+patches, and that it would be worth the benefit of attracting
+Windows-based developers' contributions.
+
+Neither of these hopes have panned out.
+
+To lower the frustration, and incidentally benefit from using way less
+build minutes, let's just not run the win+VS jobs by default, which
+appears to be the consensus of the mail thread leading up to
+https://lore.kernel.org/git/xmqqk0311blt.fsf@gitster.g/
+
+Since the Git for Windows project still needs to at least try to attract
+more of said Windows-based developers, let's keep the jobs, but disable
+them everywhere except in Git for Windows' fork. This will help because
+Git for Windows' branch thicket is "continuously rebased" via automation
+to the `shears/maint`, `shears/main`, `shears/next` and `shears/seen`
+branches at https://github.com/git-for-windows/git. That way, the Git
+for Windows project will still be notified early on about potential
+breakages, but the Git project won't be burdened with fixing them
+anymore, which seems to be the best compromise we can get on this issue.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index e67847a682..8af3c67f60 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -132,7 +132,7 @@ jobs:
+   vs-build:
+     name: win+VS build
+     needs: ci-config
+-    if: needs.ci-config.outputs.enabled == 'yes'
++    if: github.event.repository.owner.login == 'git-for-windows' && needs.ci-config.outputs.enabled == 'yes'
+     env:
+       NO_PERL: 1
+       GIT_CONFIG_PARAMETERS: "'user.name=CI' 'user.email=ci@git'"
+-- 
+2.39.3 (Apple Git-145)
+

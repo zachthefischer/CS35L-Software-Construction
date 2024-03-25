@@ -1,0 +1,43 @@
+From d88d727143c3444897a9fdfe2d443c72808bcc97 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 1 Jun 2023 14:10:40 -0400
+Subject: [PATCH 1547/2871] ci: drop linux-clang job
+
+Since the linux-asan-ubsan job runs using clang under Linux, there is
+not much point in running a separate clang job. Any errors that a normal
+clang compile-and-test cycle would find are likely to be a subset of
+what the sanitizer job will find. Since this job takes ~14 minutes to
+run in CI, this shaves off some of our CPU load (though it does not
+affect end-to-end runtime, since it's typically run in parallel and is
+not the longest job).
+
+Technically this provides us with slightly less signal for a given run,
+since you won't immediately know if a failure in the sanitizer job is
+from using clang or from the sanitizers themselves. But it's generally
+obvious from the logs, and anyway your next step would be to fix the
+probvlem and re-run CI, since we expect all of these jobs to pass
+normally.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 2114303b7d..079645b776 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -246,9 +246,6 @@ jobs:
+       fail-fast: false
+       matrix:
+         vector:
+-          - jobname: linux-clang
+-            cc: clang
+-            pool: ubuntu-latest
+           - jobname: linux-sha256
+             cc: clang
+             pool: ubuntu-latest
+-- 
+2.39.3 (Apple Git-145)
+

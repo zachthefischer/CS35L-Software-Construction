@@ -1,0 +1,77 @@
+From dcc4e134aa7e469ef56a988696229e7b9a686f96 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 22 Mar 2023 13:40:51 -0400
+Subject: [PATCH 1099/2871] fast-export: factor out anonymized_entry creation
+
+When anonymizing output, there's only one spot where we generate new
+entries to add to our hashmap: when anonymize_str() doesn't find an
+entry, we use the generate() callback to make one and add it. Let's pull
+that into its own function in preparation for another caller.
+
+Note that we'll add one extra feature. In anonymize_str(), we know that
+we won't find an existing entry in the hashmap (since it will only try
+to add after failing to find one). But other callers won't have the same
+behavior, so we should catch this case and free the now-dangling entry.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fast-export.c | 35 ++++++++++++++++++++++++++---------
+ 1 file changed, 26 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/fast-export.c b/builtin/fast-export.c
+index ba9ab3a97e..5a0b63219a 100644
+--- a/builtin/fast-export.c
++++ b/builtin/fast-export.c
+@@ -139,6 +139,29 @@ static int anonymized_entry_cmp(const void *cmp_data UNUSED,
+ 	return strcmp(a->orig, b->orig);
+ }
+ 
++static struct anonymized_entry *add_anonymized_entry(struct hashmap *map,
++						     unsigned hash,
++						     const char *orig, size_t len,
++						     char *anon)
++{
++	struct anonymized_entry *ret, *old;
++
++	if (!map->cmpfn)
++		hashmap_init(map, anonymized_entry_cmp, NULL, 0);
++
++	FLEX_ALLOC_MEM(ret, orig, orig, len);
++	hashmap_entry_init(&ret->hash, hash);
++	ret->anon = anon;
++	old = hashmap_put_entry(map, ret, hash);
++
++	if (old) {
++		free(old->anon);
++		free(old);
++	}
++
++	return ret;
++}
++
+ /*
+  * Basically keep a cache of X->Y so that we can repeatedly replace
+  * the same anonymized string with another. The actual generation
+@@ -164,15 +187,9 @@ static const char *anonymize_str(struct hashmap *map,
+ 		ret = hashmap_get_entry(map, &key, hash, &key);
+ 
+ 	/* ...and finally generate a new mapping if necessary */
+-	if (!ret) {
+-		if (!map->cmpfn)
+-			hashmap_init(map, anonymized_entry_cmp, NULL, 0);
+-
+-		FLEX_ALLOC_MEM(ret, orig, orig, len);
+-		hashmap_entry_init(&ret->hash, key.hash.hash);
+-		ret->anon = generate(data);
+-		hashmap_put(map, &ret->hash);
+-	}
++	if (!ret)
++		ret = add_anonymized_entry(map, key.hash.hash,
++					   orig, len, generate(data));
+ 
+ 	return ret->anon;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

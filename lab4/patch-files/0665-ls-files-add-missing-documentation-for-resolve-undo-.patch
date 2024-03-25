@@ -1,0 +1,55 @@
+From 2a34b3181dba0d2049dff127ee70aca0c255a7ad Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 13 Jan 2023 04:41:51 +0000
+Subject: [PATCH 0665/2871] ls-files: add missing documentation for
+ --resolve-undo option
+
+ls-files' --resolve-undo option has existed ever since 9d9a2f4aba
+("resolve-undo: basic tests", 2009-12-25), but was never documented.
+However, the option has been referred to in the ls-files manual itself
+ever since ce74de931d ("ls-files: introduce "--format" option",
+2022-07-23), making its omission a bit jarring.  Document this option.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-ls-files.txt | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/Documentation/git-ls-files.txt b/Documentation/git-ls-files.txt
+index 440043cdb8..cb071583f8 100644
+--- a/Documentation/git-ls-files.txt
++++ b/Documentation/git-ls-files.txt
+@@ -12,6 +12,7 @@ SYNOPSIS
+ 'git ls-files' [-z] [-t] [-v] [-f]
+ 		[-c|--cached] [-d|--deleted] [-o|--others] [-i|--ignored]
+ 		[-s|--stage] [-u|--unmerged] [-k|--killed] [-m|--modified]
++		[--resolve-undo]
+ 		[--directory [--no-empty-directory]] [--eol]
+ 		[--deduplicate]
+ 		[-x <pattern>|--exclude=<pattern>]
+@@ -77,6 +78,13 @@ OPTIONS
+ 	to file/directory conflicts for checkout-index to
+ 	succeed.
+ 
++--resolve-undo::
++	Show files having resolve-undo information in the index
++	together with their resolve-undo information.  (resolve-undo
++	information is what is used to implement "git checkout -m
++	$PATH", i.e. to recreate merge conflicts that were
++	accidentally resolved)
++
+ -z::
+ 	\0 line termination on output and do not quote filenames.
+ 	See OUTPUT below for more information.
+@@ -136,6 +144,7 @@ a space) at the start of each line:
+ 	C::	modified/changed
+ 	K::	to be killed
+ 	?::	other
++	U::     resolve-undo
+ --
+ 
+ -v::
+-- 
+2.39.3 (Apple Git-145)
+

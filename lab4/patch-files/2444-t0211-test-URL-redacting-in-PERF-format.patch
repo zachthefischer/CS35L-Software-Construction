@@ -1,0 +1,57 @@
+From c73e7f80d32073b6fafec553d5875e720287e216 Mon Sep 17 00:00:00 2001
+From: Jeff Hostetler <jeffhostetler@github.com>
+Date: Wed, 22 Nov 2023 19:18:36 +0000
+Subject: [PATCH 2444/2871] t0211: test URL redacting in PERF format
+
+This transmogrifies the test case that was just added to t0210, to also
+cover the `GIT_TRACE2_PERF` backend.
+
+Just like t0211, we now have to toggle the `TEST_PASSES_SANITIZE_LEAK`
+annotation.
+
+Signed-off-by: Jeff Hostetler <jeffhostetler@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0211-trace2-perf.sh | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/t/t0211-trace2-perf.sh b/t/t0211-trace2-perf.sh
+index cfba686132..290b6eaaab 100755
+--- a/t/t0211-trace2-perf.sh
++++ b/t/t0211-trace2-perf.sh
+@@ -2,7 +2,7 @@
+ 
+ test_description='test trace2 facility (perf target)'
+ 
+-TEST_PASSES_SANITIZE_LEAK=true
++TEST_PASSES_SANITIZE_LEAK=false
+ . ./test-lib.sh
+ 
+ # Turn off any inherited trace2 settings for this test.
+@@ -268,4 +268,23 @@ test_expect_success PTHREADS 'global counter test/test2' '
+ 	have_counter_event "main" "counter" "test" "test2" 60 actual
+ '
+ 
++test_expect_success 'unsafe URLs are redacted by default' '
++	test_when_finished \
++		"rm -r actual trace.perf unredacted.perf clone clone2" &&
++
++	test_config_global \
++		"url.$(pwd).insteadOf" https://user:pwd@example.com/ &&
++	test_config_global trace2.configParams "core.*,remote.*.url" &&
++
++	GIT_TRACE2_PERF="$(pwd)/trace.perf" \
++		git clone https://user:pwd@example.com/ clone &&
++	! grep user:pwd trace.perf &&
++
++	GIT_TRACE2_REDACT=0 GIT_TRACE2_PERF="$(pwd)/unredacted.perf" \
++		git clone https://user:pwd@example.com/ clone2 &&
++	perl "$TEST_DIRECTORY/t0211/scrub_perf.perl" <unredacted.perf >actual &&
++	grep "d0|main|start|.* clone https://user:pwd@example.com" actual &&
++	grep "d0|main|def_param|.*|remote.origin.url:https://user:pwd@example.com" actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

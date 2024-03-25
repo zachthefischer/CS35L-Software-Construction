@@ -1,0 +1,61 @@
+From 7b11234e3bee123d6d48ed175f11b26b54fa67c6 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Oct 2022 14:55:47 -0400
+Subject: [PATCH 0233/2871] shortlog: implement `--group=committer` in terms of
+ `--group=<format>`
+
+In the same spirit as the previous commit, reimplement
+`--group=committer` as a special case of `--group=<format>`, too.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/shortlog.c | 14 +++-----------
+ 1 file changed, 3 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/shortlog.c b/builtin/shortlog.c
+index f6032c6328..27a87167e1 100644
+--- a/builtin/shortlog.c
++++ b/builtin/shortlog.c
+@@ -233,7 +233,6 @@ static void insert_records_from_format(struct shortlog *log,
+ 
+ void shortlog_add_commit(struct shortlog *log, struct commit *commit)
+ {
+-	struct strbuf ident = STRBUF_INIT;
+ 	struct strbuf oneline = STRBUF_INIT;
+ 	struct strset dups = STRSET_INIT;
+ 	struct pretty_print_context ctx = {0};
+@@ -253,20 +252,10 @@ void shortlog_add_commit(struct shortlog *log, struct commit *commit)
+ 	}
+ 	oneline_str = oneline.len ? oneline.buf : "<none>";
+ 
+-	if (log->groups & SHORTLOG_GROUP_COMMITTER) {
+-		strbuf_reset(&ident);
+-		format_commit_message(commit,
+-				      log->email ? "%cN <%cE>" : "%cN",
+-				      &ident, &ctx);
+-		if (!HAS_MULTI_BITS(log->groups) ||
+-		    strset_add(&dups, ident.buf))
+-			insert_one_record(log, ident.buf, oneline_str);
+-	}
+ 	insert_records_from_trailers(log, &dups, commit, &ctx, oneline_str);
+ 	insert_records_from_format(log, &dups, commit, &ctx, oneline_str);
+ 
+ 	strset_clear(&dups);
+-	strbuf_release(&ident);
+ 	strbuf_release(&oneline);
+ }
+ 
+@@ -377,6 +366,9 @@ void shortlog_finish_setup(struct shortlog *log)
+ 	if (log->groups & SHORTLOG_GROUP_AUTHOR)
+ 		string_list_append(&log->format,
+ 				   log->email ? "%aN <%aE>" : "%aN");
++	if (log->groups & SHORTLOG_GROUP_COMMITTER)
++		string_list_append(&log->format,
++				   log->email ? "%cN <%cE>" : "%cN");
+ 
+ 	string_list_sort(&log->trailers);
+ }
+-- 
+2.39.3 (Apple Git-145)
+

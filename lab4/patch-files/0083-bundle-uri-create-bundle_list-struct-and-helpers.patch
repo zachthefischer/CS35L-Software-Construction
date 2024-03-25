@@ -1,0 +1,189 @@
+From 0634f717a3e3c57ee5d965882366df1ada1ad11b Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 12 Oct 2022 12:52:29 +0000
+Subject: [PATCH 0083/2871] bundle-uri: create bundle_list struct and helpers
+
+It will likely be rare where a user uses a single bundle URI and expects
+that URI to point to a bundle. Instead, that URI will likely be a list
+of bundles provided in some format. Alternatively, the Git server could
+advertise a list of bundles.
+
+In anticipation of these two ways of advertising multiple bundles,
+create a data structure that represents such a list. This will be
+populated using a common API, but for now focus on what data can be
+represented.
+
+Each list contains a number of remote_bundle_info structs. These contain
+an 'id' that is used to uniquely identify them in the list, and also a
+'uri' that contains the location of its data. Finally, there is a strbuf
+containing the filename used when Git downloads the contents to disk.
+
+The list itself stores these remote_bundle_info structs in a hashtable
+using 'id' as the key. The order of the structs in the input is
+considered unimportant, but future modifications to the format and these
+data structures will place ordering possibilities on the set. The list
+also has a few "global" properties, including the version (used when
+parsing the list) and the mode. The mode is one of these two options:
+
+1. BUNDLE_MODE_ALL: all listed URIs are intended to be combined
+   together. The client should download all of the advertised data to
+   have a complete copy of the data.
+
+2. BUNDLE_MODE_ANY: any one listed item is sufficient to have a complete
+   copy of the data. The client can choose arbitrarily from these
+   options. In the future, the client may use pings to find the closest
+   URI among geodistributed replicas, or use some other heuristic
+   information added to the format.
+
+This API is currently unused, but will soon be expanded with parsing
+logic and then be consumed by the bundle URI download logic.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c | 60 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ bundle-uri.h | 56 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 116 insertions(+)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 8b2f4e08c9..f9a8db221b 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -4,6 +4,66 @@
+ #include "object-store.h"
+ #include "refs.h"
+ #include "run-command.h"
++#include "hashmap.h"
++#include "pkt-line.h"
++
++static int compare_bundles(const void *hashmap_cmp_fn_data,
++			   const struct hashmap_entry *he1,
++			   const struct hashmap_entry *he2,
++			   const void *id)
++{
++	const struct remote_bundle_info *e1 =
++		container_of(he1, const struct remote_bundle_info, ent);
++	const struct remote_bundle_info *e2 =
++		container_of(he2, const struct remote_bundle_info, ent);
++
++	return strcmp(e1->id, id ? (const char *)id : e2->id);
++}
++
++void init_bundle_list(struct bundle_list *list)
++{
++	memset(list, 0, sizeof(*list));
++
++	/* Implied defaults. */
++	list->mode = BUNDLE_MODE_ALL;
++	list->version = 1;
++
++	hashmap_init(&list->bundles, compare_bundles, NULL, 0);
++}
++
++static int clear_remote_bundle_info(struct remote_bundle_info *bundle,
++				    void *data)
++{
++	FREE_AND_NULL(bundle->id);
++	FREE_AND_NULL(bundle->uri);
++	return 0;
++}
++
++void clear_bundle_list(struct bundle_list *list)
++{
++	if (!list)
++		return;
++
++	for_all_bundles_in_list(list, clear_remote_bundle_info, NULL);
++	hashmap_clear_and_free(&list->bundles, struct remote_bundle_info, ent);
++}
++
++int for_all_bundles_in_list(struct bundle_list *list,
++			    bundle_iterator iter,
++			    void *data)
++{
++	struct remote_bundle_info *info;
++	struct hashmap_iter i;
++
++	hashmap_for_each_entry(&list->bundles, &i, info, ent) {
++		int result = iter(info, data);
++
++		if (result)
++			return result;
++	}
++
++	return 0;
++}
+ 
+ static char *find_temp_filename(void)
+ {
+diff --git a/bundle-uri.h b/bundle-uri.h
+index 8a152f1ef1..ff7e3fd3fb 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -1,7 +1,63 @@
+ #ifndef BUNDLE_URI_H
+ #define BUNDLE_URI_H
+ 
++#include "hashmap.h"
++#include "strbuf.h"
++
+ struct repository;
++struct string_list;
++
++/**
++ * The remote_bundle_info struct contains information for a single bundle
++ * URI. This may be initialized simply by a given URI or might have
++ * additional metadata associated with it if the bundle was advertised by
++ * a bundle list.
++ */
++struct remote_bundle_info {
++	struct hashmap_entry ent;
++
++	/**
++	 * The 'id' is a name given to the bundle for reference
++	 * by other bundle infos.
++	 */
++	char *id;
++
++	/**
++	 * The 'uri' is the location of the remote bundle so
++	 * it can be downloaded on-demand. This will be NULL
++	 * if there was no table of contents.
++	 */
++	char *uri;
++};
++
++#define REMOTE_BUNDLE_INFO_INIT { 0 }
++
++enum bundle_list_mode {
++	BUNDLE_MODE_NONE = 0,
++	BUNDLE_MODE_ALL,
++	BUNDLE_MODE_ANY
++};
++
++/**
++ * A bundle_list contains an unordered set of remote_bundle_info structs,
++ * as well as information about the bundle listing, such as version and
++ * mode.
++ */
++struct bundle_list {
++	int version;
++	enum bundle_list_mode mode;
++	struct hashmap bundles;
++};
++
++void init_bundle_list(struct bundle_list *list);
++void clear_bundle_list(struct bundle_list *list);
++
++typedef int (*bundle_iterator)(struct remote_bundle_info *bundle,
++			       void *data);
++
++int for_all_bundles_in_list(struct bundle_list *list,
++			    bundle_iterator iter,
++			    void *data);
+ 
+ /**
+  * Fetch data from the given 'uri' and unbundle the bundle data found
+-- 
+2.39.3 (Apple Git-145)
+

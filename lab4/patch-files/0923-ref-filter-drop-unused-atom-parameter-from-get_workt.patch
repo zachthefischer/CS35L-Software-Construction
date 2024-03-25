@@ -1,0 +1,45 @@
+From fe6258c348ad79a3c11e309995d88cdf08cde984 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:34:44 -0500
+Subject: [PATCH 0923/2871] ref-filter: drop unused atom parameter from
+ get_worktree_path()
+
+The get_worktree_path() function is used to populate the %(worktreepath)
+value, but it has never used its "atom" parameter since it was added in
+2582083fa1 (ref-filter: add worktreepath atom, 2019-04-28).
+
+Normally we'd use the atom struct to cache any work we do, but in this
+case there's a global hashmap that does that caching already. So we can
+just drop the unused parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index f8203c6b05..434a28c830 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -1822,7 +1822,7 @@ static void lazy_init_worktree_map(void)
+ 	populate_worktree_map(&(ref_to_worktree_map.map), ref_to_worktree_map.worktrees);
+ }
+ 
+-static char *get_worktree_path(const struct used_atom *atom, const struct ref_array_item *ref)
++static char *get_worktree_path(const struct ref_array_item *ref)
+ {
+ 	struct hashmap_entry entry, *e;
+ 	struct ref_to_worktree_entry *lookup_result;
+@@ -1881,7 +1881,7 @@ static int populate_value(struct ref_array_item *ref, struct strbuf *err)
+ 			refname = get_refname(atom, ref);
+ 		else if (atom_type == ATOM_WORKTREEPATH) {
+ 			if (ref->kind == FILTER_REFS_BRANCHES)
+-				v->s = get_worktree_path(atom, ref);
++				v->s = get_worktree_path(ref);
+ 			else
+ 				v->s = xstrdup("");
+ 			continue;
+-- 
+2.39.3 (Apple Git-145)
+

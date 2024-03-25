@@ -1,0 +1,41 @@
+From 97cf0c7de5dd49d9b518ebe694036159f6515422 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 16 Jan 2023 17:41:48 +0000
+Subject: [PATCH 0713/2871] branch: improve advice when --recurse-submodules
+ fails
+
+'git branch --recurse-submodules start from-here' fails if any submodule
+present in 'from-here' is not yet cloned (under
+submodule.propagateBranches=true). We then give this advice:
+
+   "You may try updating the submodules using 'git checkout from-here && git submodule update --init'"
+
+If 'submodule.recurse' is set, 'git checkout from-here' will also fail since
+it will try to recursively checkout the submodules.
+
+Improve the advice by adding '--no-recurse-submodules' to the checkout
+command.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Reviewed-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/branch.c b/branch.c
+index d182756827..e5614b53b3 100644
+--- a/branch.c
++++ b/branch.c
+@@ -756,7 +756,7 @@ void create_branches_recursively(struct repository *r, const char *name,
+ 				_("submodule '%s': unable to find submodule"),
+ 				submodule_entry_list.entries[i].submodule->name);
+ 			if (advice_enabled(ADVICE_SUBMODULES_NOT_UPDATED))
+-				advise(_("You may try updating the submodules using 'git checkout %s && git submodule update --init'"),
++				advise(_("You may try updating the submodules using 'git checkout --no-recurse-submodules %s && git submodule update --init'"),
+ 				       start_commitish);
+ 			exit(code);
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

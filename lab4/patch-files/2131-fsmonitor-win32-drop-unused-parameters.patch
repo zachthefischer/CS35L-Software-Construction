@@ -1,0 +1,113 @@
+From 42e862c0b3127736040790a11a4f44a0dee69888 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 18 Sep 2023 18:30:01 -0400
+Subject: [PATCH 2131/2871] fsmonitor/win32: drop unused parameters
+
+A few helper functions (centered around file-watch events) take extra
+fsmonitor state parameters that they don't use. These are static helpers
+local to the win32 implementation, and don't need to conform to any
+particular interface. We can just drop the extra parameters, which
+simplifies the code and silences -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/fsmonitor/fsm-listen-win32.c | 24 ++++++++++--------------
+ 1 file changed, 10 insertions(+), 14 deletions(-)
+
+diff --git a/compat/fsmonitor/fsm-listen-win32.c b/compat/fsmonitor/fsm-listen-win32.c
+index a361a7db20..90a2412284 100644
+--- a/compat/fsmonitor/fsm-listen-win32.c
++++ b/compat/fsmonitor/fsm-listen-win32.c
+@@ -289,8 +289,7 @@ void fsm_listen__stop_async(struct fsmonitor_daemon_state *state)
+ 	SetEvent(state->listen_data->hListener[LISTENER_SHUTDOWN]);
+ }
+ 
+-static struct one_watch *create_watch(struct fsmonitor_daemon_state *state,
+-				      const char *path)
++static struct one_watch *create_watch(const char *path)
+ {
+ 	struct one_watch *watch = NULL;
+ 	DWORD desired_access = FILE_LIST_DIRECTORY;
+@@ -361,8 +360,7 @@ static void destroy_watch(struct one_watch *watch)
+ 	free(watch);
+ }
+ 
+-static int start_rdcw_watch(struct fsm_listen_data *data,
+-			    struct one_watch *watch)
++static int start_rdcw_watch(struct one_watch *watch)
+ {
+ 	DWORD dwNotifyFilter =
+ 		FILE_NOTIFY_CHANGE_FILE_NAME |
+@@ -735,11 +733,11 @@ void fsm_listen__loop(struct fsmonitor_daemon_state *state)
+ 
+ 	state->listen_error_code = 0;
+ 
+-	if (start_rdcw_watch(data, data->watch_worktree) == -1)
++	if (start_rdcw_watch(data->watch_worktree) == -1)
+ 		goto force_error_stop;
+ 
+ 	if (data->watch_gitdir &&
+-	    start_rdcw_watch(data, data->watch_gitdir) == -1)
++	    start_rdcw_watch(data->watch_gitdir) == -1)
+ 		goto force_error_stop;
+ 
+ 	for (;;) {
+@@ -755,7 +753,7 @@ void fsm_listen__loop(struct fsmonitor_daemon_state *state)
+ 			}
+ 			if (result == -2) {
+ 				/* retryable error */
+-				if (start_rdcw_watch(data, data->watch_worktree) == -1)
++				if (start_rdcw_watch(data->watch_worktree) == -1)
+ 					goto force_error_stop;
+ 				continue;
+ 			}
+@@ -763,7 +761,7 @@ void fsm_listen__loop(struct fsmonitor_daemon_state *state)
+ 			/* have data */
+ 			if (process_worktree_events(state) == LISTENER_SHUTDOWN)
+ 				goto force_shutdown;
+-			if (start_rdcw_watch(data, data->watch_worktree) == -1)
++			if (start_rdcw_watch(data->watch_worktree) == -1)
+ 				goto force_error_stop;
+ 			continue;
+ 		}
+@@ -776,7 +774,7 @@ void fsm_listen__loop(struct fsmonitor_daemon_state *state)
+ 			}
+ 			if (result == -2) {
+ 				/* retryable error */
+-				if (start_rdcw_watch(data, data->watch_gitdir) == -1)
++				if (start_rdcw_watch(data->watch_gitdir) == -1)
+ 					goto force_error_stop;
+ 				continue;
+ 			}
+@@ -784,7 +782,7 @@ void fsm_listen__loop(struct fsmonitor_daemon_state *state)
+ 			/* have data */
+ 			if (process_gitdir_events(state) == LISTENER_SHUTDOWN)
+ 				goto force_shutdown;
+-			if (start_rdcw_watch(data, data->watch_gitdir) == -1)
++			if (start_rdcw_watch(data->watch_gitdir) == -1)
+ 				goto force_error_stop;
+ 			continue;
+ 		}
+@@ -821,16 +819,14 @@ int fsm_listen__ctor(struct fsmonitor_daemon_state *state)
+ 
+ 	data->hEventShutdown = CreateEvent(NULL, TRUE, FALSE, NULL);
+ 
+-	data->watch_worktree = create_watch(state,
+-					    state->path_worktree_watch.buf);
++	data->watch_worktree = create_watch(state->path_worktree_watch.buf);
+ 	if (!data->watch_worktree)
+ 		goto failed;
+ 
+ 	check_for_shortnames(data->watch_worktree);
+ 
+ 	if (state->nr_paths_watching > 1) {
+-		data->watch_gitdir = create_watch(state,
+-						  state->path_gitdir_watch.buf);
++		data->watch_gitdir = create_watch(state->path_gitdir_watch.buf);
+ 		if (!data->watch_gitdir)
+ 			goto failed;
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,32 @@
+From c1b754d0597be83439ecc8de2a59a90f35cd4040 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 7 Oct 2023 13:20:31 -0400
+Subject: [PATCH 2215/2871] repack: free existing_cruft array after use
+
+We allocate an array of packed_git pointers so that we can sort the list
+of cruft packs, but we never free the array, causing a small leak. Note
+that we don't need to free the packed_git structs themselves; they're
+owned by the repository object.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index a1a893d952..69e8f302c0 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -955,6 +955,7 @@ static void collapse_small_cruft_packs(FILE *in, size_t max_size,
+ 			existing->non_kept_packs.items[i].string);
+ 
+ 	strbuf_release(&buf);
++	free(existing_cruft);
+ }
+ 
+ static int write_cruft_pack(const struct pack_objects_args *args,
+-- 
+2.39.3 (Apple Git-145)
+

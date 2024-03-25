@@ -1,0 +1,51 @@
+From 7e1fcb81eef3be73890d7c469da508b9bf3327b5 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 29 Nov 2023 08:24:57 +0100
+Subject: [PATCH 2476/2871] t1417: make `reflog --updateref` tests backend
+ agnostic
+
+The tests for `git reflog delete --updateref` are currently marked to
+only run with the reffiles backend. There is no inherent reason that
+this should be the case other than the fact that the setup messes with
+the on-disk reflogs directly.
+
+Refactor the test to stop doing so and drop the REFFILES prerequisite.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1417-reflog-updateref.sh | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/t/t1417-reflog-updateref.sh b/t/t1417-reflog-updateref.sh
+index 14f13b57c6..0eb5e674bc 100755
+--- a/t/t1417-reflog-updateref.sh
++++ b/t/t1417-reflog-updateref.sh
+@@ -14,9 +14,13 @@ test_expect_success 'setup' '
+ 		test_commit B &&
+ 		test_commit C &&
+ 
+-		cp .git/logs/HEAD HEAD.old &&
++		git reflog HEAD >expect &&
+ 		git reset --hard HEAD~ &&
+-		cp HEAD.old .git/logs/HEAD
++		# Make sure that the reflog does not point to the same commit
++		# as HEAD.
++		git reflog delete HEAD@{0} &&
++		git reflog HEAD >actual &&
++		test_cmp expect actual
+ 	)
+ '
+ 
+@@ -25,7 +29,7 @@ test_reflog_updateref () {
+ 	shift
+ 	args="$@"
+ 
+-	test_expect_success REFFILES "get '$exp' with '$args'"  '
++	test_expect_success "get '$exp' with '$args'"  '
+ 		test_when_finished "rm -rf copy" &&
+ 		cp -R repo copy &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

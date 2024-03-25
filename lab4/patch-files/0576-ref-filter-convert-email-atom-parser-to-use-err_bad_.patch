@@ -1,0 +1,45 @@
+From 285da4321a9351d4c99dd1685a4aa2dfb47ff62e Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 14 Dec 2022 11:24:03 -0500
+Subject: [PATCH 0576/2871] ref-filter: convert email atom parser to use
+ err_bad_arg()
+
+The error message for a bogus argument to %(authoremail), etc, is:
+
+   $ git for-each-ref --format='%(authoremail:foo)'
+   fatal: unrecognized email option: foo
+
+Saying just "email" is a little vague; most of the other atom parsers
+would use the full name "%(authoremail)", but we can't do that here
+because the same function also handles %(taggeremail), etc. Until
+recently, passing atom->name was a bad idea, because it erroneously
+included the arguments in the atom name. But since the previous commit
+taught err_bad_arg() to handle this, we can now do so and get:
+
+  fatal: unrecognized %(authoremail) argument: foo
+
+which is consistent with other atoms.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index f40bc4d9c9..733b0149e8 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -489,7 +489,7 @@ static int person_email_atom_parser(struct ref_format *format, struct used_atom
+ 	else if (!strcmp(arg, "localpart"))
+ 		atom->u.email_option.option = EO_LOCALPART;
+ 	else
+-		return strbuf_addf_ret(err, -1, _("unrecognized email option: %s"), arg);
++		return err_bad_arg(err, atom->name, arg);
+ 	return 0;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

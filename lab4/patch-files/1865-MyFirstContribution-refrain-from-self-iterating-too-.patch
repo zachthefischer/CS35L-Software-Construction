@@ -1,0 +1,71 @@
+From 010447cf098f7407008f2940b4fefa5351477044 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 27 Jul 2023 17:43:17 -0700
+Subject: [PATCH 1865/2871] MyFirstContribution: refrain from self-iterating
+ too much
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Finding mistakes in and improving your own patches is a good idea,
+but doing so too quickly is being inconsiderate to reviewers who
+have just seen the initial iteration and taking their time to review
+it.  Encourage new developers to perform such a self review before
+they send out their patches, not after.  After sending a patch that
+they immediately found mistakes in, they are welcome to comment on
+them, mentioning what and how they plan to improve them in an
+updated version, before sending out their updates.
+
+Helped-by: Torsten Bögershausen <tboegi@web.de>
+Helped-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/MyFirstContribution.txt | 32 +++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/Documentation/MyFirstContribution.txt b/Documentation/MyFirstContribution.txt
+index ccfd0cb5f3..93c9e459fc 100644
+--- a/Documentation/MyFirstContribution.txt
++++ b/Documentation/MyFirstContribution.txt
+@@ -1256,6 +1256,38 @@ index 88f126184c..38da593a60 100644
+ [[now-what]]
+ == My Patch Got Emailed - Now What?
+ 
++Please give reviewers enough time to process your initial patch before
++sending an updated version. That is, resist the temptation to send a new
++version immediately, because others may have already started reviewing
++your initial version.
++
++While waiting for review comments, you may find mistakes in your initial
++patch, or perhaps realize a different and better way to achieve the goal
++of the patch. In this case you may communicate your findings to other
++reviewers as follows:
++
++ - If the mistakes you found are minor, send a reply to your patch as if
++   you were a reviewer and mention that you will fix them in an
++   updated version.
++
++ - On the other hand, if you think you want to change the course so
++   drastically that reviews on the initial patch would be a waste of
++   time (for everyone involved), retract the patch immediately with
++   a reply like "I am working on a much better approach, so please
++   ignore this patch and wait for the updated version."
++
++Now, the above is a good practice if you sent your initial patch
++prematurely without polish.  But a better approach of course is to avoid
++sending your patch prematurely in the first place.
++
++Please be considerate of the time needed by reviewers to examine each
++new version of your patch. Rather than seeing the initial version right
++now (followed by several "oops, I like this version better than the
++previous one" patches over 2 days), reviewers would strongly prefer if a
++single polished version came 2 days later instead, and that version with
++fewer mistakes were the only one they would need to review.
++
++
+ [[reviewing]]
+ === Responding to Reviews
+ 
+-- 
+2.39.3 (Apple Git-145)
+

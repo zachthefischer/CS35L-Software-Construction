@@ -1,0 +1,79 @@
+From fa8e8d5b31f2accfe956e9fd0f67ccb90586ed65 Mon Sep 17 00:00:00 2001
+From: Philip Oakley <philipoakley@iee.email>
+Date: Sat, 29 Oct 2022 17:41:09 +0100
+Subject: [PATCH 0273/2871] doc: use 'object database' not ODB or abbreviation
+
+The abbreviation 'ODB' is used in the technical documentation
+sections for commit-graph and parallel-checkout, along with an
+'odb' option in `git-pack-redundant`, without expansion.
+
+Use 'object database' in full, in those entries. The text has not
+been reflowed to keep the changes minimal.
+
+While in the glossary for `object` terms, add the common`oid`
+abbreviation to its entry.
+
+Signed-off-by: Philip Oakley <philipoakley@iee.email>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/git-pack-redundant.txt          | 2 +-
+ Documentation/glossary-content.txt            | 2 +-
+ Documentation/technical/commit-graph.txt      | 2 +-
+ Documentation/technical/parallel-checkout.txt | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-pack-redundant.txt b/Documentation/git-pack-redundant.txt
+index dda80a740c..99ef13839d 100644
+--- a/Documentation/git-pack-redundant.txt
++++ b/Documentation/git-pack-redundant.txt
+@@ -34,7 +34,7 @@ OPTIONS
+ 
+ --alt-odb::
+ 	Don't require objects present in packs from alternate object
+-	directories to be present in local packs.
++	database (odb) directories to be present in local packs.
+ 
+ --verbose::
+ 	Outputs some statistics to stderr. Has a small performance penalty.
+diff --git a/Documentation/glossary-content.txt b/Documentation/glossary-content.txt
+index aa2f41f5e7..947ac49606 100644
+--- a/Documentation/glossary-content.txt
++++ b/Documentation/glossary-content.txt
+@@ -262,7 +262,7 @@ This commit is referred to as a "merge commit", or sometimes just a
+ 	identified by its <<def_object_name,object name>>. The objects usually
+ 	live in `$GIT_DIR/objects/`.
+ 
+-[[def_object_identifier]]object identifier::
++[[def_object_identifier]]object identifier (oid)::
+ 	Synonym for <<def_object_name,object name>>.
+ 
+ [[def_object_name]]object name::
+diff --git a/Documentation/technical/commit-graph.txt b/Documentation/technical/commit-graph.txt
+index d821365b18..86fed0de0f 100644
+--- a/Documentation/technical/commit-graph.txt
++++ b/Documentation/technical/commit-graph.txt
+@@ -17,7 +17,7 @@ There are two main costs here:
+ 
+ The commit-graph file is a supplemental data structure that accelerates
+ commit graph walks. If a user downgrades or disables the 'core.commitGraph'
+-config setting, then the existing ODB is sufficient. The file is stored
++config setting, then the existing object database is sufficient. The file is stored
+ as "commit-graph" either in the .git/objects/info directory or in the info
+ directory of an alternate.
+ 
+diff --git a/Documentation/technical/parallel-checkout.txt b/Documentation/technical/parallel-checkout.txt
+index e790258a1a..47c9b6183c 100644
+--- a/Documentation/technical/parallel-checkout.txt
++++ b/Documentation/technical/parallel-checkout.txt
+@@ -56,7 +56,7 @@ Rejected Multi-Threaded Solution
+ 
+ The most "straightforward" implementation would be to spread the set of
+ to-be-updated cache entries across multiple threads. But due to the
+-thread-unsafe functions in the ODB code, we would have to use locks to
++thread-unsafe functions in the object database code, we would have to use locks to
+ coordinate the parallel operation. An early prototype of this solution
+ showed that the multi-threaded checkout would bring performance
+ improvements over the sequential code, but there was still too much lock
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,42 @@
+From 833f4c0514fb08368066ace5260b4b80792c4ffc Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 28 Nov 2022 22:09:52 +0800
+Subject: [PATCH 0455/2871] pack-bitmap.c: break out of the bitmap loop early
+ if not tracing
+
+After opening a bitmap successfully, we try opening others only
+because we want to report that other bitmap files are ignored in
+the trace2 log.  When trace2 is not enabled, we do not have to
+do any of that.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-bitmap.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/pack-bitmap.c b/pack-bitmap.c
+index aaa2d9a104..3b6c2f804a 100644
+--- a/pack-bitmap.c
++++ b/pack-bitmap.c
+@@ -527,8 +527,15 @@ static int open_pack_bitmap(struct repository *r,
+ 	assert(!bitmap_git->map);
+ 
+ 	for (p = get_all_packs(r); p; p = p->next) {
+-		if (open_pack_bitmap_1(bitmap_git, p) == 0)
++		if (open_pack_bitmap_1(bitmap_git, p) == 0) {
+ 			ret = 0;
++			/*
++			 * The only reason to keep looking is to report
++			 * duplicates.
++			 */
++			if (!trace2_is_enabled())
++				break;
++		}
+ 	}
+ 
+ 	return ret;
+-- 
+2.39.3 (Apple Git-145)
+

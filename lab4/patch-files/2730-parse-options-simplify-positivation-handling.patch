@@ -1,0 +1,64 @@
+From 457f96252fcfd64127f71e8663e2e4b6dfd4576c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 21 Jan 2024 18:56:39 +0100
+Subject: [PATCH 2730/2871] parse-options: simplify positivation handling
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We accept the positive version of options whose long name starts with
+"no-" and are defined without the flag PARSE_OPT_NONEG.  E.g. git clone
+has an explicitly defined --no-checkout option and also implicitly
+accepts --checkout to override it.
+
+parse_long_opt() handles that by restarting the option matching with the
+positive version when it finds that only the current option definition
+starts with "no-", but not the user-supplied argument.  This code is
+located almost at the end of the matching logic.
+
+Avoid the need for a restart by moving the code up.  We don't have to
+check the positive arg against the negative long_name at all -- the
+"no-" prefix of the latter makes a match impossible.  Skip it and toggle
+OPT_UNSET right away to simplify the control flow.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index 0dd07eec82..e4fda09af4 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -369,7 +369,11 @@ static enum parse_opt_result parse_long_opt(
+ 		if (!long_name)
+ 			continue;
+ 
+-again:
++		if (!starts_with(arg, "no-") &&
++		    !(options->flags & PARSE_OPT_NONEG) &&
++		    skip_prefix(long_name, "no-", &long_name))
++			opt_flags |= OPT_UNSET;
++
+ 		if (!skip_prefix(arg, long_name, &rest))
+ 			rest = NULL;
+ 		if (!rest) {
+@@ -403,13 +407,8 @@ static enum parse_opt_result parse_long_opt(
+ 				goto is_abbreviated;
+ 			}
+ 			/* negated? */
+-			if (!starts_with(arg, "no-")) {
+-				if (skip_prefix(long_name, "no-", &long_name)) {
+-					opt_flags |= OPT_UNSET;
+-					goto again;
+-				}
++			if (!starts_with(arg, "no-"))
+ 				continue;
+-			}
+ 			flags |= OPT_UNSET;
+ 			if (!skip_prefix(arg + 3, long_name, &rest)) {
+ 				/* abbreviated and negated? */
+-- 
+2.39.3 (Apple Git-145)
+

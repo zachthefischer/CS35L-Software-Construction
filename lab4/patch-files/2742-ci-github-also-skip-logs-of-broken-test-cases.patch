@@ -1,0 +1,47 @@
+From 0188b2c8e015d0bb1b39bc396d38f3b73f2f8c34 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Sun, 21 Jan 2024 03:38:33 +0000
+Subject: [PATCH 2742/2871] ci(github): also skip logs of broken test cases
+
+When a test fails in the GitHub Actions CI pipeline, we mark it up using
+special GitHub syntax so it stands out when looking at the run log. We
+also mark up "fixed" test cases, and skip passing tests since we want to
+concentrate on the failures.
+
+The finalize_test_case_output function in
+test-lib-github-workflow-markup.sh which performs this markup is however
+missing a fourth case: "broken" tests, i.e. tests using
+'test_expect_failure' to document a known bug. This leads to these
+"broken" tests appearing along with any failed tests, potentially
+confusing the reader who might not be aware that "broken" is the status
+for 'test_expect_failure' tests that indeed failed, and wondering what
+their commits "broke".
+
+Also skip these "broken" tests so that only failures and fixed tests
+stand out.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Acked-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib-github-workflow-markup.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/test-lib-github-workflow-markup.sh b/t/test-lib-github-workflow-markup.sh
+index 9c5339c577..f9c2a0fb8d 100644
+--- a/t/test-lib-github-workflow-markup.sh
++++ b/t/test-lib-github-workflow-markup.sh
+@@ -42,8 +42,8 @@ finalize_test_case_output () {
+ 	fixed)
+ 		echo >>$github_markup_output "::notice::fixed: $this_test.$test_count $1"
+ 		;;
+-	ok)
+-		# Exit without printing the "ok" tests
++	ok|broken)
++		# Exit without printing the "ok" or ""broken" tests
+ 		return
+ 		;;
+ 	esac
+-- 
+2.39.3 (Apple Git-145)
+

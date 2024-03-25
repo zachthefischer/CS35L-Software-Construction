@@ -1,0 +1,60 @@
+From c0b5d46ded46bf6e2cf4bb5325e4bf43374dd1ed Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 28 Aug 2023 18:49:12 -0400
+Subject: [PATCH 2006/2871] Documentation/gitformat-pack.txt: drop mixed
+ version section
+
+This section was added in 3d89a8c118 (Documentation/technical: add
+cruft-packs.txt, 2022-05-20) to highlight a potential pitfall when
+deploying cruft packs in an environment where multiple versions of Git
+are GC-ing the same repository.
+
+Now that it has been more than a year since 3d89a8c118 was written,
+let's drop this section as it is no longer relevant.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitformat-pack.txt | 26 --------------------------
+ 1 file changed, 26 deletions(-)
+
+diff --git a/Documentation/gitformat-pack.txt b/Documentation/gitformat-pack.txt
+index 49bb09d7df..870e00f298 100644
+--- a/Documentation/gitformat-pack.txt
++++ b/Documentation/gitformat-pack.txt
+@@ -588,32 +588,6 @@ later on.
+ It is linkgit:git-gc[1] that is typically responsible for removing expired
+ unreachable objects.
+ 
+-=== Caution for mixed-version environments
+-
+-Repositories that have cruft packs in them will continue to work with any older
+-version of Git. Note, however, that previous versions of Git which do not
+-understand the `.mtimes` file will use the cruft pack's mtime as the mtime for
+-all of the objects in it. In other words, do not expect older (pre-cruft pack)
+-versions of Git to interpret or even read the contents of the `.mtimes` file.
+-
+-Note that having mixed versions of Git GC-ing the same repository can lead to
+-unreachable objects never being completely pruned. This can happen under the
+-following circumstances:
+-
+-  - An older version of Git running GC explodes the contents of an existing
+-    cruft pack loose, using the cruft pack's mtime.
+-  - A newer version running GC collects those loose objects into a cruft pack,
+-    where the .mtime file reflects the loose object's actual mtimes, but the
+-    cruft pack mtime is "now".
+-
+-Repeating this process will lead to unreachable objects not getting pruned as a
+-result of repeatedly resetting the objects' mtimes to the present time.
+-
+-If you are GC-ing repositories in a mixed version environment, consider omitting
+-the `--cruft` option when using linkgit:git-repack[1] and linkgit:git-gc[1], and
+-setting the `gc.cruftPacks` configuration to "false" until all writers
+-understand cruft packs.
+-
+ === Alternatives
+ 
+ Notable alternatives to this design include:
+-- 
+2.39.3 (Apple Git-145)
+

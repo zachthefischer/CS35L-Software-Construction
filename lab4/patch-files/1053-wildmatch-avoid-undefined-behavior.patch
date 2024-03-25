@@ -1,0 +1,41 @@
+From 81b26f8f2891f1a63d5dbf7c2d4209b8325062b6 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Mon, 20 Mar 2023 16:10:01 +0000
+Subject: [PATCH 1053/2871] wildmatch: avoid undefined behavior
+
+The code changed in this commit is designed to check if the pattern
+starts with "**/" or contains "/**/" (see 3a078dec33 (wildmatch: fix
+"**" special case, 2013-01-01)). Unfortunately when the pattern begins
+with "**/" `prev_p = p - 2` is evaluated when `p` points to the second
+"*" and so the subtraction is undefined according to section 6.5.6 of
+the C standard because the result does not point within the same object
+as `p`. Fix this by avoiding the subtraction unless it is well defined.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ wildmatch.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/wildmatch.c b/wildmatch.c
+index 06861bd8bc..694d2f8e40 100644
+--- a/wildmatch.c
++++ b/wildmatch.c
+@@ -83,12 +83,12 @@ static int dowild(const uchar *p, const uchar *text, unsigned int flags)
+ 			continue;
+ 		case '*':
+ 			if (*++p == '*') {
+-				const uchar *prev_p = p - 2;
++				const uchar *prev_p = p;
+ 				while (*++p == '*') {}
+ 				if (!(flags & WM_PATHNAME))
+ 					/* without WM_PATHNAME, '*' == '**' */
+ 					match_slash = 1;
+-				else if ((prev_p < pattern || *prev_p == '/') &&
++				else if ((prev_p - pattern < 2 || *(prev_p - 2) == '/') &&
+ 				    (*p == '\0' || *p == '/' ||
+ 				     (p[0] == '\\' && p[1] == '/'))) {
+ 					/*
+-- 
+2.39.3 (Apple Git-145)
+

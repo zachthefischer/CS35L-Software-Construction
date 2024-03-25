@@ -1,0 +1,82 @@
+From e288b3de35eaaf3febe07cd56565d8e8af17fb1e Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 30 Sep 2022 11:06:22 -0700
+Subject: [PATCH 0003/2871] branch: do not fail a no-op --edit-desc
+
+Imagine running "git branch --edit-description" while on a branch
+without the branch description, and then exit the editor after
+emptying the edit buffer, which is the way to tell the command that
+you changed your mind and you do not want the description after all.
+
+The command should just happily oblige, adding no branch description
+for the current branch, and exit successfully.  But it fails to do
+so:
+
+    $ git init -b main
+    $ git commit --allow-empty -m commit
+    $ GIT_EDITOR=: git branch --edit-description
+    fatal: could not unset 'branch.main.description'
+
+The end result is OK in that the configuration variable does not
+exist in the resulting repository, but we should do better.  If we
+know we didn't have a description, and if we are asked not to have a
+description by the editor, we can just return doing nothing.
+
+This of course introduces TOCTOU.  If you add a branch description
+to the same branch from another window, while you had the editor
+open to edit the description, and then exit the editor without
+writing anything there, we'd end up not removing the description you
+added in the other window.  But you are fooling yourself in your own
+repository at that point, and if it hurts, you'd be better off not
+doing so ;-).
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c  | 6 ++++--
+ t/t3200-branch.sh | 3 +++
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index 8c0b428104..ae08147572 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -576,10 +576,11 @@ static GIT_PATH_FUNC(edit_description, "EDIT_DESCRIPTION")
+ 
+ static int edit_branch_description(const char *branch_name)
+ {
++	int exists;
+ 	struct strbuf buf = STRBUF_INIT;
+ 	struct strbuf name = STRBUF_INIT;
+ 
+-	read_branch_desc(&buf, branch_name);
++	exists = !read_branch_desc(&buf, branch_name);
+ 	if (!buf.len || buf.buf[buf.len-1] != '\n')
+ 		strbuf_addch(&buf, '\n');
+ 	strbuf_commented_addf(&buf,
+@@ -596,7 +597,8 @@ static int edit_branch_description(const char *branch_name)
+ 	strbuf_stripspace(&buf, 1);
+ 
+ 	strbuf_addf(&name, "branch.%s.description", branch_name);
+-	git_config_set(name.buf, buf.len ? buf.buf : NULL);
++	if (buf.len || exists)
++		git_config_set(name.buf, buf.len ? buf.buf : NULL);
+ 	strbuf_release(&name);
+ 	strbuf_release(&buf);
+ 
+diff --git a/t/t3200-branch.sh b/t/t3200-branch.sh
+index 3ec3e1d730..30dff9e712 100755
+--- a/t/t3200-branch.sh
++++ b/t/t3200-branch.sh
+@@ -1268,6 +1268,9 @@ test_expect_success 'attempt to delete a branch merged to its base' '
+ '
+ 
+ test_expect_success 'use --edit-description' '
++	EDITOR=: git branch --edit-description &&
++	test_must_fail git config branch.main.description &&
++
+ 	write_script editor <<-\EOF &&
+ 		echo "New contents" >"$1"
+ 	EOF
+-- 
+2.39.3 (Apple Git-145)
+

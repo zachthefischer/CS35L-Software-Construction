@@ -1,0 +1,50 @@
+From e6c71f239d18af3b99af8fa2b68f16cee813d1e2 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:36 -0400
+Subject: [PATCH 1788/2871] midx.c: use `size_t`'s for fanout nr and alloc
+
+The `midx_fanout` struct is used to keep track of a set of OIDs
+corresponding to each layer of the MIDX's fanout table. It stores an
+array of entries, along with the number of entries in the table, and the
+allocated size of the array.
+
+Both `nr` and `alloc` are stored as 32-bit unsigned integers. In
+practice, this should never cause any problems, since most packs have
+far fewer than 2^32-1 objects.
+
+But storing these as `size_t`'s is more appropriate, and prevents us
+from accidentally overflowing some result when multiplying or adding to
+either of these values. Update these struct members to be `size_t`'s as
+appropriate.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index b500174d1f..0da2faac67 100644
+--- a/midx.c
++++ b/midx.c
+@@ -584,12 +584,14 @@ static void fill_pack_entry(uint32_t pack_int_id,
+ 
+ struct midx_fanout {
+ 	struct pack_midx_entry *entries;
+-	uint32_t nr;
+-	uint32_t alloc;
++	size_t nr, alloc;
+ };
+ 
+-static void midx_fanout_grow(struct midx_fanout *fanout, uint32_t nr)
++static void midx_fanout_grow(struct midx_fanout *fanout, size_t nr)
+ {
++	if (nr < fanout->nr)
++		BUG("negative growth in midx_fanout_grow() (%"PRIuMAX" < %"PRIuMAX")",
++		    (uintmax_t)nr, (uintmax_t)fanout->nr);
+ 	ALLOC_GROW(fanout->entries, nr, fanout->alloc);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

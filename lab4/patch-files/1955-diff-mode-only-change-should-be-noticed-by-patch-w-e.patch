@@ -1,0 +1,114 @@
+From c9a3e724cf75b44e47cfca5ae37cd0d7864c2220 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 18 Aug 2023 16:59:29 -0700
+Subject: [PATCH 1955/2871] diff: mode-only change should be noticed by
+ "--patch -w --exit-code"
+
+The codepath to notice the content-level changes, taking certain
+no-op changes like "ignore whitespace" into account, forgot that
+a mode-only change is still a change.  This resulted in
+
+    $ git diff --patch --exit-code -w
+
+to exit with status 0 even when there is such a mode-only change,
+breaking both "--patch" and "--quiet" output formats.
+
+Teach the builtin_diff() codepath that creation and deletion as well
+as mode changes are all interesting changes.
+
+Note that the test specifically checks removal of an empty file,
+because if there is anything in the preimage (i.e. the removed file
+is not empty), the removal would still trigger textual patch output
+and the codepath for that does update .found_changes bit to report
+that it found an interesting change.  We need to make sure that the
+.found_changes bit is set even without triggering textual patch
+output.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                     |  3 +++
+ t/t4015-diff-whitespace.sh | 35 ++++++++++++++++++++++++++++++++++-
+ 2 files changed, 37 insertions(+), 1 deletion(-)
+
+diff --git a/diff.c b/diff.c
+index 0ce678fc06..998d7ae20c 100644
+--- a/diff.c
++++ b/diff.c
+@@ -3497,18 +3497,21 @@ static void builtin_diff(const char *name_a,
+ 		strbuf_addf(&header, "%s%snew file mode %06o%s\n", line_prefix, meta, two->mode, reset);
+ 		if (xfrm_msg)
+ 			strbuf_addstr(&header, xfrm_msg);
++		o->found_changes = 1;
+ 		must_show_header = 1;
+ 	}
+ 	else if (lbl[1][0] == '/') {
+ 		strbuf_addf(&header, "%s%sdeleted file mode %06o%s\n", line_prefix, meta, one->mode, reset);
+ 		if (xfrm_msg)
+ 			strbuf_addstr(&header, xfrm_msg);
++		o->found_changes = 1;
+ 		must_show_header = 1;
+ 	}
+ 	else {
+ 		if (one->mode != two->mode) {
+ 			strbuf_addf(&header, "%s%sold mode %06o%s\n", line_prefix, meta, one->mode, reset);
+ 			strbuf_addf(&header, "%s%snew mode %06o%s\n", line_prefix, meta, two->mode, reset);
++			o->found_changes = 1;
+ 			must_show_header = 1;
+ 		}
+ 		if (xfrm_msg)
+diff --git a/t/t4015-diff-whitespace.sh b/t/t4015-diff-whitespace.sh
+index f3e20dd5bb..02731dccb9 100755
+--- a/t/t4015-diff-whitespace.sh
++++ b/t/t4015-diff-whitespace.sh
+@@ -1,7 +1,7 @@
+ #!/bin/sh
+ #
+ # Copyright (c) 2006 Johannes E. Schindelin
+-#
++# Copyright (c) 2023 Google LLC
+ 
+ test_description='Test special whitespace in diff engine.
+ 
+@@ -11,6 +11,39 @@ TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-diff.sh
+ 
++for opts in --patch --quiet -s
++do
++
++	test_expect_success "status with $opts (different)" '
++		echo foo >x &&
++		git add x &&
++		echo bar >x &&
++		test_expect_code 1 git diff -w $opts --exit-code x
++	'
++
++	test_expect_success POSIXPERM "status with $opts (mode differs)" '
++		test_when_finished "git update-index --chmod=-x x" &&
++		echo foo >x &&
++		git add x &&
++		git update-index --chmod=+x x &&
++		test_expect_code 1 git diff -w $opts --exit-code x
++	'
++
++	test_expect_success "status with $opts (removing an empty file)" '
++		: >x &&
++		git add x &&
++		rm x &&
++		test_expect_code 1 git diff -w $opts --exit-code -- x
++	'
++
++	test_expect_success "status with $opts (different but equivalent)" '
++		echo foo >x &&
++		git add x &&
++		echo " foo" >x &&
++		git diff -w $opts --exit-code x
++	'
++done
++
+ test_expect_success "Ray Lehtiniemi's example" '
+ 	cat <<-\EOF >x &&
+ 	do {
+-- 
+2.39.3 (Apple Git-145)
+

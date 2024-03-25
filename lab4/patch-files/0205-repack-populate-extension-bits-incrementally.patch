@@ -1,0 +1,81 @@
+From b639606fd0e20584edd2515236fcc69ada24e430 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 21 Oct 2022 20:21:48 -0400
+Subject: [PATCH 0205/2871] repack: populate extension bits incrementally
+
+After generating the main pack and then any additional cruft packs, we
+iterate over the "names" list (which contains hashes of packs generated
+by pack-objects), and call populate_pack_exts() for each.
+
+There's one small problem with this. In repack_promisor_objects(), we
+may add entries to "names" and call populate_pack_exts() for them.
+Calling it again is mostly just wasteful, as we'll stat() the filename
+with each possible extension, get the same result, and just overwrite
+our bits.
+
+So we could drop the call there, and leave the final loop to populate
+all of the bits. But instead, this patch does the reverse: drops the
+final loop, and teaches the other two sites to populate the bits as they
+add entries.
+
+This makes the code easier to reason about, as you never have to worry
+about when the util field is valid; it is always valid for each entry.
+
+It also serves my ulterior purpose: recording the generated filenames as
+soon as possible will make it easier for a future patch to use them for
+cleaning up from a failed operation.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 8e71230bf7..b5bd9e5fed 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -714,10 +714,14 @@ static int write_cruft_pack(const struct pack_objects_args *args,
+ 
+ 	out = xfdopen(cmd.out, "r");
+ 	while (strbuf_getline_lf(&line, out) != EOF) {
++		struct string_list_item *item;
++
+ 		if (line.len != the_hash_algo->hexsz)
+ 			die(_("repack: Expecting full hex object ID lines only "
+ 			      "from pack-objects."));
+-		string_list_append(names, line.buf);
++
++		item = string_list_append(names, line.buf);
++		item->util = populate_pack_exts(line.buf);
+ 	}
+ 	fclose(out);
+ 
+@@ -956,9 +960,12 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 
+ 	out = xfdopen(cmd.out, "r");
+ 	while (strbuf_getline_lf(&line, out) != EOF) {
++		struct string_list_item *item;
++
+ 		if (line.len != the_hash_algo->hexsz)
+ 			die(_("repack: Expecting full hex object ID lines only from pack-objects."));
+-		string_list_append(&names, line.buf);
++		item = string_list_append(&names, line.buf);
++		item->util = populate_pack_exts(item->string);
+ 	}
+ 	fclose(out);
+ 	ret = finish_command(&cmd);
+@@ -997,10 +1004,6 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 
+ 	string_list_sort(&names);
+ 
+-	for_each_string_list_item(item, &names) {
+-		item->util = populate_pack_exts(item->string);
+-	}
+-
+ 	close_object_store(the_repository->objects);
+ 
+ 	/*
+-- 
+2.39.3 (Apple Git-145)
+

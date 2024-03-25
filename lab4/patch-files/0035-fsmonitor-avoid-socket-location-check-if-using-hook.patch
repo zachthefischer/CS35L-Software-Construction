@@ -1,0 +1,112 @@
+From 8f44976882b77bb3b9ac0579a04ef05cbea5bdb2 Mon Sep 17 00:00:00 2001
+From: Eric DeCosta <edecosta@mathworks.com>
+Date: Tue, 4 Oct 2022 17:32:28 +0000
+Subject: [PATCH 0035/2871] fsmonitor: avoid socket location check if using
+ hook
+
+If monitoring is done via fsmonitor hook rather than IPC there is no
+need to check if the location of the Unix Domain socket (UDS) file is
+on a remote filesystem.
+
+Signed-off-by: Eric DeCosta <edecosta@mathworks.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/fsmonitor/fsm-settings-darwin.c | 10 ++++++----
+ compat/fsmonitor/fsm-settings-win32.c  |  2 +-
+ fsmonitor-settings.c                   |  8 ++++----
+ fsmonitor-settings.h                   |  2 +-
+ 4 files changed, 12 insertions(+), 10 deletions(-)
+
+diff --git a/compat/fsmonitor/fsm-settings-darwin.c b/compat/fsmonitor/fsm-settings-darwin.c
+index 7241c4c22c..6abbc7af3a 100644
+--- a/compat/fsmonitor/fsm-settings-darwin.c
++++ b/compat/fsmonitor/fsm-settings-darwin.c
+@@ -48,13 +48,15 @@ static enum fsmonitor_reason check_uds_volume(struct repository *r)
+ 	return FSMONITOR_REASON_OK;
+ }
+ 
+-enum fsmonitor_reason fsm_os__incompatible(struct repository *r)
++enum fsmonitor_reason fsm_os__incompatible(struct repository *r, int ipc)
+ {
+ 	enum fsmonitor_reason reason;
+ 
+-	reason = check_uds_volume(r);
+-	if (reason != FSMONITOR_REASON_OK)
+-		return reason;
++	if (ipc) {
++		reason = check_uds_volume(r);
++		if (reason != FSMONITOR_REASON_OK)
++			return reason;
++	}
+ 
+ 	return FSMONITOR_REASON_OK;
+ }
+diff --git a/compat/fsmonitor/fsm-settings-win32.c b/compat/fsmonitor/fsm-settings-win32.c
+index d88b06ae61..a8af31b71d 100644
+--- a/compat/fsmonitor/fsm-settings-win32.c
++++ b/compat/fsmonitor/fsm-settings-win32.c
+@@ -25,7 +25,7 @@ static enum fsmonitor_reason check_vfs4git(struct repository *r)
+ 	return FSMONITOR_REASON_OK;
+ }
+ 
+-enum fsmonitor_reason fsm_os__incompatible(struct repository *r)
++enum fsmonitor_reason fsm_os__incompatible(struct repository *r, int ipc)
+ {
+ 	enum fsmonitor_reason reason;
+ 
+diff --git a/fsmonitor-settings.c b/fsmonitor-settings.c
+index d288cbad47..531a1b6f95 100644
+--- a/fsmonitor-settings.c
++++ b/fsmonitor-settings.c
+@@ -60,7 +60,7 @@ static enum fsmonitor_reason check_remote(struct repository *r)
+ }
+ #endif
+ 
+-static enum fsmonitor_reason check_for_incompatible(struct repository *r)
++static enum fsmonitor_reason check_for_incompatible(struct repository *r, int ipc)
+ {
+ 	if (!r->worktree) {
+ 		/*
+@@ -77,7 +77,7 @@ static enum fsmonitor_reason check_for_incompatible(struct repository *r)
+ 		reason = check_remote(r);
+ 		if (reason != FSMONITOR_REASON_OK)
+ 			return reason;
+-		reason = fsm_os__incompatible(r);
++		reason = fsm_os__incompatible(r, ipc);
+ 		if (reason != FSMONITOR_REASON_OK)
+ 			return reason;
+ 	}
+@@ -162,7 +162,7 @@ const char *fsm_settings__get_hook_path(struct repository *r)
+ 
+ void fsm_settings__set_ipc(struct repository *r)
+ {
+-	enum fsmonitor_reason reason = check_for_incompatible(r);
++	enum fsmonitor_reason reason = check_for_incompatible(r, 1);
+ 
+ 	if (reason != FSMONITOR_REASON_OK) {
+ 		fsm_settings__set_incompatible(r, reason);
+@@ -185,7 +185,7 @@ void fsm_settings__set_ipc(struct repository *r)
+ 
+ void fsm_settings__set_hook(struct repository *r, const char *path)
+ {
+-	enum fsmonitor_reason reason = check_for_incompatible(r);
++	enum fsmonitor_reason reason = check_for_incompatible(r, 0);
+ 
+ 	if (reason != FSMONITOR_REASON_OK) {
+ 		fsm_settings__set_incompatible(r, reason);
+diff --git a/fsmonitor-settings.h b/fsmonitor-settings.h
+index d9c2605197..0721617b95 100644
+--- a/fsmonitor-settings.h
++++ b/fsmonitor-settings.h
+@@ -48,7 +48,7 @@ struct fsmonitor_settings;
+  * fsm_os__* routines should considered private to fsm_settings__
+  * routines.
+  */
+-enum fsmonitor_reason fsm_os__incompatible(struct repository *r);
++enum fsmonitor_reason fsm_os__incompatible(struct repository *r, int ipc);
+ #endif /* HAVE_FSMONITOR_OS_SETTINGS */
+ 
+ #endif /* FSMONITOR_SETTINGS_H */
+-- 
+2.39.3 (Apple Git-145)
+

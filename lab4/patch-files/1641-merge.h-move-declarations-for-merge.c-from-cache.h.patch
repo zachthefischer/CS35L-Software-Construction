@@ -1,0 +1,111 @@
+From 750324ddb876b54f52578df26278bf99c1e51eb9 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:54 +0000
+Subject: [PATCH 1641/2871] merge.h: move declarations for merge.c from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/merge.c |  1 +
+ builtin/pull.c  |  1 +
+ cache.h         | 11 -----------
+ merge.c         |  1 +
+ merge.h         | 17 +++++++++++++++++
+ sequencer.c     |  1 +
+ 6 files changed, 21 insertions(+), 11 deletions(-)
+ create mode 100644 merge.h
+
+diff --git a/builtin/merge.c b/builtin/merge.c
+index 8da3e46abb..6e8f7b9bb5 100644
+--- a/builtin/merge.c
++++ b/builtin/merge.c
+@@ -37,6 +37,7 @@
+ #include "color.h"
+ #include "rerere.h"
+ #include "help.h"
++#include "merge.h"
+ #include "merge-recursive.h"
+ #include "merge-ort-wrappers.h"
+ #include "resolve-undo.h"
+diff --git a/builtin/pull.c b/builtin/pull.c
+index 0c7bac97b7..eb60c9d52f 100644
+--- a/builtin/pull.c
++++ b/builtin/pull.c
+@@ -12,6 +12,7 @@
+ #include "builtin.h"
+ #include "gettext.h"
+ #include "hex.h"
++#include "merge.h"
+ #include "object-name.h"
+ #include "parse-options.h"
+ #include "exec-cmd.h"
+diff --git a/cache.h b/cache.h
+index 08f6fbd801..5b690b80a1 100644
+--- a/cache.h
++++ b/cache.h
+@@ -527,15 +527,4 @@ int add_files_to_cache(struct repository *repo, const char *prefix,
+ void overlay_tree_on_index(struct index_state *istate,
+ 			   const char *tree_name, const char *prefix);
+ 
+-/* merge.c */
+-struct commit_list;
+-int try_merge_command(struct repository *r,
+-		const char *strategy, size_t xopts_nr,
+-		const char **xopts, struct commit_list *common,
+-		const char *head_arg, struct commit_list *remotes);
+-int checkout_fast_forward(struct repository *r,
+-			  const struct object_id *from,
+-			  const struct object_id *to,
+-			  int overwrite_ignore);
+-
+ #endif /* CACHE_H */
+diff --git a/merge.c b/merge.c
+index 10aaec3a6c..fade6b203b 100644
+--- a/merge.c
++++ b/merge.c
+@@ -4,6 +4,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "lockfile.h"
++#include "merge.h"
+ #include "commit.h"
+ #include "run-command.h"
+ #include "resolve-undo.h"
+diff --git a/merge.h b/merge.h
+new file mode 100644
+index 0000000000..21ac7ef2f1
+--- /dev/null
++++ b/merge.h
+@@ -0,0 +1,17 @@
++#ifndef MERGE_H
++#define MERGE_H
++
++struct commit_list;
++struct object_id;
++struct repository;
++
++int try_merge_command(struct repository *r,
++		const char *strategy, size_t xopts_nr,
++		const char **xopts, struct commit_list *common,
++		const char *head_arg, struct commit_list *remotes);
++int checkout_fast_forward(struct repository *r,
++			  const struct object_id *from,
++			  const struct object_id *to,
++			  int overwrite_ignore);
++
++#endif /* MERGE_H */
+diff --git a/sequencer.c b/sequencer.c
+index d132cd884f..bdcf2cc6d9 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -25,6 +25,7 @@
+ #include "diff.h"
+ #include "revision.h"
+ #include "rerere.h"
++#include "merge.h"
+ #include "merge-ort.h"
+ #include "merge-ort-wrappers.h"
+ #include "refs.h"
+-- 
+2.39.3 (Apple Git-145)
+

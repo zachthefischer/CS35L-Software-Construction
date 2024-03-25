@@ -1,0 +1,46 @@
+From 7790b8c6b5498e85533d2c05f483dffcce079f44 Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Mon, 21 Nov 2022 03:00:19 +0000
+Subject: [PATCH 0511/2871] t1509: fix failing "root work tree" test due to
+ owner-check
+
+When 8959555cee (setup_git_directory(): add an owner check for the
+top-level directory, 2022-03-02) tightened security surrounding
+directory ownership, it neglected to adjust t1509-root-work-tree.sh to
+take the new restriction into account. As a result, since the root
+directory `/` is typically not owned by the user running the test
+(indeed, t1509 refuses to run as `root`), the ownership check added
+by 8959555cee kicks in and causes the test to fail:
+
+    fatal: detected dubious ownership in repository at '/'
+    To add an exception for this directory, call:
+
+        git config --global --add safe.directory /
+
+This problem went unnoticed for so long because t1509 is rarely run
+since it requires setting up a `chroot` environment or a sacrificial
+virtual machine in which `/` can be made writable and polluted by any
+user.
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+---
+ t/t1509-root-work-tree.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/t/t1509-root-work-tree.sh b/t/t1509-root-work-tree.sh
+index 553a3f601b..eb57fe7e19 100755
+--- a/t/t1509-root-work-tree.sh
++++ b/t/t1509-root-work-tree.sh
+@@ -221,7 +221,8 @@ test_expect_success 'setup' '
+ 	rm -rf /.git &&
+ 	echo "Initialized empty Git repository in /.git/" > expected &&
+ 	git init > result &&
+-	test_cmp expected result
++	test_cmp expected result &&
++	git config --global --add safe.directory /
+ '
+ 
+ test_vars 'auto gitdir, root' ".git" "/" ""
+-- 
+2.39.3 (Apple Git-145)
+

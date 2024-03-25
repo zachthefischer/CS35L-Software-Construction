@@ -1,0 +1,97 @@
+From 26b8abc7b14754d32d994f87a45b303873565853 Mon Sep 17 00:00:00 2001
+From: Sean Allred <allred.sean@gmail.com>
+Date: Sat, 26 Nov 2022 14:17:56 +0000
+Subject: [PATCH 0445/2871] var: do not print usage() with a correct invocation
+
+Before, git-var could print usage() even if the command was invoked
+correctly with a variable defined in git_vars -- provided that its
+read() function returned NULL.
+
+Now, we only print usage() only if it was called with a logical
+variable that wasn't defined -- regardless of read().
+
+Since we now know the variable is valid when we call read_var(), we
+can avoid printing usage() here (and exiting with code 129) and
+instead exit quietly with code 1. While exiting with a different code
+can be a breaking change, it's far better than changing the exit
+status more generally from 'failure' to 'success'.
+
+Signed-off-by: Sean Allred <allred.sean@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-var.txt |  3 ++-
+ builtin/var.c             | 22 +++++++++++++---------
+ 2 files changed, 15 insertions(+), 10 deletions(-)
+
+diff --git a/Documentation/git-var.txt b/Documentation/git-var.txt
+index 6aa521fab2..0ab5bfa7d7 100644
+--- a/Documentation/git-var.txt
++++ b/Documentation/git-var.txt
+@@ -13,7 +13,8 @@ SYNOPSIS
+ 
+ DESCRIPTION
+ -----------
+-Prints a Git logical variable.
++Prints a Git logical variable. Exits with code 1 if the variable has
++no value.
+ 
+ OPTIONS
+ -------
+diff --git a/builtin/var.c b/builtin/var.c
+index 491db27429..5cbe32ec89 100644
+--- a/builtin/var.c
++++ b/builtin/var.c
+@@ -56,18 +56,15 @@ static void list_vars(void)
+ 			printf("%s=%s\n", ptr->name, val);
+ }
+ 
+-static const char *read_var(const char *var)
++static const struct git_var *get_git_var(const char *var)
+ {
+ 	struct git_var *ptr;
+-	const char *val;
+-	val = NULL;
+ 	for (ptr = git_vars; ptr->read; ptr++) {
+ 		if (strcmp(var, ptr->name) == 0) {
+-			val = ptr->read(IDENT_STRICT);
+-			break;
++			return ptr;
+ 		}
+ 	}
+-	return val;
++	return NULL;
+ }
+ 
+ static int show_config(const char *var, const char *value, void *cb)
+@@ -81,7 +78,9 @@ static int show_config(const char *var, const char *value, void *cb)
+ 
+ int cmd_var(int argc, const char **argv, const char *prefix)
+ {
+-	const char *val = NULL;
++	const struct git_var *git_var;
++	const char *val;
++
+ 	if (argc != 2)
+ 		usage(var_usage);
+ 
+@@ -91,10 +90,15 @@ int cmd_var(int argc, const char **argv, const char *prefix)
+ 		return 0;
+ 	}
+ 	git_config(git_default_config, NULL);
+-	val = read_var(argv[1]);
+-	if (!val)
++
++	git_var = get_git_var(argv[1]);
++	if (!git_var)
+ 		usage(var_usage);
+ 
++	val = git_var->read(IDENT_STRICT);
++	if (!val)
++		return 1;
++
+ 	printf("%s\n", val);
+ 
+ 	return 0;
+-- 
+2.39.3 (Apple Git-145)
+

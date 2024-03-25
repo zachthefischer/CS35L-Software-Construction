@@ -1,0 +1,50 @@
+From fce9ffb2253660346c826a969c2b49a485e70cbd Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 14 Sep 2023 05:39:58 -0400
+Subject: [PATCH 2116/2871] merge-ort: drop unused parameters from
+ detect_and_process_renames()
+
+This function takes three trees representing the merge base and both
+sides of the merge, but never looks at any of them. This is due to
+f78cf97617 (merge-ort: call diffcore_rename() directly, 2021-02-14).
+Prior to that commit, we passed pairs of trees to diff_tree_oid(). But
+after that commit, we collect a custom diff_queue for each pair in the
+merge_options struct, and just run diffcore_rename() on the result. So
+the function does not need to know about the original trees at all
+anymore.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index 31c663b297..20eefd9b5e 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -3324,10 +3324,7 @@ static int collect_renames(struct merge_options *opt,
+ 	return clean;
+ }
+ 
+-static int detect_and_process_renames(struct merge_options *opt,
+-				      struct tree *merge_base,
+-				      struct tree *side1,
+-				      struct tree *side2)
++static int detect_and_process_renames(struct merge_options *opt)
+ {
+ 	struct diff_queue_struct combined = { 0 };
+ 	struct rename_info *renames = &opt->priv->renames;
+@@ -4964,8 +4961,7 @@ static void merge_ort_nonrecursive_internal(struct merge_options *opt,
+ 	trace2_region_leave("merge", "collect_merge_info", opt->repo);
+ 
+ 	trace2_region_enter("merge", "renames", opt->repo);
+-	result->clean = detect_and_process_renames(opt, merge_base,
+-						   side1, side2);
++	result->clean = detect_and_process_renames(opt);
+ 	trace2_region_leave("merge", "renames", opt->repo);
+ 	if (opt->priv->renames.redo_after_renames == 2) {
+ 		trace2_region_enter("merge", "reset_maps", opt->repo);
+-- 
+2.39.3 (Apple Git-145)
+

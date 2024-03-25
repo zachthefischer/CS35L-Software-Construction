@@ -1,0 +1,46 @@
+From 4137c84198be24b9e34eb2b2e0d4743a55629116 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Fri, 25 Nov 2022 17:59:52 +0800
+Subject: [PATCH 0442/2871] ci: remove the pipe after "p4 -V" to catch errors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When installing p4 as a dependency, we used to pipe output of "p4 -V"
+and "p4d -V" to validate the installation and output a condensed version
+information. But this would hide potential errors of p4 and would stop
+with an empty output. E.g.: p4d version 16.2 running on ubuntu 22.04
+causes sigfaults, even before it produces any output.
+
+By removing the pipe after "p4 -V" and "p4d -V", we may get a
+verbose output, and stop immediately on errors because we have "set
+-e" in "ci/lib.sh". Since we won't look at these trace logs unless
+something fails, just including the raw output seems most sensible.
+
+Reviewed-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Helped-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/install-dependencies.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ci/install-dependencies.sh b/ci/install-dependencies.sh
+index feefd6e9bb..97a1a1f574 100755
+--- a/ci/install-dependencies.sh
++++ b/ci/install-dependencies.sh
+@@ -83,9 +83,9 @@ esac
+ if type p4d >/dev/null 2>&1 && type p4 >/dev/null 2>&1
+ then
+ 	echo "$(tput setaf 6)Perforce Server Version$(tput sgr0)"
+-	p4d -V | grep Rev.
++	p4d -V
+ 	echo "$(tput setaf 6)Perforce Client Version$(tput sgr0)"
+-	p4 -V | grep Rev.
++	p4 -V
+ else
+ 	echo >&2 "WARNING: perforce wasn't installed, see above for clues why"
+ fi
+-- 
+2.39.3 (Apple Git-145)
+

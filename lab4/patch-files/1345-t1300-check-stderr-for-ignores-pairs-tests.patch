@@ -1,0 +1,66 @@
+From 93f86046c94545e36aceef9eef084b60d02f4c59 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sun, 23 Apr 2023 15:46:48 +0200
+Subject: [PATCH 1345/2871] t1300: check stderr for "ignores pairs" tests
+
+Tests "git config ignores pairs ..." in t1300-config.sh validate that
+"git config" ignores various kinds of supplied pairs of environment
+variables GIT_CONFIG_KEY_* GIT_CONFIG_VALUE_* depending on
+GIT_CONFIG_COUNT.  By "ignores" here we mean that "git config" abides by
+the value of environment variable GIT_CONFIG_COUNT and doesn't use
+key-value pairs outside of the supplied GIT_CONFIG_COUNT when trying to
+produce a value for config key "pair.one".
+
+These tests also validate that "git config" doesn't complain about
+mismatched environment variables to standard error.  This is validated
+by redirecting the standard error to a file called "error" and asserting
+that it is empty.  However, two of these tests incorrectly redirect to
+standard output while calling the file "error", and test 'git config
+ignores pairs exceeding count' doesn't validate standard error at all.
+
+Fix these tests by redirecting standard error to file "error" and
+asserting its emptiness.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1300-config.sh | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/t/t1300-config.sh b/t/t1300-config.sh
+index 696dca17c6..20a15ede5c 100755
+--- a/t/t1300-config.sh
++++ b/t/t1300-config.sh
+@@ -1462,24 +1462,25 @@ test_expect_success 'git config ignores pairs exceeding count' '
+ 	GIT_CONFIG_COUNT=1 \
+ 		GIT_CONFIG_KEY_0="pair.one" GIT_CONFIG_VALUE_0="value" \
+ 		GIT_CONFIG_KEY_1="pair.two" GIT_CONFIG_VALUE_1="value" \
+-		git config --get-regexp "pair.*" >actual &&
++		git config --get-regexp "pair.*" >actual 2>error &&
+ 	cat >expect <<-EOF &&
+ 	pair.one value
+ 	EOF
+-	test_cmp expect actual
++	test_cmp expect actual &&
++	test_must_be_empty error
+ '
+ 
+ test_expect_success 'git config ignores pairs with zero count' '
+ 	test_must_fail env \
+ 		GIT_CONFIG_COUNT=0 GIT_CONFIG_KEY_0="pair.one" GIT_CONFIG_VALUE_0="value" \
+-		git config pair.one >error &&
++		git config pair.one 2>error &&
+ 	test_must_be_empty error
+ '
+ 
+ test_expect_success 'git config ignores pairs with empty count' '
+ 	test_must_fail env \
+ 		GIT_CONFIG_COUNT= GIT_CONFIG_KEY_0="pair.one" GIT_CONFIG_VALUE_0="value" \
+-		git config pair.one >error &&
++		git config pair.one 2>error &&
+ 	test_must_be_empty error
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

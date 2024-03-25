@@ -1,0 +1,61 @@
+From d1dfe6e936777c2f64d19fe516cff83e1ef9dca6 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Tue, 14 Nov 2023 19:53:56 +0000
+Subject: [PATCH 2425/2871] for-each-ref: clean up documentation of --format
+
+Move the description of the `*` prefix from the --format option
+documentation to the part of the command documentation that deals with other
+object type-specific modifiers. Also reorganize and reword the remaining
+--format documentation so that the explanation of the default format doesn't
+interrupt the details on format string interpolation.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-for-each-ref.txt | 23 ++++++++++++-----------
+ 1 file changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/Documentation/git-for-each-ref.txt b/Documentation/git-for-each-ref.txt
+index 11b2bc3121..f64fa8b406 100644
+--- a/Documentation/git-for-each-ref.txt
++++ b/Documentation/git-for-each-ref.txt
+@@ -51,17 +51,14 @@ OPTIONS
+ 	key.
+ 
+ --format=<format>::
+-	A string that interpolates `%(fieldname)` from a ref being shown
+-	and the object it points at.  If `fieldname`
+-	is prefixed with an asterisk (`*`) and the ref points
+-	at a tag object, use the value for the field in the object
+-	which the tag object refers to (instead of the field in the tag object).
+-	When unspecified, `<format>` defaults to
+-	`%(objectname) SPC %(objecttype) TAB %(refname)`.
+-	It also interpolates `%%` to `%`, and `%xx` where `xx`
+-	are hex digits interpolates to character with hex code
+-	`xx`; for example `%00` interpolates to `\0` (NUL),
+-	`%09` to `\t` (TAB) and `%0a` to `\n` (LF).
++	A string that interpolates `%(fieldname)` from a ref being shown and
++	the object it points at. In addition, the string literal `%%`
++	renders as `%` and `%xx` - where `xx` are hex digits - renders as
++	the character with hex code `xx`. For example, `%00` interpolates to
++	`\0` (NUL), `%09` to `\t` (TAB), and `%0a` to `\n` (LF).
+++
++When unspecified, `<format>` defaults to `%(objectname) SPC %(objecttype)
++TAB %(refname)`.
+ 
+ --color[=<when>]::
+ 	Respect any colors specified in the `--format` option. The
+@@ -298,6 +295,10 @@ fields will correspond to the appropriate date or name-email-date tuple
+ from the `committer` or `tagger` fields depending on the object type.
+ These are intended for working on a mix of annotated and lightweight tags.
+ 
++For tag objects, a `fieldname` prefixed with an asterisk (`*`) expands to
++the `fieldname` value of object the tag points at, rather than that of the
++tag object itself.
++
+ Fields that have name-email-date tuple as its value (`author`,
+ `committer`, and `tagger`) can be suffixed with `name`, `email`,
+ and `date` to extract the named component.  For email fields (`authoremail`,
+-- 
+2.39.3 (Apple Git-145)
+

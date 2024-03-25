@@ -1,0 +1,117 @@
+From 301f1e3ac1531dc3a15064a06b24fa98f02a3b78 Mon Sep 17 00:00:00 2001
+From: Jonathan Tan <jonathantanmy@google.com>
+Date: Tue, 4 Oct 2022 14:13:41 -0700
+Subject: [PATCH 0040/2871] promisor-remote: die upon failing fetch
+
+In a partial clone, an attempt to read a missing object results in an
+attempt to fetch that single object. In order to avoid multiple
+sequential fetches, which would occur when multiple objects are missing
+(which is the typical case), some commands have been taught to prefetch
+in a batch: such a command would, in a partial clone, notice that
+several objects that it will eventually need are missing, and call
+promisor_remote_get_direct() with all such objects at once.
+
+When this batch prefetch fails, these commands fall back to the
+sequential fetches. But at $DAYJOB we have noticed that this results in
+a bad user experience: a command would take unexpectedly long to finish
+(and possibly use up a lot of bandwidth) if the batch prefetch would
+fail for some intermittent reason, but all subsequent fetches would
+work. It would be a better user experience for such a command would
+just fail.
+
+Therefore, make it a fatal error if the prefetch fails and at least one
+object being fetched is known to be a promisor object. (The latter
+criterion is to make sure that we are not misleading the user that such
+an object would be present from the promisor remote. For example, a
+missing object may be a result of repository corruption and not because
+it is expectedly missing due to the repository being a partial clone.)
+
+Signed-off-by: Jonathan Tan <jonathantanmy@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-file.c            |  4 ----
+ promisor-remote.c        | 11 ++++++++++-
+ t/t0410-partial-clone.sh | 14 ++++++++++++++
+ 3 files changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/object-file.c b/object-file.c
+index 6c8e3b1660..a5e0160d28 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -1599,10 +1599,6 @@ static int do_oid_object_info_extended(struct repository *r,
+ 		if (fetch_if_missing && repo_has_promisor_remote(r) &&
+ 		    !already_retried &&
+ 		    !(flags & OBJECT_INFO_SKIP_FETCH_OBJECT)) {
+-			/*
+-			 * TODO Investigate checking promisor_remote_get_direct()
+-			 * TODO return value and stopping on error here.
+-			 */
+ 			promisor_remote_get_direct(r, real, 1);
+ 			already_retried = 1;
+ 			continue;
+diff --git a/promisor-remote.c b/promisor-remote.c
+index 8b4d650b4c..faa7612941 100644
+--- a/promisor-remote.c
++++ b/promisor-remote.c
+@@ -4,6 +4,7 @@
+ #include "config.h"
+ #include "transport.h"
+ #include "strvec.h"
++#include "packfile.h"
+ 
+ struct promisor_remote_config {
+ 	struct promisor_remote *promisors;
+@@ -238,6 +239,7 @@ void promisor_remote_get_direct(struct repository *repo,
+ 	struct object_id *remaining_oids = (struct object_id *)oids;
+ 	int remaining_nr = oid_nr;
+ 	int to_free = 0;
++	int i;
+ 
+ 	if (oid_nr == 0)
+ 		return;
+@@ -255,9 +257,16 @@ void promisor_remote_get_direct(struct repository *repo,
+ 				continue;
+ 			}
+ 		}
+-		break;
++		goto all_fetched;
++	}
++
++	for (i = 0; i < remaining_nr; i++) {
++		if (is_promisor_object(&remaining_oids[i]))
++			die(_("could not fetch %s from promisor remote"),
++			    oid_to_hex(&remaining_oids[i]));
+ 	}
+ 
++all_fetched:
+ 	if (to_free)
+ 		free(remaining_oids);
+ }
+diff --git a/t/t0410-partial-clone.sh b/t/t0410-partial-clone.sh
+index 1e864cf317..5b7bee888d 100755
+--- a/t/t0410-partial-clone.sh
++++ b/t/t0410-partial-clone.sh
+@@ -215,6 +215,20 @@ test_expect_success 'fetching of missing objects' '
+ 	grep "$HASH" out
+ '
+ 
++test_expect_success 'fetching of a promised object that promisor remote no longer has' '
++	rm -f err &&
++	test_create_repo unreliable-server &&
++	git -C unreliable-server config uploadpack.allowanysha1inwant 1 &&
++	git -C unreliable-server config uploadpack.allowfilter 1 &&
++	test_commit -C unreliable-server foo &&
++
++	git clone --filter=blob:none --no-checkout "file://$(pwd)/unreliable-server" unreliable-client &&
++
++	rm -rf unreliable-server/.git/objects/* &&
++	test_must_fail git -C unreliable-client checkout HEAD 2>err &&
++	grep "could not fetch.*from promisor remote" err
++'
++
+ test_expect_success 'fetching of missing objects works with ref-in-want enabled' '
+ 	# ref-in-want requires protocol version 2
+ 	git -C server config protocol.version 2 &&
+-- 
+2.39.3 (Apple Git-145)
+

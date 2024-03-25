@@ -1,0 +1,39 @@
+From f0b9e1537832e22b17741fb2fc5bfa28fafd6dc9 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:25 +0000
+Subject: [PATCH 1663/2871] completion: add comments describing __git_diff_*
+ globals
+
+Add descriptive comments for '__git_diff_common_options' and
+'__git_diff_difftool_options', so that it is clearer when looking at
+these variables to know in which command's completion they are used.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index dc95c34cc8..90fe292459 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1733,6 +1733,7 @@ __git_color_moved_opts="no default plain blocks zebra dimmed-zebra"
+ __git_color_moved_ws_opts="no ignore-space-at-eol ignore-space-change
+ 			ignore-all-space allow-indentation-change"
+ 
++# Options for the diff machinery (diff, log, show, stash, range-diff, ...)
+ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--patch-with-stat --name-only --name-status --color
+ 			--no-color --color-words --no-renames --check
+@@ -1757,6 +1758,7 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--anchored=
+ "
+ 
++# Options for diff/difftool
+ __git_diff_difftool_options="--cached --staged --pickaxe-all --pickaxe-regex
+ 			--base --ours --theirs --no-index --relative --merge-base
+ 			$__git_diff_common_options"
+-- 
+2.39.3 (Apple Git-145)
+

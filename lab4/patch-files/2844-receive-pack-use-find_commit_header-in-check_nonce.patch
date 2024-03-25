@@ -1,0 +1,100 @@
+From 020456cb744b16f686d9220eb4b95a8e157c3485 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 9 Feb 2024 21:41:47 +0100
+Subject: [PATCH 2844/2871] receive-pack: use find_commit_header() in
+ check_nonce()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use the public function find_commit_header() and remove find_header(),
+as it becomes unused.  This is safe and appropriate because we pass the
+NUL-terminated payload buffer to check_nonce() instead of its start and
+length.  The underlying strbuf push_cert cannot contain NULs, as it is
+built using strbuf_addstr(), only.
+
+We no longer need to call strlen(), as find_commit_header() returns the
+length of nonce already.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c | 30 +++++++-----------------------
+ 1 file changed, 7 insertions(+), 23 deletions(-)
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index 8ebb3a872f..db65607485 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -593,21 +593,6 @@ static char *prepare_push_cert_nonce(const char *path, timestamp_t stamp)
+ 	return strbuf_detach(&buf, NULL);
+ }
+ 
+-static char *find_header(const char *msg, size_t len, const char *key,
+-			 const char **next_line)
+-{
+-	size_t out_len;
+-	const char *val = find_header_mem(msg, len, key, &out_len);
+-
+-	if (!val)
+-		return NULL;
+-
+-	if (next_line)
+-		*next_line = val + out_len + 1;
+-
+-	return xmemdupz(val, out_len);
+-}
+-
+ /*
+  * Return zero if a and b are equal up to n bytes and nonzero if they are not.
+  * This operation is guaranteed to run in constant time to avoid leaking data.
+@@ -622,13 +607,14 @@ static int constant_memequal(const char *a, const char *b, size_t n)
+ 	return res;
+ }
+ 
+-static const char *check_nonce(const char *buf, size_t len)
++static const char *check_nonce(const char *buf)
+ {
+-	char *nonce = find_header(buf, len, "nonce", NULL);
++	size_t noncelen;
++	const char *found = find_commit_header(buf, "nonce", &noncelen);
++	char *nonce = found ? xmemdupz(found, noncelen) : NULL;
+ 	timestamp_t stamp, ostamp;
+ 	char *bohmac, *expect = NULL;
+ 	const char *retval = NONCE_BAD;
+-	size_t noncelen;
+ 
+ 	if (!nonce) {
+ 		retval = NONCE_MISSING;
+@@ -670,7 +656,6 @@ static const char *check_nonce(const char *buf, size_t len)
+ 		goto leave;
+ 	}
+ 
+-	noncelen = strlen(nonce);
+ 	expect = prepare_push_cert_nonce(service_dir, stamp);
+ 	if (noncelen != strlen(expect)) {
+ 		/* This is not even the right size. */
+@@ -732,9 +717,8 @@ static int check_cert_push_options(const struct string_list *push_options)
+ 		buf = option + optionlen + 1;
+ 		options_seen++;
+ 		if (options_seen > push_options->nr
+-		    || strncmp(push_options->items[options_seen - 1].string,
+-			       option, optionlen)
+-		    || push_options->items[options_seen - 1].string[optionlen])
++		    || xstrncmpz(push_options->items[options_seen - 1].string,
++				 option, optionlen))
+ 			return 0;
+ 	}
+ 
+@@ -767,7 +751,7 @@ static void prepare_push_cert_sha1(struct child_process *proc)
+ 		check_signature(&sigcheck, push_cert.buf + bogs,
+ 				push_cert.len - bogs);
+ 
+-		nonce_status = check_nonce(push_cert.buf, bogs);
++		nonce_status = check_nonce(sigcheck.payload);
+ 	}
+ 	if (!is_null_oid(&push_cert_oid)) {
+ 		strvec_pushf(&proc->env, "GIT_PUSH_CERT=%s",
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,195 @@
+From f2b5f41eda52416d29fade2f823d3b5bd7aa2205 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 6 Sep 2023 15:22:48 +0000
+Subject: [PATCH 2070/2871] sequencer: factor out part of pick_commits()
+
+This simplifies the next commit. If a pick fails we now return the error
+at the end of the loop body rather than returning early, a successful
+"edit" command continues to return early. There are three things to
+check to ensure that removing the early return for an error does not
+change the behavior of the code:
+
+(1) We could enter the block guarded by "if (reschedule)". This block
+    is not entered because "reschedlue" is always zero when picking a
+    commit.
+
+(2) We could enter the block guarded by
+    "else if (is_rebase_i(opts) &&  check_todo && !res)". This block is
+    not entered when returning an error because "res" is non-zero in
+    that case.
+
+(3) todo_list->current could be incremented before returning. That is
+    avoided by moving the increment which is of course a potential
+    change in behavior itself. The move is safe because none of the
+    callers look at todo_list after this function returns. Moving the
+    increment makes it clear we only want to advance the current item
+    if the command was successful.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c | 132 ++++++++++++++++++++++++++++------------------------
+ 1 file changed, 71 insertions(+), 61 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index cf45597d4f..5b598413e3 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -4628,6 +4628,72 @@ N_("Could not execute the todo command\n"
+ "    git rebase --edit-todo\n"
+ "    git rebase --continue\n");
+ 
++static int pick_one_commit(struct repository *r,
++			   struct todo_list *todo_list,
++			   struct replay_opts *opts,
++			   int *check_todo)
++{
++	int res;
++	struct todo_item *item = todo_list->items + todo_list->current;
++	const char *arg = todo_item_get_arg(todo_list, item);
++	if (is_rebase_i(opts))
++		opts->reflog_message = reflog_message(
++			opts, command_to_string(item->command), NULL);
++
++	res = do_pick_commit(r, item, opts, is_final_fixup(todo_list),
++			     check_todo);
++	if (is_rebase_i(opts) && res < 0) {
++		/* Reschedule */
++		advise(_(rescheduled_advice),
++		       get_item_line_length(todo_list, todo_list->current),
++		       get_item_line(todo_list, todo_list->current));
++		todo_list->current--;
++		if (save_todo(todo_list, opts))
++			return -1;
++	}
++	if (item->command == TODO_EDIT) {
++		struct commit *commit = item->commit;
++		if (!res) {
++			if (!opts->verbose)
++				term_clear_line();
++			fprintf(stderr, _("Stopped at %s...  %.*s\n"),
++				short_commit_name(commit), item->arg_len, arg);
++		}
++		return error_with_patch(r, commit,
++					arg, item->arg_len, opts, res, !res);
++	}
++	if (is_rebase_i(opts) && !res)
++		record_in_rewritten(&item->commit->object.oid,
++				    peek_command(todo_list, 1));
++	if (res && is_fixup(item->command)) {
++		if (res == 1)
++			intend_to_amend();
++		return error_failed_squash(r, item->commit, opts,
++					   item->arg_len, arg);
++	} else if (res && is_rebase_i(opts) && item->commit) {
++		int to_amend = 0;
++		struct object_id oid;
++
++		/*
++		 * If we are rewording and have either
++		 * fast-forwarded already, or are about to
++		 * create a new root commit, we want to amend,
++		 * otherwise we do not.
++		 */
++		if (item->command == TODO_REWORD &&
++		    !repo_get_oid(r, "HEAD", &oid) &&
++		    (oideq(&item->commit->object.oid, &oid) ||
++		     (opts->have_squash_onto &&
++		      oideq(&opts->squash_onto, &oid))))
++			to_amend = 1;
++
++		return res | error_with_patch(r, item->commit,
++					      arg, item->arg_len, opts,
++					      res, to_amend);
++	}
++	return res;
++}
++
+ static int pick_commits(struct repository *r,
+ 			struct todo_list *todo_list,
+ 			struct replay_opts *opts)
+@@ -4683,66 +4749,9 @@ static int pick_commits(struct repository *r,
+ 			}
+ 		}
+ 		if (item->command <= TODO_SQUASH) {
+-			if (is_rebase_i(opts))
+-				opts->reflog_message = reflog_message(opts,
+-				      command_to_string(item->command), NULL);
+-
+-			res = do_pick_commit(r, item, opts,
+-					     is_final_fixup(todo_list),
+-					     &check_todo);
+-			if (is_rebase_i(opts) && res < 0) {
+-				/* Reschedule */
+-				advise(_(rescheduled_advice),
+-				       get_item_line_length(todo_list,
+-							    todo_list->current),
+-				       get_item_line(todo_list,
+-						     todo_list->current));
+-				todo_list->current--;
+-				if (save_todo(todo_list, opts))
+-					return -1;
+-			}
+-			if (item->command == TODO_EDIT) {
+-				struct commit *commit = item->commit;
+-				if (!res) {
+-					if (!opts->verbose)
+-						term_clear_line();
+-					fprintf(stderr,
+-						_("Stopped at %s...  %.*s\n"),
+-						short_commit_name(commit),
+-						item->arg_len, arg);
+-				}
+-				return error_with_patch(r, commit,
+-					arg, item->arg_len, opts, res, !res);
+-			}
+-			if (is_rebase_i(opts) && !res)
+-				record_in_rewritten(&item->commit->object.oid,
+-					peek_command(todo_list, 1));
+-			if (res && is_fixup(item->command)) {
+-				if (res == 1)
+-					intend_to_amend();
+-				return error_failed_squash(r, item->commit, opts,
+-					item->arg_len, arg);
+-			} else if (res && is_rebase_i(opts) && item->commit) {
+-				int to_amend = 0;
+-				struct object_id oid;
+-
+-				/*
+-				 * If we are rewording and have either
+-				 * fast-forwarded already, or are about to
+-				 * create a new root commit, we want to amend,
+-				 * otherwise we do not.
+-				 */
+-				if (item->command == TODO_REWORD &&
+-				    !repo_get_oid(r, "HEAD", &oid) &&
+-				    (oideq(&item->commit->object.oid, &oid) ||
+-				     (opts->have_squash_onto &&
+-				      oideq(&opts->squash_onto, &oid))))
+-					to_amend = 1;
+-
+-				return res | error_with_patch(r, item->commit,
+-						arg, item->arg_len, opts,
+-						res, to_amend);
+-			}
++			res = pick_one_commit(r, todo_list, opts, &check_todo);
++			if (!res && item->command == TODO_EDIT)
++				return 0;
+ 		} else if (item->command == TODO_EXEC) {
+ 			char *end_of_arg = (char *)(arg + item->arg_len);
+ 			int saved = *end_of_arg;
+@@ -4803,9 +4812,10 @@ static int pick_commits(struct repository *r,
+ 			return -1;
+ 		}
+ 
+-		todo_list->current++;
+ 		if (res)
+ 			return res;
++
++		todo_list->current++;
+ 	}
+ 
+ 	if (is_rebase_i(opts)) {
+-- 
+2.39.3 (Apple Git-145)
+

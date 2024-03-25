@@ -1,0 +1,50 @@
+From 9deef088aec321e72955d6ededc9c9f62f083851 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 15 Feb 2023 16:42:25 -0800
+Subject: [PATCH 0871/2871] rev-list: clarify git-log default date format
+
+The documentation mistakenly said that the default format was
+similar to RFC 2822 format and tried to specify it by enumerating
+differences, which had two problems:
+
+ * There are some more differences from the 2822 format that are not
+   mentioned; worse yet
+
+ * The default format is not modeled after RFC 2822 format at all.
+   As can be seen in f80cd783 (date.c: add "show_date()" function.,
+   2005-05-06), it is a derivative of ctime(3) format.
+
+Stop saying that it is similar to RFC 2822, and rewrite the
+description to explain the format without requiring the reader to
+know any other format.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/rev-list-options.txt | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/rev-list-options.txt b/Documentation/rev-list-options.txt
+index ff68e48406..0d90d5b154 100644
+--- a/Documentation/rev-list-options.txt
++++ b/Documentation/rev-list-options.txt
+@@ -1100,12 +1100,12 @@ preferred format.  See the `strftime` manual for a complete list of
+ format placeholders. When using `-local`, the correct syntax is
+ `--date=format-local:...`.
+ 
+-`--date=default` is the default format, and is similar to
+-`--date=rfc2822`, with a few exceptions:
++`--date=default` is the default format, and is based on ctime(3)
++output.  It shows a single line with three-letter day of the week,
++three-letter month, day-of-month, hour-minute-seconds in "HH:MM:SS"
++format, followed by 4-digit year, plus timezone information, unless
++the local time zone is used, e.g. `Thu Jan 1 00:00:00 1970 +0000`.
+ --
+-	- there is no comma after the day-of-week
+-
+-	- the time zone is omitted when the local time zone is used
+ 
+ ifdef::git-rev-list[]
+ --header::
+-- 
+2.39.3 (Apple Git-145)
+

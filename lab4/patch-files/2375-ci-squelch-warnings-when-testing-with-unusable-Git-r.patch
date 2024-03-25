@@ -1,0 +1,86 @@
+From dd02c3b68c67f8e9a5daca3b52a562318738fa47 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 9 Nov 2023 09:05:46 +0100
+Subject: [PATCH 2375/2871] ci: squelch warnings when testing with unusable Git
+ repo
+
+Our CI jobs that run on Docker also use mostly the same architecture to
+build and test Git via the "ci/run-build-and-tests.sh" script. These
+scripts also provide some functionality to massage the Git repository
+we're supposedly operating in.
+
+In our Docker-based infrastructure we may not even have a Git repository
+available though, which leads to warnings when those functions execute.
+Make the helpers exit gracefully in case either there is no Git in our
+PATH, or when not running in a Git repository.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 33be93852f..eab0e24080 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -69,10 +69,32 @@ skip_branch_tip_with_tag () {
+ 	fi
+ }
+ 
++# Check whether we can use the path passed via the first argument as Git
++# repository.
++is_usable_git_repository () {
++	# We require Git in our PATH, otherwise we cannot access repositories
++	# at all.
++	if ! command -v git >/dev/null
++	then
++		return 1
++	fi
++
++	# And the target directory needs to be a proper Git repository.
++	if ! git -C "$1" rev-parse 2>/dev/null
++	then
++		return 1
++	fi
++}
++
+ # Save some info about the current commit's tree, so we can skip the build
+ # job if we encounter the same tree again and can provide a useful info
+ # message.
+ save_good_tree () {
++	if ! is_usable_git_repository .
++	then
++		return
++	fi
++
+ 	echo "$(git rev-parse $CI_COMMIT^{tree}) $CI_COMMIT $CI_JOB_NUMBER $CI_JOB_ID" >>"$good_trees_file"
+ 	# limit the file size
+ 	tail -1000 "$good_trees_file" >"$good_trees_file".tmp
+@@ -88,6 +110,11 @@ skip_good_tree () {
+ 		return
+ 	fi
+ 
++	if ! is_usable_git_repository .
++	then
++		return
++	fi
++
+ 	if ! good_tree_info="$(grep "^$(git rev-parse $CI_COMMIT^{tree}) " "$good_trees_file")"
+ 	then
+ 		# Haven't seen this tree yet, or no cached good trees file yet.
+@@ -119,6 +146,11 @@ skip_good_tree () {
+ }
+ 
+ check_unignored_build_artifacts () {
++	if ! is_usable_git_repository .
++	then
++		return
++	fi
++
+ 	! git ls-files --other --exclude-standard --error-unmatch \
+ 		-- ':/*' 2>/dev/null ||
+ 	{
+-- 
+2.39.3 (Apple Git-145)
+

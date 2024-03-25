@@ -1,0 +1,39 @@
+From 3d27ae0712d9b1b70464159b448be1d96ac537e8 Mon Sep 17 00:00:00 2001
+From: Teng Long <dyroneteng@gmail.com>
+Date: Sat, 27 May 2023 15:57:49 +0800
+Subject: [PATCH 1622/2871] notes.c: use designated initializers for clarity
+
+The "struct note_data d = { 0, 0, NULL, STRBUF_INIT };" style could be
+replaced with designated initializer for clarity.
+
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/notes.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/notes.c b/builtin/notes.c
+index c501c6eebb..9d8ca79582 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -405,7 +405,7 @@ static int add(int argc, const char **argv, const char *prefix)
+ 	struct notes_tree *t;
+ 	struct object_id object, new_note;
+ 	const struct object_id *note;
+-	struct note_data d = { 0, 0, NULL, STRBUF_INIT };
++	struct note_data d = { .buf = STRBUF_INIT };
+ 	struct option options[] = {
+ 		OPT_CALLBACK_F('m', "message", &d, N_("message"),
+ 			N_("note contents as a string"), PARSE_OPT_NONEG,
+@@ -571,7 +571,7 @@ static int append_edit(int argc, const char **argv, const char *prefix)
+ 	const struct object_id *note;
+ 	char *logmsg;
+ 	const char * const *usage;
+-	struct note_data d = { 0, 0, NULL, STRBUF_INIT };
++	struct note_data d = { .buf = STRBUF_INIT };
+ 	struct option options[] = {
+ 		OPT_CALLBACK_F('m', "message", &d, N_("message"),
+ 			N_("note contents as a string"), PARSE_OPT_NONEG,
+-- 
+2.39.3 (Apple Git-145)
+

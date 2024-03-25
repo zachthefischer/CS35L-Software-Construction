@@ -1,0 +1,57 @@
+From a9b5955e07793ceadaad05315c1599226d01292f Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Thu, 24 Aug 2023 17:00:46 +0200
+Subject: [PATCH 1990/2871] sequencer: rectify empty hint in call of
+ require_clean_work_tree()
+
+The canonical way to represent "no error hint" is making it NULL, which
+shortcuts the error() call altogether. This fixes the output by removing
+the line which said just "error:", which would appear when the worktree
+is dirtied while editing the initial rebase todo file. This was
+introduced by 97e1873 (rebase -i: rewrite complete_action() in C,
+2018-08-28), which did a somewhat inaccurate conversion from shell.
+
+To avoid that such bugs re-appear, test for the condition in
+require_clean_work_tree().
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c | 2 +-
+ wt-status.c | 6 +++++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index bceb6abcb6..c01fb7bf5c 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -6172,7 +6172,7 @@ int complete_action(struct repository *r, struct replay_opts *opts, unsigned fla
+ 	if (checkout_onto(r, opts, onto_name, &oid, orig_head))
+ 		goto cleanup;
+ 
+-	if (require_clean_work_tree(r, "rebase", "", 1, 1))
++	if (require_clean_work_tree(r, "rebase", NULL, 1, 1))
+ 		goto cleanup;
+ 
+ 	todo_list_write_total_nr(&new_todo);
+diff --git a/wt-status.c b/wt-status.c
+index 068b76ef6d..d48ee467a1 100644
+--- a/wt-status.c
++++ b/wt-status.c
+@@ -2651,8 +2651,12 @@ int require_clean_work_tree(struct repository *r,
+ 	}
+ 
+ 	if (err) {
+-		if (hint)
++		if (hint) {
++			if (!*hint)
++				BUG("empty hint passed to require_clean_work_tree();"
++				    " use NULL instead");
+ 			error("%s", hint);
++		}
+ 		if (!gently)
+ 			exit(128);
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

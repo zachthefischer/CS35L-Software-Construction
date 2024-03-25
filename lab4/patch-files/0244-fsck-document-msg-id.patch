@@ -1,0 +1,248 @@
+From f6534dbda474ce9c4ce06c1f3212745724dd1724 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Tue, 25 Oct 2022 15:42:23 -0700
+Subject: [PATCH 0244/2871] fsck: document msg-id
+
+The documentation lacks mention of specific <msg-id> that are supported.
+While git-help --config will display a list of these options, often
+developers' first instinct is to consult the git docs to find valid
+config values.
+
+Add a list of fsck error messages, and link to it from the git-fsck
+documentation.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/fsck.txt |   4 +
+ Documentation/fsck-msgids.txt | 161 ++++++++++++++++++++++++++++++++++
+ Documentation/git-fsck.txt    |  12 +++
+ fsck.h                        |   6 ++
+ 4 files changed, 183 insertions(+)
+ create mode 100644 Documentation/fsck-msgids.txt
+
+diff --git a/Documentation/config/fsck.txt b/Documentation/config/fsck.txt
+index 450e8c38e3..a3c865df56 100644
+--- a/Documentation/config/fsck.txt
++++ b/Documentation/config/fsck.txt
+@@ -35,6 +35,10 @@ allow new instances of the same breakages go unnoticed.
+ Setting an unknown `fsck.<msg-id>` value will cause fsck to die, but
+ doing the same for `receive.fsck.<msg-id>` and `fetch.fsck.<msg-id>`
+ will only cause git to warn.
+++
++See `Fsck Messages` section of linkgit:git-fsck[1] for supported
++values of `<msg-id>`.
++
+ 
+ fsck.skipList::
+ 	The path to a list of object names (i.e. one unabbreviated SHA-1 per
+diff --git a/Documentation/fsck-msgids.txt b/Documentation/fsck-msgids.txt
+new file mode 100644
+index 0000000000..7af76ff99a
+--- /dev/null
++++ b/Documentation/fsck-msgids.txt
+@@ -0,0 +1,161 @@
++`badDate`::
++	(ERROR) Invalid date format in an author/committer line.
++
++`badDateOverflow`::
++	(ERROR) Invalid date value in an author/committer line.
++
++`badEmail`::
++	(ERROR) Invalid email format in an author/committer line.
++
++`badFilemode`::
++	(INFO) A tree contains a bad filemode entry.
++
++`badName`::
++	(ERROR) An author/committer name is empty.
++
++`badObjectSha1`::
++	(ERROR) An object has a bad sha1.
++
++`badParentSha1`::
++	(ERROR) A commit object has a bad parent sha1.
++
++`badTagName`::
++	(INFO) A tag has an invalid format.
++
++`badTimezone`::
++	(ERROR) Found an invalid time zone in an author/committer line.
++
++`badTree`::
++	(ERROR) A tree cannot be parsed.
++
++`badTreeSha1`::
++	(ERROR) A tree has an invalid format.
++
++`badType`::
++	(ERROR) Found an invalid object type.
++
++`duplicateEntries`::
++	(ERROR) A tree contains duplicate file entries.
++
++`emptyName`::
++	(WARN) A path contains an empty name.
++
++`extraHeaderEntry`::
++	(IGNORE) Extra headers found after `tagger`.
++
++`fullPathname`::
++	(WARN) A path contains the full path starting with "/".
++
++`gitattributesSymlink`::
++	(INFO) `.gitattributes` is a symlink.
++
++`gitignoreSymlink`::
++	(INFO) `.gitignore` is a symlink.
++
++`gitmodulesBlob`::
++	(ERROR) A non-blob found at `.gitmodules`.
++
++`gitmodulesLarge`::
++	(ERROR) The `.gitmodules` file is too large to parse.
++
++`gitmodulesMissing`::
++	(ERROR) Unable to read `.gitmodules` blob.
++
++`gitmodulesName`::
++	(ERROR) A submodule name is invalid.
++
++`gitmodulesParse`::
++	(INFO) Could not parse `.gitmodules` blob.
++
++`gitmodulesLarge`;
++	(ERROR) `.gitmodules` blob is too large to parse.
++
++`gitmodulesPath`::
++	(ERROR) `.gitmodules` path is invalid.
++
++`gitmodulesSymlink`::
++	(ERROR) `.gitmodules` is a symlink.
++
++`gitmodulesUpdate`::
++	(ERROR) Found an invalid submodule update setting.
++
++`gitmodulesUrl`::
++	(ERROR) Found an invalid submodule url.
++
++`hasDot`::
++	(WARN) A tree contains an entry named `.`.
++
++`hasDotdot`::
++	(WARN) A tree contains an entry named `..`.
++
++`hasDotgit`::
++	(WARN) A tree contains an entry named `.git`.
++
++`mailmapSymlink`::
++	(INFO) `.mailmap` is a symlink.
++
++`missingAuthor`::
++	(ERROR) Author is missing.
++
++`missingCommitter`::
++	(ERROR) Committer is missing.
++
++`missingEmail`::
++	(ERROR) Email is missing in an author/committer line.
++
++`missingNameBeforeEmail`::
++	(ERROR) Missing name before an email in an author/committer line.
++
++`missingObject`::
++	(ERROR) Missing `object` line in tag object.
++
++`missingSpaceBeforeDate`::
++	(ERROR) Missing space before date in an author/committer line.
++
++`missingSpaceBeforeEmail`::
++	(ERROR) Missing space before the email in author/committer line.
++
++`missingTag`::
++	(ERROR) Unexpected end after `type` line in a tag object.
++
++`missingTagEntry`::
++	(ERROR) Missing `tag` line in a tag object.
++
++`missingTaggerEntry`::
++	(INFO) Missing `tagger` line in a tag object.
++
++`missingTree`::
++	(ERROR) Missing `tree` line in a commit object.
++
++`missingType`::
++	(ERROR) Invalid type value on the `type` line in a tag object.
++
++`missingTypeEntry`::
++	(ERROR) Missing `type` line in a tag object.
++
++`multipleAuthors`::
++	(ERROR) Multiple author lines found in a commit.
++
++`nulInCommit`::
++	(WARN) Found a NUL byte in the commit object body.
++
++`nulInHeader`::
++	(FATAL) NUL byte exists in the object header.
++
++`nullSha1`::
++	(WARN) Tree contains entries pointing to a null sha1.
++
++`treeNotSorted`::
++	(ERROR) A tree is not properly sorted.
++
++`unknownType`::
++	(ERROR) Found an unknown object type.
++
++`unterminatedHeader`::
++	(FATAL) Missing end-of-line in the object header.
++
++`zeroPaddedDate`::
++	(ERROR) Found a zero padded date in an author/commiter line.
++
++`zeroPaddedFilemode`::
++	(WARN) Found a zero padded filemode in a tree.
+diff --git a/Documentation/git-fsck.txt b/Documentation/git-fsck.txt
+index 29318ea957..b6a0f8a085 100644
+--- a/Documentation/git-fsck.txt
++++ b/Documentation/git-fsck.txt
+@@ -152,6 +152,18 @@ hash mismatch <object>::
+ 	object database value.
+ 	This indicates a serious data integrity problem.
+ 
++
++FSCK MESSAGES
++-------------
++
++The following lists the types of errors `git fsck` detects and what
++each error means, with their default severity.  The severity of the
++error, other than those that are marked as "(FATAL)", can be tweaked
++by setting the corresponding `fsck.<msg-id>` configuration variable.
++
++include::fsck-msgids.txt[]
++
++
+ Environment Variables
+ ---------------------
+ 
+diff --git a/fsck.h b/fsck.h
+index 1d7c38f268..6fbce68ad6 100644
+--- a/fsck.h
++++ b/fsck.h
+@@ -13,6 +13,12 @@ enum fsck_msg_type {
+ 	FSCK_WARN,
+ };
+ 
++/*
++ * Documentation/fsck-msgids.txt documents these; when
++ * modifying this list in any way, make sure to keep the
++ * two in sync.
++ */
++
+ #define FOREACH_FSCK_MSG_ID(FUNC) \
+ 	/* fatal errors */ \
+ 	FUNC(NUL_IN_HEADER, FATAL) \
+-- 
+2.39.3 (Apple Git-145)
+

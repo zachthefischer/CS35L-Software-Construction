@@ -1,0 +1,159 @@
+From fba732c462107a6e8a92577cae1d64a8cc149879 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 23 Jan 2024 20:00:56 -0500
+Subject: [PATCH 2757/2871] transport-helper: re-examine object dir after
+ fetching
+
+This patch fixes a bug where fetch over http (or any helper) using the
+v0 protocol may sometimes fail to auto-follow tags. The bug comes from
+61c7711cfe (sha1-file: use loose object cache for quick existence check,
+2018-11-12). But to explain why (and why this is the right fix), let's
+take a step back.
+
+After fetching a pack, the object database has changed, but we may still
+hold in-memory caches that are now out of date. Traditionally this was
+just the packed_git list, but 61c7711cfe started using a loose-object
+cache, as well.
+
+Usually these caches are invalidated automatically. When an expected
+object cannot be found, the low-level object lookup routines call
+reprepare_packed_git(), which re-scans the set of packs (and thanks to
+some preparatory patches ahead of 61c7711cfe, throws away the loose
+object cache). But not all calls do this! In some cases we expect that
+the object might not exist, and pass OBJECT_INFO_QUICK to tell the
+low-level routines not to bother re-scanning. And the tag auto-following
+code is one such caller, since we are asking about oids that the other
+side has (but we might not have locally).
+
+To deal with this, we explicitly call reprepare_packed_git() ourselves
+after fetching a pack; this goes all the way back to 48ec3e5c07
+(Incorporate fetched packs in future object traversal, 2008-06-15). But
+that only helps if we call fetch_pack() in the main fetch process. When
+we're using a transport helper, it happens in a separate sub-process,
+and the parent process is left with old values. So this is only a
+problem with protocols which require a separate helper process (like
+http).
+
+This patch fixes it by teaching the parent process in the transport
+helper relationship to make that same reprepare call after the helper
+finishes fetching.
+
+You might be left with some lingering questions, like:
+
+  1. Why only the v0 protocol, and not v2? It's because in v2 the child
+     helper doesn't actually run fetch_pack(); it merely establishes a
+     tunnel over which the main process can talk to the remote side (so
+     the fetch_pack() and reprepare happen in the main process).
+
+  2. Wouldn't we have the same bug even before the 61c7711cfe added
+     the loose object cache? For example, when we store the fetch as a
+     pack locally, wouldn't our packed_git list still be out of date?
+
+     If we store a pack, everything works because other parts of the
+     fetch process happen to trigger a call to reprepare_packed_git().
+     In particular, before storing whatever ref was originally
+     requested, we'll make sure we have the pointed-to object, and that
+     call happens without the QUICK flag. So in that case we'll see that
+     we don't know about it, reprepare, and then repeat our lookup. And
+     now we _do_ know about the pack, and further calls with QUICK will
+     find its contents.
+
+     Whereas when we unpack the result into loose objects, we never get
+     that same invalidation trigger. We didn't have packs before, and we
+     don't after. But when we do the loose object lookup, we find the
+     object. There's no way to realize that we didn't have the object
+     before the pack, and that having it now means things have changed
+     (in theory we could do a superfluous cache lookup to see that it
+     was missing from the old cache; but depending on the tags the other
+     side showed us, we might not even have filled in that part of the
+     cache earlier).
+
+  3. Why does the included test use "--depth 1"? This is important
+     because without it, we happen to invalidate the cache as a side
+     effect of other parts of the fetch process. What happens in a
+     non-shallow fetch is something like this:
+
+        1. we call find_non_local_tags() once before actually getting the
+           pack, to see if there are any tags we can fill in from what we
+           already have. This fills in the cache (which is obviously
+           missing objects we're about to fetch).
+
+        2. before fetching the actual pack, fetch_and_consume_refs()
+           calls check_exist_and_connected(), to see if we even need to
+           fetch a pack at all. This doesn't use QUICK (though arguably
+           it could, as it's purely an optimization). And since it sees
+           there are objects we are indeed missing, that triggers a
+           reprepare_packed_git() call, which throws out the loose object
+           cache.
+
+        3. after fetching, now we call find_non_local_tags() again. And
+           since step (2) invalidated our loose object cache, we find
+           the new objects and create the tags.
+
+     So everything works, but mostly due to luck. Whereas in a fetch
+     with --depth, we skip step 2 entirely, and thus the out-of-date
+     cache is still in place for step 3, giving us the wrong answer.
+
+So the test works with a small "--depth 1" fetch, which makes sure that
+we don't store the pack from the other side, and that we don't trigger
+the accidental cache invalidation. And of course it forces the use of
+v0 along with using the http protocol.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5551-http-fetch-smart.sh | 18 ++++++++++++++++++
+ transport-helper.c          |  3 +++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/t/t5551-http-fetch-smart.sh b/t/t5551-http-fetch-smart.sh
+index 0908534f25..921c69bcce 100755
+--- a/t/t5551-http-fetch-smart.sh
++++ b/t/t5551-http-fetch-smart.sh
+@@ -704,4 +704,22 @@ test_expect_success 'no empty path components' '
+ 	! grep "//" log
+ '
+ 
++test_expect_success 'tag following always works over v0 http' '
++	upstream=$HTTPD_DOCUMENT_ROOT_PATH/tags &&
++	git init "$upstream" &&
++	(
++		cd "$upstream" &&
++		git commit --allow-empty -m base &&
++		git tag not-annotated &&
++		git tag -m foo annotated
++	) &&
++	git init tags &&
++	git -C tags -c protocol.version=0 \
++		fetch --depth 1 $HTTPD_URL/smart/tags \
++		refs/tags/annotated:refs/tags/annotated &&
++	git -C "$upstream" for-each-ref refs/tags >expect &&
++	git -C tags for-each-ref >actual &&
++	test_cmp expect actual
++'
++
+ test_done
+diff --git a/transport-helper.c b/transport-helper.c
+index 3ea7c2bb5a..6f088639da 100644
+--- a/transport-helper.c
++++ b/transport-helper.c
+@@ -14,6 +14,7 @@
+ #include "refspec.h"
+ #include "transport-internal.h"
+ #include "protocol.h"
++#include "packfile.h"
+ 
+ static int debug;
+ 
+@@ -429,6 +430,8 @@ static int fetch_with_fetch(struct transport *transport,
+ 			warning(_("%s unexpectedly said: '%s'"), data->name, buf.buf);
+ 	}
+ 	strbuf_release(&buf);
++
++	reprepare_packed_git(the_repository);
+ 	return 0;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

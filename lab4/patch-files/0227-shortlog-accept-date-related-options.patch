@@ -1,0 +1,106 @@
+From 251554c26931bec94e86d0e5740084d6116dd263 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 24 Oct 2022 14:55:30 -0400
+Subject: [PATCH 0227/2871] shortlog: accept `--date`-related options
+
+Prepare for a future patch which will introduce arbitrary pretty formats
+via the `--group` argument.
+
+To allow additional customizability (for example, to support something
+like `git shortlog -s --group='%aD' --date='format:%Y-%m' ...` (which
+groups commits by the datestring 'YYYY-mm' according to author date), we
+must store off the `--date` parsed from calling `parse_revision_opt()`.
+
+Note that this also affects custom output `--format` strings in `git
+shortlog`. Though this is a behavior change, this is arguably fixing a
+long-standing bug (ie., that `--format` strings are not affected by
+`--date` specifiers as they should be).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-shortlog.txt | 5 +++++
+ builtin/shortlog.c             | 3 ++-
+ shortlog.h                     | 2 ++
+ t/t4201-shortlog.sh            | 7 +++++++
+ 4 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/git-shortlog.txt b/Documentation/git-shortlog.txt
+index f64e77047b..9ed9d6a9e7 100644
+--- a/Documentation/git-shortlog.txt
++++ b/Documentation/git-shortlog.txt
+@@ -47,6 +47,11 @@ OPTIONS
+ 
+ 	Each pretty-printed commit will be rewrapped before it is shown.
+ 
++--date=<format>::
++	Show dates formatted according to the given date string. (See
++	the `--date` option in the "Commit Formatting" section of
++	linkgit:git-log[1]).
++
+ --group=<type>::
+ 	Group commits based on `<type>`. If no `--group` option is
+ 	specified, the default is `author`. `<type>` is one of:
+diff --git a/builtin/shortlog.c b/builtin/shortlog.c
+index 7a1e1fe7c0..53c379a51d 100644
+--- a/builtin/shortlog.c
++++ b/builtin/shortlog.c
+@@ -211,7 +211,7 @@ void shortlog_add_commit(struct shortlog *log, struct commit *commit)
+ 	ctx.fmt = CMIT_FMT_USERFORMAT;
+ 	ctx.abbrev = log->abbrev;
+ 	ctx.print_email_subject = 1;
+-	ctx.date_mode.type = DATE_NORMAL;
++	ctx.date_mode = log->date_mode;
+ 	ctx.output_encoding = get_log_output_encoding();
+ 
+ 	if (!log->summary) {
+@@ -407,6 +407,7 @@ int cmd_shortlog(int argc, const char **argv, const char *prefix)
+ 	log.user_format = rev.commit_format == CMIT_FMT_USERFORMAT;
+ 	log.abbrev = rev.abbrev;
+ 	log.file = rev.diffopt.file;
++	log.date_mode = rev.date_mode;
+ 
+ 	if (!log.groups)
+ 		log.groups = SHORTLOG_GROUP_AUTHOR;
+diff --git a/shortlog.h b/shortlog.h
+index 3f7e9aabca..dc388dd459 100644
+--- a/shortlog.h
++++ b/shortlog.h
+@@ -2,6 +2,7 @@
+ #define SHORTLOG_H
+ 
+ #include "string-list.h"
++#include "date.h"
+ 
+ struct commit;
+ 
+@@ -15,6 +16,7 @@ struct shortlog {
+ 	int in2;
+ 	int user_format;
+ 	int abbrev;
++	struct date_mode date_mode;
+ 
+ 	enum {
+ 		SHORTLOG_GROUP_AUTHOR = (1 << 0),
+diff --git a/t/t4201-shortlog.sh b/t/t4201-shortlog.sh
+index 3095b1b2ff..7547da539d 100755
+--- a/t/t4201-shortlog.sh
++++ b/t/t4201-shortlog.sh
+@@ -83,6 +83,13 @@ test_expect_success 'pretty format' '
+ 	test_cmp expect log.predictable
+ '
+ 
++test_expect_success 'pretty format (with --date)' '
++	sed "s/SUBJECT/2005-04-07 OBJECT_NAME/" expect.template >expect &&
++	git shortlog --format="%ad %H" --date=short HEAD >log &&
++	fuzz log >log.predictable &&
++	test_cmp expect log.predictable
++'
++
+ test_expect_success '--abbrev' '
+ 	sed s/SUBJECT/OBJID/ expect.template >expect &&
+ 	git shortlog --format="%h" --abbrev=35 HEAD >log &&
+-- 
+2.39.3 (Apple Git-145)
+

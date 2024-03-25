@@ -1,0 +1,46 @@
+From f297424a3a02b552865798ac8367cf657ef1df2d Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Mon, 27 Feb 2023 15:28:20 +0000
+Subject: [PATCH 0968/2871] unpack-trees: add usage notices around
+ df_conflict_entry
+
+Avoid making users believe they need to initialize df_conflict_entry
+to something (as happened with other output only fields before) with
+a quick comment and a small sanity check.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ unpack-trees.c | 2 ++
+ unpack-trees.h | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/unpack-trees.c b/unpack-trees.c
+index 3e5f4bd235..a37ab292bb 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -1876,6 +1876,8 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options
+ 		BUG("o->internal.dir is for internal use only");
+ 	if (o->internal.pl)
+ 		BUG("o->internal.pl is for internal use only");
++	if (o->df_conflict_entry)
++		BUG("o->df_conflict_entry is an output only field");
+ 
+ 	trace_performance_enter();
+ 	trace2_region_enter("unpack_trees", "unpack_trees", the_repository);
+diff --git a/unpack-trees.h b/unpack-trees.h
+index e8737adfed..61c06eb7c5 100644
+--- a/unpack-trees.h
++++ b/unpack-trees.h
+@@ -78,7 +78,7 @@ struct unpack_trees_options {
+ 
+ 	int head_idx;
+ 
+-	struct cache_entry *df_conflict_entry;
++	struct cache_entry *df_conflict_entry; /* output only */
+ 	void *unpack_data;
+ 
+ 	struct index_state *dst_index;
+-- 
+2.39.3 (Apple Git-145)
+

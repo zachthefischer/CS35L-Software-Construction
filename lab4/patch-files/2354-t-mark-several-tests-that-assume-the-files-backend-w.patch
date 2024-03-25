@@ -1,0 +1,222 @@
+From a6f43364e3dc1eedf18b241f41bbd4abfd640fb4 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 2 Nov 2023 09:47:14 +0100
+Subject: [PATCH 2354/2871] t: mark several tests that assume the files backend
+ with REFFILES
+
+Add the REFFILES prerequisite to several tests that assume we're using
+the files backend. There are various reasons why we cannot easily
+convert those tests to be backend-independent, where the most common
+one is that we have no way to write corrupt references into the refdb
+via our tooling. We may at a later point in time grow the tooling to
+make this possible, but for now we just mark these tests as requiring
+the files backend.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1400-update-ref.sh            |  8 ++++----
+ t/t1450-fsck.sh                  |  6 +++---
+ t/t2011-checkout-invalid-head.sh | 16 ++++++++--------
+ t/t3200-branch.sh                |  8 ++++----
+ t/t3400-rebase.sh                |  2 +-
+ t/t5605-clone-local.sh           |  2 +-
+ 6 files changed, 21 insertions(+), 21 deletions(-)
+
+diff --git a/t/t1400-update-ref.sh b/t/t1400-update-ref.sh
+index b7d1e5deed..70a760ba37 100755
+--- a/t/t1400-update-ref.sh
++++ b/t/t1400-update-ref.sh
+@@ -236,7 +236,7 @@ test_expect_success 'update-ref --no-deref -d can delete self-reference' '
+ 	test_must_fail git show-ref --verify -q refs/heads/self
+ '
+ 
+-test_expect_success 'update-ref --no-deref -d can delete reference to bad ref' '
++test_expect_success REFFILES 'update-ref --no-deref -d can delete reference to bad ref' '
+ 	>.git/refs/heads/bad &&
+ 	test_when_finished "rm -f .git/refs/heads/bad" &&
+ 	git symbolic-ref refs/heads/ref-to-bad refs/heads/bad &&
+@@ -288,7 +288,7 @@ test_expect_success "set $m (logged by touch)" '
+ 	test $A = $(git show-ref -s --verify $m)
+ '
+ 
+-test_expect_success 'empty directory removal' '
++test_expect_success REFFILES 'empty directory removal' '
+ 	git branch d1/d2/r1 HEAD &&
+ 	git branch d1/r2 HEAD &&
+ 	test_path_is_file .git/refs/heads/d1/d2/r1 &&
+@@ -300,7 +300,7 @@ test_expect_success 'empty directory removal' '
+ 	test_path_is_file .git/logs/refs/heads/d1/r2
+ '
+ 
+-test_expect_success 'symref empty directory removal' '
++test_expect_success REFFILES 'symref empty directory removal' '
+ 	git branch e1/e2/r1 HEAD &&
+ 	git branch e1/r2 HEAD &&
+ 	git checkout e1/e2/r1 &&
+@@ -1639,7 +1639,7 @@ test_expect_success PIPE 'transaction flushes status updates' '
+ 	test_cmp expected actual
+ '
+ 
+-test_expect_success 'directory not created deleting packed ref' '
++test_expect_success REFFILES 'directory not created deleting packed ref' '
+ 	git branch d1/d2/r1 HEAD &&
+ 	git pack-refs --all &&
+ 	test_path_is_missing .git/refs/heads/d1/d2 &&
+diff --git a/t/t1450-fsck.sh b/t/t1450-fsck.sh
+index a6af550867..50b15bd7fc 100755
+--- a/t/t1450-fsck.sh
++++ b/t/t1450-fsck.sh
+@@ -123,7 +123,7 @@ test_expect_success 'branch pointing to non-commit' '
+ 	test_i18ngrep "not a commit" out
+ '
+ 
+-test_expect_success 'HEAD link pointing at a funny object' '
++test_expect_success REFFILES 'HEAD link pointing at a funny object' '
+ 	test_when_finished "git update-ref HEAD $orig_head" &&
+ 	echo $ZERO_OID >.git/HEAD &&
+ 	# avoid corrupt/broken HEAD from interfering with repo discovery
+@@ -139,7 +139,7 @@ test_expect_success 'HEAD link pointing at a funny place' '
+ 	test_i18ngrep "HEAD points to something strange" out
+ '
+ 
+-test_expect_success 'HEAD link pointing at a funny object (from different wt)' '
++test_expect_success REFFILES 'HEAD link pointing at a funny object (from different wt)' '
+ 	test_when_finished "git update-ref HEAD $orig_head" &&
+ 	test_when_finished "git worktree remove -f wt" &&
+ 	git worktree add wt &&
+@@ -149,7 +149,7 @@ test_expect_success 'HEAD link pointing at a funny object (from different wt)' '
+ 	test_i18ngrep "main-worktree/HEAD: detached HEAD points" out
+ '
+ 
+-test_expect_success 'other worktree HEAD link pointing at a funny object' '
++test_expect_success REFFILES 'other worktree HEAD link pointing at a funny object' '
+ 	test_when_finished "git worktree remove -f other" &&
+ 	git worktree add other &&
+ 	echo $ZERO_OID >.git/worktrees/other/HEAD &&
+diff --git a/t/t2011-checkout-invalid-head.sh b/t/t2011-checkout-invalid-head.sh
+index d9997e7b6b..3c8135831b 100755
+--- a/t/t2011-checkout-invalid-head.sh
++++ b/t/t2011-checkout-invalid-head.sh
+@@ -18,18 +18,18 @@ test_expect_success 'checkout should not start branch from a tree' '
+ 	test_must_fail git checkout -b newbranch main^{tree}
+ '
+ 
+-test_expect_success 'checkout main from invalid HEAD' '
++test_expect_success REFFILES 'checkout main from invalid HEAD' '
+ 	echo $ZERO_OID >.git/HEAD &&
+ 	git checkout main --
+ '
+ 
+-test_expect_success 'checkout notices failure to lock HEAD' '
++test_expect_success REFFILES 'checkout notices failure to lock HEAD' '
+ 	test_when_finished "rm -f .git/HEAD.lock" &&
+ 	>.git/HEAD.lock &&
+ 	test_must_fail git checkout -b other
+ '
+ 
+-test_expect_success 'create ref directory/file conflict scenario' '
++test_expect_success REFFILES 'create ref directory/file conflict scenario' '
+ 	git update-ref refs/heads/outer/inner main &&
+ 
+ 	# do not rely on symbolic-ref to get a known state,
+@@ -39,26 +39,26 @@ test_expect_success 'create ref directory/file conflict scenario' '
+ 	}
+ '
+ 
+-test_expect_success 'checkout away from d/f HEAD (unpacked, to branch)' '
++test_expect_success REFFILES 'checkout away from d/f HEAD (unpacked, to branch)' '
+ 	reset_to_df &&
+ 	git checkout main
+ '
+ 
+-test_expect_success 'checkout away from d/f HEAD (unpacked, to detached)' '
++test_expect_success REFFILES 'checkout away from d/f HEAD (unpacked, to detached)' '
+ 	reset_to_df &&
+ 	git checkout --detach main
+ '
+ 
+-test_expect_success 'pack refs' '
++test_expect_success REFFILES 'pack refs' '
+ 	git pack-refs --all --prune
+ '
+ 
+-test_expect_success 'checkout away from d/f HEAD (packed, to branch)' '
++test_expect_success REFFILES 'checkout away from d/f HEAD (packed, to branch)' '
+ 	reset_to_df &&
+ 	git checkout main
+ '
+ 
+-test_expect_success 'checkout away from d/f HEAD (packed, to detached)' '
++test_expect_success REFFILES 'checkout away from d/f HEAD (packed, to detached)' '
+ 	reset_to_df &&
+ 	git checkout --detach main
+ '
+diff --git a/t/t3200-branch.sh b/t/t3200-branch.sh
+index 30fb0dee6b..f0624ba3bb 100755
+--- a/t/t3200-branch.sh
++++ b/t/t3200-branch.sh
+@@ -28,7 +28,7 @@ test_expect_success 'git branch --help should not have created a bogus branch' '
+ 	test_ref_missing refs/heads/--help
+ '
+ 
+-test_expect_success 'branch -h in broken repository' '
++test_expect_success REFFILES 'branch -h in broken repository' '
+ 	mkdir broken &&
+ 	(
+ 		cd broken &&
+@@ -245,7 +245,7 @@ test_expect_success 'git branch -M baz bam should succeed when baz is checked ou
+ 	git worktree prune
+ '
+ 
+-test_expect_success 'git branch -M fails if updating any linked working tree fails' '
++test_expect_success REFFILES 'git branch -M fails if updating any linked working tree fails' '
+ 	git worktree add -b baz bazdir1 &&
+ 	git worktree add -f bazdir2 baz &&
+ 	touch .git/worktrees/bazdir1/HEAD.lock &&
+@@ -836,14 +836,14 @@ test_expect_success 'renaming a symref is not allowed' '
+ 	test_ref_missing refs/heads/new-topic
+ '
+ 
+-test_expect_success SYMLINKS 'git branch -m u v should fail when the reflog for u is a symlink' '
++test_expect_success SYMLINKS,REFFILES 'git branch -m u v should fail when the reflog for u is a symlink' '
+ 	git branch --create-reflog u &&
+ 	mv .git/logs/refs/heads/u real-u &&
+ 	ln -s real-u .git/logs/refs/heads/u &&
+ 	test_must_fail git branch -m u v
+ '
+ 
+-test_expect_success SYMLINKS 'git branch -m with symlinked .git/refs' '
++test_expect_success SYMLINKS,REFFILES 'git branch -m with symlinked .git/refs' '
+ 	test_when_finished "rm -rf subdir" &&
+ 	git init --bare subdir &&
+ 
+diff --git a/t/t3400-rebase.sh b/t/t3400-rebase.sh
+index d3df19a51f..435943a089 100755
+--- a/t/t3400-rebase.sh
++++ b/t/t3400-rebase.sh
+@@ -424,7 +424,7 @@ test_expect_success 'refuse to switch to branch checked out elsewhere' '
+ 	test_i18ngrep "already used by worktree at" err
+ '
+ 
+-test_expect_success MINGW,SYMLINKS_WINDOWS 'rebase when .git/logs is a symlink' '
++test_expect_success REFFILES,MINGW,SYMLINKS_WINDOWS 'rebase when .git/logs is a symlink' '
+ 	git checkout main &&
+ 	mv .git/logs actual_logs &&
+ 	cmd //c "mklink /D .git\logs ..\actual_logs" &&
+diff --git a/t/t5605-clone-local.sh b/t/t5605-clone-local.sh
+index bedd29d055..a3055869bc 100755
+--- a/t/t5605-clone-local.sh
++++ b/t/t5605-clone-local.sh
+@@ -157,7 +157,7 @@ test_expect_success 'cloning locally respects "-u" for fetching refs' '
+ 	test_must_fail git clone --bare -u false a should_not_work.git
+ '
+ 
+-test_expect_success 'local clone from repo with corrupt refs fails gracefully' '
++test_expect_success REFFILES 'local clone from repo with corrupt refs fails gracefully' '
+ 	git init corrupt &&
+ 	test_commit -C corrupt one &&
+ 	echo a >corrupt/.git/refs/heads/topic &&
+-- 
+2.39.3 (Apple Git-145)
+

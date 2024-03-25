@@ -1,0 +1,29 @@
+From d0e8084c65cbf949038ae4cc344ac2c2efd77415 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 2 Oct 2023 11:19:18 -0700
+Subject: [PATCH 2171/2871] The fourteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index a8f9461163..7f46b10ed9 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -193,6 +193,11 @@ Fixes since v2.42
+    run via the httpd, unlike ASan options, which has been corrected.
+    (merge 252d693797 jk/test-pass-ubsan-options-to-http-test later to maint).
+ 
++ * "checkout --merge -- path" and "update-index --unresolve path" did
++   not resurrect conflicted state that was resolved to remove path,
++   but now they do.
++   (merge 5bdedac3c7 jc/unresolve-removal later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge fd3ba590d8 ws/git-push-doc-grammofix later to maint).
+    (merge 5f33a843de ds/upload-pack-error-sequence-fix later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

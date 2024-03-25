@@ -1,0 +1,51 @@
+From f591a9bfebce123acca44ede12a4327ec1804b65 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 18 Jan 2024 11:22:45 +0100
+Subject: [PATCH 2700/2871] t7527: decrease likelihood of racing with fsmonitor
+ daemon
+
+In t7527, we test that the builtin fsmonitor daemon works well in
+various edge cases. One of these tests is frequently failing because
+events reported by the fsmonitor--daemon are missing an expected event.
+This failure is essentially a race condition: we do not wait for the
+daemon to flush out all events before we ask it to quit. Consequently,
+it can happen that we miss some expected events.
+
+In other testcases we counteract this race by sending a simple query to
+the daemon. Quoting a comment:
+
+  We run a simple query after modifying the filesystem just to introduce
+  a bit of a delay so that the trace logging from the daemon has time to
+  get flushed to disk.
+
+Now this workaround is not a "proper" fix as we do not wait for all
+events to have been synchronized in a deterministic way. But this fix
+seems to be sufficient for all the other tests to pass, so it must not
+be all that bad.
+
+Convert the failing test to do the same. While the test was previously
+failing in about 50% of the test runs, I couldn't reproduce the failure
+after the change anymore.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7527-builtin-fsmonitor.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t7527-builtin-fsmonitor.sh b/t/t7527-builtin-fsmonitor.sh
+index 78503158fd..363f9dc0e4 100755
+--- a/t/t7527-builtin-fsmonitor.sh
++++ b/t/t7527-builtin-fsmonitor.sh
+@@ -978,7 +978,7 @@ test_expect_success !UNICODE_COMPOSITION_SENSITIVE 'Unicode nfc/nfd' '
+ 	mkdir test_unicode/nfd &&
+ 	mkdir test_unicode/nfd/d_${utf8_nfd} &&
+ 
+-	git -C test_unicode fsmonitor--daemon stop &&
++	test-tool -C test_unicode fsmonitor-client query --token 0 &&
+ 
+ 	if test_have_prereq UNICODE_NFC_PRESERVED
+ 	then
+-- 
+2.39.3 (Apple Git-145)
+

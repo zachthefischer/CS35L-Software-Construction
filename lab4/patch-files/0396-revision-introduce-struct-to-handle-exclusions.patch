@@ -1,0 +1,241 @@
+From 1e9f273ac06f7826ee3ec5a8da5d03bf07c14389 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 17 Nov 2022 06:46:51 +0100
+Subject: [PATCH 0396/2871] revision: introduce struct to handle exclusions
+
+The functions that handle exclusion of refs work on a single string
+list. We're about to add a second mechanism for excluding refs though,
+and it makes sense to reuse much of the same architecture for both kinds
+of exclusion.
+
+Introduce a new `struct ref_exclusions` that encapsulates all the logic
+related to excluding refs and move the `struct string_list` that holds
+all wildmatch patterns of excluded refs into it. Rename functions that
+operate on this struct to match its name.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/rev-parse.c |  8 ++++----
+ revision.c          | 48 +++++++++++++++++++++------------------------
+ revision.h          | 27 +++++++++++++++++++------
+ 3 files changed, 47 insertions(+), 36 deletions(-)
+
+diff --git a/builtin/rev-parse.c b/builtin/rev-parse.c
+index 8f61050bde..7fa5b6991b 100644
+--- a/builtin/rev-parse.c
++++ b/builtin/rev-parse.c
+@@ -39,7 +39,7 @@ static int abbrev_ref_strict;
+ static int output_sq;
+ 
+ static int stuck_long;
+-static struct string_list *ref_excludes;
++static struct ref_exclusions ref_excludes = REF_EXCLUSIONS_INIT;
+ 
+ /*
+  * Some arguments are relevant "revision" arguments,
+@@ -198,7 +198,7 @@ static int show_default(void)
+ static int show_reference(const char *refname, const struct object_id *oid,
+ 			  int flag UNUSED, void *cb_data UNUSED)
+ {
+-	if (ref_excluded(ref_excludes, refname))
++	if (ref_excluded(&ref_excludes, refname))
+ 		return 0;
+ 	show_rev(NORMAL, oid, refname);
+ 	return 0;
+@@ -585,7 +585,7 @@ static void handle_ref_opt(const char *pattern, const char *prefix)
+ 		for_each_glob_ref_in(show_reference, pattern, prefix, NULL);
+ 	else
+ 		for_each_ref_in(prefix, show_reference, NULL);
+-	clear_ref_exclusion(&ref_excludes);
++	clear_ref_exclusions(&ref_excludes);
+ }
+ 
+ enum format_type {
+@@ -863,7 +863,7 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
+ 			}
+ 			if (!strcmp(arg, "--all")) {
+ 				for_each_ref(show_reference, NULL);
+-				clear_ref_exclusion(&ref_excludes);
++				clear_ref_exclusions(&ref_excludes);
+ 				continue;
+ 			}
+ 			if (skip_prefix(arg, "--disambiguate=", &arg)) {
+diff --git a/revision.c b/revision.c
+index be755670e2..fe3ec98f46 100644
+--- a/revision.c
++++ b/revision.c
+@@ -1517,35 +1517,30 @@ static void add_rev_cmdline_list(struct rev_info *revs,
+ 	}
+ }
+ 
+-int ref_excluded(struct string_list *ref_excludes, const char *path)
++int ref_excluded(const struct ref_exclusions *exclusions, const char *path)
+ {
+ 	struct string_list_item *item;
+-
+-	if (!ref_excludes)
+-		return 0;
+-	for_each_string_list_item(item, ref_excludes) {
++	for_each_string_list_item(item, &exclusions->excluded_refs) {
+ 		if (!wildmatch(item->string, path, 0))
+ 			return 1;
+ 	}
+ 	return 0;
+ }
+ 
+-void clear_ref_exclusion(struct string_list **ref_excludes_p)
++void init_ref_exclusions(struct ref_exclusions *exclusions)
+ {
+-	if (*ref_excludes_p) {
+-		string_list_clear(*ref_excludes_p, 0);
+-		free(*ref_excludes_p);
+-	}
+-	*ref_excludes_p = NULL;
++	struct ref_exclusions blank = REF_EXCLUSIONS_INIT;
++	memcpy(exclusions, &blank, sizeof(*exclusions));
+ }
+ 
+-void add_ref_exclusion(struct string_list **ref_excludes_p, const char *exclude)
++void clear_ref_exclusions(struct ref_exclusions *exclusions)
+ {
+-	if (!*ref_excludes_p) {
+-		CALLOC_ARRAY(*ref_excludes_p, 1);
+-		(*ref_excludes_p)->strdup_strings = 1;
+-	}
+-	string_list_append(*ref_excludes_p, exclude);
++	string_list_clear(&exclusions->excluded_refs, 0);
++}
++
++void add_ref_exclusion(struct ref_exclusions *exclusions, const char *exclude)
++{
++	string_list_append(&exclusions->excluded_refs, exclude);
+ }
+ 
+ struct all_refs_cb {
+@@ -1563,7 +1558,7 @@ static int handle_one_ref(const char *path, const struct object_id *oid,
+ 	struct all_refs_cb *cb = cb_data;
+ 	struct object *object;
+ 
+-	if (ref_excluded(cb->all_revs->ref_excludes, path))
++	if (ref_excluded(&cb->all_revs->ref_excludes, path))
+ 	    return 0;
+ 
+ 	object = get_reference(cb->all_revs, path, oid, cb->all_flags);
+@@ -1901,6 +1896,7 @@ void repo_init_revisions(struct repository *r,
+ 
+ 	init_display_notes(&revs->notes_opt);
+ 	list_objects_filter_init(&revs->filter);
++	init_ref_exclusions(&revs->ref_excludes);
+ }
+ 
+ static void add_pending_commit_list(struct rev_info *revs,
+@@ -2689,10 +2685,10 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ 			init_all_refs_cb(&cb, revs, *flags);
+ 			other_head_refs(handle_one_ref, &cb);
+ 		}
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (!strcmp(arg, "--branches")) {
+ 		handle_refs(refs, revs, *flags, refs_for_each_branch_ref);
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (!strcmp(arg, "--bisect")) {
+ 		read_bisect_terms(&term_bad, &term_good);
+ 		handle_refs(refs, revs, *flags, for_each_bad_bisect_ref);
+@@ -2701,15 +2697,15 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ 		revs->bisect = 1;
+ 	} else if (!strcmp(arg, "--tags")) {
+ 		handle_refs(refs, revs, *flags, refs_for_each_tag_ref);
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (!strcmp(arg, "--remotes")) {
+ 		handle_refs(refs, revs, *flags, refs_for_each_remote_ref);
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if ((argcount = parse_long_opt("glob", argv, &optarg))) {
+ 		struct all_refs_cb cb;
+ 		init_all_refs_cb(&cb, revs, *flags);
+ 		for_each_glob_ref(handle_one_ref, optarg, &cb);
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 		return argcount;
+ 	} else if ((argcount = parse_long_opt("exclude", argv, &optarg))) {
+ 		add_ref_exclusion(&revs->ref_excludes, optarg);
+@@ -2718,17 +2714,17 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ 		struct all_refs_cb cb;
+ 		init_all_refs_cb(&cb, revs, *flags);
+ 		for_each_glob_ref_in(handle_one_ref, optarg, "refs/heads/", &cb);
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (skip_prefix(arg, "--tags=", &optarg)) {
+ 		struct all_refs_cb cb;
+ 		init_all_refs_cb(&cb, revs, *flags);
+ 		for_each_glob_ref_in(handle_one_ref, optarg, "refs/tags/", &cb);
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (skip_prefix(arg, "--remotes=", &optarg)) {
+ 		struct all_refs_cb cb;
+ 		init_all_refs_cb(&cb, revs, *flags);
+ 		for_each_glob_ref_in(handle_one_ref, optarg, "refs/remotes/", &cb);
+-		clear_ref_exclusion(&revs->ref_excludes);
++		clear_ref_exclusions(&revs->ref_excludes);
+ 	} else if (!strcmp(arg, "--reflog")) {
+ 		add_reflogs_to_pending(revs, *flags);
+ 	} else if (!strcmp(arg, "--indexed-objects")) {
+diff --git a/revision.h b/revision.h
+index afe1b77985..5c8ab16047 100644
+--- a/revision.h
++++ b/revision.h
+@@ -81,6 +81,21 @@ struct rev_cmdline_info {
+ 	} *rev;
+ };
+ 
++struct ref_exclusions {
++	/*
++	 * Excluded refs is a list of wildmatch patterns. If any of the
++	 * patterns matches, the reference will be excluded.
++	 */
++	struct string_list excluded_refs;
++};
++
++/**
++ * Initialize a `struct ref_exclusions` with a macro.
++ */
++#define REF_EXCLUSIONS_INIT { \
++	.excluded_refs = STRING_LIST_INIT_DUP, \
++}
++
+ struct oidset;
+ struct topo_walk_info;
+ 
+@@ -103,7 +118,7 @@ struct rev_info {
+ 	struct list_objects_filter_options filter;
+ 
+ 	/* excluding from --branches, --refs, etc. expansion */
+-	struct string_list *ref_excludes;
++	struct ref_exclusions ref_excludes;
+ 
+ 	/* Basic information */
+ 	const char *prefix;
+@@ -439,12 +454,12 @@ void mark_trees_uninteresting_sparse(struct repository *r, struct oidset *trees)
+ void show_object_with_name(FILE *, struct object *, const char *);
+ 
+ /**
+- * Helpers to check if a "struct string_list" item matches with
+- * wildmatch().
++ * Helpers to check if a reference should be excluded.
+  */
+-int ref_excluded(struct string_list *, const char *path);
+-void clear_ref_exclusion(struct string_list **);
+-void add_ref_exclusion(struct string_list **, const char *exclude);
++int ref_excluded(const struct ref_exclusions *exclusions, const char *path);
++void init_ref_exclusions(struct ref_exclusions *);
++void clear_ref_exclusions(struct ref_exclusions *);
++void add_ref_exclusion(struct ref_exclusions *, const char *exclude);
+ 
+ /**
+  * This function can be used if you want to add commit objects as revision
+-- 
+2.39.3 (Apple Git-145)
+

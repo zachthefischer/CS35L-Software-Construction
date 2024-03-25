@@ -1,0 +1,78 @@
+From 799d449105dc1f6e77fa1ebaea4f6d8bdc6537cf Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 30 Jan 2024 00:40:37 -0500
+Subject: [PATCH 2789/2871] t/Makefile: get UNIT_TESTS list from C sources
+
+We decide on the set of unit tests to run by asking make to expand the
+wildcard "t/unit-tests/bin/*". One unfortunate outcome of this is that
+we'll run anything in that directory, even if it is leftover cruft from
+a previous build. This isn't _quite_ as bad as it sounds, since in
+theory the unit tests executables are self-contained (so if they passed
+before, they'll pass even though they now have nothing to do with the
+checked out version of Git). But at the very least it's wasteful, and if
+they _do_ fail it can be quite confusing to understand why they are
+being run at all.
+
+This wildcarding presumably came from our handling of the regular
+shell-script tests, which use $(wildcard t[0-9][0-9][0-9][0-9]-*.sh).
+But the difference there is that those are actual tracked files. So if
+you checkout a different commit, they'll go away. Whereas the contents
+of unit-tests/bin are ignored (so not only do they stick around, but you
+are not even warned of the stale files via "git status").
+
+This patch fixes the situation by looking for the actual unit-test
+source files and then massaging those names into the final executable
+names. This has two additional benefits:
+
+  1. It will notice if we failed to build one or more unit-tests for
+     some reason (whereas the current code just runs whatever made it to
+     the bin/ directory).
+
+  2. The wildcard should avoid other build cruft, like the pdb files we
+     worked around in 0df903d402 (unit-tests: do not mistake `.pdb`
+     files for being executable, 2023-09-25).
+
+Our new wildcard does make an assumption that unit tests are built from
+C sources. It would be a bit cleaner if we consulted UNIT_TEST_PROGRAMS
+from the top-level Makefile. But doing so is tricky unless we reorganize
+that Makefile to split the source file lists into include-able subfiles.
+That might be worth doing in general, but in the meantime, the
+assumptions made by the wildcard here seems reasonable.
+
+Note that we do need to include config.mak.uname either way, though, as
+we need the value of $(X) to compute the correct executable names (which
+would be true even if we had access to the top-level's UNIT_TEST_PROGRAMS
+variable).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/t/Makefile b/t/Makefile
+index b7a6fefe28..281f4c3534 100644
+--- a/t/Makefile
++++ b/t/Makefile
+@@ -6,6 +6,7 @@ include ../shared.mak
+ # Copyright (c) 2005 Junio C Hamano
+ #
+ 
++-include ../config.mak.uname
+ -include ../config.mak.autogen
+ -include ../config.mak
+ 
+@@ -42,7 +43,9 @@ TPERF = $(sort $(wildcard perf/p[0-9][0-9][0-9][0-9]-*.sh))
+ TINTEROP = $(sort $(wildcard interop/i[0-9][0-9][0-9][0-9]-*.sh))
+ CHAINLINTTESTS = $(sort $(patsubst chainlint/%.test,%,$(wildcard chainlint/*.test)))
+ CHAINLINT = '$(PERL_PATH_SQ)' chainlint.pl
+-UNIT_TESTS = $(sort $(filter-out %.pdb unit-tests/bin/t-basic%,$(wildcard unit-tests/bin/t-*)))
++UNIT_TEST_SOURCES = $(wildcard unit-tests/t-*.c)
++UNIT_TEST_PROGRAMS = $(patsubst unit-tests/%.c,unit-tests/bin/%$(X),$(UNIT_TEST_SOURCES))
++UNIT_TESTS = $(sort $(filter-out unit-tests/bin/t-basic%,$(UNIT_TEST_PROGRAMS)))
+ 
+ # `test-chainlint` (which is a dependency of `test-lint`, `test` and `prove`)
+ # checks all tests in all scripts via a single invocation, so tell individual
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,38 @@
+From 40286ca2fa1e08c386ea7bc6b76616a3cac63ffd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Mon, 21 Nov 2022 14:26:55 -0500
+Subject: [PATCH 0435/2871] parse_object(): simplify blob conditional
+
+Commit 8db2dad7a0 (parse_object(): check on-disk type of suspected blob,
+2022-11-17) simplified the conditional for checking if we might have a
+blob. But we can simplify it further. In:
+
+  !obj || (obj && obj->type == OBJ_BLOB)
+
+the short-circuit "OR" means "obj" will always be true on the right-hand
+side. The compiler almost certainly optimized that out anyway, but
+dropping it makes the conditional easier to understand for humans.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/object.c b/object.c
+index fad1a5af4a..682b852a46 100644
+--- a/object.c
++++ b/object.c
+@@ -286,7 +286,7 @@ struct object *parse_object_with_flags(struct repository *r,
+ 			return &commit->object;
+ 	}
+ 
+-	if ((!obj || (obj && obj->type == OBJ_BLOB)) &&
++	if ((!obj || obj->type == OBJ_BLOB) &&
+ 	    oid_object_info(r, oid, NULL) == OBJ_BLOB) {
+ 		if (!skip_hash && stream_object_signature(r, repl) < 0) {
+ 			error(_("hash mismatch %s"), oid_to_hex(oid));
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,60 @@
+From a88a3d7cd7cee64fd29fe2a4c6c7a0511f398bfb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sun, 11 Jun 2023 20:50:16 +0200
+Subject: [PATCH 1584/2871] branch: fix a leak in inherit_tracking
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In d3115660b4 (branch: add flags and config to inherit tracking,
+2021-12-20) a new option was introduced to allow creating a new branch,
+inheriting the tracking of another branch.
+
+The new code, strdup()'d the remote_name of the existing branch, but
+unfortunately it was not freed, producing a leak.
+
+   $ git remote add local .
+   $ git update-ref refs/remotes/local/foo HEAD
+   $ git branch --track bar local/foo
+   branch 'bar' set up to track 'local/foo'.
+   $ git branch --track=inherit baz bar
+   branch 'baz' set up to track 'local/foo'.
+
+   Direct leak of 6 byte(s) in 1 object(s) allocated from:
+       ... in xstrdup wrapper.c
+       ... in inherit_tracking branch.c
+       ... in setup_tracking branch.c
+       ... in create_branch branch.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+Actually, the string we're strdup()'ing is from the struct branch
+returned by get_branch().  Which, in turn, retrieves the string from the
+global "struct repository".  This makes perfectly valid to use the
+string throughout the entire execution of create_branch().  There is no
+need to duplicate it.
+
+Let's fix the leak, removing the strdup().
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/branch.c b/branch.c
+index a7333a4c32..cc869d2beb 100644
+--- a/branch.c
++++ b/branch.c
+@@ -233,7 +233,7 @@ static int inherit_tracking(struct tracking *tracking, const char *orig_ref)
+ 		return -1;
+ 	}
+ 
+-	tracking->remote = xstrdup(branch->remote_name);
++	tracking->remote = branch->remote_name;
+ 	for (i = 0; i < branch->merge_nr; i++)
+ 		string_list_append(tracking->srcs, branch->merge_name[i]);
+ 	return 0;
+-- 
+2.39.3 (Apple Git-145)
+

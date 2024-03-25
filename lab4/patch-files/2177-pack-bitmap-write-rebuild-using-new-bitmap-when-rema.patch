@@ -1,0 +1,61 @@
+From 0e4747ec8b5558e7106146fd37501649f577bcfa Mon Sep 17 00:00:00 2001
+From: Christian Couder <christian.couder@gmail.com>
+Date: Mon, 2 Oct 2023 18:55:00 +0200
+Subject: [PATCH 2177/2871] pack-bitmap-write: rebuild using new bitmap when
+ remapping
+
+`git repack` is about to learn a new `--filter=<filter-spec>` option and
+we will want to check that this option is incompatible with
+`--write-bitmap-index`.
+
+Unfortunately it appears that a test like:
+
+test_expect_success '--filter fails with --write-bitmap-index' '
+       test_must_fail \
+               env GIT_TEST_MULTI_PACK_INDEX_WRITE_BITMAP=0 \
+               git -C bare.git repack -a -d --write-bitmap-index --filter=blob:none
+'
+
+sometimes fail because when rebuilding bitmaps, it appears that we are
+reusing existing bitmap information. So instead of detecting that some
+objects are missing and erroring out as it should, the
+`git repack --write-bitmap-index --filter=...` command succeeds.
+
+Let's fix that by making sure we rebuild bitmaps using new bitmaps
+instead of existing ones.
+
+Helped-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-bitmap-write.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/pack-bitmap-write.c b/pack-bitmap-write.c
+index f6757c3cbf..f4ecdf8b0e 100644
+--- a/pack-bitmap-write.c
++++ b/pack-bitmap-write.c
+@@ -413,15 +413,19 @@ static int fill_bitmap_commit(struct bb_commit *ent,
+ 
+ 		if (old_bitmap && mapping) {
+ 			struct ewah_bitmap *old = bitmap_for_commit(old_bitmap, c);
++			struct bitmap *remapped = bitmap_new();
+ 			/*
+ 			 * If this commit has an old bitmap, then translate that
+ 			 * bitmap and add its bits to this one. No need to walk
+ 			 * parents or the tree for this commit.
+ 			 */
+-			if (old && !rebuild_bitmap(mapping, old, ent->bitmap)) {
++			if (old && !rebuild_bitmap(mapping, old, remapped)) {
++				bitmap_or(ent->bitmap, remapped);
++				bitmap_free(remapped);
+ 				reused_bitmaps_nr++;
+ 				continue;
+ 			}
++			bitmap_free(remapped);
+ 		}
+ 
+ 		/*
+-- 
+2.39.3 (Apple Git-145)
+

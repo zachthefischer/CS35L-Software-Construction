@@ -1,0 +1,113 @@
+From a53f43f9005e8a6fd4c5a6733c69b46199c7bb75 Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Mon, 26 Jun 2023 17:41:37 +0000
+Subject: [PATCH 1687/2871] config: don't BUG when both kvi and source are set
+
+When iterating through config, we read config source metadata from
+global values - either a "struct config_source + enum config_scope"
+or a "struct key_value_info", using the current_config* functions. Prior
+to the series starting from 0c60285147 (config.c: create config_reader
+and the_reader, 2023-03-28), we weren't very picky about which values we
+should read in which situation; we did note that both groups of values
+generally shouldn't be set together, but if both were set,
+current_config* preferentially reads key_value_info. When that series
+added more structure, we enforced that either the former (when parsing a
+config source) can be set, or the latter (when iterating a config set),
+but *never* both at the same time. See 9828453ff0 (config.c: remove
+current_config_kvi, 2023-03-28) and 5cdf18e7cd (config.c: remove
+current_parsing_scope, 2023-03-28).
+
+That was a good simplifying constraint that helped us reason about the
+global state, but it turns out that there is at least one situation
+where we need both to be set at the same time: in a blobless partial
+clone where .gitmodules is missing. "git fetch" in such a repo will
+start a config parse over .gitmodules (setting the config_source), and
+Git will attempt to lazy-fetch it from the promisor remote. However,
+when we try to read the promisor configuration, we start iterating a
+config set (setting the key_value_info), and we BUG() out because that's
+not allowed any more.
+
+Teaching config_reader to gracefully handle this is somewhat
+complicated, but fortunately, there are proposed changes to the config.c
+machinery to get rid of this global state, and make the BUG() obsolete
+[1]. We should rely on that as the eventual solution, and avoid doing
+yet another refactor in the meantime.
+
+Therefore, fix the bug by removing the BUG() check. We're reverting to
+an older, less safe state, but that's generally okay since
+key_value_info is always preferentially read, so we'd always read the
+correct values when we iterate a config set in the middle of a config
+parse (like we are here). The reverse would be wrong, but extremely
+unlikely to happen since very few callers parse config without going
+through a config set.
+
+[1] https://lore.kernel.org/git/pull.1497.v3.git.git.1687290231.gitgitgadget@gmail.com
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c                 |  6 ------
+ t/t5616-partial-clone.sh | 10 ++++++++--
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/config.c b/config.c
+index b79baf83e3..7bd4b5b940 100644
+--- a/config.c
++++ b/config.c
+@@ -106,8 +106,6 @@ static struct config_reader the_reader;
+ static inline void config_reader_push_source(struct config_reader *reader,
+ 					     struct config_source *top)
+ {
+-	if (reader->config_kvi)
+-		BUG("source should not be set while iterating a config set");
+ 	top->prev = reader->source;
+ 	reader->source = top;
+ }
+@@ -125,16 +123,12 @@ static inline struct config_source *config_reader_pop_source(struct config_reade
+ static inline void config_reader_set_kvi(struct config_reader *reader,
+ 					 struct key_value_info *kvi)
+ {
+-	if (kvi && (reader->source || reader->parsing_scope))
+-		BUG("kvi should not be set while parsing a config source");
+ 	reader->config_kvi = kvi;
+ }
+ 
+ static inline void config_reader_set_scope(struct config_reader *reader,
+ 					   enum config_scope scope)
+ {
+-	if (scope && reader->config_kvi)
+-		BUG("scope should only be set when iterating through a config source");
+ 	reader->parsing_scope = scope;
+ }
+ 
+diff --git a/t/t5616-partial-clone.sh b/t/t5616-partial-clone.sh
+index f519d2a87a..8759fc2853 100755
+--- a/t/t5616-partial-clone.sh
++++ b/t/t5616-partial-clone.sh
+@@ -257,8 +257,8 @@ test_expect_success 'partial clone with transfer.fsckobjects=1 works with submod
+ 	test_commit -C submodule mycommit &&
+ 
+ 	test_create_repo src_with_sub &&
+-	test_config -C src_with_sub uploadpack.allowfilter 1 &&
+-	test_config -C src_with_sub uploadpack.allowanysha1inwant 1 &&
++	git -C src_with_sub config uploadpack.allowfilter 1 &&
++	git -C src_with_sub config uploadpack.allowanysha1inwant 1 &&
+ 
+ 	test_config_global protocol.file.allow always &&
+ 
+@@ -270,6 +270,12 @@ test_expect_success 'partial clone with transfer.fsckobjects=1 works with submod
+ 	test_when_finished rm -rf dst
+ '
+ 
++test_expect_success 'lazily fetched .gitmodules works' '
++	git clone --filter="blob:none" --no-checkout "file://$(pwd)/src_with_sub" dst &&
++	git -C dst fetch &&
++	test_when_finished rm -rf dst
++'
++
+ test_expect_success 'partial clone with transfer.fsckobjects=1 uses index-pack --fsck-objects' '
+ 	git init src &&
+ 	test_commit -C src x &&
+-- 
+2.39.3 (Apple Git-145)
+

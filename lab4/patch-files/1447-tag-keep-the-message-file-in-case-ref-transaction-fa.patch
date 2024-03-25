@@ -1,0 +1,117 @@
+From 08c12ec1d0444c9ea7cf24b7157aa158f3f641f4 Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Tue, 16 May 2023 19:55:46 +0200
+Subject: [PATCH 1447/2871] tag: keep the message file in case ref transaction
+ fails
+
+The ref transaction can fail after the user has written their tag
+message. In particular, if there exists a tag `foo/bar` and `git tag -a
+foo` is said then the command will only fail once it tries to write
+`refs/tags/foo`, which is after the file has been unlinked.
+
+Hold on to the message file for a little longer so that it is not
+unlinked before the fatal error occurs.
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/tag.c  | 24 +++++++++++++++---------
+ t/t7004-tag.sh | 10 ++++++++++
+ 2 files changed, 25 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/tag.c b/builtin/tag.c
+index 1850a6a6fd..49b64c7a28 100644
+--- a/builtin/tag.c
++++ b/builtin/tag.c
+@@ -271,11 +271,10 @@ static const char message_advice_nested_tag[] =
+ static void create_tag(const struct object_id *object, const char *object_ref,
+ 		       const char *tag,
+ 		       struct strbuf *buf, struct create_tag_options *opt,
+-		       struct object_id *prev, struct object_id *result)
++		       struct object_id *prev, struct object_id *result, char *path)
+ {
+ 	enum object_type type;
+ 	struct strbuf header = STRBUF_INIT;
+-	char *path = NULL;
+ 
+ 	type = oid_object_info(the_repository, object, NULL);
+ 	if (type <= OBJ_NONE)
+@@ -299,7 +298,6 @@ static void create_tag(const struct object_id *object, const char *object_ref,
+ 		int fd;
+ 
+ 		/* write the template message before editing: */
+-		path = git_pathdup("TAG_EDITMSG");
+ 		fd = xopen(path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+ 
+ 		if (opt->message_given) {
+@@ -341,10 +339,6 @@ static void create_tag(const struct object_id *object, const char *object_ref,
+ 				path);
+ 		exit(128);
+ 	}
+-	if (path) {
+-		unlink_or_warn(path);
+-		free(path);
+-	}
+ }
+ 
+ static void create_reflog_msg(const struct object_id *oid, struct strbuf *sb)
+@@ -495,6 +489,7 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 	};
+ 	int ret = 0;
+ 	const char *only_in_list = NULL;
++	char *path = NULL;
+ 
+ 	setup_ref_filter_porcelain_msg();
+ 
+@@ -629,7 +624,9 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 	if (create_tag_object) {
+ 		if (force_sign_annotate && !annotate)
+ 			opt.sign = 1;
+-		create_tag(&object, object_ref, tag, &buf, &opt, &prev, &object);
++		path = git_pathdup("TAG_EDITMSG");
++		create_tag(&object, object_ref, tag, &buf, &opt, &prev, &object,
++			   path);
+ 	}
+ 
+ 	transaction = ref_transaction_begin(&err);
+@@ -637,8 +634,17 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 	    ref_transaction_update(transaction, ref.buf, &object, &prev,
+ 				   create_reflog ? REF_FORCE_CREATE_REFLOG : 0,
+ 				   reflog_msg.buf, &err) ||
+-	    ref_transaction_commit(transaction, &err))
++	    ref_transaction_commit(transaction, &err)) {
++		if (path)
++			fprintf(stderr,
++				_("The tag message has been left in %s\n"),
++				path);
+ 		die("%s", err.buf);
++	}
++	if (path) {
++		unlink_or_warn(path);
++		free(path);
++	}
+ 	ref_transaction_free(transaction);
+ 	if (force && !is_null_oid(&prev) && !oideq(&prev, &object))
+ 		printf(_("Updated tag '%s' (was %s)\n"), tag,
+diff --git a/t/t7004-tag.sh b/t/t7004-tag.sh
+index 13937c3642..e689db4292 100755
+--- a/t/t7004-tag.sh
++++ b/t/t7004-tag.sh
+@@ -2197,4 +2197,14 @@ test_expect_success 'If tag is created then tag message file is unlinked' '
+ 	test_path_is_missing .git/TAG_EDITMSG
+ '
+ 
++test_expect_success 'If tag cannot be created then tag message file is not unlinked' '
++	test_when_finished "git tag -d foo/bar && rm .git/TAG_EDITMSG" &&
++	write_script fakeeditor <<-\EOF &&
++	echo Message >.git/TAG_EDITMSG
++	EOF
++	git tag foo/bar &&
++	test_must_fail env GIT_EDITOR=./fakeeditor git tag -a foo &&
++	test_path_exists .git/TAG_EDITMSG
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

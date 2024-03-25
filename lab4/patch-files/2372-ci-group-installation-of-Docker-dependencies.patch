@@ -1,0 +1,43 @@
+From 412847ced432c558bc4c3ab40dc2ea22ffe7fb8f Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 9 Nov 2023 09:05:34 +0100
+Subject: [PATCH 2372/2871] ci: group installation of Docker dependencies
+
+The output of CI jobs tends to be quite long-winded and hard to digest.
+To help with this, many CI systems provide the ability to group output
+into collapsible sections, and we're also doing this in some of our
+scripts.
+
+One notable omission is the script to install Docker dependencies.
+Address it to bring more structure to the output for Docker-based jobs.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/install-docker-dependencies.sh | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/ci/install-docker-dependencies.sh b/ci/install-docker-dependencies.sh
+index 78b7e326da..d0bc19d3bb 100755
+--- a/ci/install-docker-dependencies.sh
++++ b/ci/install-docker-dependencies.sh
+@@ -3,6 +3,10 @@
+ # Install dependencies required to build and test Git inside container
+ #
+ 
++. ${0%/*}/lib.sh
++
++begin_group "Install dependencies"
++
+ case "$jobname" in
+ linux32)
+ 	linux32 --32bit i386 sh -c '
+@@ -20,3 +24,5 @@ pedantic)
+ 	dnf -yq install make gcc findutils diffutils perl python3 gettext zlib-devel expat-devel openssl-devel curl-devel pcre2-devel >/dev/null
+ 	;;
+ esac
++
++end_group "Install dependencies"
+-- 
+2.39.3 (Apple Git-145)
+

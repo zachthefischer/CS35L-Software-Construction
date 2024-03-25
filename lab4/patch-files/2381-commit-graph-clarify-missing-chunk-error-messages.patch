@@ -1,0 +1,91 @@
+From 93d29247298e9ae3fbc6dd8e022a6260b568191a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Nov 2023 02:14:34 -0500
+Subject: [PATCH 2381/2871] commit-graph: clarify missing-chunk error messages
+
+When a required commit-graph chunk cannot be loaded, we leave its entry
+in the struct NULL, and then later complain that it is missing. But
+that's just one reason we might not have loaded it, as we also do some
+data quality checks.
+
+Let's switch these messages to say "missing or corrupted", which is
+exactly what the midx code says for the same cases. Likewise, we'll use
+the same phrasing and capitalization as those for consistency. And while
+we're here, we can mark them for translation (just like the midx ones).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c          |  6 +++---
+ t/t5318-commit-graph.sh | 10 +++++-----
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 87e594c42e..85450a93de 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -292,15 +292,15 @@ static int verify_commit_graph_lite(struct commit_graph *g)
+ 	 * itself.
+ 	 */
+ 	if (!g->chunk_oid_fanout) {
+-		error("commit-graph is missing the OID Fanout chunk");
++		error(_("commit-graph required OID fanout chunk missing or corrupted"));
+ 		return 1;
+ 	}
+ 	if (!g->chunk_oid_lookup) {
+-		error("commit-graph is missing the OID Lookup chunk");
++		error(_("commit-graph required OID lookup chunk missing or corrupted"));
+ 		return 1;
+ 	}
+ 	if (!g->chunk_commit_data) {
+-		error("commit-graph is missing the Commit Data chunk");
++		error(_("commit-graph required commit data chunk missing or corrupted"));
+ 		return 1;
+ 	}
+ 
+diff --git a/t/t5318-commit-graph.sh b/t/t5318-commit-graph.sh
+index 6505ff595a..4c4a4ae13e 100755
+--- a/t/t5318-commit-graph.sh
++++ b/t/t5318-commit-graph.sh
+@@ -540,17 +540,17 @@ test_expect_success 'detect low chunk count' '
+ 
+ test_expect_success 'detect missing OID fanout chunk' '
+ 	corrupt_graph_and_verify $GRAPH_BYTE_OID_FANOUT_ID "\0" \
+-		"missing the OID Fanout chunk"
++		"commit-graph required OID fanout chunk missing or corrupted"
+ '
+ 
+ test_expect_success 'detect missing OID lookup chunk' '
+ 	corrupt_graph_and_verify $GRAPH_BYTE_OID_LOOKUP_ID "\0" \
+-		"missing the OID Lookup chunk"
++		"commit-graph required OID lookup chunk missing or corrupted"
+ '
+ 
+ test_expect_success 'detect missing commit data chunk' '
+ 	corrupt_graph_and_verify $GRAPH_BYTE_COMMIT_DATA_ID "\0" \
+-		"missing the Commit Data chunk"
++		"commit-graph required commit data chunk missing or corrupted"
+ '
+ 
+ test_expect_success 'detect incorrect fanout' '
+@@ -842,7 +842,7 @@ test_expect_success 'reader notices too-small oid fanout chunk' '
+ 	check_corrupt_chunk OIDF clear $(printf "000000%02x" $(test_seq 250)) &&
+ 	cat >expect.err <<-\EOF &&
+ 	error: commit-graph oid fanout chunk is wrong size
+-	error: commit-graph is missing the OID Fanout chunk
++	error: commit-graph required OID fanout chunk missing or corrupted
+ 	EOF
+ 	test_cmp expect.err err
+ '
+@@ -874,7 +874,7 @@ test_expect_success 'reader notices too-small commit data chunk' '
+ 	check_corrupt_chunk CDAT clear 00000000 &&
+ 	cat >expect.err <<-\EOF &&
+ 	error: commit-graph commit data chunk is wrong size
+-	error: commit-graph is missing the Commit Data chunk
++	error: commit-graph required commit data chunk missing or corrupted
+ 	EOF
+ 	test_cmp expect.err err
+ '
+-- 
+2.39.3 (Apple Git-145)
+

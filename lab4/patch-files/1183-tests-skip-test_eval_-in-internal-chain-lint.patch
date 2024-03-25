@@ -1,0 +1,94 @@
+From cc48ddd937f9d852da73e188e4a3216cb038c421 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 30 Mar 2023 15:30:56 -0400
+Subject: [PATCH 1183/2871] tests: skip test_eval_ in internal chain-lint
+
+To check for broken &&-chains, we run "fail_117 && $1" as a test
+snippet, and check the exit code. We use test_eval_ to do so, because
+that's the way we run the actual test.
+
+But we don't need any of its niceties, like "set -x" tracing. In fact,
+they hinder us, because we have to explicitly disable them. So let's
+skip that and use "eval" more directly, which is simpler. I had hoped it
+would also be faster, but it doesn't seem to produce a measurable
+improvement (probably because it's just running internal shell commands,
+with no subshells or forks).
+
+Note that there is one gotcha: even though we don't intend to run any of
+the commands if the &&-chain is intact, an error like this:
+
+   test_expect_success 'broken' '
+	# this next line breaks the &&-chain
+	true
+	# and then this one is executed even by the linter
+	return 1
+   '
+
+means we'll "return 1" from the eval, and thus from test_run_(). We
+actually do notice this in test_expect_success, but only by saying "hey,
+this test didn't say it was OK, so it must have failed", which is not
+right (it should say "broken &&-chain").
+
+We can handle this by calling test_eval_inner_() instead, which is our
+trick for wrapping "return" in a test snippet. But to do that, we have
+to push the trace code out of that inner function and into test_eval_().
+This is arguably where it belonged in the first place, but it never
+mattered because the "inner_" function had only one caller.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib.sh | 17 ++++++-----------
+ 1 file changed, 6 insertions(+), 11 deletions(-)
+
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 0048ec7b6f..293caf0f20 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -1041,10 +1041,7 @@ want_trace () {
+ # (and we want to make sure we run any cleanup like
+ # "set +x").
+ test_eval_inner_ () {
+-	# Do not add anything extra (including LF) after '$*'
+-	eval "
+-		want_trace && trace_level_=$(($trace_level_+1)) && set -x
+-		$*"
++	eval "$*"
+ }
+ 
+ test_eval_ () {
+@@ -1069,7 +1066,10 @@ test_eval_ () {
+ 	#     be _inside_ the block to avoid polluting the "set -x" output
+ 	#
+ 
+-	test_eval_inner_ "$@" </dev/null >&3 2>&4
++	# Do not add anything extra (including LF) after '$*'
++	test_eval_inner_ </dev/null >&3 2>&4 "
++		want_trace && trace_level_=$(($trace_level_+1)) && set -x
++		$*"
+ 	{
+ 		test_eval_ret_=$?
+ 		if want_trace
+@@ -1095,18 +1095,13 @@ test_run_ () {
+ 	expecting_failure=$2
+ 
+ 	if test "${GIT_TEST_CHAIN_LINT:-1}" != 0; then
+-		# turn off tracing for this test-eval, as it simply creates
+-		# confusing noise in the "-x" output
+-		trace_tmp=$trace
+-		trace=
+ 		# 117 is magic because it is unlikely to match the exit
+ 		# code of other programs
+-		test_eval_ "fail_117 && $1"
++		test_eval_inner_ "fail_117 && $1" </dev/null >&3 2>&4
+ 		if test $? != 117
+ 		then
+ 			BUG "broken &&-chain: $1"
+ 		fi
+-		trace=$trace_tmp
+ 	fi
+ 
+ 	setup_malloc_check
+-- 
+2.39.3 (Apple Git-145)
+

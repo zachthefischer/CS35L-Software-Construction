@@ -1,0 +1,53 @@
+From cd52d9e90f63a1a08023980d27f3004174d23655 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 26 Aug 2023 10:06:00 +0200
+Subject: [PATCH 1994/2871] parse-options: allow omitting option help text
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+1b68387e02 (builtin/receive-pack.c: use parse_options API, 2016-03-02)
+added the options --stateless-rpc, --advertise-refs and
+--reject-thin-pack-for-testing with a NULL `help` string; 03831ef7b5
+(difftool: implement the functionality in the builtin, 2017-01-19)
+similarly added the "helpless" option --prompt.  Presumably this was
+done because all four options are hidden and self-explanatory.
+
+They cause a NULL pointer dereference when using the option --help-all
+with their respective tool, though.  Handle such options gracefully
+instead by turning the NULL pointer into an empty string at the top of
+the loop, always printing a newline at the end and passing through the
+separating newlines from the help text.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index 76d2e76b49..e8e076c3a6 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1186,14 +1186,15 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 			continue;
+ 		}
+ 
+-		for (cp = _(opts->help); *cp; cp = np) {
++		for (cp = opts->help ? _(opts->help) : ""; *cp; cp = np) {
+ 			np = strchrnul(cp, '\n');
+-			usage_padding(outfile, pos);
+-			fprintf(outfile, "%.*s\n", (int)(np - cp), cp);
+ 			if (*np)
+ 				np++;
++			usage_padding(outfile, pos);
++			fwrite(cp, 1, np - cp, outfile);
+ 			pos = 0;
+ 		}
++		fputc('\n', outfile);
+ 
+ 		if (positive_name) {
+ 			if (find_option_by_long_name(all_opts, positive_name))
+-- 
+2.39.3 (Apple Git-145)
+

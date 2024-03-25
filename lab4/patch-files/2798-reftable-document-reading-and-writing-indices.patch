@@ -1,0 +1,104 @@
+From 4950acae7d0db40c327003eff2621aaa2172322c Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 1 Feb 2024 08:52:12 +0100
+Subject: [PATCH 2798/2871] reftable: document reading and writing indices
+
+The way the index gets written and read is not trivial at all and
+requires the reader to piece together a bunch of parts to figure out how
+it works. Add some documentation to hopefully make this easier to
+understand for the next reader.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/reader.c | 27 +++++++++++++++++++++++++++
+ reftable/writer.c | 23 +++++++++++++++++++++++
+ 2 files changed, 50 insertions(+)
+
+diff --git a/reftable/reader.c b/reftable/reader.c
+index 278f727a3d..6011d0aa04 100644
+--- a/reftable/reader.c
++++ b/reftable/reader.c
+@@ -508,11 +508,38 @@ static int reader_seek_indexed(struct reftable_reader *r,
+ 	if (err < 0)
+ 		goto done;
+ 
++	/*
++	 * The index may consist of multiple levels, where each level may have
++	 * multiple index blocks. We start by doing a linear search in the
++	 * highest layer that identifies the relevant index block as well as
++	 * the record inside that block that corresponds to our wanted key.
++	 */
+ 	err = reader_seek_linear(&index_iter, &want_index);
+ 	if (err < 0)
+ 		goto done;
+ 
++	/*
++	 * Traverse down the levels until we find a non-index entry.
++	 */
+ 	while (1) {
++		/*
++		 * In case we seek a record that does not exist the index iter
++		 * will tell us that the iterator is over. This works because
++		 * the last index entry of the current level will contain the
++		 * last key it knows about. So in case our seeked key is larger
++		 * than the last indexed key we know that it won't exist.
++		 *
++		 * There is one subtlety in the layout of the index section
++		 * that makes this work as expected: the highest-level index is
++		 * at end of the section and will point backwards and thus we
++		 * start reading from the end of the index section, not the
++		 * beginning.
++		 *
++		 * If that wasn't the case and the order was reversed then the
++		 * linear seek would seek into the lower levels and traverse
++		 * all levels of the index only to find out that the key does
++		 * not exist.
++		 */
+ 		err = table_iter_next(&index_iter, &index_result);
+ 		table_iter_block_done(&index_iter);
+ 		if (err != 0)
+diff --git a/reftable/writer.c b/reftable/writer.c
+index 0349094d29..e23953e498 100644
+--- a/reftable/writer.c
++++ b/reftable/writer.c
+@@ -391,6 +391,24 @@ static int writer_finish_section(struct reftable_writer *w)
+ 	if (err < 0)
+ 		return err;
+ 
++	/*
++	 * When the section we are about to index has a lot of blocks then the
++	 * index itself may span across multiple blocks, as well. This would
++	 * require a linear scan over index blocks only to find the desired
++	 * indexed block, which is inefficient. Instead, we write a multi-level
++	 * index where index records of level N+1 will refer to index blocks of
++	 * level N. This isn't constant time, either, but at least logarithmic.
++	 *
++	 * This loop handles writing this multi-level index. Note that we write
++	 * the lowest-level index pointing to the indexed blocks first. We then
++	 * continue writing additional index levels until the current level has
++	 * less blocks than the threshold so that the highest level will be at
++	 * the end of the index section.
++	 *
++	 * Readers are thus required to start reading the index section from
++	 * its end, which is why we set `index_start` to the beginning of the
++	 * last index section.
++	 */
+ 	while (w->index_len > threshold) {
+ 		struct reftable_index_record *idx = NULL;
+ 		size_t i, idx_len;
+@@ -427,6 +445,11 @@ static int writer_finish_section(struct reftable_writer *w)
+ 		reftable_free(idx);
+ 	}
+ 
++	/*
++	 * The index may still contain a number of index blocks lower than the
++	 * threshold. Clear it so that these entries don't leak into the next
++	 * index section.
++	 */
+ 	writer_clear_index(w);
+ 
+ 	bstats = writer_reftable_block_stats(w, typ);
+-- 
+2.39.3 (Apple Git-145)
+

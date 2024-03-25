@@ -1,0 +1,143 @@
+From 932c16c04b5e41ee1c76d5640ec3ae67e1900c07 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 14 Apr 2023 08:02:08 +0200
+Subject: [PATCH 1261/2871] repack: honor `-l` when calculating pack geometry
+
+When the user passes `-l` to git-repack(1), then they essentially ask us
+to only repack objects part of the local object database while ignoring
+any packfiles part of an alternate object database. And we in fact honor
+this bit when doing a geometric repack as the resulting packfile will
+only ever contain local objects.
+
+What we're missing though is that we don't take locality of packfiles
+into account when computing whether the geometric sequence is intact or
+not. So even though we would only ever roll up local packfiles anyway,
+we could end up trying to repack because of non-local packfiles. This
+does not make much sense, and in the worst case it can cause us to try
+and do the geometric repack over and over again because we're never able
+to restore the geometric sequence.
+
+Fix this bug by honoring whether the user has passed `-l`. If so, we
+skip adding any non-local packfiles to the pack geometry.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c            | 13 +++++++--
+ t/t7703-repack-geometric.sh | 57 +++++++++++++++++++++++++++++++++++++
+ 2 files changed, 68 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index a591a4ddd6..165fe1b628 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -321,7 +321,8 @@ static int geometry_cmp(const void *va, const void *vb)
+ }
+ 
+ static void init_pack_geometry(struct pack_geometry **geometry_p,
+-			       struct string_list *existing_kept_packs)
++			       struct string_list *existing_kept_packs,
++			       const struct pack_objects_args *args)
+ {
+ 	struct packed_git *p;
+ 	struct pack_geometry *geometry;
+@@ -331,6 +332,14 @@ static void init_pack_geometry(struct pack_geometry **geometry_p,
+ 	geometry = *geometry_p;
+ 
+ 	for (p = get_all_packs(the_repository); p; p = p->next) {
++		if (args->local && !p->pack_local)
++			/*
++			 * When asked to only repack local packfiles we skip
++			 * over any packfiles that are borrowed from alternate
++			 * object directories.
++			 */
++			continue;
++
+ 		if (!pack_kept_objects) {
+ 			/*
+ 			 * Any pack that has its pack_keep bit set will appear
+@@ -898,7 +907,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 	if (geometric_factor) {
+ 		if (pack_everything)
+ 			die(_("options '%s' and '%s' cannot be used together"), "--geometric", "-A/-a");
+-		init_pack_geometry(&geometry, &existing_kept_packs);
++		init_pack_geometry(&geometry, &existing_kept_packs, &po_args);
+ 		split_pack_geometry(geometry, geometric_factor);
+ 	}
+ 
+diff --git a/t/t7703-repack-geometric.sh b/t/t7703-repack-geometric.sh
+index a358dfb7bd..be8fe78448 100755
+--- a/t/t7703-repack-geometric.sh
++++ b/t/t7703-repack-geometric.sh
+@@ -10,6 +10,12 @@ objdir=.git/objects
+ packdir=$objdir/pack
+ midx=$objdir/pack/multi-pack-index
+ 
++packed_objects () {
++	git show-index <"$1" >tmp-object-list &&
++	cut -d' ' -f2 tmp-object-list | sort &&
++	rm tmp-object-list
++ }
++
+ test_expect_success '--geometric with no packs' '
+ 	git init geometric &&
+ 	test_when_finished "rm -fr geometric" &&
+@@ -361,4 +367,55 @@ test_expect_success '--geometric with same pack in main and alternate ODB' '
+ 	test_cmp expected-files actual-files
+ '
+ 
++test_expect_success '--geometric -l with non-intact geometric sequence across ODBs' '
++	test_when_finished "rm -fr shared member" &&
++
++	git init shared &&
++	test_commit_bulk -C shared --start=1 1 &&
++
++	git clone --shared shared member &&
++	test_commit_bulk -C member --start=2 1 &&
++
++	# Verify that our assumptions actually hold: both generated packfiles
++	# should have three objects and should be non-equal.
++	packed_objects shared/.git/objects/pack/pack-*.idx >shared-objects &&
++	packed_objects member/.git/objects/pack/pack-*.idx >member-objects &&
++	test_line_count = 3 shared-objects &&
++	test_line_count = 3 member-objects &&
++	! test_cmp shared-objects member-objects &&
++
++	# Perform the geometric repack. With `-l`, we should only see the local
++	# packfile and thus arrive at the conclusion that the geometric
++	# sequence is intact. We thus expect no changes.
++	#
++	# Note that we are tweaking mtimes of the packfiles so that we can
++	# verify they did not change. This is done in order to detect the case
++	# where we do repack objects, but the resulting packfile is the same.
++	test-tool chmtime --verbose =0 member/.git/objects/pack/* >expected-member-packs &&
++	git -C member repack --geometric=2 -l -d &&
++	test-tool chmtime --verbose member/.git/objects/pack/* >actual-member-packs &&
++	test_cmp expected-member-packs actual-member-packs &&
++
++	{
++		packed_objects shared/.git/objects/pack/pack-*.idx &&
++		packed_objects member/.git/objects/pack/pack-*.idx
++	} | sort >expected-objects &&
++
++	# On the other hand, when doing a non-local geometric repack we should
++	# see both packfiles and thus repack them. We expect that the shared
++	# object database was not changed.
++	test-tool chmtime --verbose =0 shared/.git/objects/pack/* >expected-shared-packs &&
++	git -C member repack --geometric=2 -d &&
++	test-tool chmtime --verbose shared/.git/objects/pack/* >actual-shared-packs &&
++	test_cmp expected-shared-packs actual-shared-packs &&
++
++	# Furthermore, we expect that the member repository now has a single
++	# packfile that contains the combined shared and non-shared objects.
++	ls member/.git/objects/pack/pack-*.idx >actual &&
++	test_line_count = 1 actual &&
++	packed_objects member/.git/objects/pack/pack-*.idx >actual-objects &&
++	test_line_count = 6 actual-objects &&
++	test_cmp expected-objects actual-objects
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

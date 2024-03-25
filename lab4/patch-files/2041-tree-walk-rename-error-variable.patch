@@ -1,0 +1,49 @@
+From c7cd0e34cd5f62339d4c92e96d2e7dd848dd5a6c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 02:19:22 -0400
+Subject: [PATCH 2041/2871] tree-walk: rename "error" variable
+
+The "error" variable in traverse_trees() shadows the global error()
+function (meaning we can't call error() from here). Let's call the local
+variable "ret" instead, which matches the idiom in other functions.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ tree-walk.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/tree-walk.c b/tree-walk.c
+index ad49d55290..4efd0fc391 100644
+--- a/tree-walk.c
++++ b/tree-walk.c
+@@ -441,7 +441,7 @@ int traverse_trees(struct index_state *istate,
+ 		   int n, struct tree_desc *t,
+ 		   struct traverse_info *info)
+ {
+-	int error = 0;
++	int ret = 0;
+ 	struct name_entry *entry;
+ 	int i;
+ 	struct tree_desc_x *tx;
+@@ -539,7 +539,7 @@ int traverse_trees(struct index_state *istate,
+ 		if (interesting) {
+ 			trees_used = info->fn(n, mask, dirmask, entry, info);
+ 			if (trees_used < 0) {
+-				error = trees_used;
++				ret = trees_used;
+ 				if (!info->show_all_errors)
+ 					break;
+ 			}
+@@ -558,7 +558,7 @@ int traverse_trees(struct index_state *istate,
+ 	strbuf_release(&base);
+ 
+ 	traverse_trees_cur_depth--;
+-	return error;
++	return ret;
+ }
+ 
+ struct dir_state {
+-- 
+2.39.3 (Apple Git-145)
+

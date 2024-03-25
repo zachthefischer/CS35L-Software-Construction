@@ -1,0 +1,32 @@
+From 7506535775186a9223293e09948d253d7c9d8483 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:08:51 -0400
+Subject: [PATCH 0175/2871] apply: mark unused parameters in noop error/warning
+ routine
+
+We squelch error/warning output by passing a noop handler to
+set_error_routine(). We need to tell the compiler that this is intended
+so that it doesn't trigger -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ apply.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/apply.c b/apply.c
+index fa9a02771c..6b4dbe0c88 100644
+--- a/apply.c
++++ b/apply.c
+@@ -125,7 +125,7 @@ void clear_apply_state(struct apply_state *state)
+ 	/* &state->fn_table is cleared at the end of apply_patch() */
+ }
+ 
+-static void mute_routine(const char *msg, va_list params)
++static void mute_routine(const char *msg UNUSED, va_list params UNUSED)
+ {
+ 	/* do nothing */
+ }
+-- 
+2.39.3 (Apple Git-145)
+

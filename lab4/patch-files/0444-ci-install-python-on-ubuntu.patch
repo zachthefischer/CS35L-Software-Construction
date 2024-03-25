@@ -1,0 +1,68 @@
+From 0d3507f3e7b74ccbaa6f1ddc282cf467cce0e102 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Fri, 25 Nov 2022 17:59:54 +0800
+Subject: [PATCH 0444/2871] ci: install python on ubuntu
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Python is missing from the default ubuntu-22.04 runner image, which
+prevents git-p4 from working. To install python on ubuntu, we need
+to provide the correct package names:
+
+ * On Ubuntu 18.04 (bionic), "/usr/bin/python2" is provided by the
+   "python" package, and "/usr/bin/python3" is provided by the "python3"
+   package.
+
+ * On Ubuntu 20.04 (focal) and above, "/usr/bin/python2" is provided by
+   the "python2" package which has a different name from bionic, and
+   "/usr/bin/python3" is provided by "python3".
+
+Since the "ubuntu-latest" runner image has a higher version, its
+safe to use "python2" or "python3" package name.
+
+Helped-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/install-dependencies.sh | 2 +-
+ ci/lib.sh                  | 8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/ci/install-dependencies.sh b/ci/install-dependencies.sh
+index b569893b38..d8fafc8ed2 100755
+--- a/ci/install-dependencies.sh
++++ b/ci/install-dependencies.sh
+@@ -15,7 +15,7 @@ case "$runs_on_pool" in
+ ubuntu-*)
+ 	sudo apt-get -q update
+ 	sudo apt-get -q -y install language-pack-is libsvn-perl apache2 \
+-		$UBUNTU_COMMON_PKGS $CC_PACKAGE
++		$UBUNTU_COMMON_PKGS $CC_PACKAGE $PYTHON_PACKAGE
+ 	mkdir --parents "$P4_PATH"
+ 	pushd "$P4_PATH"
+ 		wget --quiet "$P4WHENCE/bin.linux26x86_64/p4d"
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 39d07f9788..fe37e87807 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -232,12 +232,12 @@ ubuntu-*)
+ 		break
+ 	fi
+ 
+-	if [ "$jobname" = linux-gcc ]
++	PYTHON_PACKAGE=python2
++	if test "$jobname" = linux-gcc
+ 	then
+-		MAKEFLAGS="$MAKEFLAGS PYTHON_PATH=/usr/bin/python3"
+-	else
+-		MAKEFLAGS="$MAKEFLAGS PYTHON_PATH=/usr/bin/python2"
++		PYTHON_PACKAGE=python3
+ 	fi
++	MAKEFLAGS="$MAKEFLAGS PYTHON_PATH=/usr/bin/$PYTHON_PACKAGE"
+ 
+ 	export GIT_TEST_HTTPD=true
+ 
+-- 
+2.39.3 (Apple Git-145)
+

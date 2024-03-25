@@ -1,0 +1,136 @@
+From 7b61bd18b13223064db01d89e3b8af106661efd5 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 02:22:08 -0400
+Subject: [PATCH 2047/2871] tree-diff: respect max_allowed_tree_depth
+
+When diffing trees, we recurse to handle subtrees. That means we may run
+out of stack space and segfault. Let's teach this code path about
+core.maxTreeDepth in order to fail more gracefully.
+
+As with the previous patch, we have no way to return an error (and other
+tree-loading problems would just cause us to die()). So we'll likewise
+call die() if we exceed the maximum depth.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6700-tree-depth.sh |  9 +++++++++
+ tree-diff.c           | 23 +++++++++++++++--------
+ 2 files changed, 24 insertions(+), 8 deletions(-)
+
+diff --git a/t/t6700-tree-depth.sh b/t/t6700-tree-depth.sh
+index f5d284b16e..e410c41234 100755
+--- a/t/t6700-tree-depth.sh
++++ b/t/t6700-tree-depth.sh
+@@ -81,4 +81,13 @@ test_expect_success 'default limit for rev-list fails gracefully' '
+ 	test_must_fail git rev-list --objects big >/dev/null
+ '
+ 
++test_expect_success 'limit recursion of diff-tree -r' '
++	git $small_ok diff-tree -r $EMPTY_TREE small &&
++	test_must_fail git $small_no diff-tree -r $EMPTY_TREE small
++'
++
++test_expect_success 'default limit for diff-tree fails gracefully' '
++	test_must_fail git diff-tree -r $EMPTY_TREE big
++'
++
+ test_done
+diff --git a/tree-diff.c b/tree-diff.c
+index 8fc159b86e..46107772d1 100644
+--- a/tree-diff.c
++++ b/tree-diff.c
+@@ -7,6 +7,7 @@
+ #include "hash.h"
+ #include "tree.h"
+ #include "tree-walk.h"
++#include "environment.h"
+ 
+ /*
+  * Some mode bits are also used internally for computations.
+@@ -45,7 +46,8 @@
+ static struct combine_diff_path *ll_diff_tree_paths(
+ 	struct combine_diff_path *p, const struct object_id *oid,
+ 	const struct object_id **parents_oid, int nparent,
+-	struct strbuf *base, struct diff_options *opt);
++	struct strbuf *base, struct diff_options *opt,
++	int depth);
+ static void ll_diff_tree_oid(const struct object_id *old_oid,
+ 			     const struct object_id *new_oid,
+ 			     struct strbuf *base, struct diff_options *opt);
+@@ -196,7 +198,7 @@ static struct combine_diff_path *path_appendnew(struct combine_diff_path *last,
+ static struct combine_diff_path *emit_path(struct combine_diff_path *p,
+ 	struct strbuf *base, struct diff_options *opt, int nparent,
+ 	struct tree_desc *t, struct tree_desc *tp,
+-	int imin)
++	int imin, int depth)
+ {
+ 	unsigned short mode;
+ 	const char *path;
+@@ -302,7 +304,8 @@ static struct combine_diff_path *emit_path(struct combine_diff_path *p,
+ 
+ 		strbuf_add(base, path, pathlen);
+ 		strbuf_addch(base, '/');
+-		p = ll_diff_tree_paths(p, oid, parents_oid, nparent, base, opt);
++		p = ll_diff_tree_paths(p, oid, parents_oid, nparent, base, opt,
++				       depth + 1);
+ 		FAST_ARRAY_FREE(parents_oid, nparent);
+ 	}
+ 
+@@ -423,12 +426,16 @@ static inline void update_tp_entries(struct tree_desc *tp, int nparent)
+ static struct combine_diff_path *ll_diff_tree_paths(
+ 	struct combine_diff_path *p, const struct object_id *oid,
+ 	const struct object_id **parents_oid, int nparent,
+-	struct strbuf *base, struct diff_options *opt)
++	struct strbuf *base, struct diff_options *opt,
++	int depth)
+ {
+ 	struct tree_desc t, *tp;
+ 	void *ttree, **tptree;
+ 	int i;
+ 
++	if (depth > max_allowed_tree_depth)
++		die("exceeded maximum allowed tree depth");
++
+ 	FAST_ARRAY_ALLOC(tp, nparent);
+ 	FAST_ARRAY_ALLOC(tptree, nparent);
+ 
+@@ -522,7 +529,7 @@ static struct combine_diff_path *ll_diff_tree_paths(
+ 
+ 			/* D += {δ(t,pi) if pi=p[imin];  "+a" if pi > p[imin]} */
+ 			p = emit_path(p, base, opt, nparent,
+-					&t, tp, imin);
++					&t, tp, imin, depth);
+ 
+ 		skip_emit_t_tp:
+ 			/* t↓,  ∀ pi=p[imin]  pi↓ */
+@@ -534,7 +541,7 @@ static struct combine_diff_path *ll_diff_tree_paths(
+ 		else if (cmp < 0) {
+ 			/* D += "+t" */
+ 			p = emit_path(p, base, opt, nparent,
+-					&t, /*tp=*/NULL, -1);
++					&t, /*tp=*/NULL, -1, depth);
+ 
+ 			/* t↓ */
+ 			update_tree_entry(&t);
+@@ -550,7 +557,7 @@ static struct combine_diff_path *ll_diff_tree_paths(
+ 			}
+ 
+ 			p = emit_path(p, base, opt, nparent,
+-					/*t=*/NULL, tp, imin);
++					/*t=*/NULL, tp, imin, depth);
+ 
+ 		skip_emit_tp:
+ 			/* ∀ pi=p[imin]  pi↓ */
+@@ -572,7 +579,7 @@ struct combine_diff_path *diff_tree_paths(
+ 	const struct object_id **parents_oid, int nparent,
+ 	struct strbuf *base, struct diff_options *opt)
+ {
+-	p = ll_diff_tree_paths(p, oid, parents_oid, nparent, base, opt);
++	p = ll_diff_tree_paths(p, oid, parents_oid, nparent, base, opt, 0);
+ 
+ 	/*
+ 	 * free pre-allocated last element, if any
+-- 
+2.39.3 (Apple Git-145)
+

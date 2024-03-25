@@ -1,0 +1,32 @@
+From 59167d7d09fd7a1d64aa1d5be73bc484f6621894 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 12 Oct 2023 11:06:35 -0700
+Subject: [PATCH 2278/2871] The seventeenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index b90aeed132..a6ed554886 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -118,6 +118,9 @@ Performance, Internal Implementation, Development Support etc.
+    narrowed to take only blob objects for now, with no real loss of
+    functionality.
+ 
++ * GitHub CI workflow has learned to trigger Coverity check.
++   (merge 3349520e1a js/ci-coverity later to maint).
++
+ 
+ Fixes since v2.42
+ -----------------
+@@ -241,3 +244,4 @@ Fixes since v2.42
+    (merge 4fbe83fcd9 hy/doc-show-is-like-log-not-diff-tree later to maint).
+    (merge 43abaaf008 ob/am-msgfix later to maint).
+    (merge c2c349a15c xz/commit-title-soft-limit-doc later to maint).
++   (merge f4cbb32c27 rs/parse-opt-ctx-cleanup later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

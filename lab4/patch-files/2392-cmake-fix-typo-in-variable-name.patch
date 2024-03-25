@@ -1,0 +1,31 @@
+From 5bd7fb49afbe315c08102fea3536823068fad46d Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 25 Sep 2023 11:20:34 +0000
+Subject: [PATCH 2392/2871] cmake: fix typo in variable name
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/buildsystems/CMakeLists.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/buildsystems/CMakeLists.txt b/contrib/buildsystems/CMakeLists.txt
+index ffeca1a53f..54bdf5f3fe 100644
+--- a/contrib/buildsystems/CMakeLists.txt
++++ b/contrib/buildsystems/CMakeLists.txt
+@@ -1102,10 +1102,10 @@ if(NOT ${CMAKE_BINARY_DIR}/CMakeCache.txt STREQUAL ${CACHE_PATH})
+ 	file(COPY ${CMAKE_SOURCE_DIR}/contrib/completion/git-completion.bash DESTINATION ${CMAKE_BINARY_DIR}/contrib/completion/)
+ endif()
+ 
+-file(GLOB test_scipts "${CMAKE_SOURCE_DIR}/t/t[0-9]*.sh")
++file(GLOB test_scripts "${CMAKE_SOURCE_DIR}/t/t[0-9]*.sh")
+ 
+ #test
+-foreach(tsh ${test_scipts})
++foreach(tsh ${test_scripts})
+ 	add_test(NAME ${tsh}
+ 		COMMAND ${SH_EXE} ${tsh} --no-bin-wrappers --no-chain-lint -vx
+ 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/t)
+-- 
+2.39.3 (Apple Git-145)
+

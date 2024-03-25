@@ -1,0 +1,57 @@
+From 29c9f2c3664d30189f5dc04e44c13287176ca260 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:06 -0400
+Subject: [PATCH 2011/2871] ref-filter: mark unused parameters in parser
+ callbacks
+
+These are similar to the cases annotated in 5fe9e1ce2f (ref-filter: mark
+unused callback parameters, 2023-02-24), but were added after that
+commit.
+
+Note that the ahead/behind callback ignores its "atom" parameter, which
+is a little unusual, since that struct usually stores the result. But in
+this case, the data is stored centrally in ref_array->counts, since we
+want to compute all ahead/behinds at once, not per ref.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index 1bfaf20fbf..88b021dd1d 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -549,7 +549,8 @@ static int signature_atom_parser(struct ref_format *format UNUSED,
+ 	return 0;
+ }
+ 
+-static int trailers_atom_parser(struct ref_format *format, struct used_atom *atom,
++static int trailers_atom_parser(struct ref_format *format UNUSED,
++				struct used_atom *atom,
+ 				const char *arg, struct strbuf *err)
+ {
+ 	atom->u.contents.trailer_opts.no_divider = 1;
+@@ -819,7 +820,7 @@ static int if_atom_parser(struct ref_format *format UNUSED,
+ 	return 0;
+ }
+ 
+-static int rest_atom_parser(struct ref_format *format,
++static int rest_atom_parser(struct ref_format *format UNUSED,
+ 			    struct used_atom *atom UNUSED,
+ 			    const char *arg, struct strbuf *err)
+ {
+@@ -828,7 +829,8 @@ static int rest_atom_parser(struct ref_format *format,
+ 	return 0;
+ }
+ 
+-static int ahead_behind_atom_parser(struct ref_format *format, struct used_atom *atom,
++static int ahead_behind_atom_parser(struct ref_format *format,
++				    struct used_atom *atom UNUSED,
+ 				    const char *arg, struct strbuf *err)
+ {
+ 	struct string_list_item *item;
+-- 
+2.39.3 (Apple Git-145)
+

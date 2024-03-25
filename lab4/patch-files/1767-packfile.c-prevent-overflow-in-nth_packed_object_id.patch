@@ -1,0 +1,80 @@
+From de41d03e1c7ab73174716c99b8eaf7ff5884d6bb Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:27 -0400
+Subject: [PATCH 1767/2871] packfile.c: prevent overflow in
+ `nth_packed_object_id()`
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In 37fec86a83 (packfile: abstract away hash constant values,
+2018-05-02), `nth_packed_object_id()` started using the variable
+`the_hash_algo->rawsz` instead of a fixed constant when trying to
+compute an offset into the ".idx" file for some object position.
+
+This can lead to surprising truncation when looking for an object
+towards the end of a large enough pack, like the following:
+
+    (gdb) p hashsz
+    $1 = 20
+    (gdb) p n
+    $2 = 215043814
+    (gdb) p hashsz * n
+    $3 = 5908984
+
+, which is a debugger session broken on a known-bad call to the
+`nth_packed_object_id()` function.
+
+This behavior predates 37fec86a83, and is original to the v2 index
+format, via: 74e34e1fca (sha1_file.c: learn about index version 2,
+2007-04-09).
+
+This is due to §6.4.4.1 of the C99 standard, which states that an
+untyped integer constant will take the first type in which the value can
+be accurately represented, among `int`, `long int`, and `long long int`.
+
+Since 20 can be represented as an `int`, and `n` is a 32-bit unsigned
+integer, the resulting computation is defined by §6.3.1.8, and the
+(signed) integer value representing `n` is converted to an unsigned
+type, meaning that `20 * n` (for `n` having type `uint32_t`) is
+equivalent to a multiplication between two unsigned 32-bit integers.
+
+When multiplying a sufficiently large `n`, the resulting value can
+exceed 2^32-1, wrapping around and producing an invalid result. Let's
+follow the example in f86f769550e (compute pack .idx byte offsets using
+size_t, 2020-11-13) and replace this computation with `st_mult()`, which
+will ensure that the computation is done using 64-bits.
+
+While here, guard the corresponding computation for packs with v1
+indexes, too. Though the likelihood of seeing a bug there is much
+smaller, since (a) v1 indexes are generated far less frequently than v2
+indexes, and (b) they all correspond to packs no larger than 2 GiB, so
+having enough objects to trigger this overflow is unlikely if not
+impossible.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ packfile.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/packfile.c b/packfile.c
+index fd083c86e0..5ee67de569 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -1920,10 +1920,10 @@ int nth_packed_object_id(struct object_id *oid,
+ 		return -1;
+ 	index += 4 * 256;
+ 	if (p->index_version == 1) {
+-		oidread(oid, index + (hashsz + 4) * n + 4);
++		oidread(oid, index + st_add(st_mult(hashsz + 4, n), 4));
+ 	} else {
+ 		index += 8;
+-		oidread(oid, index + hashsz * n);
++		oidread(oid, index + st_mult(hashsz, n));
+ 	}
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

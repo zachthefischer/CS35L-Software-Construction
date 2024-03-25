@@ -1,0 +1,48 @@
+From e8ed0a8ac5ecb4379018e78188ed3ff489c7cfc5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 7 Feb 2023 00:07:38 +0100
+Subject: [PATCH 0812/2871] commit-graph: use free_commit_graph() instead of
+ UNLEAK()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In 0bfb48e6723 (builtin/commit-graph.c: UNLEAK variables, 2018-10-03)
+this was made to UNLEAK(), but we can just as easily invoke the
+free_commit_graph() function added in c3756d5b7fc (commit-graph: add
+free_commit_graph, 2018-07-11) instead.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit-graph.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/commit-graph.c b/builtin/commit-graph.c
+index e8f77f535f..0102ac8540 100644
+--- a/builtin/commit-graph.c
++++ b/builtin/commit-graph.c
+@@ -67,6 +67,7 @@ static int graph_verify(int argc, const char **argv, const char *prefix)
+ 	int fd;
+ 	struct stat st;
+ 	int flags = 0;
++	int ret;
+ 
+ 	static struct option builtin_commit_graph_verify_options[] = {
+ 		OPT_BOOL(0, "shallow", &opts.shallow,
+@@ -111,8 +112,9 @@ static int graph_verify(int argc, const char **argv, const char *prefix)
+ 	if (!graph)
+ 		return !!open_ok;
+ 
+-	UNLEAK(graph);
+-	return verify_commit_graph(the_repository, graph, flags);
++	ret = verify_commit_graph(the_repository, graph, flags);
++	free_commit_graph(graph);
++	return ret;
+ }
+ 
+ extern int read_replace_refs;
+-- 
+2.39.3 (Apple Git-145)
+

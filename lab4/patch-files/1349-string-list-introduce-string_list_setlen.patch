@@ -1,0 +1,106 @@
+From 492ba81346cc45322d0c26bc927b01a34becf304 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Apr 2023 18:20:14 -0400
+Subject: [PATCH 1349/2871] string-list: introduce `string_list_setlen()`
+
+It is sometimes useful to reduce the size of a `string_list`'s list of
+items without having to re-allocate them. For example, doing the
+following:
+
+    struct strbuf buf = STRBUF_INIT;
+    struct string_list parts = STRING_LIST_INIT_NO_DUP;
+    while (strbuf_getline(&buf, stdin) != EOF) {
+      parts.nr = 0;
+      string_list_split_in_place(&parts, buf.buf, ":", -1);
+      /* ... */
+    }
+    string_list_clear(&parts, 0);
+
+is preferable over calling `string_list_clear()` on every iteration of
+the loop. This is because `string_list_clear()` causes us free our
+existing `items` array. This means that every time we call
+`string_list_split_in_place()`, the string-list internals re-allocate
+the same size array.
+
+Since in the above example we do not care about the individual parts
+after processing each line, it is much more efficient to pretend that
+there aren't any elements in the `string_list` by setting `list->nr` to
+0 while leaving the list of elements allocated as-is.
+
+This allows `string_list_split_in_place()` to overwrite any existing
+entries without needing to free and re-allocate them.
+
+However, setting `list->nr` manually is not safe in all instances. There
+are a couple of cases worth worrying about:
+
+  - If the `string_list` is initialized with `strdup_strings`,
+    truncating the list can lead to overwriting strings which are
+    allocated elsewhere. If there aren't any other pointers to those
+    strings other than the ones inside of the `items` array, they will
+    become unreachable and leak.
+
+    (We could ourselves free the truncated items between
+    string_list->items[nr] and `list->nr`, but no present or future
+    callers would benefit from this additional complexity).
+
+  - If the given `nr` is larger than the current value of `list->nr`,
+    we'll trick the `string_list` into a state where it thinks there are
+    more items allocated than there actually are, which can lead to
+    undefined behavior if we try to read or write those entries.
+
+Guard against both of these by introducing a helper function which
+guards assignment of `list->nr` against each of the above conditions.
+
+Co-authored-by: Jeff King <peff@peff.net>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ string-list.c |  9 +++++++++
+ string-list.h | 10 ++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/string-list.c b/string-list.c
+index 5f5b60fe1c..0f8ac117fd 100644
+--- a/string-list.c
++++ b/string-list.c
+@@ -203,6 +203,15 @@ void string_list_clear_func(struct string_list *list, string_list_clear_func_t c
+ 	list->nr = list->alloc = 0;
+ }
+ 
++void string_list_setlen(struct string_list *list, size_t nr)
++{
++	if (list->strdup_strings)
++		BUG("cannot setlen a string_list which owns its entries");
++	if (nr > list->nr)
++		BUG("cannot grow a string_list with setlen");
++	list->nr = nr;
++}
++
+ struct string_list_item *string_list_append_nodup(struct string_list *list,
+ 						  char *string)
+ {
+diff --git a/string-list.h b/string-list.h
+index 77854840f7..122b318641 100644
+--- a/string-list.h
++++ b/string-list.h
+@@ -134,6 +134,16 @@ typedef void (*string_list_clear_func_t)(void *p, const char *str);
+ /** Call a custom clear function on each util pointer */
+ void string_list_clear_func(struct string_list *list, string_list_clear_func_t clearfunc);
+ 
++/*
++ * Set the length of a string_list to `nr`, provided that (a) `list`
++ * does not own its own storage, and (b) that `nr` is no larger than
++ * `list->nr`.
++ *
++ * Useful when "shrinking" `list` to write over existing entries that
++ * are no longer used without reallocating.
++ */
++void string_list_setlen(struct string_list *list, size_t nr);
++
+ /**
+  * Apply `func` to each item. If `func` returns nonzero, the
+  * iteration aborts and the return value is propagated.
+-- 
+2.39.3 (Apple Git-145)
+

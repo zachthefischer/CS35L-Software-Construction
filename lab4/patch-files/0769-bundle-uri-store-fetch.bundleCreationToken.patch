@@ -1,0 +1,244 @@
+From c429bed10223135a13f1f2f854e367762c37af7a Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 31 Jan 2023 13:29:18 +0000
+Subject: [PATCH 0769/2871] bundle-uri: store fetch.bundleCreationToken
+
+When a bundle list specifies the "creationToken" heuristic, the Git
+client downloads the list and then starts downloading bundles in
+descending creationToken order. This process stops as soon as all
+downloaded bundles can be applied to the repository (because all
+required commits are present in the repository or in the downloaded
+bundles).
+
+When checking the same bundle list twice, this strategy requires
+downloading the bundle with the maximum creationToken again, which is
+wasteful. The creationToken heuristic promises that the client will not
+have a use for that bundle if its creationToken value is at most the
+previous creationToken value.
+
+To prevent these wasteful downloads, create a fetch.bundleCreationToken
+config setting that the Git client sets after downloading bundles. This
+value allows skipping that maximum bundle download when this config
+value is the same value (or larger).
+
+To test that this works correctly, we can insert some "duplicate"
+fetches into existing tests and demonstrate that only the bundle list is
+downloaded.
+
+The previous logic for downloading bundles by creationToken worked even
+if the bundle list was empty, but now we have logic that depends on the
+first entry of the list. Terminate early in the (non-sensical) case of
+an empty bundle list.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/fetch.txt | 16 ++++++++++++
+ bundle-uri.c                   | 48 ++++++++++++++++++++++++++++++++--
+ t/t5558-clone-bundle-uri.sh    | 29 +++++++++++++++++++-
+ 3 files changed, 90 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/config/fetch.txt b/Documentation/config/fetch.txt
+index 244f44d460..568f0f75b3 100644
+--- a/Documentation/config/fetch.txt
++++ b/Documentation/config/fetch.txt
+@@ -104,3 +104,19 @@ fetch.bundleURI::
+ 	linkgit:git-clone[1]. `git clone --bundle-uri` will set the
+ 	`fetch.bundleURI` value if the supplied bundle URI contains a bundle
+ 	list that is organized for incremental fetches.
+++
++If you modify this value and your repository has a `fetch.bundleCreationToken`
++value, then remove that `fetch.bundleCreationToken` value before fetching from
++the new bundle URI.
++
++fetch.bundleCreationToken::
++	When using `fetch.bundleURI` to fetch incrementally from a bundle
++	list that uses the "creationToken" heuristic, this config value
++	stores the maximum `creationToken` value of the downloaded bundles.
++	This value is used to prevent downloading bundles in the future
++	if the advertised `creationToken` is not strictly larger than this
++	value.
+++
++The creation token values are chosen by the provider serving the specific
++bundle URI. If you modify the URI at `fetch.bundleURI`, then be sure to
++remove the value for the `fetch.bundleCreationToken` value before fetching.
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 7a1b6d94bf..d6f7df7350 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -481,6 +481,8 @@ static int fetch_bundles_by_token(struct repository *r,
+ {
+ 	int cur;
+ 	int move_direction = 0;
++	const char *creationTokenStr;
++	uint64_t maxCreationToken = 0, newMaxCreationToken = 0;
+ 	struct bundle_list_context ctx = {
+ 		.r = r,
+ 		.list = list,
+@@ -494,8 +496,27 @@ static int fetch_bundles_by_token(struct repository *r,
+ 
+ 	for_all_bundles_in_list(list, append_bundle, &bundles);
+ 
++	if (!bundles.nr) {
++		free(bundles.items);
++		return 0;
++	}
++
+ 	QSORT(bundles.items, bundles.nr, compare_creation_token_decreasing);
+ 
++	/*
++	 * If fetch.bundleCreationToken exists, parses to a uint64t, and
++	 * is not strictly smaller than the maximum creation token in the
++	 * bundle list, then do not download any bundles.
++	 */
++	if (!repo_config_get_value(r,
++				   "fetch.bundlecreationtoken",
++				   &creationTokenStr) &&
++	    sscanf(creationTokenStr, "%"PRIu64, &maxCreationToken) == 1 &&
++	    bundles.items[0]->creationToken <= maxCreationToken) {
++		free(bundles.items);
++		return 0;
++	}
++
+ 	/*
+ 	 * Attempt to download and unbundle the minimum number of bundles by
+ 	 * creationToken in decreasing order. If we fail to unbundle (after
+@@ -516,6 +537,16 @@ static int fetch_bundles_by_token(struct repository *r,
+ 	cur = 0;
+ 	while (cur >= 0 && cur < bundles.nr) {
+ 		struct remote_bundle_info *bundle = bundles.items[cur];
++
++		/*
++		 * If we need to dig into bundles below the previous
++		 * creation token value, then likely we are in an erroneous
++		 * state due to missing or invalid bundles. Halt the process
++		 * instead of continuing to download extra data.
++		 */
++		if (bundle->creationToken <= maxCreationToken)
++			break;
++
+ 		if (!bundle->file) {
+ 			/*
+ 			 * Not downloaded yet. Try downloading.
+@@ -555,6 +586,9 @@ static int fetch_bundles_by_token(struct repository *r,
+ 				 */
+ 				move_direction = -1;
+ 				bundle->unbundled = 1;
++
++				if (bundle->creationToken > newMaxCreationToken)
++					newMaxCreationToken = bundle->creationToken;
+ 			}
+ 		}
+ 
+@@ -569,14 +603,24 @@ static int fetch_bundles_by_token(struct repository *r,
+ 		cur += move_direction;
+ 	}
+ 
+-	free(bundles.items);
+-
+ 	/*
+ 	 * We succeed if the loop terminates because 'cur' drops below
+ 	 * zero. The other case is that we terminate because 'cur'
+ 	 * reaches the end of the list, so we have a failure no matter
+ 	 * which bundles we apply from the list.
+ 	 */
++	if (cur < 0) {
++		struct strbuf value = STRBUF_INIT;
++		strbuf_addf(&value, "%"PRIu64"", newMaxCreationToken);
++		if (repo_config_set_multivar_gently(ctx.r,
++						    "fetch.bundleCreationToken",
++						    value.buf, NULL, 0))
++			warning(_("failed to store maximum creation token"));
++
++		strbuf_release(&value);
++	}
++
++	free(bundles.items);
+ 	return cur >= 0;
+ }
+ 
+diff --git a/t/t5558-clone-bundle-uri.sh b/t/t5558-clone-bundle-uri.sh
+index 7deeb4b8ad..9c2b7934b9 100755
+--- a/t/t5558-clone-bundle-uri.sh
++++ b/t/t5558-clone-bundle-uri.sh
+@@ -433,6 +433,7 @@ test_expect_success 'clone incomplete bundle list (http, creationToken)' '
+ 		"$HTTPD_URL/smart/fetch.git" clone-token-http &&
+ 
+ 	test_cmp_config -C clone-token-http "$HTTPD_URL/bundle-list" fetch.bundleuri &&
++	test_cmp_config -C clone-token-http 1 fetch.bundlecreationtoken &&
+ 
+ 	cat >expect <<-EOF &&
+ 	$HTTPD_URL/bundle-list
+@@ -468,6 +469,7 @@ test_expect_success 'clone incomplete bundle list (http, creationToken)' '
+ 	GIT_TRACE2_EVENT="$(pwd)/trace1.txt" \
+ 		git -C clone-token-http fetch origin --no-tags \
+ 		refs/heads/merge:refs/heads/merge &&
++	test_cmp_config -C clone-token-http 4 fetch.bundlecreationtoken &&
+ 
+ 	cat >expect <<-EOF &&
+ 	$HTTPD_URL/bundle-list
+@@ -511,6 +513,7 @@ test_expect_success 'http clone with bundle.heuristic creates fetch.bundleURI' '
+ 		"$HTTPD_URL/smart/fetch.git" fetch-http-4 &&
+ 
+ 	test_cmp_config -C fetch-http-4 "$HTTPD_URL/bundle-list" fetch.bundleuri &&
++	test_cmp_config -C fetch-http-4 1 fetch.bundlecreationtoken &&
+ 
+ 	cat >expect <<-EOF &&
+ 	$HTTPD_URL/bundle-list
+@@ -538,6 +541,7 @@ test_expect_success 'http clone with bundle.heuristic creates fetch.bundleURI' '
+ 		git -C fetch-http-4 fetch origin --no-tags \
+ 		refs/heads/left:refs/heads/left \
+ 		refs/heads/right:refs/heads/right &&
++	test_cmp_config -C fetch-http-4 2 fetch.bundlecreationtoken &&
+ 
+ 	cat >expect <<-EOF &&
+ 	$HTTPD_URL/bundle-list
+@@ -555,6 +559,18 @@ test_expect_success 'http clone with bundle.heuristic creates fetch.bundleURI' '
+ 	EOF
+ 	test_cmp expect refs &&
+ 
++	# No-op fetch
++	GIT_TRACE2_EVENT="$(pwd)/trace1b.txt" \
++		git -C fetch-http-4 fetch origin --no-tags \
++		refs/heads/left:refs/heads/left \
++		refs/heads/right:refs/heads/right &&
++
++	cat >expect <<-EOF &&
++	$HTTPD_URL/bundle-list
++	EOF
++	test_remote_https_urls <trace1b.txt >actual &&
++	test_cmp expect actual &&
++
+ 	cat >>"$HTTPD_DOCUMENT_ROOT_PATH/bundle-list" <<-EOF &&
+ 	[bundle "bundle-3"]
+ 		uri = bundle-3.bundle
+@@ -570,6 +586,7 @@ test_expect_success 'http clone with bundle.heuristic creates fetch.bundleURI' '
+ 	GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+ 		git -C fetch-http-4 fetch origin --no-tags \
+ 		refs/heads/merge:refs/heads/merge &&
++	test_cmp_config -C fetch-http-4 4 fetch.bundlecreationtoken &&
+ 
+ 	cat >expect <<-EOF &&
+ 	$HTTPD_URL/bundle-list
+@@ -588,7 +605,17 @@ test_expect_success 'http clone with bundle.heuristic creates fetch.bundleURI' '
+ 	refs/bundles/left
+ 	refs/bundles/merge
+ 	EOF
+-	test_cmp expect refs
++	test_cmp expect refs &&
++
++	# No-op fetch
++	GIT_TRACE2_EVENT="$(pwd)/trace2b.txt" \
++		git -C fetch-http-4 fetch origin &&
++
++	cat >expect <<-EOF &&
++	$HTTPD_URL/bundle-list
++	EOF
++	test_remote_https_urls <trace2b.txt >actual &&
++	test_cmp expect actual
+ '
+ 
+ # Do not add tests here unless they use the HTTP server, as they will
+-- 
+2.39.3 (Apple Git-145)
+

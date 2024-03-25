@@ -1,0 +1,107 @@
+From 512fccf8a503bd8617fe46cb62c77480b83fbaea Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 31 Jan 2023 13:29:13 +0000
+Subject: [PATCH 0764/2871] bundle-uri: parse bundle.<id>.creationToken values
+
+The previous change taught Git to parse the bundle.heuristic value,
+especially when its value is "creationToken". Now, teach Git to parse
+the bundle.<id>.creationToken values on each bundle in a bundle list.
+
+Before implementing any logic based on creationToken values for the
+creationToken heuristic, parse and print these values for testing
+purposes.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c                | 10 ++++++++++
+ bundle-uri.h                |  6 ++++++
+ t/t5750-bundle-uri-parse.sh | 18 ++++++++++++++++++
+ 3 files changed, 34 insertions(+)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 36ec542718..d4277b2e3a 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -83,6 +83,9 @@ static int summarize_bundle(struct remote_bundle_info *info, void *data)
+ 	FILE *fp = data;
+ 	fprintf(fp, "[bundle \"%s\"]\n", info->id);
+ 	fprintf(fp, "\turi = %s\n", info->uri);
++
++	if (info->creationToken)
++		fprintf(fp, "\tcreationToken = %"PRIu64"\n", info->creationToken);
+ 	return 0;
+ }
+ 
+@@ -203,6 +206,13 @@ static int bundle_list_update(const char *key, const char *value,
+ 		return 0;
+ 	}
+ 
++	if (!strcmp(subkey, "creationtoken")) {
++		if (sscanf(value, "%"PRIu64, &bundle->creationToken) != 1)
++			warning(_("could not parse bundle list key %s with value '%s'"),
++				"creationToken", value);
++		return 0;
++	}
++
+ 	/*
+ 	 * At this point, we ignore any information that we don't
+ 	 * understand, assuming it to be hints for a heuristic the client
+diff --git a/bundle-uri.h b/bundle-uri.h
+index 2e44a50a90..ef32840bfa 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -42,6 +42,12 @@ struct remote_bundle_info {
+ 	 * this boolean is true.
+ 	 */
+ 	unsigned unbundled:1;
++
++	/**
++	 * If the bundle is part of a list with the creationToken
++	 * heuristic, then we use this member for sorting the bundles.
++	 */
++	uint64_t creationToken;
+ };
+ 
+ #define REMOTE_BUNDLE_INFO_INIT { 0 }
+diff --git a/t/t5750-bundle-uri-parse.sh b/t/t5750-bundle-uri-parse.sh
+index 6fc92a9c0d..81bdf58b94 100755
+--- a/t/t5750-bundle-uri-parse.sh
++++ b/t/t5750-bundle-uri-parse.sh
+@@ -258,10 +258,13 @@ test_expect_success 'parse config format: creationToken heuristic' '
+ 		heuristic = creationToken
+ 	[bundle "one"]
+ 		uri = http://example.com/bundle.bdl
++		creationToken = 123456
+ 	[bundle "two"]
+ 		uri = https://example.com/bundle.bdl
++		creationToken = 12345678901234567890
+ 	[bundle "three"]
+ 		uri = file:///usr/share/git/bundle.bdl
++		creationToken = 1
+ 	EOF
+ 
+ 	test-tool bundle-uri parse-config expect >actual 2>err &&
+@@ -269,4 +272,19 @@ test_expect_success 'parse config format: creationToken heuristic' '
+ 	test_cmp_config_output expect actual
+ '
+ 
++test_expect_success 'parse config format edge cases: creationToken heuristic' '
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++		heuristic = creationToken
++	[bundle "one"]
++		uri = http://example.com/bundle.bdl
++		creationToken = bogus
++	EOF
++
++	test-tool bundle-uri parse-config expect >actual 2>err &&
++	grep "could not parse bundle list key creationToken with value '\''bogus'\''" err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,61 @@
+From 3ccb4c55adc36793ec34f6f9f2235a695df7d0a5 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 17:17:33 -0400
+Subject: [PATCH 2038/2871] format-patch: use OPT_STRING_LIST for to/cc options
+
+The to_callback() and cc_callback() functions are identical to the
+generic parse_opt_string_list() function (except that they don't handle
+optional arguments, but that's OK because their callers do not use the
+OPTARG flag).
+
+Let's simplify the code by using OPT_STRING_LIST.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c | 22 ++--------------------
+ 1 file changed, 2 insertions(+), 20 deletions(-)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index db3a88bfe9..fb90d43717 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1567,24 +1567,6 @@ static int header_callback(const struct option *opt, const char *arg, int unset)
+ 	return 0;
+ }
+ 
+-static int to_callback(const struct option *opt, const char *arg, int unset)
+-{
+-	if (unset)
+-		string_list_clear(&extra_to, 0);
+-	else
+-		string_list_append(&extra_to, arg);
+-	return 0;
+-}
+-
+-static int cc_callback(const struct option *opt, const char *arg, int unset)
+-{
+-	if (unset)
+-		string_list_clear(&extra_cc, 0);
+-	else
+-		string_list_append(&extra_cc, arg);
+-	return 0;
+-}
+-
+ static int from_callback(const struct option *opt, const char *arg, int unset)
+ {
+ 	char **from = opt->value;
+@@ -1957,8 +1939,8 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 		OPT_GROUP(N_("Messaging")),
+ 		OPT_CALLBACK(0, "add-header", NULL, N_("header"),
+ 			    N_("add email header"), header_callback),
+-		OPT_CALLBACK(0, "to", NULL, N_("email"), N_("add To: header"), to_callback),
+-		OPT_CALLBACK(0, "cc", NULL, N_("email"), N_("add Cc: header"), cc_callback),
++		OPT_STRING_LIST(0, "to", &extra_to, N_("email"), N_("add To: header")),
++		OPT_STRING_LIST(0, "cc", &extra_cc, N_("email"), N_("add Cc: header")),
+ 		OPT_CALLBACK_F(0, "from", &from, N_("ident"),
+ 			    N_("set From address to <ident> (or committer ident if absent)"),
+ 			    PARSE_OPT_OPTARG, from_callback),
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,64 @@
+From aeee1408ce98f0527d9d22c3aee96360f341443b Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Mon, 5 Jun 2023 12:05:23 +0200
+Subject: [PATCH 1552/2871] notes: move the documentation to the struct
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Its better to document the struct members directly instead of on a
+function that takes a pointer to the struct. This will also make it
+easier to update the documentation in the future.
+
+Make adjustments for this new context. Also drop “may contain” since we
+don’t need to emphasize that a list could be empty.
+
+Suggested-by: Jeff King <peff@peff.net>
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ notes.h | 20 +++++++++++---------
+ 1 file changed, 11 insertions(+), 9 deletions(-)
+
+diff --git a/notes.h b/notes.h
+index a823840e49..064fd7143a 100644
+--- a/notes.h
++++ b/notes.h
+@@ -256,7 +256,17 @@ void free_notes(struct notes_tree *t);
+ struct string_list;
+ 
+ struct display_notes_opt {
++	/*
++	 * Less than `0` is "unset", which means that the default notes
++	 * are shown iff no other notes are given. Otherwise,
++	 * treat it like a boolean.
++	 */
+ 	int use_default_notes;
++
++	/*
++	 * A list of globs (in the same style as notes.displayRef) where
++	 * notes should be loaded from.
++	 */
+ 	struct string_list extra_notes_refs;
+ };
+ 
+@@ -283,15 +293,7 @@ void disable_display_notes(struct display_notes_opt *opt, int *show_notes);
+ /*
+  * Load the notes machinery for displaying several notes trees.
+  *
+- * If 'opt' is not NULL, then it specifies additional settings for the
+- * displaying:
+- *
+- * - use_default_notes: less than `0` is "unset", which means that the
+- *   default notes are shown iff no other notes are given. Otherwise,
+- *   treat it like a boolean.
+- *
+- * - extra_notes_refs may contain a list of globs (in the same style
+- *   as notes.displayRef) where notes should be loaded from.
++ * 'opt' may be NULL.
+  */
+ void load_display_notes(struct display_notes_opt *opt);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

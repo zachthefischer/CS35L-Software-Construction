@@ -1,0 +1,68 @@
+From 64c8559575a2d91bad66a3c0a7067d9275dd5905 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:49 +0000
+Subject: [PATCH 1636/2871] run-command.h: move declarations for run-command.c
+ from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h       | 3 ---
+ exec-cmd.c    | 3 ++-
+ run-command.c | 2 +-
+ run-command.h | 2 ++
+ 4 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 891e5fec74..d31b151506 100644
+--- a/cache.h
++++ b/cache.h
+@@ -555,7 +555,4 @@ int checkout_fast_forward(struct repository *r,
+ 			  const struct object_id *to,
+ 			  int overwrite_ignore);
+ 
+-
+-int sane_execvp(const char *file, char *const argv[]);
+-
+ #endif /* CACHE_H */
+diff --git a/exec-cmd.c b/exec-cmd.c
+index 1e34e48c0e..1d597e84ea 100644
+--- a/exec-cmd.c
++++ b/exec-cmd.c
+@@ -1,10 +1,11 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "environment.h"
+ #include "exec-cmd.h"
+ #include "gettext.h"
+ #include "path.h"
+ #include "quote.h"
++#include "run-command.h"
+ #include "strvec.h"
+ #include "trace.h"
+ #include "trace2.h"
+diff --git a/run-command.c b/run-command.c
+index 60c9419866..1ac2848b54 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "run-command.h"
+ #include "environment.h"
+ #include "exec-cmd.h"
+diff --git a/run-command.h b/run-command.h
+index 072db56a4d..9e47f91d46 100644
+--- a/run-command.h
++++ b/run-command.h
+@@ -564,4 +564,6 @@ enum start_bg_result start_bg_command(struct child_process *cmd,
+ 				      void *cb_data,
+ 				      unsigned int timeout_sec);
+ 
++int sane_execvp(const char *file, char *const argv[]);
++
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,229 @@
+From 3d6a31646491bf4f8b1166d7182c6d92e2414cf8 Mon Sep 17 00:00:00 2001
+From: Teng Long <dyroneteng@gmail.com>
+Date: Sat, 27 May 2023 15:57:54 +0800
+Subject: [PATCH 1627/2871] notes: introduce "--no-separator" option
+
+Sometimes, the user may want to add or append multiple notes
+without any separator to be added between them.
+
+Disscussion:
+
+  https://public-inbox.org/git/3f86a553-246a-4626-b1bd-bacd8148318a@app.fastmail.com/
+
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-notes.txt | 11 +++++----
+ builtin/notes.c             | 37 ++++++++++++++++++++--------
+ t/t3301-notes.sh            | 49 ++++++++++++++++++++++++++++++++++---
+ 3 files changed, 79 insertions(+), 18 deletions(-)
+
+diff --git a/Documentation/git-notes.txt b/Documentation/git-notes.txt
+index 5f3a9479a9..bc1bfa3791 100644
+--- a/Documentation/git-notes.txt
++++ b/Documentation/git-notes.txt
+@@ -9,9 +9,9 @@ SYNOPSIS
+ --------
+ [verse]
+ 'git notes' [list [<object>]]
+-'git notes' add [-f] [--allow-empty] [--separator=<paragraph-break>] [--[no-]stripspace] [-F <file> | -m <msg> | (-c | -C) <object>] [<object>]
++'git notes' add [-f] [--allow-empty] [--[no-]separator | --separator=<paragraph-break>] [--[no-]stripspace] [-F <file> | -m <msg> | (-c | -C) <object>] [<object>]
+ 'git notes' copy [-f] ( --stdin | <from-object> [<to-object>] )
+-'git notes' append [--allow-empty] [--separator=<paragraph-break>] [--[no-]stripspace] [-F <file> | -m <msg> | (-c | -C) <object>] [<object>]
++'git notes' append [--allow-empty] [--[no-]separator | --separator=<paragraph-break>] [--[no-]stripspace] [-F <file> | -m <msg> | (-c | -C) <object>] [<object>]
+ 'git notes' edit [--allow-empty] [<object>] [--[no-]stripspace]
+ 'git notes' show [<object>]
+ 'git notes' merge [-v | -q] [-s <strategy> ] <notes-ref>
+@@ -171,10 +171,11 @@ OPTIONS
+ 	Allow an empty note object to be stored. The default behavior is
+ 	to automatically remove empty notes.
+ 
+---separator <paragraph-break>::
++--[no-]separator, --separator=<paragraph-break>::
+ 	Specify a string used as a custom inter-paragraph separator
+-	(a newline is added at the end as needed).  Defaults to a
+-	blank line.
++	(a newline is added at the end as needed). If `--no-separator`, no
++	separators will be added between paragraphs.  Defaults to a blank
++	line.
+ 
+ --[no-]stripspace::
+ 	Strip leading and trailing whitespace from the note message.
+diff --git a/builtin/notes.c b/builtin/notes.c
+index 2140a697b7..00268e949c 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -28,12 +28,12 @@
+ #include "worktree.h"
+ #include "write-or-die.h"
+ 
+-static char *separator = "\n";
++static const char *separator = "\n";
+ static const char * const git_notes_usage[] = {
+ 	N_("git notes [--ref <notes-ref>] [list [<object>]]"),
+-	N_("git notes [--ref <notes-ref>] add [-f] [--allow-empty] [--separator=<paragraph-break>] [-m <msg> | -F <file> | (-c | -C) <object>] [<object>]"),
++	N_("git notes [--ref <notes-ref>] add [-f] [--allow-empty] [--[no-]separator|--separator=<paragraph-break>] [--[no-]stripspace] [-m <msg> | -F <file> | (-c | -C) <object>] [<object>]"),
+ 	N_("git notes [--ref <notes-ref>] copy [-f] <from-object> <to-object>"),
+-	N_("git notes [--ref <notes-ref>] append [--allow-empty] [--separator=<paragraph-break>] [-m <msg> | -F <file> | (-c | -C) <object>] [<object>]"),
++	N_("git notes [--ref <notes-ref>] append [--allow-empty] [--[no-]separator|--separator=<paragraph-break>] [--[no-]stripspace] [-m <msg> | -F <file> | (-c | -C) <object>] [<object>]"),
+ 	N_("git notes [--ref <notes-ref>] edit [--allow-empty] [<object>]"),
+ 	N_("git notes [--ref <notes-ref>] show [<object>]"),
+ 	N_("git notes [--ref <notes-ref>] merge [-v | -q] [-s <strategy>] <notes-ref>"),
+@@ -239,8 +239,11 @@ static void write_note_data(struct note_data *d, struct object_id *oid)
+ 
+ static void append_separator(struct strbuf *message)
+ {
+-	size_t sep_len = strlen(separator);
+-	if (sep_len && separator[sep_len - 1] == '\n')
++	size_t sep_len = 0;
++
++	if (!separator)
++		return;
++	else if ((sep_len = strlen(separator)) && separator[sep_len - 1] == '\n')
+ 		strbuf_addstr(message, separator);
+ 	else
+ 		strbuf_addf(message, "%s%s", separator, "\n");
+@@ -249,8 +252,8 @@ static void append_separator(struct strbuf *message)
+ static void concat_messages(struct note_data *d)
+ {
+ 	struct strbuf msg = STRBUF_INIT;
+-
+ 	size_t i;
++
+ 	for (i = 0; i < d->msg_nr ; i++) {
+ 		if (d->buf.len)
+ 			append_separator(&d->buf);
+@@ -341,6 +344,16 @@ static int parse_reedit_arg(const struct option *opt, const char *arg, int unset
+ 	return parse_reuse_arg(opt, arg, unset);
+ }
+ 
++static int parse_separator_arg(const struct option *opt, const char *arg,
++			       int unset)
++{
++	if (unset)
++		*(const char **)opt->value = NULL;
++	else
++		*(const char **)opt->value = arg ? arg : "\n";
++	return 0;
++}
++
+ static int notes_copy_from_stdin(int force, const char *rewrite_cmd)
+ {
+ 	struct strbuf buf = STRBUF_INIT;
+@@ -481,8 +494,10 @@ static int add(int argc, const char **argv, const char *prefix)
+ 		OPT_BOOL(0, "allow-empty", &allow_empty,
+ 			N_("allow storing empty note")),
+ 		OPT__FORCE(&force, N_("replace existing notes"), PARSE_OPT_NOCOMPLETE),
+-		OPT_STRING(0, "separator", &separator, N_("separator"),
+-			N_("insert <paragraph-break> between paragraphs")),
++		OPT_CALLBACK_F(0, "separator", &separator,
++			N_("<paragraph-break>"),
++			N_("insert <paragraph-break> between paragraphs"),
++			PARSE_OPT_OPTARG, parse_separator_arg),
+ 		OPT_BOOL(0, "stripspace", &d.stripspace,
+ 			N_("remove unnecessary whitespace")),
+ 		OPT_END()
+@@ -654,8 +669,10 @@ static int append_edit(int argc, const char **argv, const char *prefix)
+ 			parse_reuse_arg),
+ 		OPT_BOOL(0, "allow-empty", &allow_empty,
+ 			N_("allow storing empty note")),
+-		OPT_STRING(0, "separator", &separator, N_("separator"),
+-			N_("insert <paragraph-break> between paragraphs")),
++		OPT_CALLBACK_F(0, "separator", &separator,
++			N_("<paragraph-break>"),
++			N_("insert <paragraph-break> between paragraphs"),
++			PARSE_OPT_OPTARG, parse_separator_arg),
+ 		OPT_BOOL(0, "stripspace", &d.stripspace,
+ 			N_("remove unnecessary whitespace")),
+ 		OPT_END()
+diff --git a/t/t3301-notes.sh b/t/t3301-notes.sh
+index dbadcf1375..d734000d2f 100755
+--- a/t/t3301-notes.sh
++++ b/t/t3301-notes.sh
+@@ -382,6 +382,7 @@ test_expect_success 'create note with combination of -m and -F' '
+ '
+ 
+ test_expect_success 'create note with combination of -m and -F and --separator' '
++	test_when_finished git notes remove HEAD &&
+ 	cat >expect-combine_m_and_F <<-\EOF &&
+ 	foo
+ 	-------
+@@ -395,7 +396,22 @@ test_expect_success 'create note with combination of -m and -F and --separator'
+ 	EOF
+ 	echo "xyzzy" >note_a &&
+ 	echo "zyxxy" >note_b &&
+-	git notes add -m "foo" -F note_a -m "bar" -F note_b -m "baz" --separator "-------" &&
++	git notes add -m "foo" -F note_a -m "bar" -F note_b -m "baz" --separator="-------" &&
++	git notes show >actual &&
++	test_cmp expect-combine_m_and_F actual
++'
++
++test_expect_success 'create note with combination of -m and -F and --no-separator' '
++	cat >expect-combine_m_and_F <<-\EOF &&
++	foo
++	xyzzy
++	bar
++	zyxxy
++	baz
++	EOF
++	echo "xyzzy" >note_a &&
++	echo "zyxxy" >note_b &&
++	git notes add -m "foo" -F note_a -m "bar" -F note_b -m "baz" --no-separator &&
+ 	git notes show >actual &&
+ 	test_cmp expect-combine_m_and_F actual
+ '
+@@ -541,7 +557,7 @@ test_expect_success 'listing non-existing notes fails' '
+ 	test_must_be_empty actual
+ '
+ 
+-test_expect_success 'append: specify an empty separator' '
++test_expect_success 'append: specify a separator with an empty arg' '
+ 	test_when_finished git notes remove HEAD &&
+ 	cat >expect <<-\EOF &&
+ 	notes-1
+@@ -555,6 +571,33 @@ test_expect_success 'append: specify an empty separator' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'append: specify a separator without arg' '
++	test_when_finished git notes remove HEAD &&
++	cat >expect <<-\EOF &&
++	notes-1
++
++	notes-2
++	EOF
++
++	git notes add -m "notes-1" &&
++	git notes append --separator -m "notes-2" &&
++	git notes show >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'append: specify as --no-separator' '
++	test_when_finished git notes remove HEAD &&
++	cat >expect <<-\EOF &&
++	notes-1
++	notes-2
++	EOF
++
++	git notes add -m "notes-1" &&
++	git notes append --no-separator -m "notes-2" &&
++	git notes show >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'append: specify separator with line break' '
+ 	test_when_finished git notes remove HEAD &&
+ 	cat >expect <<-\EOF &&
+@@ -615,7 +658,7 @@ test_expect_success 'append note with combination of -m and -F and --separator'
+ 
+ 	echo "f-notes-1" >note_a &&
+ 	echo "f-notes-2" >note_b &&
+-	git notes append -m "m-notes-1" -F note_a -m "m-notes-2" -F note_b -m "m-notes-3" --separator "-------" &&
++	git notes append -m "m-notes-1" -F note_a -m "m-notes-2" -F note_b -m "m-notes-3" --separator="-------" &&
+ 	git notes show >actual &&
+ 	test_cmp expect-combine_m_and_F actual
+ '
+-- 
+2.39.3 (Apple Git-145)
+

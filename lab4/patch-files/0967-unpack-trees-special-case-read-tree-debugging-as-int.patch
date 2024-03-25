@@ -1,0 +1,176 @@
+From 1ca13dd3ca6e153a2bc5b0b53555996cdd668e93 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Mon, 27 Feb 2023 15:28:19 +0000
+Subject: [PATCH 0967/2871] unpack-trees: special case read-tree debugging as
+ internal usage
+
+builtin/read-tree.c has some special functionality explicitly designed
+for debugging unpack-trees.[ch].  Associated with that is two fields
+that no other external caller would or should use.  Mark these as
+internal to unpack-trees, but allow builtin/read-tree to read or write
+them for this special case.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/read-tree.c | 10 +++++-----
+ unpack-trees.c      | 22 +++++++++++-----------
+ unpack-trees.h      |  6 +++---
+ 3 files changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/builtin/read-tree.c b/builtin/read-tree.c
+index 3ce7541783..6034408d48 100644
+--- a/builtin/read-tree.c
++++ b/builtin/read-tree.c
+@@ -87,9 +87,9 @@ static int debug_merge(const struct cache_entry * const *stages,
+ {
+ 	int i;
+ 
+-	printf("* %d-way merge\n", o->merge_size);
++	printf("* %d-way merge\n", o->internal.merge_size);
+ 	debug_stage("index", stages[0], o);
+-	for (i = 1; i <= o->merge_size; i++) {
++	for (i = 1; i <= o->internal.merge_size; i++) {
+ 		char buf[24];
+ 		xsnprintf(buf, sizeof(buf), "ent#%d", i);
+ 		debug_stage(buf, stages[i], o);
+@@ -144,7 +144,7 @@ int cmd_read_tree(int argc, const char **argv, const char *cmd_prefix)
+ 		OPT__DRY_RUN(&opts.dry_run, N_("don't update the index or the work tree")),
+ 		OPT_BOOL(0, "no-sparse-checkout", &opts.skip_sparse_checkout,
+ 			 N_("skip applying sparse checkout filter")),
+-		OPT_BOOL(0, "debug-unpack", &opts.debug_unpack,
++		OPT_BOOL(0, "debug-unpack", &opts.internal.debug_unpack,
+ 			 N_("debug unpack-trees")),
+ 		OPT_CALLBACK_F(0, "recurse-submodules", NULL,
+ 			    "checkout", "control recursive updating of submodules",
+@@ -247,7 +247,7 @@ int cmd_read_tree(int argc, const char **argv, const char *cmd_prefix)
+ 			opts.head_idx = 1;
+ 	}
+ 
+-	if (opts.debug_unpack)
++	if (opts.internal.debug_unpack)
+ 		opts.fn = debug_merge;
+ 
+ 	/* If we're going to prime_cache_tree later, skip cache tree update */
+@@ -263,7 +263,7 @@ int cmd_read_tree(int argc, const char **argv, const char *cmd_prefix)
+ 	if (unpack_trees(nr_trees, t, &opts))
+ 		return 128;
+ 
+-	if (opts.debug_unpack || opts.dry_run)
++	if (opts.internal.debug_unpack || opts.dry_run)
+ 		return 0; /* do not write the index out */
+ 
+ 	/*
+diff --git a/unpack-trees.c b/unpack-trees.c
+index cac5dd0da3..3e5f4bd235 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -839,7 +839,7 @@ static int traverse_by_cache_tree(int pos, int nr_entries, int nr_names,
+ 		mark_ce_used(src[0], o);
+ 	}
+ 	free(tree_ce);
+-	if (o->debug_unpack)
++	if (o->internal.debug_unpack)
+ 		printf("Unpacked %d entries from %s to %s using cache-tree\n",
+ 		       nr_entries,
+ 		       o->src_index->cache[pos]->name,
+@@ -1488,7 +1488,7 @@ static int unpack_callback(int n, unsigned long mask, unsigned long dirmask, str
+ 	while (!p->mode)
+ 		p++;
+ 
+-	if (o->debug_unpack)
++	if (o->internal.debug_unpack)
+ 		debug_unpack_callback(n, mask, dirmask, names, info);
+ 
+ 	/* Are we supposed to look at the index too? */
+@@ -1929,7 +1929,7 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options
+ 			init_split_index(&o->internal.result);
+ 	}
+ 	oidcpy(&o->internal.result.oid, &o->src_index->oid);
+-	o->merge_size = len;
++	o->internal.merge_size = len;
+ 	mark_all_ce_unused(o->src_index);
+ 
+ 	o->internal.result.fsmonitor_last_update =
+@@ -2882,9 +2882,9 @@ int twoway_merge(const struct cache_entry * const *src,
+ 	const struct cache_entry *oldtree = src[1];
+ 	const struct cache_entry *newtree = src[2];
+ 
+-	if (o->merge_size != 2)
++	if (o->internal.merge_size != 2)
+ 		return error("Cannot do a twoway merge of %d trees",
+-			     o->merge_size);
++			     o->internal.merge_size);
+ 
+ 	if (oldtree == o->df_conflict_entry)
+ 		oldtree = NULL;
+@@ -2964,9 +2964,9 @@ int bind_merge(const struct cache_entry * const *src,
+ 	const struct cache_entry *old = src[0];
+ 	const struct cache_entry *a = src[1];
+ 
+-	if (o->merge_size != 1)
++	if (o->internal.merge_size != 1)
+ 		return error("Cannot do a bind merge of %d trees",
+-			     o->merge_size);
++			     o->internal.merge_size);
+ 	if (a && old)
+ 		return o->quiet ? -1 :
+ 			error(ERRORMSG(o, ERROR_BIND_OVERLAP),
+@@ -2990,9 +2990,9 @@ int oneway_merge(const struct cache_entry * const *src,
+ 	const struct cache_entry *old = src[0];
+ 	const struct cache_entry *a = src[1];
+ 
+-	if (o->merge_size != 1)
++	if (o->internal.merge_size != 1)
+ 		return error("Cannot do a oneway merge of %d trees",
+-			     o->merge_size);
++			     o->internal.merge_size);
+ 
+ 	if (!a || a == o->df_conflict_entry)
+ 		return deleted_entry(old, old, o);
+@@ -3027,8 +3027,8 @@ int stash_worktree_untracked_merge(const struct cache_entry * const *src,
+ 	const struct cache_entry *worktree = src[1];
+ 	const struct cache_entry *untracked = src[2];
+ 
+-	if (o->merge_size != 2)
+-		BUG("invalid merge_size: %d", o->merge_size);
++	if (o->internal.merge_size != 2)
++		BUG("invalid merge_size: %d", o->internal.merge_size);
+ 
+ 	if (worktree && untracked)
+ 		return error(_("worktree and untracked commit have duplicate entries: %s"),
+diff --git a/unpack-trees.h b/unpack-trees.h
+index 0335c89bc7..e8737adfed 100644
+--- a/unpack-trees.h
++++ b/unpack-trees.h
+@@ -65,7 +65,6 @@ struct unpack_trees_options {
+ 		     skip_unmerged,
+ 		     initial_checkout,
+ 		     diff_index_cached,
+-		     debug_unpack,
+ 		     skip_sparse_checkout,
+ 		     quiet,
+ 		     exiting_early,
+@@ -78,7 +77,6 @@ struct unpack_trees_options {
+ 	merge_fn_t fn;
+ 
+ 	int head_idx;
+-	int merge_size;
+ 
+ 	struct cache_entry *df_conflict_entry;
+ 	void *unpack_data;
+@@ -90,8 +88,10 @@ struct unpack_trees_options {
+ 
+ 	struct unpack_trees_options_internal {
+ 		unsigned int nontrivial_merge,
+-			     show_all_errors;
++			     show_all_errors,
++			     debug_unpack; /* used by read-tree debugging */
+ 
++		int merge_size; /* used by read-tree debugging */
+ 		int cache_bottom;
+ 		const char *msgs[NB_UNPACK_TREES_WARNING_TYPES];
+ 		struct strvec msgs_to_free;
+-- 
+2.39.3 (Apple Git-145)
+

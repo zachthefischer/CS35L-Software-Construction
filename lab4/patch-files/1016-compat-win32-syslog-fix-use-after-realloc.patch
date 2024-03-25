@@ -1,0 +1,50 @@
+From 417fb91b5d193c58a9a31ad6c7901ccfc08ff760 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 24 May 2022 00:23:03 +0000
+Subject: [PATCH 1016/2871] compat/win32/syslog: fix use-after-realloc
+
+Git for Windows' SDK recently upgraded to GCC v12.x which points out
+that the `pos` variable might be used even after the corresponding
+memory was `realloc()`ed and therefore potentially no longer valid.
+
+Since a subset of this SDK is used in Git's CI/PR builds, we need to fix
+this to continue to be able to benefit from the CI/PR runs.
+
+Note: This bug has been with us since 2a6b149c64f6 (mingw: avoid using
+strbuf in syslog, 2011-10-06), and while it looks tempting to replace
+the hand-rolled string manipulation with a `strbuf`-based one, that
+commit's message explains why we cannot do that: The `syslog()` function
+is called as part of the function in `daemon.c` which is set as the
+`die()` routine, and since `strbuf_grow()` can call that function if it
+runs out of memory, this would cause a nasty infinite loop that we do
+not want to re-introduce.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/win32/syslog.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/compat/win32/syslog.c b/compat/win32/syslog.c
+index 161978d720..1f8d8934cc 100644
+--- a/compat/win32/syslog.c
++++ b/compat/win32/syslog.c
+@@ -43,6 +43,7 @@ void syslog(int priority, const char *fmt, ...)
+ 	va_end(ap);
+ 
+ 	while ((pos = strstr(str, "%1")) != NULL) {
++		size_t offset = pos - str;
+ 		char *oldstr = str;
+ 		str = realloc(str, st_add(++str_len, 1));
+ 		if (!str) {
+@@ -50,6 +51,7 @@ void syslog(int priority, const char *fmt, ...)
+ 			warning_errno("realloc failed");
+ 			return;
+ 		}
++		pos = str + offset;
+ 		memmove(pos + 2, pos + 1, strlen(pos));
+ 		pos[1] = ' ';
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

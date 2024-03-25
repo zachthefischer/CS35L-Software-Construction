@@ -1,0 +1,46 @@
+From 671bbf7b9da70bad0307d616e7f6717a28300ffc Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 28 Oct 2022 14:16:09 -0700
+Subject: [PATCH 0258/2871] adjust_shared_perm(): leave g+s alone when the
+ group does not matter
+
+Julien Moutinho reports that in an environment where directory does
+not have BSD group semantics and requires the g+s to be set (aka
+FORCE_DIR_SET_GID), but the system forbids chmod() to touch the g+s
+bit, adjust_shared_perm() fails even when the repository is for
+private use with perm = 0600, because we unconditionally try to set
+the g+s bit.
+
+When we grant extra access based on group membership (i.e. the
+directory has either g+r or g+w bit set), which group the directory
+and its contents are owned by matters.  But otherwise (e.g. perm is
+set to 0600, in Julien's case), flipping g+s bit is not necessary.
+
+Reported-by: Julien Moutinho <julm+git@sourcephile.fr>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ path.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/path.c b/path.c
+index a3cfcd8a6e..492e17ad12 100644
+--- a/path.c
++++ b/path.c
+@@ -901,7 +901,13 @@ int adjust_shared_perm(const char *path)
+ 	if (S_ISDIR(old_mode)) {
+ 		/* Copy read bits to execute bits */
+ 		new_mode |= (new_mode & 0444) >> 2;
+-		new_mode |= FORCE_DIR_SET_GID;
++
++		/*
++		 * g+s matters only if any extra access is granted
++		 * based on group membership.
++		 */
++		if (FORCE_DIR_SET_GID && (new_mode & 060))
++			new_mode |= FORCE_DIR_SET_GID;
+ 	}
+ 
+ 	if (((old_mode ^ new_mode) & ~S_IFMT) &&
+-- 
+2.39.3 (Apple Git-145)
+

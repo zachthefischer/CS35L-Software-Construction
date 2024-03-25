@@ -1,0 +1,76 @@
+From 3a7a18a045cd94a13ed04ef715dcd1b91547a0af Mon Sep 17 00:00:00 2001
+From: Maxim Cournoyer <maxim.cournoyer@gmail.com>
+Date: Mon, 1 May 2023 10:38:48 -0400
+Subject: [PATCH 1373/2871] send-email: detect empty blank lines in command
+ output
+
+The email format does not allow blank lines in headers; detect such
+input and report it as malformed and add a test for it.
+
+Signed-off-by: Maxim Cournoyer <maxim.cournoyer@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl   | 12 ++++++++++--
+ t/t9001-send-email.sh | 17 +++++++++++++++++
+ 2 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 32febe9af3..22a64e608f 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -2026,14 +2026,22 @@ sub process_file {
+ 	}
+ }
+ 
+-# Execute a command and return its output lines as an array.
++# Execute a command and return its output lines as an array.  Blank
++# lines which do not appear at the end of the output are reported as
++# errors.
+ sub execute_cmd {
+ 	my ($prefix, $cmd, $file) = @_;
+ 	my @lines = ();
++	my $seen_blank_line = 0;
+ 	open my $fh, "-|", "$cmd \Q$file\E"
+ 		or die sprintf(__("(%s) Could not execute '%s'"), $prefix, $cmd);
+ 	while (my $line = <$fh>) {
+-		last if $line =~ /^$/;
++		die sprintf(__("(%s) Malformed output from '%s'"), $prefix, $cmd)
++		    if $seen_blank_line;
++		if ($line =~ /^$/) {
++			$seen_blank_line = $line =~ /^$/;
++			next;
++		}
+ 		push @lines, $line;
+ 	}
+ 	close $fh
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index f10546acba..21d4f6a382 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -460,6 +460,23 @@ FoldedField: This is a tale
+ 	grep "^FoldedField: This is a tale best told using multiple lines.$" msgtxt1
+ '
+ 
++# Blank lines in the middle of the output of a command are invalid.
++test_expect_success $PREREQ 'malform output reported on blank lines in command output' '
++	clean_fake_sendmail &&
++	cp $patches headercmd.patch &&
++	write_script headercmd-malformed-output <<-\EOF &&
++	echo "X-Debbugs-CC: someone@example.com
++
++SomeOtherField: someone-else@example.com"
++	EOF
++	! git send-email \
++		--from="Example <nobody@example.com>" \
++		--to=nobody@example.com \
++		--header-cmd=./headercmd-malformed-output \
++		--smtp-server="$(pwd)/fake.sendmail" \
++		headercmd.patch
++'
++
+ test_expect_success $PREREQ 'reject long lines' '
+ 	z8=zzzzzzzz &&
+ 	z64=$z8$z8$z8$z8$z8$z8$z8$z8 &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,73 @@
+From 1c5bc6971e28c581b17b812cbbd1f09e39f0bb63 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 13 Jan 2024 04:26:13 +0000
+Subject: [PATCH 2711/2871] diffcore-delta: avoid ignoring final 'line' of file
+
+hash_chars() would hash lines to integers, and store them in a spanhash,
+but cut lines at 64 characters.  Thus, whenever it reached 64 characters
+or a newline, it would create a new spanhash.  The problem is, the final
+part of the file might not end 64 characters after the previous 'line'
+and might not end with a newline.  This could, for example, cause an
+85-byte file with 12 lines and only the first character in the file
+differing to appear merely 23% similar rather than the expected 97%.
+Ensure the last line is included, and add a testcase that would have
+caught this problem.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diffcore-delta.c       |  4 ++++
+ t/t4001-diff-rename.sh | 24 ++++++++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/diffcore-delta.c b/diffcore-delta.c
+index 18d8f766d7..0b45f64400 100644
+--- a/diffcore-delta.c
++++ b/diffcore-delta.c
+@@ -159,6 +159,10 @@ static struct spanhash_top *hash_chars(struct repository *r,
+ 		n = 0;
+ 		accum1 = accum2 = 0;
+ 	}
++	if (n > 0) {
++		hashval = (accum1 + accum2 * 0x61) % HASHBASE;
++		hash = add_spanhash(hash, hashval, n);
++	}
+ 	QSORT(hash->data, (size_t)1ul << hash->alloc_log2, spanhash_cmp);
+ 	return hash;
+ }
+diff --git a/t/t4001-diff-rename.sh b/t/t4001-diff-rename.sh
+index 3dc9047044..c0d88e5e0d 100755
+--- a/t/t4001-diff-rename.sh
++++ b/t/t4001-diff-rename.sh
+@@ -286,4 +286,28 @@ test_expect_success 'basename similarity vs best similarity' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'last line matters too' '
++	{
++		test_write_lines a 0 1 2 3 4 5 6 7 8 9 &&
++		printf "git ignores final up to 63 characters if not newline terminated"
++	} >no-final-lf &&
++	git add no-final-lf &&
++	git commit -m "original version of file with no final newline" &&
++
++	# Change ONLY the first character of the whole file
++	{
++		test_write_lines b 0 1 2 3 4 5 6 7 8 9 &&
++		printf "git ignores final up to 63 characters if not newline terminated"
++	} >no-final-lf &&
++	git add no-final-lf &&
++	git mv no-final-lf still-absent-final-lf &&
++	git commit -a -m "rename no-final-lf -> still-absent-final-lf" &&
++	git diff-tree -r -M --name-status HEAD^ HEAD >actual &&
++	sed -e "s/^R[0-9]*	/R	/" actual >actual.munged &&
++	cat >expected <<-\EOF &&
++	R	no-final-lf	still-absent-final-lf
++	EOF
++	test_cmp expected actual.munged
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

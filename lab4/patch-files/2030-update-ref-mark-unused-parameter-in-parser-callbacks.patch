@@ -1,0 +1,72 @@
+From 44ad08296864e2b71b65a7885d106eadb8483268 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:42 -0400
+Subject: [PATCH 2030/2871] update-ref: mark unused parameter in parser
+ callbacks
+
+The parsing of stdin is driven by a table of function pointers; mark
+unused parameters in concrete functions to avoid -Wunused-parameter
+warnings.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/update-ref.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/update-ref.c b/builtin/update-ref.c
+index 242102273e..c0c4e65e6f 100644
+--- a/builtin/update-ref.c
++++ b/builtin/update-ref.c
+@@ -311,8 +311,8 @@ static void report_ok(const char *command)
+ 	fflush(stdout);
+ }
+ 
+-static void parse_cmd_option(struct ref_transaction *transaction,
+-			     const char *next, const char *end)
++static void parse_cmd_option(struct ref_transaction *transaction UNUSED,
++			     const char *next, const char *end UNUSED)
+ {
+ 	const char *rest;
+ 	if (skip_prefix(next, "no-deref", &rest) && *rest == line_termination)
+@@ -321,8 +321,8 @@ static void parse_cmd_option(struct ref_transaction *transaction,
+ 		die("option unknown: %s", next);
+ }
+ 
+-static void parse_cmd_start(struct ref_transaction *transaction,
+-			    const char *next, const char *end)
++static void parse_cmd_start(struct ref_transaction *transaction UNUSED,
++			    const char *next, const char *end UNUSED)
+ {
+ 	if (*next != line_termination)
+ 		die("start: extra input: %s", next);
+@@ -330,7 +330,7 @@ static void parse_cmd_start(struct ref_transaction *transaction,
+ }
+ 
+ static void parse_cmd_prepare(struct ref_transaction *transaction,
+-			      const char *next, const char *end)
++			      const char *next, const char *end UNUSED)
+ {
+ 	struct strbuf error = STRBUF_INIT;
+ 	if (*next != line_termination)
+@@ -341,7 +341,7 @@ static void parse_cmd_prepare(struct ref_transaction *transaction,
+ }
+ 
+ static void parse_cmd_abort(struct ref_transaction *transaction,
+-			    const char *next, const char *end)
++			    const char *next, const char *end UNUSED)
+ {
+ 	struct strbuf error = STRBUF_INIT;
+ 	if (*next != line_termination)
+@@ -352,7 +352,7 @@ static void parse_cmd_abort(struct ref_transaction *transaction,
+ }
+ 
+ static void parse_cmd_commit(struct ref_transaction *transaction,
+-			     const char *next, const char *end)
++			     const char *next, const char *end UNUSED)
+ {
+ 	struct strbuf error = STRBUF_INIT;
+ 	if (*next != line_termination)
+-- 
+2.39.3 (Apple Git-145)
+

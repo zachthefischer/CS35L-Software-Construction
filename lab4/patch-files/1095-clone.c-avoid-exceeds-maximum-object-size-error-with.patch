@@ -1,0 +1,56 @@
+From 321854ac464bbc85ff2afe089c4a56505a1c9e25 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 24 May 2022 00:23:06 +0000
+Subject: [PATCH 1095/2871] clone.c: avoid "exceeds maximum object size" error
+ with GCC v12.x
+
+Technically, the pointer difference `end - start` _could_ be negative,
+and when cast to an (unsigned) `size_t` that would cause problems. In
+this instance, the symptom is:
+
+dir.c: In function 'git_url_basename':
+dir.c:3087:13: error: 'memchr' specified bound [9223372036854775808, 0]
+       exceeds maximum object size 9223372036854775807
+       [-Werror=stringop-overread]
+    CC ewah/bitmap.o
+ 3087 |         if (memchr(start, '/', end - start) == NULL
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+While it is a bit far-fetched to think that `end` (which is defined as
+`repo + strlen(repo)`) and `start` (which starts at `repo` and never
+steps beyond the NUL terminator) could result in such a negative
+difference, GCC has no way of knowing that.
+
+See also https://gcc.gnu.org/bugzilla//show_bug.cgi?id=85783.
+
+Let's just add a safety check, primarily for GCC's benefit.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clone.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/builtin/clone.c b/builtin/clone.c
+index c042b2e256..9ab17cab19 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -250,6 +250,15 @@ static char *guess_dir_name(const char *repo, int is_bundle, int is_bare)
+ 			end--;
+ 	}
+ 
++	/*
++	 * It should not be possible to overflow `ptrdiff_t` by passing in an
++	 * insanely long URL, but GCC does not know that and will complain
++	 * without this check.
++	 */
++	if (end - start < 0)
++		die(_("No directory name could be guessed.\n"
++		      "Please specify a directory on the command line"));
++
+ 	/*
+ 	 * Strip trailing port number if we've got only a
+ 	 * hostname (that is, there is no dir separator but a
+-- 
+2.39.3 (Apple Git-145)
+

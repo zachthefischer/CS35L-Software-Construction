@@ -1,0 +1,44 @@
+From b3edf335dfa978b43d10de7e722a7e355a3d0e4c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 17 Mar 2023 15:17:18 -0400
+Subject: [PATCH 1042/2871] transport: mark unused parameters in
+ fetch_refs_from_bundle()
+
+We don't look at the "to_fetch" or "nr_heads" parameters at all. At
+first glance this seems like a bug (or at least pessimisation), because
+it means we fetch more objects from the bundle than we actually need.
+But the bundle does not have any way of computing the set of reachable
+objects itself (we'd have to pull all of the objects out to walk them).
+And anyway, we've probably already paid most of the cost of grabbing the
+objects, since we must copy the bundle locally before accessing it.
+
+So it's perfectly reasonable for the bundle code to just pull everything
+into the local object store. Unneeded objects can be dropped later via
+gc, etc.
+
+But we should mark these unused parameters as such to avoid the wrath of
+-Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ transport.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/transport.c b/transport.c
+index 906dbad5a0..bb532d0f72 100644
+--- a/transport.c
++++ b/transport.c
+@@ -170,7 +170,8 @@ static struct ref *get_refs_from_bundle(struct transport *transport,
+ }
+ 
+ static int fetch_refs_from_bundle(struct transport *transport,
+-			       int nr_heads, struct ref **to_fetch)
++				  int nr_heads UNUSED,
++				  struct ref **to_fetch UNUSED)
+ {
+ 	struct bundle_transport_data *data = transport->data;
+ 	struct strvec extra_index_pack_args = STRVEC_INIT;
+-- 
+2.39.3 (Apple Git-145)
+

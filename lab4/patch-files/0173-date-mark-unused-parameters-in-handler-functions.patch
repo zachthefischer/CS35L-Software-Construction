@@ -1,0 +1,50 @@
+From 7829746a6ceca69813348331833b0b6940f41d54 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:05:52 -0400
+Subject: [PATCH 0173/2871] date: mark unused parameters in handler functions
+
+When parsing approxidates, we use a table to map special strings (like
+"noon") to functions which handle them. Not all functions need the "now"
+parameter, as they are not relative (e.g., "yesterday" does, but "pm"
+does not). Let's annotate those to make -Wunused-parameter happy.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ date.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/date.c b/date.c
+index 68a260c214..53bd6a7932 100644
+--- a/date.c
++++ b/date.c
+@@ -1101,7 +1101,7 @@ static void date_tea(struct tm *tm, struct tm *now, int *num)
+ 	date_time(tm, now, 17);
+ }
+ 
+-static void date_pm(struct tm *tm, struct tm *now, int *num)
++static void date_pm(struct tm *tm, struct tm *now UNUSED, int *num)
+ {
+ 	int hour, n = *num;
+ 	*num = 0;
+@@ -1115,7 +1115,7 @@ static void date_pm(struct tm *tm, struct tm *now, int *num)
+ 	tm->tm_hour = (hour % 12) + 12;
+ }
+ 
+-static void date_am(struct tm *tm, struct tm *now, int *num)
++static void date_am(struct tm *tm, struct tm *now UNUSED, int *num)
+ {
+ 	int hour, n = *num;
+ 	*num = 0;
+@@ -1129,7 +1129,7 @@ static void date_am(struct tm *tm, struct tm *now, int *num)
+ 	tm->tm_hour = (hour % 12);
+ }
+ 
+-static void date_never(struct tm *tm, struct tm *now, int *num)
++static void date_never(struct tm *tm, struct tm *now UNUSED, int *num)
+ {
+ 	time_t n = 0;
+ 	localtime_r(&n, tm);
+-- 
+2.39.3 (Apple Git-145)
+

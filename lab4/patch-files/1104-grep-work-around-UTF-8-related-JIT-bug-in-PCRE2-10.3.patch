@@ -1,0 +1,63 @@
+From 14b9a044798ebb3858a1f1a1377309a3d6054ac8 Mon Sep 17 00:00:00 2001
+From: Mathias Krause <minipli@grsecurity.net>
+Date: Thu, 23 Mar 2023 18:25:39 +0100
+Subject: [PATCH 1104/2871] grep: work around UTF-8 related JIT bug in PCRE2 <=
+ 10.34
+
+Stephane is reporting[1] a regression introduced in git v2.40.0 that leads
+to 'git grep' segfaulting in his CI pipeline. It turns out, he's using an
+older version of libpcre2 that triggers a wild pointer dereference in
+the generated JIT code that was fixed in PCRE2 10.35.
+
+Instead of completely disabling the JIT compiler for the buggy version,
+just mask out the Unicode property handling as we used to do prior to
+commit acabd2048ee0 ("grep: correctly identify utf-8 characters with
+\{b,w} in -P").
+
+[1] https://lore.kernel.org/git/7E83DAA1-F9A9-4151-8D07-D80EA6D59EEA@clumio.com/
+
+Reported-by: Stephane Odul <stephane@clumio.com>
+Signed-off-by: Mathias Krause <minipli@grsecurity.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ grep.c | 9 +++++++++
+ grep.h | 3 +++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/grep.c b/grep.c
+index 1687f65b64..00b3cf0e18 100644
+--- a/grep.c
++++ b/grep.c
+@@ -295,6 +295,15 @@ static void compile_pcre2_pattern(struct grep_pat *p, const struct grep_opt *opt
+ 	if (!opt->ignore_locale && is_utf8_locale() && !literal)
+ 		options |= (PCRE2_UTF | PCRE2_UCP | PCRE2_MATCH_INVALID_UTF);
+ 
++#ifndef GIT_PCRE2_VERSION_10_35_OR_HIGHER
++	/*
++	 * Work around a JIT bug related to invalid Unicode character handling
++	 * fixed in 10.35:
++	 * https://github.com/PCRE2Project/pcre2/commit/c21bd977547d
++	 */
++	options &= ~PCRE2_UCP;
++#endif
++
+ #ifndef GIT_PCRE2_VERSION_10_36_OR_HIGHER
+ 	/* Work around https://bugs.exim.org/show_bug.cgi?id=2642 fixed in 10.36 */
+ 	if (PCRE2_MATCH_INVALID_UTF && options & (PCRE2_UTF | PCRE2_CASELESS))
+diff --git a/grep.h b/grep.h
+index 6075f997e6..c59592e3bd 100644
+--- a/grep.h
++++ b/grep.h
+@@ -7,6 +7,9 @@
+ #if (PCRE2_MAJOR >= 10 && PCRE2_MINOR >= 36) || PCRE2_MAJOR >= 11
+ #define GIT_PCRE2_VERSION_10_36_OR_HIGHER
+ #endif
++#if (PCRE2_MAJOR >= 10 && PCRE2_MINOR >= 35) || PCRE2_MAJOR >= 11
++#define GIT_PCRE2_VERSION_10_35_OR_HIGHER
++#endif
+ #if (PCRE2_MAJOR >= 10 && PCRE2_MINOR >= 34) || PCRE2_MAJOR >= 11
+ #define GIT_PCRE2_VERSION_10_34_OR_HIGHER
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

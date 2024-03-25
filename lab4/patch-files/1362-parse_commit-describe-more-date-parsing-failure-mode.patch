@@ -1,0 +1,40 @@
+From 90ef0f14eb1410747885806d8e55725053572654 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 27 Apr 2023 04:17:24 -0400
+Subject: [PATCH 1362/2871] parse_commit(): describe more date-parsing failure
+ modes
+
+The previous few commits improved the parsing of dates in malformed
+commit objects. But there's one big case left implicit: we may still
+feed garbage to parse_timestamp(). This is preferable to trying to be
+more strict, but let's document the thinking in a comment.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/commit.c b/commit.c
+index a54b0a0df0..73e883fe45 100644
+--- a/commit.c
++++ b/commit.c
+@@ -143,6 +143,15 @@ static timestamp_t parse_commit_date(const char *buf, const char *tail)
+ 	/*
+ 	 * We know there is at least one digit (or dash), so we'll begin
+ 	 * parsing there and stop at worst case at eol.
++	 *
++	 * Note that we may feed parse_timestamp() extra characters here if the
++	 * commit is malformed, and it will parse as far as it can. For
++	 * example, "123foo456" would return "123". That might be questionable
++	 * (versus returning "0"), but it would help in a hypothetical case
++	 * like "123456+0100", where the whitespace from the timezone is
++	 * missing. Since such syntactic errors may be baked into history and
++	 * hard to correct now, let's err on trying to make our best guess
++	 * here, rather than insist on perfect syntax.
+ 	 */
+ 	return parse_timestamp(dateptr, NULL, 10);
+ }
+-- 
+2.39.3 (Apple Git-145)
+

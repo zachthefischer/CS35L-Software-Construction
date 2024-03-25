@@ -1,0 +1,40 @@
+From 242aa33de0f18bf09dd147401af9b44cf961d532 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 30 Oct 2022 12:49:37 +0100
+Subject: [PATCH 0264/2871] sequencer: simplify building argument list in
+ do_exec()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Build child_argv during initialization, taking advantage of the C99
+support for initialization expressions that are not compile time
+constants.  This avoids the use of a magic index constant and is shorter
+and simpler.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ sequencer.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index debb2ecbaf..66eedd2c76 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -3558,11 +3558,10 @@ static int error_failed_squash(struct repository *r,
+ 
+ static int do_exec(struct repository *r, const char *command_line)
+ {
+-	const char *child_argv[] = { NULL, NULL };
++	const char *child_argv[] = { command_line, NULL };
+ 	int dirty, status;
+ 
+ 	fprintf(stderr, _("Executing: %s\n"), command_line);
+-	child_argv[0] = command_line;
+ 	status = run_command_v_opt(child_argv, RUN_USING_SHELL);
+ 
+ 	/* force re-reading of the cache */
+-- 
+2.39.3 (Apple Git-145)
+

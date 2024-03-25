@@ -1,0 +1,36 @@
+From 15b63689a1698f91c6882bbf99f43226033d7cb1 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 12 Jan 2023 11:06:49 -0500
+Subject: [PATCH 0650/2871] object-file: fix indent-with-space
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Commit b25562e63f (object-file: inline calls to read_object(),
+2023-01-07) accidentally indented a conditional block with spaces
+instead of a tab.
+
+Reported-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/object-file.c b/object-file.c
+index 80b08fc389..ce9efae994 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -1708,7 +1708,7 @@ void *repo_read_object_file(struct repository *r,
+ 	oi.sizep = size;
+ 	oi.contentp = &data;
+ 	if (oid_object_info_extended(r, oid, &oi, flags))
+-	    return NULL;
++		return NULL;
+ 
+ 	return data;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

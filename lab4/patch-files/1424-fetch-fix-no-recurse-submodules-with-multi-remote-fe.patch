@@ -1,0 +1,63 @@
+From 5667141e3b2a5a9f983882df3a3b1f481ce9be88 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 10 May 2023 14:34:02 +0200
+Subject: [PATCH 1424/2871] fetch: fix `--no-recurse-submodules` with
+ multi-remote fetches
+
+When running `git fetch --no-recurse-submodules`, the exectation is that
+we don't fetch any submodules. And while this works for fetches of a
+single remote, it doesn't when fetching multiple remotes at once. The
+result is that we do recurse into submodules even though the user has
+explicitly asked us not to.
+
+This is because while we pass on `--recurse-submodules={yes,on-demand}`
+if specified by the user, we don't pass on `--no-recurse-submodules` to
+the subprocess spawned to perform the submodule fetch.
+
+Fix this by also forwarding this flag as expected.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c             |  2 ++
+ t/t5526-fetch-submodules.sh | 13 +++++++++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 85bd280103..71959b2479 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -1879,6 +1879,8 @@ static void add_options_to_argv(struct strvec *argv)
+ 		strvec_push(argv, "--keep");
+ 	if (recurse_submodules == RECURSE_SUBMODULES_ON)
+ 		strvec_push(argv, "--recurse-submodules");
++	else if (recurse_submodules == RECURSE_SUBMODULES_OFF)
++		strvec_push(argv, "--no-recurse-submodules");
+ 	else if (recurse_submodules == RECURSE_SUBMODULES_ON_DEMAND)
+ 		strvec_push(argv, "--recurse-submodules=on-demand");
+ 	if (tags == TAGS_SET)
+diff --git a/t/t5526-fetch-submodules.sh b/t/t5526-fetch-submodules.sh
+index dcdbe26a08..26e933f93a 100755
+--- a/t/t5526-fetch-submodules.sh
++++ b/t/t5526-fetch-submodules.sh
+@@ -1180,4 +1180,17 @@ test_expect_success 'fetch --all with --recurse-submodules with multiple' '
+ 	test_line_count = 2 fetch-subs
+ '
+ 
++test_expect_success "fetch --all with --no-recurse-submodules only fetches superproject" '
++	test_when_finished "rm -rf src_clone" &&
++
++	git clone --recurse-submodules src src_clone &&
++	(
++		cd src_clone &&
++		git remote add secondary ../src &&
++		git config submodule.recurse true &&
++		git fetch --all --no-recurse-submodules 2>../fetch-log
++	) &&
++	! grep "Fetching submodule" fetch-log
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

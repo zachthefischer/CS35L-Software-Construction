@@ -1,0 +1,65 @@
+From 209250ef38f353f174ee9e90e55f5a4605449f70 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:57 -0400
+Subject: [PATCH 1796/2871] commit-graph.c: prevent overflow in
+ add_graph_to_chain()
+
+The commit-graph uses a fanout table with 4-byte entries to store the
+number of commits at each shard of the commit-graph. So it is OK to have
+a commit graph with as many as 2^32-1 stored commits. But we risk
+overflowing any computation which may exceed the 32-bit (unsigned)
+maximum when those computations are (incorrectly) performed using 32-bit
+operands.
+
+There are a couple of spots in `add_graph_to_chain()` where we could
+potentially overflow the result:
+
+  - First, when comparing the list of existing entries in the
+    commit-graph chain. It is unlikely that this should ever overflow,
+    since it would require having roughly 2^32-1/g->hash_len
+    commit-graphs in the chain. But let's guard that computation with a
+    `st_mult()` just to be safe.
+
+  - Second, when computing the number of commits in the graph added to
+    the front of the chain. This value is also a 32-bit unsigned, but we
+    should make sure that it does not grow beyond the maximum value.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 86c76bd2f8..17ab3e8029 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -482,7 +482,7 @@ static int add_graph_to_chain(struct commit_graph *g,
+ 
+ 		if (!cur_g ||
+ 		    !oideq(&oids[n], &cur_g->oid) ||
+-		    !hasheq(oids[n].hash, g->chunk_base_graphs + g->hash_len * n)) {
++		    !hasheq(oids[n].hash, g->chunk_base_graphs + st_mult(g->hash_len, n))) {
+ 			warning(_("commit-graph chain does not match"));
+ 			return 0;
+ 		}
+@@ -492,8 +492,15 @@ static int add_graph_to_chain(struct commit_graph *g,
+ 
+ 	g->base_graph = chain;
+ 
+-	if (chain)
++	if (chain) {
++		if (unsigned_add_overflows(chain->num_commits,
++					   chain->num_commits_in_base)) {
++			warning(_("commit count in base graph too high: %"PRIuMAX),
++				(uintmax_t)chain->num_commits_in_base);
++			return 0;
++		}
+ 		g->num_commits_in_base = chain->num_commits + chain->num_commits_in_base;
++	}
+ 
+ 	return 1;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

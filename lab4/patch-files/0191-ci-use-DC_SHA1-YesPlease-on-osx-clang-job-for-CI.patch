@@ -1,0 +1,44 @@
+From 1ad5c3df35aa92416443e42e718d0855abcec1d3 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 20 Oct 2022 10:01:07 -0700
+Subject: [PATCH 0191/2871] ci: use DC_SHA1=YesPlease on osx-clang job for CI
+
+7b8cfe34 (Merge branch 'ed/fsmonitor-on-networked-macos',
+2022-10-17) broke the build on macOS with sha1dc by bypassing our
+hash abstraction (git_SHA_CTX etc.), but it wasn't caught before the
+problematic topic was merged down to the 'master' branch.  Nobody
+was even compile testing with DC_SHA1 set, although it is the
+recommended choice in these days for folks when they use SHA-1.
+
+This was because the default for macOS uses Apple Common Crypto, and
+both of the two CI jobs did not override the default.  Tweak one of
+them to use DC_SHA1 to improve the coverage.
+
+We may want to give similar diversity for Linux jobs so that some of
+them build with other implementations of SHA-1; they currently all
+build and test with DC_SHA1 as that is the default on everywhere
+other than macOS.
+
+But let's start small to fill only the immediate need.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 1b0cc2b57d..51e47aa5d6 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -259,6 +259,8 @@ macos-latest)
+ 		MAKEFLAGS="$MAKEFLAGS PYTHON_PATH=$(which python3)"
+ 	else
+ 		MAKEFLAGS="$MAKEFLAGS PYTHON_PATH=$(which python2)"
++		MAKEFLAGS="$MAKEFLAGS NO_APPLE_COMMON_CRYPTO=NoThanks"
++		MAKEFLAGS="$MAKEFLAGS DC_SHA1=YesPlease NO_OPENSSL=NoThanks"
+ 	fi
+ 	;;
+ esac
+-- 
+2.39.3 (Apple Git-145)
+

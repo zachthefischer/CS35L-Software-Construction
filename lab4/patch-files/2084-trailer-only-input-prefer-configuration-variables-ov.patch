@@ -1,0 +1,53 @@
+From a6c72e7046cce70384eb54764c43e78dd4a1bfec Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 7 Sep 2023 22:20:04 +0000
+Subject: [PATCH 2084/2871] trailer --only-input: prefer "configuration
+ variables" over "rules"
+
+Use the phrase "configuration variables" instead of "rules" because
+
+(1) we already say "configuration variables" in multiple
+    places in the docs (where the word "rules" is only used for describing
+    "--only-input" behavior and for an unrelated case of mentioning how
+    the trailers do not follow "rules for RFC 822 headers"), and
+
+(2) this phrase is more specific than just "rules".
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 4 ++--
+ builtin/interpret-trailers.c             | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index b5284c3d33..0eea937c30 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -149,8 +149,8 @@ OPTIONS
+ 
+ --only-input::
+ 	Output only trailers that exist in the input; do not add any
+-	from the command-line or by following configured `trailer.*`
+-	rules.
++	from the command-line or by applying `trailer.*` configuration
++	variables.
+ 
+ --unfold::
+ 	Remove any whitespace-continuation in trailers, so that each
+diff --git a/builtin/interpret-trailers.c b/builtin/interpret-trailers.c
+index 5f3e1a38ee..f70c5df8d4 100644
+--- a/builtin/interpret-trailers.c
++++ b/builtin/interpret-trailers.c
+@@ -105,7 +105,7 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
+ 			     N_("action if trailer is missing"), option_parse_if_missing),
+ 
+ 		OPT_BOOL(0, "only-trailers", &opts.only_trailers, N_("output only the trailers")),
+-		OPT_BOOL(0, "only-input", &opts.only_input, N_("do not apply config rules")),
++		OPT_BOOL(0, "only-input", &opts.only_input, N_("do not apply trailer.* configuration variables")),
+ 		OPT_BOOL(0, "unfold", &opts.unfold, N_("join whitespace-continued values")),
+ 		OPT_CALLBACK_F(0, "parse", &opts, NULL, N_("alias for --only-trailers --only-input --unfold"),
+ 			PARSE_OPT_NOARG | PARSE_OPT_NONEG, parse_opt_parse),
+-- 
+2.39.3 (Apple Git-145)
+

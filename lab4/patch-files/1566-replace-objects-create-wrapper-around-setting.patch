@@ -1,0 +1,108 @@
+From f1178380ac645684fcf0519488f9336e55f0946f Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 6 Jun 2023 13:24:36 +0000
+Subject: [PATCH 1566/2871] replace-objects: create wrapper around setting
+
+The 'read_replace_objects' constant is initialized by git_default_config
+(if core.useReplaceRefs is disabled) and within setup_git_env (if
+GIT_NO_REPLACE_OBJECTS) is set. To ensure that this variable cannot be
+set accidentally in other places, wrap it in a replace_refs_enabled()
+method.
+
+Since we still assign this global in config.c, we are not able to remove
+the global scope of this variable and make it a static within
+replace-object.c. This will happen in a later change which will also
+prevent the variable from being read before it is initialized.
+
+Centralizing read access to the variable is an important first step.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c   |  4 +---
+ log-tree.c       |  2 +-
+ replace-object.c |  5 +++++
+ replace-object.h | 14 +++++++++++++-
+ 4 files changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 43558b4d9b..95873317bf 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -203,14 +203,12 @@ static struct commit_graph *alloc_commit_graph(void)
+ 	return g;
+ }
+ 
+-extern int read_replace_refs;
+-
+ static int commit_graph_compatible(struct repository *r)
+ {
+ 	if (!r->gitdir)
+ 		return 0;
+ 
+-	if (read_replace_refs) {
++	if (replace_refs_enabled(r)) {
+ 		prepare_replace_object(r);
+ 		if (hashmap_get_size(&r->objects->replace_map->map))
+ 			return 0;
+diff --git a/log-tree.c b/log-tree.c
+index 143b86fecf..86212af362 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -155,7 +155,7 @@ static int add_ref_decoration(const char *refname, const struct object_id *oid,
+ 
+ 	if (starts_with(refname, git_replace_ref_base)) {
+ 		struct object_id original_oid;
+-		if (!read_replace_refs)
++		if (!replace_refs_enabled(the_repository))
+ 			return 0;
+ 		if (get_oid_hex(refname + strlen(git_replace_ref_base),
+ 				&original_oid)) {
+diff --git a/replace-object.c b/replace-object.c
+index ceec81c940..07cfedd6df 100644
+--- a/replace-object.c
++++ b/replace-object.c
+@@ -89,3 +89,8 @@ void disable_replace_refs(void)
+ {
+ 	read_replace_refs = 0;
+ }
++
++int replace_refs_enabled(struct repository *r)
++{
++	return read_replace_refs;
++}
+diff --git a/replace-object.h b/replace-object.h
+index 7786d4152b..3e9c3516c3 100644
+--- a/replace-object.h
++++ b/replace-object.h
+@@ -27,6 +27,18 @@ void prepare_replace_object(struct repository *r);
+ const struct object_id *do_lookup_replace_object(struct repository *r,
+ 						 const struct object_id *oid);
+ 
++/*
++ * Some commands disable replace-refs unconditionally, and otherwise each
++ * repository could alter the core.useReplaceRefs config value.
++ *
++ * Return 1 if and only if all of the following are true:
++ *
++ *  a. disable_replace_refs() has not been called.
++ *  b. GIT_NO_REPLACE_OBJECTS is unset or zero.
++ *  c. the given repository does not have core.useReplaceRefs=false.
++ */
++int replace_refs_enabled(struct repository *r);
++
+ /*
+  * If object sha1 should be replaced, return the replacement object's
+  * name (replaced recursively, if necessary).  The return value is
+@@ -41,7 +53,7 @@ const struct object_id *do_lookup_replace_object(struct repository *r,
+ static inline const struct object_id *lookup_replace_object(struct repository *r,
+ 							    const struct object_id *oid)
+ {
+-	if (!read_replace_refs ||
++	if (!replace_refs_enabled(r) ||
+ 	    (r->objects->replace_map_initialized &&
+ 	     r->objects->replace_map->map.tablesize == 0))
+ 		return oid;
+-- 
+2.39.3 (Apple Git-145)
+

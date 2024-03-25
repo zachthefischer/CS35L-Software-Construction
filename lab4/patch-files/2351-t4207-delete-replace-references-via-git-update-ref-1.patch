@@ -1,0 +1,57 @@
+From c6429fb86765714ef35d789905c1c15f50c4de91 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 2 Nov 2023 09:47:01 +0100
+Subject: [PATCH 2351/2871] t4207: delete replace references via
+ git-update-ref(1)
+
+In t4207 we set up a set of replace objects via git-replace(1). Because
+these references should not be impacting subsequent tests we also set up
+some cleanup logic that deletes the replacement references via a call to
+`rm -rf`. This reaches into the internal implementation details of the
+reference backend and will thus break when we grow an alternative refdb
+implementation.
+
+Refactor the tests to delete the replacement refs via Git commands so
+that we become independent of the actual refdb that's in use. As we
+don't have a nice way to delete all replacements or all references in a
+certain namespace, we opt for a combination of git-for-each-ref(1) and
+git-update-ref(1)'s `--stdin` mode.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4207-log-decoration-colors.sh | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/t/t4207-log-decoration-colors.sh b/t/t4207-log-decoration-colors.sh
+index 21986a866d..73ea9e5155 100755
+--- a/t/t4207-log-decoration-colors.sh
++++ b/t/t4207-log-decoration-colors.sh
+@@ -70,8 +70,14 @@ ${c_tag}tag: ${c_reset}${c_tag}A${c_reset}${c_commit})${c_reset} A
+ 	cmp_filtered_decorations
+ '
+ 
++remove_replace_refs () {
++	git for-each-ref 'refs/replace*/**' --format='delete %(refname)' >in &&
++	git update-ref --stdin <in &&
++	rm in
++}
++
+ test_expect_success 'test coloring with replace-objects' '
+-	test_when_finished rm -rf .git/refs/replace* &&
++	test_when_finished remove_replace_refs &&
+ 	test_commit C &&
+ 	test_commit D &&
+ 
+@@ -99,7 +105,7 @@ EOF
+ '
+ 
+ test_expect_success 'test coloring with grafted commit' '
+-	test_when_finished rm -rf .git/refs/replace* &&
++	test_when_finished remove_replace_refs &&
+ 
+ 	git replace --graft HEAD HEAD~2 &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

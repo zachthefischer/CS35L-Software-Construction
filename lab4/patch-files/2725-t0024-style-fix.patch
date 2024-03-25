@@ -1,0 +1,48 @@
+From 5ba95e0880a2486509c49b0ee47b58f1d4e95d14 Mon Sep 17 00:00:00 2001
+From: Ghanshyam Thakkar <shyamthakkar001@gmail.com>
+Date: Fri, 19 Jan 2024 09:03:35 +0530
+Subject: [PATCH 2725/2871] t0024: style fix
+
+t0024 has multiple command invocations on a single line, which
+goes against the style described in CodingGuidelines, thus fix
+that.
+
+Also, use the -C flag to give the destination when using $TAR,
+therefore, not requiring a subshell.
+
+Signed-off-by: Ghanshyam Thakkar <shyamthakkar001@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0024-crlf-archive.sh | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/t/t0024-crlf-archive.sh b/t/t0024-crlf-archive.sh
+index fa4da7c2b3..a7f4de4a43 100755
+--- a/t/t0024-crlf-archive.sh
++++ b/t/t0024-crlf-archive.sh
+@@ -20,7 +20,8 @@ test_expect_success setup '
+ test_expect_success 'tar archive' '
+ 
+ 	git archive --format=tar HEAD >test.tar &&
+-	( mkdir untarred && cd untarred && "$TAR" -xf ../test.tar ) &&
++	mkdir untarred &&
++	"$TAR" xf test.tar -C untarred &&
+ 
+ 	test_cmp sample untarred/sample
+ 
+@@ -30,7 +31,11 @@ test_expect_success UNZIP 'zip archive' '
+ 
+ 	git archive --format=zip HEAD >test.zip &&
+ 
+-	( mkdir unzipped && cd unzipped && "$GIT_UNZIP" ../test.zip ) &&
++	mkdir unzipped &&
++	(
++		cd unzipped &&
++		"$GIT_UNZIP" ../test.zip
++	) &&
+ 
+ 	test_cmp sample unzipped/sample
+ 
+-- 
+2.39.3 (Apple Git-145)
+

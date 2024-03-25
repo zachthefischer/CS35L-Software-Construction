@@ -1,0 +1,31 @@
+From 1e6459efcaaf9d0bffba59fd0bc0c44d0731dd65 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:44:31 -0400
+Subject: [PATCH 1783/2871] rev-parse: mark unused parameter in for_each_abbrev
+ callback
+
+We don't need to use the "data" parameter in this instance. Let's mark
+it to avoid -Wunused-parameter warnings.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rev-parse.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/rev-parse.c b/builtin/rev-parse.c
+index 3e2ee44177..075e2c5aa4 100644
+--- a/builtin/rev-parse.c
++++ b/builtin/rev-parse.c
+@@ -226,7 +226,7 @@ static int anti_reference(const char *refname, const struct object_id *oid,
+ 	return 0;
+ }
+ 
+-static int show_abbrev(const struct object_id *oid, void *cb_data)
++static int show_abbrev(const struct object_id *oid, void *cb_data UNUSED)
+ {
+ 	show_rev(NORMAL, oid, NULL);
+ 	return 0;
+-- 
+2.39.3 (Apple Git-145)
+

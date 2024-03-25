@@ -1,0 +1,79 @@
+From 991c552916d3c8fa464acfca135b4235e11792bf Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 18 Jul 2023 17:44:13 +0200
+Subject: [PATCH 1821/2871] ls-tree: fix --no-full-name
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 61fdbcf98b (ls-tree: migrate to parse-options, 2009-11-13) git
+ls-tree has accepted the option --no-full-name, but it does the same
+as --full-name, contrary to convention.  That's because it's defined
+using OPT_SET_INT with a value of 0, where the negative variant sets
+0 as well.
+
+Turn --no-full-name into the opposite of --full-name by using OPT_BOOL
+instead and storing the option's status directly in a variable named
+"full_name" instead of in negated form in "chomp_prefix".
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-tree.c          | 7 +++----
+ t/t3101-ls-tree-dirname.sh | 8 ++++++++
+ 2 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/ls-tree.c b/builtin/ls-tree.c
+index 53073d64cb..f558db5f3b 100644
+--- a/builtin/ls-tree.c
++++ b/builtin/ls-tree.c
+@@ -343,7 +343,7 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
+ 	struct object_id oid;
+ 	struct tree *tree;
+ 	int i, full_tree = 0;
+-	int chomp_prefix = prefix && *prefix;
++	int full_name = !prefix || !*prefix;
+ 	read_tree_fn_t fn = NULL;
+ 	enum ls_tree_cmdmode cmdmode = MODE_DEFAULT;
+ 	int null_termination = 0;
+@@ -365,8 +365,7 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
+ 			    MODE_NAME_STATUS),
+ 		OPT_CMDMODE(0, "object-only", &cmdmode, N_("list only objects"),
+ 			    MODE_OBJECT_ONLY),
+-		OPT_SET_INT(0, "full-name", &chomp_prefix,
+-			    N_("use full path names"), 0),
++		OPT_BOOL(0, "full-name", &full_name, N_("use full path names")),
+ 		OPT_BOOL(0, "full-tree", &full_tree,
+ 			 N_("list entire tree; not just current directory "
+ 			    "(implies --full-name)")),
+@@ -387,7 +386,7 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
+ 
+ 	if (full_tree)
+ 		prefix = NULL;
+-	options.prefix = chomp_prefix ? prefix : NULL;
++	options.prefix = full_name ? NULL : prefix;
+ 
+ 	/*
+ 	 * We wanted to detect conflicts between --name-only and
+diff --git a/t/t3101-ls-tree-dirname.sh b/t/t3101-ls-tree-dirname.sh
+index 217006d1bf..5af2dac0e4 100755
+--- a/t/t3101-ls-tree-dirname.sh
++++ b/t/t3101-ls-tree-dirname.sh
+@@ -154,6 +154,14 @@ EOF
+ 	test_output
+ '
+ 
++test_expect_success 'ls-tree --no-full-name' '
++	git -C path0 ls-tree --no-full-name $tree a >current &&
++	cat >expected <<-EOF &&
++	040000 tree X	a
++	EOF
++	test_output
++'
++
+ test_expect_success 'ls-tree --full-tree' '
+ 	(
+ 		cd path1/b/c &&
+-- 
+2.39.3 (Apple Git-145)
+

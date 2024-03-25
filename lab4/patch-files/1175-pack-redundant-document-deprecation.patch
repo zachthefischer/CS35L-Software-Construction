@@ -1,0 +1,44 @@
+From fcf31daae4cdb71ec367aac0d2cbeef779e97451 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 28 Mar 2023 15:06:41 -0400
+Subject: [PATCH 1175/2871] pack-redundant: document deprecation
+
+Running the command itself has generated a warning for several versions,
+which has recently been upgraded to an error. Let's also make sure the
+documentation mentions what is going on. This also gives us a good spot
+to explain the reasoning and recommend alternatives.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-pack-redundant.txt | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Documentation/git-pack-redundant.txt b/Documentation/git-pack-redundant.txt
+index 99ef13839d..13c3eb5ec9 100644
+--- a/Documentation/git-pack-redundant.txt
++++ b/Documentation/git-pack-redundant.txt
+@@ -11,6 +11,20 @@ SYNOPSIS
+ [verse]
+ 'git pack-redundant' [--verbose] [--alt-odb] (--all | <pack-filename>...)
+ 
++WARNING
++-------
++`git pack-redundant` has been deprecated and is scheduled for removal in
++a future version of Git. Because it can only remove entire duplicate
++packs and not individual duplicate objects, it is generally not a useful
++tool for reducing repository size. You are better off using `git gc` to
++do so, which will put objects into a new pack, removing duplicates.
++
++Running `pack-redundant` without the `--i-still-use-this` flag will fail
++in this release. If you believe you have a use case for which
++`pack-redundant` is better suited and oppose this removal, please
++contact the Git mailing list at git@vger.kernel.org. More information
++about the list is available at https://git-scm.com/community.
++
+ DESCRIPTION
+ -----------
+ This program computes which packs in your repository
+-- 
+2.39.3 (Apple Git-145)
+

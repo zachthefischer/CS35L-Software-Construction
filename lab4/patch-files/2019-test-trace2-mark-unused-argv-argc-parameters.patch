@@ -1,0 +1,53 @@
+From 51bf8676c09aefaa8ccd6de0bcae4e0e532cc672 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:25 -0400
+Subject: [PATCH 2019/2871] test-trace2: mark unused argv/argc parameters
+
+The trace2 test helper uses function pointers to dispatch to individual
+tests. Not all tests bother looking at their argv/argc parameters. We
+could tighten this up (e.g., complaining when seeing unexpected
+parameters), but for internal test code it's not worth worrying about.
+
+This is similar in spirit to 126e3b3d2a (t/helper: mark unused argv/argc
+arguments, 2023-03-28).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-trace2.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/t/helper/test-trace2.c b/t/helper/test-trace2.c
+index 20c7495f38..d5ca0046c8 100644
+--- a/t/helper/test-trace2.c
++++ b/t/helper/test-trace2.c
+@@ -45,7 +45,7 @@ static int get_i(int *p_value, const char *data)
+  * [] "def_param" events for all of the "interesting" pre-defined
+  * config settings.
+  */
+-static int ut_001return(int argc, const char **argv)
++static int ut_001return(int argc UNUSED, const char **argv)
+ {
+ 	int rc;
+ 
+@@ -65,7 +65,7 @@ static int ut_001return(int argc, const char **argv)
+  * [] "def_param" events for all of the "interesting" pre-defined
+  * config settings.
+  */
+-static int ut_002exit(int argc, const char **argv)
++static int ut_002exit(int argc UNUSED, const char **argv)
+ {
+ 	int rc;
+ 
+@@ -201,7 +201,7 @@ static int ut_006data(int argc, const char **argv)
+ 	return 0;
+ }
+ 
+-static int ut_007BUG(int argc, const char **argv)
++static int ut_007BUG(int argc UNUSED, const char **argv UNUSED)
+ {
+ 	/*
+ 	 * Exercise BUG() to ensure that the message is printed to trace2.
+-- 
+2.39.3 (Apple Git-145)
+

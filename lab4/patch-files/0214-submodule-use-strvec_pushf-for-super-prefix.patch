@@ -1,0 +1,57 @@
+From cdc3db33ced095ab49c047040da19485bfad2afe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 23 Oct 2022 08:47:35 +0200
+Subject: [PATCH 0214/2871] submodule: use strvec_pushf() for --super-prefix
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+absorb_git_dir_into_superproject() uses a strbuf and strvec_pushl() to
+build and add the --super-prefix option and its argument.  Use a single
+strvec_pushf() call to add the stuck form instead, which reduces the
+code size and avoids a strbuf allocation and release.  The same is
+already done in submodule_reset_index() and submodule_move_head().
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ submodule.c | 12 +++---------
+ 1 file changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/submodule.c b/submodule.c
+index bf7a2c7918..0a82aa9bdd 100644
+--- a/submodule.c
++++ b/submodule.c
+@@ -2361,26 +2361,20 @@ void absorb_git_dir_into_superproject(const char *path,
+ 
+ 	if (flags & ABSORB_GITDIR_RECURSE_SUBMODULES) {
+ 		struct child_process cp = CHILD_PROCESS_INIT;
+-		struct strbuf sb = STRBUF_INIT;
+ 
+ 		if (flags & ~ABSORB_GITDIR_RECURSE_SUBMODULES)
+ 			BUG("we don't know how to pass the flags down?");
+ 
+-		strbuf_addstr(&sb, get_super_prefix_or_empty());
+-		strbuf_addstr(&sb, path);
+-		strbuf_addch(&sb, '/');
+-
+ 		cp.dir = path;
+ 		cp.git_cmd = 1;
+ 		cp.no_stdin = 1;
+-		strvec_pushl(&cp.args, "--super-prefix", sb.buf,
+-			     "submodule--helper",
++		strvec_pushf(&cp.args, "--super-prefix=%s%s/",
++			     get_super_prefix_or_empty(), path);
++		strvec_pushl(&cp.args, "submodule--helper",
+ 			     "absorbgitdirs", NULL);
+ 		prepare_submodule_repo_env(&cp.env);
+ 		if (run_command(&cp))
+ 			die(_("could not recurse into submodule '%s'"), path);
+-
+-		strbuf_release(&sb);
+ 	}
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

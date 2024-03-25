@@ -1,0 +1,41 @@
+From bb532b534547d0a6b203baaf2f3379d987f611b9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Matthias=20A=C3=9Fhauer?= <mha1993@live.de>
+Date: Fri, 4 Aug 2023 04:08:42 +0000
+Subject: [PATCH 1885/2871] run-command: conditionally define locate_in_PATH()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This commit doesn't change any behaviour by itself, but allows us to easily
+define compat replacements for locate_in_PATH(). It prepares us for the next
+commit that adds a native Windows implementation of locate_in_PATH().
+
+Signed-off-by: Matthias Aßhauer <mha1993@live.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ run-command.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/run-command.c b/run-command.c
+index 60c9419866..85fc150728 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -170,6 +170,7 @@ int is_executable(const char *name)
+ 	return st.st_mode & S_IXUSR;
+ }
+ 
++#ifndef locate_in_PATH
+ /*
+  * Search $PATH for a command.  This emulates the path search that
+  * execvp would perform, without actually executing the command so it
+@@ -218,6 +219,7 @@ static char *locate_in_PATH(const char *file)
+ 	strbuf_release(&buf);
+ 	return NULL;
+ }
++#endif
+ 
+ int exists_in_PATH(const char *command)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

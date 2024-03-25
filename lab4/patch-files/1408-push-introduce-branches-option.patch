@@ -1,0 +1,254 @@
+From 425b4d7f47bd2be561ced14eac36056390862e8c Mon Sep 17 00:00:00 2001
+From: Teng Long <dyroneteng@gmail.com>
+Date: Sat, 6 May 2023 19:34:08 +0800
+Subject: [PATCH 1408/2871] push: introduce '--branches' option
+
+The '--all' option of git-push built-in cmd support to push all branches
+(refs under refs/heads) to remote. Under the usage, a user can easlily
+work in some scenarios, for example, branches synchronization and batch
+upload.
+
+The '--all' was introduced for a long time, meanwhile, git supports to
+customize the storage location under "refs/". when a new git user see
+the usage like, 'git push origin --all', we might feel like we're
+pushing _all_ the refs instead of just branches without looking at the
+documents until we found the related description of it or '--mirror'.
+
+To ensure compatibility, we cannot rename '--all' to another name
+directly, one way is, we can try to add a new option '--heads' which be
+identical with the functionality of '--all' to let the user understand
+the meaning of representation more clearly. Actually, We've more or less
+named options this way already, for example, in 'git-show-ref' and 'git
+ls-remote'.
+
+At the same time, we fix a related issue about the wrong help
+information of '--all' option in code and add some test cases in
+t5523, t5543 and t5583.
+
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-push.txt |   3 +-
+ builtin/push.c             |   7 ++-
+ t/t5523-push-upstream.sh   |  12 +++-
+ t/t5543-atomic-push.sh     |   5 +-
+ t/t5583-push-branches.sh   | 115 +++++++++++++++++++++++++++++++++++++
+ 5 files changed, 135 insertions(+), 7 deletions(-)
+ create mode 100755 t/t5583-push-branches.sh
+
+diff --git a/Documentation/git-push.txt b/Documentation/git-push.txt
+index 5bb1d5aae2..297927d866 100644
+--- a/Documentation/git-push.txt
++++ b/Documentation/git-push.txt
+@@ -9,7 +9,7 @@ git-push - Update remote refs along with associated objects
+ SYNOPSIS
+ --------
+ [verse]
+-'git push' [--all | --mirror | --tags] [--follow-tags] [--atomic] [-n | --dry-run] [--receive-pack=<git-receive-pack>]
++'git push' [--all | --branches | --mirror | --tags] [--follow-tags] [--atomic] [-n | --dry-run] [--receive-pack=<git-receive-pack>]
+ 	   [--repo=<repository>] [-f | --force] [-d | --delete] [--prune] [-v | --verbose]
+ 	   [-u | --set-upstream] [-o <string> | --push-option=<string>]
+ 	   [--[no-]signed|--signed=(true|false|if-asked)]
+@@ -147,6 +147,7 @@ already exists on the remote side.
+ `tag <tag>` means the same as `refs/tags/<tag>:refs/tags/<tag>`.
+ 
+ --all::
++--branches::
+ 	Push all branches (i.e. refs under `refs/heads/`); cannot be
+ 	used with other <refspec>.
+ 
+diff --git a/builtin/push.c b/builtin/push.c
+index 6001e4ae0a..d616fa831a 100644
+--- a/builtin/push.c
++++ b/builtin/push.c
+@@ -593,11 +593,12 @@ int cmd_push(int argc, const char **argv, const char *prefix)
+ 	struct option options[] = {
+ 		OPT__VERBOSITY(&verbosity),
+ 		OPT_STRING( 0 , "repo", &repo, N_("repository"), N_("repository")),
+-		OPT_BIT( 0 , "all", &flags, N_("push all refs"), TRANSPORT_PUSH_ALL),
++		OPT_BIT( 0 , "all", &flags, N_("push all branches"), TRANSPORT_PUSH_ALL),
++		OPT_ALIAS( 0 , "branches", "all"),
+ 		OPT_BIT( 0 , "mirror", &flags, N_("mirror all refs"),
+ 			    (TRANSPORT_PUSH_MIRROR|TRANSPORT_PUSH_FORCE)),
+ 		OPT_BOOL('d', "delete", &deleterefs, N_("delete refs")),
+-		OPT_BOOL( 0 , "tags", &tags, N_("push tags (can't be used with --all or --mirror)")),
++		OPT_BOOL( 0 , "tags", &tags, N_("push tags (can't be used with --all or --branches or --mirror)")),
+ 		OPT_BIT('n' , "dry-run", &flags, N_("dry run"), TRANSPORT_PUSH_DRY_RUN),
+ 		OPT_BIT( 0,  "porcelain", &flags, N_("machine-readable output"), TRANSPORT_PUSH_PORCELAIN),
+ 		OPT_BIT('f', "force", &flags, N_("force updates"), TRANSPORT_PUSH_FORCE),
+@@ -640,7 +641,7 @@ int cmd_push(int argc, const char **argv, const char *prefix)
+ 	set_push_cert_flags(&flags, push_cert);
+ 
+ 	if (deleterefs && (tags || (flags & (TRANSPORT_PUSH_ALL | TRANSPORT_PUSH_MIRROR))))
+-		die(_("options '%s' and '%s' cannot be used together"), "--delete", "--all/--mirror/--tags");
++		die(_("options '%s' and '%s' cannot be used together"), "--delete", "--all/--branches/--mirror/--tags");
+ 	if (deleterefs && argc < 2)
+ 		die(_("--delete doesn't make sense without any refs"));
+ 
+diff --git a/t/t5523-push-upstream.sh b/t/t5523-push-upstream.sh
+index c9acc07635..1b8d609879 100755
+--- a/t/t5523-push-upstream.sh
++++ b/t/t5523-push-upstream.sh
+@@ -61,12 +61,20 @@ test_expect_success 'push -u :topic_2' '
+ 	check_config topic_2 upstream refs/heads/other2
+ '
+ 
+-test_expect_success 'push -u --all' '
++test_expect_success 'push -u --all(the same behavior with--branches)' '
+ 	git branch all1 &&
+ 	git branch all2 &&
+ 	git push -u --all &&
+ 	check_config all1 upstream refs/heads/all1 &&
+-	check_config all2 upstream refs/heads/all2
++	check_config all2 upstream refs/heads/all2 &&
++	git config --get-regexp branch.all* > expect &&
++	git config --remove-section branch.all1 &&
++	git config --remove-section branch.all2 &&
++	git push -u --branches &&
++	check_config all1 upstream refs/heads/all1 &&
++	check_config all2 upstream refs/heads/all2 &&
++	git config --get-regexp branch.all* > actual &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'push -u HEAD' '
+diff --git a/t/t5543-atomic-push.sh b/t/t5543-atomic-push.sh
+index 70431122a4..04b47ad84a 100755
+--- a/t/t5543-atomic-push.sh
++++ b/t/t5543-atomic-push.sh
+@@ -117,7 +117,10 @@ test_expect_success 'atomic push fails if one branch fails' '
+ 		test_commit five &&
+ 		git checkout main &&
+ 		test_commit six &&
+-		test_must_fail git push --atomic --all up
++		test_must_fail git push --atomic --all up >output-all 2>&1 &&
++		# --all and --branches have the same behavior when be combined with --atomic
++		test_must_fail git push --atomic --branches up >output-branches 2>&1 &&
++		test_cmp output-all output-branches
+ 	) &&
+ 	test_refs main HEAD@{7} &&
+ 	test_refs second HEAD@{4}
+diff --git a/t/t5583-push-branches.sh b/t/t5583-push-branches.sh
+new file mode 100755
+index 0000000000..29a5c5601b
+--- /dev/null
++++ b/t/t5583-push-branches.sh
+@@ -0,0 +1,115 @@
++#!bin/sh
++
++test_description='check the consisitency of behavior of --all and --branches'
++
++GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
++export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
++
++. ./test-lib.sh
++
++delete_refs() {
++	dir=$1
++	shift
++	rm -rf deletes
++	for arg in $*
++	do
++		echo "delete ${arg}" >>deletes
++	done
++	git -C $dir update-ref --stdin < deletes
++}
++
++test_expect_success 'setup bare remote' '
++	git init --bare remote-1 &&
++	git -C remote-1 config gc.auto 0 &&
++	test_commit one &&
++	git push remote-1 HEAD
++'
++
++test_expect_success 'setup different types of references' '
++	cat >refs <<-EOF &&
++	update refs/heads/branch-1 HEAD
++	update refs/heads/branch-2 HEAD
++	EOF
++
++	git tag -a -m "annotated" annotated-1 HEAD &&
++	git tag -a -m "annotated" annotated-2 HEAD &&
++	git update-ref --stdin < refs
++'
++
++test_expect_success '--all and --branches have the same behavior' '
++	test_when_finished "delete_refs remote-1 \
++			   refs/heads/branch-1 \
++			   refs/heads/branch-2" &&
++	git push remote-1 --all &&
++	commit=$(git rev-parse HEAD) &&
++	cat >expect <<-EOF &&
++	$commit refs/heads/branch-1
++	$commit refs/heads/branch-2
++	$commit refs/heads/main
++	EOF
++
++	git -C remote-1 show-ref --heads >actual.all &&
++	delete_refs remote-1 refs/heads/branch-1 refs/heads/branch-2 &&
++	git push remote-1 --branches &&
++	git -C remote-1 show-ref --heads >actual.branches &&
++	test_cmp actual.all actual.branches &&
++	test_cmp expect actual.all
++'
++
++test_expect_success '--all or --branches can not be combined with refspecs' '
++	test_must_fail git push remote-1 --all main >actual.all 2>&1 &&
++	test_must_fail git push remote-1 --branches main >actual.branches 2>&1 &&
++	test_cmp actual.all actual.branches &&
++	grep "be combined with refspecs" actual.all
++'
++
++test_expect_success '--all or --branches can not be combined with --mirror' '
++	test_must_fail git push remote-1 --all --mirror >actual.all 2>&1 &&
++	test_must_fail git push remote-1 --branches --mirror >actual.branches 2>&1 &&
++	test_cmp actual.all actual.branches &&
++	grep "cannot be used together" actual.all
++'
++
++test_expect_success '--all or --branches can not be combined with --tags' '
++	test_must_fail git push remote-1 --all --tags >actual.all 2>&1 &&
++	test_must_fail git push remote-1 --branches --tags >actual.branches 2>&1 &&
++	test_cmp actual.all actual.branches &&
++	grep "cannot be used together" actual.all
++'
++
++
++test_expect_success '--all or --branches can not be combined with --delete' '
++	test_must_fail git push remote-1 --all --delete >actual.all 2>&1 &&
++	test_must_fail git push remote-1 --branches --delete >actual.branches 2>&1 &&
++	test_cmp actual.all actual.branches &&
++	grep "cannot be used together" actual.all
++'
++
++test_expect_success '--all or --branches combines with --follow-tags have same behavior' '
++	test_when_finished "delete_refs remote-1 \
++			   refs/heads/branch-1 \
++			   refs/heads/branch-2 \
++			   refs/tags/annotated-1 \
++			   refs/tags/annotated-2" &&
++	git push remote-1 --all --follow-tags &&
++	git -C remote-1 show-ref > actual.all &&
++	cat >expect <<-EOF &&
++	$commit refs/heads/branch-1
++	$commit refs/heads/branch-2
++	$commit refs/heads/main
++	$(git rev-parse annotated-1) refs/tags/annotated-1
++	$(git rev-parse annotated-2) refs/tags/annotated-2
++	EOF
++
++	delete_refs remote-1 \
++		    refs/heads/branch-1 \
++		    refs/heads/branch-2 \
++		    refs/tags/annotated-1 \
++		    refs/tags/annotated-2 &&
++	git push remote-1 --branches --follow-tags &&
++	git -C remote-1 show-ref >actual.branches &&
++	test_cmp actual.all actual.branches &&
++	test_cmp expect actual.all
++'
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

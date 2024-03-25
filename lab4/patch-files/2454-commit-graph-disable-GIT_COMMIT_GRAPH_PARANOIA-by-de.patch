@@ -1,0 +1,190 @@
+From b1df3b3867e351913887121063cbd69de24e83fc Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 24 Nov 2023 12:08:21 +0100
+Subject: [PATCH 2454/2871] commit-graph: disable GIT_COMMIT_GRAPH_PARANOIA by
+ default
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In 7a5d604443 (commit: detect commits that exist in commit-graph but not
+in the ODB, 2023-10-31), we have introduced a new object existence check
+into `repo_parse_commit_internal()` so that we do not parse commits via
+the commit-graph that don't have a corresponding object in the object
+database. This new check of course comes with a performance penalty,
+which the commit put at around 30% for `git rev-list --topo-order`. But
+there are in fact scenarios where the performance regression is even
+higher. The following benchmark against linux.git with a fully-build
+commit-graph:
+
+  Benchmark 1: git.v2.42.1 rev-list --count HEAD
+    Time (mean ± σ):     658.0 ms ±   5.2 ms    [User: 613.5 ms, System: 44.4 ms]
+    Range (min … max):   650.2 ms … 666.0 ms    10 runs
+
+  Benchmark 2: git.v2.43.0-rc1 rev-list --count HEAD
+    Time (mean ± σ):      1.333 s ±  0.019 s    [User: 1.263 s, System: 0.069 s]
+    Range (min … max):    1.302 s …  1.361 s    10 runs
+
+  Summary
+    git.v2.42.1 rev-list --count HEAD ran
+      2.03 ± 0.03 times faster than git.v2.43.0-rc1 rev-list --count HEAD
+
+While it's a noble goal to ensure that results are the same regardless
+of whether or not we have a potentially stale commit-graph, taking twice
+as much time is a tough sell. Furthermore, we can generally assume that
+the commit-graph will be updated by git-gc(1) or git-maintenance(1) as
+required so that the case where the commit-graph is stale should not at
+all be common.
+
+With that in mind, default-disable GIT_COMMIT_GRAPH_PARANOIA and restore
+the behaviour and thus performance previous to the mentioned commit. In
+order to not be inconsistent, also disable this behaviour by default in
+`lookup_commit_in_graph()`, where the object existence check has been
+introduced right at its inception via f559d6d45e (revision: avoid
+hitting packfiles when commits are in commit-graph, 2021-08-09).
+
+This results in another speedup in commands that end up calling this
+function, even though it's less pronounced compared to the above
+benchmark. The following has been executed in linux.git with ~1.2
+million references:
+
+  Benchmark 1: GIT_COMMIT_GRAPH_PARANOIA=true git rev-list --all --no-walk=unsorted
+    Time (mean ± σ):      2.947 s ±  0.003 s    [User: 2.412 s, System: 0.534 s]
+    Range (min … max):    2.943 s …  2.949 s    3 runs
+
+  Benchmark 2: GIT_COMMIT_GRAPH_PARANOIA=false git rev-list --all --no-walk=unsorted
+    Time (mean ± σ):      2.724 s ±  0.030 s    [User: 2.207 s, System: 0.514 s]
+    Range (min … max):    2.704 s …  2.759 s    3 runs
+
+  Summary
+    GIT_COMMIT_GRAPH_PARANOIA=false git rev-list --all --no-walk=unsorted ran
+      1.08 ± 0.01 times faster than GIT_COMMIT_GRAPH_PARANOIA=true git rev-list --all --no-walk=unsorted
+
+So whereas 7a5d604443 initially introduced the logic to start doing an
+object existence check in `repo_parse_commit_internal()` by default, the
+updated logic will now instead cause `lookup_commit_in_graph()` to stop
+doing the check by default. This behaviour continues to be tweakable by
+the user via the GIT_COMMIT_GRAPH_PARANOIA environment variable.
+
+Note that this requires us to amend some tests to manually turn on the
+paranoid checks again. This is because we cause repository corruption by
+manually deleting objects which are part of the commit graph already.
+These circumstances shouldn't usually happen in repositories.
+
+Reported-by: Jeff King <peff@peff.net>
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git.txt       | 6 +++---
+ commit-graph.c              | 2 +-
+ commit.c                    | 2 +-
+ t/t5318-commit-graph.sh     | 8 ++++----
+ t/t6022-rev-list-missing.sh | 6 ++++++
+ t/t7700-repack.sh           | 2 +-
+ 6 files changed, 16 insertions(+), 10 deletions(-)
+
+diff --git a/Documentation/git.txt b/Documentation/git.txt
+index 2535a30194..6c19fd1d76 100644
+--- a/Documentation/git.txt
++++ b/Documentation/git.txt
+@@ -917,9 +917,9 @@ for full details.
+ 	avoid issues with stale commit-graphs that contain references to
+ 	already-deleted commits, but comes with a performance penalty.
+ +
+-The default is "true", which enables the aforementioned behavior.
+-Setting this to "false" disables the existence check. This can lead to
+-a performance improvement at the cost of consistency.
++The default is "false", which disables the aforementioned behavior.
++Setting this to "true" enables the existence check so that stale commits
++will never be returned from the commit-graph at the cost of performance.
+ 
+ `GIT_ALLOW_PROTOCOL`::
+ 	If set to a colon-separated list of protocols, behave as if
+diff --git a/commit-graph.c b/commit-graph.c
+index ee66098e07..a712917356 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -1029,7 +1029,7 @@ struct commit *lookup_commit_in_graph(struct repository *repo, const struct obje
+ 	uint32_t pos;
+ 
+ 	if (commit_graph_paranoia == -1)
+-		commit_graph_paranoia = git_env_bool(GIT_COMMIT_GRAPH_PARANOIA, 1);
++		commit_graph_paranoia = git_env_bool(GIT_COMMIT_GRAPH_PARANOIA, 0);
+ 
+ 	if (!prepare_commit_graph(repo))
+ 		return NULL;
+diff --git a/commit.c b/commit.c
+index 8405d7c3fc..37956b836c 100644
+--- a/commit.c
++++ b/commit.c
+@@ -577,7 +577,7 @@ int repo_parse_commit_internal(struct repository *r,
+ 		static int commit_graph_paranoia = -1;
+ 
+ 		if (commit_graph_paranoia == -1)
+-			commit_graph_paranoia = git_env_bool(GIT_COMMIT_GRAPH_PARANOIA, 1);
++			commit_graph_paranoia = git_env_bool(GIT_COMMIT_GRAPH_PARANOIA, 0);
+ 
+ 		if (commit_graph_paranoia && !has_object(r, &item->object.oid, 0)) {
+ 			unparse_commit(r, &item->object.oid);
+diff --git a/t/t5318-commit-graph.sh b/t/t5318-commit-graph.sh
+index d4fc65e078..4c751a6871 100755
+--- a/t/t5318-commit-graph.sh
++++ b/t/t5318-commit-graph.sh
+@@ -909,10 +909,10 @@ test_expect_success 'stale commit cannot be parsed when given directly' '
+ 
+ 		# Verify that it is possible to read the commit from the
+ 		# commit graph when not being paranoid, ...
+-		GIT_COMMIT_GRAPH_PARANOIA=false git rev-list B &&
++		git rev-list B &&
+ 		# ... but parsing the commit when double checking that
+ 		# it actually exists in the object database should fail.
+-		test_must_fail git rev-list -1 B
++		test_must_fail env GIT_COMMIT_GRAPH_PARANOIA=true git rev-list -1 B
+ 	)
+ '
+ 
+@@ -936,9 +936,9 @@ test_expect_success 'stale commit cannot be parsed when traversing graph' '
+ 
+ 		# Again, we should be able to parse the commit when not
+ 		# being paranoid about commit graph staleness...
+-		GIT_COMMIT_GRAPH_PARANOIA=false git rev-parse HEAD~2 &&
++		git rev-parse HEAD~2 &&
+ 		# ... but fail when we are paranoid.
+-		test_must_fail git rev-parse HEAD~2 2>error &&
++		test_must_fail env GIT_COMMIT_GRAPH_PARANOIA=true git rev-parse HEAD~2 2>error &&
+ 		grep "error: commit $oid exists in commit-graph but not in the object database" error
+ 	)
+ '
+diff --git a/t/t6022-rev-list-missing.sh b/t/t6022-rev-list-missing.sh
+index 40265a4f66..211672759a 100755
+--- a/t/t6022-rev-list-missing.sh
++++ b/t/t6022-rev-list-missing.sh
+@@ -13,6 +13,12 @@ test_expect_success 'create repository and alternate directory' '
+ 	test_commit 3
+ '
+ 
++# We manually corrupt the repository, which means that the commit-graph may
++# contain references to already-deleted objects. We thus need to enable
++# commit-graph paranoia to not returned these deleted commits from the graph.
++GIT_COMMIT_GRAPH_PARANOIA=true
++export GIT_COMMIT_GRAPH_PARANOIA
++
+ for obj in "HEAD~1" "HEAD~1^{tree}" "HEAD:1.t"
+ do
+ 	test_expect_success "rev-list --missing=error fails with missing object $obj" '
+diff --git a/t/t7700-repack.sh b/t/t7700-repack.sh
+index d2975e6c93..94f9f4a1da 100755
+--- a/t/t7700-repack.sh
++++ b/t/t7700-repack.sh
+@@ -271,7 +271,7 @@ test_expect_success 'repacking fails when missing .pack actually means missing o
+ 		ls .git/objects/pack/*.pack >before-pack-dir &&
+ 
+ 		test_must_fail git fsck &&
+-		test_must_fail git repack --cruft -d 2>err &&
++		test_must_fail env GIT_COMMIT_GRAPH_PARANOIA=true git repack --cruft -d 2>err &&
+ 		grep "bad object" err &&
+ 
+ 		# Before failing, the repack did not modify the
+-- 
+2.39.3 (Apple Git-145)
+

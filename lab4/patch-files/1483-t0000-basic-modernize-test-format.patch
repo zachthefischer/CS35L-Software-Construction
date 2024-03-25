@@ -1,0 +1,30 @@
+From 2f68c99a3beefa5556eca76811deb443599e214a Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Thu, 18 May 2023 20:03:06 +0000
+Subject: [PATCH 1483/2871] t0000-basic: modernize test format
+
+Some tests in t0000-basic.sh used the older four space indent format.
+Update these to use tabs.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0000-basic.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t0000-basic.sh b/t/t0000-basic.sh
+index 8ea31d187a..6e300be2ac 100755
+--- a/t/t0000-basic.sh
++++ b/t/t0000-basic.sh
+@@ -1014,7 +1014,7 @@ test_expect_success 'validate object ID for a known tree' '
+ '
+ 
+ test_expect_success 'showing tree with git ls-tree' '
+-    git ls-tree $tree >current
++	git ls-tree $tree >current
+ '
+ 
+ test_expect_success 'git ls-tree output for a known tree' '
+-- 
+2.39.3 (Apple Git-145)
+

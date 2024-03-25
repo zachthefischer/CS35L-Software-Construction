@@ -1,0 +1,45 @@
+From 382a9464145de7c1d4f89a161184686cf8685886 Mon Sep 17 00:00:00 2001
+From: Mike Hommey <mh@glandium.org>
+Date: Wed, 26 Apr 2023 09:48:43 +0900
+Subject: [PATCH 1355/2871] Handle some compiler versions containing a dash
+
+The version reported by e.g. x86_64-w64-mingw32-gcc on Debian bullseye
+looks like:
+  gcc version 10-win32 20210110 (GCC)
+
+This ends up with detect-compiler failing with:
+  ./detect-compiler: 30: test: Illegal number: 10-win32
+
+This change removes the two known suffixes known to exist in GCC versions
+in Debian: -win32 and -posix.
+
+Signed-off-by: Mike Hommey <mh@glandium.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ detect-compiler | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/detect-compiler b/detect-compiler
+index 50087f5670..a87650b71b 100755
+--- a/detect-compiler
++++ b/detect-compiler
+@@ -17,7 +17,15 @@ get_family() {
+ }
+ 
+ get_version() {
+-	get_version_line | sed 's/^.* version \([0-9][^ ]*\).*/\1/'
++	# A string that begins with a digit up to the next SP
++	ver=$(get_version_line | sed 's/^.* version \([0-9][^ ]*\).*/\1/')
++
++	# There are known -variant suffixes that do not affect the
++	# meaning of the main version number.  Strip them.
++	ver=${ver%-win32}
++	ver=${ver%-posix}
++
++	echo "$ver"
+ }
+ 
+ print_flags() {
+-- 
+2.39.3 (Apple Git-145)
+

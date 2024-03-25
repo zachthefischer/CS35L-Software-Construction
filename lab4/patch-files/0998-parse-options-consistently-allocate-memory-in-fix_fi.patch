@@ -1,0 +1,207 @@
+From 7ce4088ab78e06fc5c4ae42fc75b65a48bf7b3ff Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 4 Mar 2023 05:31:22 -0500
+Subject: [PATCH 0998/2871] parse-options: consistently allocate memory in
+ fix_filename()
+
+When handling OPT_FILENAME(), we have to stick the "prefix" (if any) in
+front of the filename to make up for the fact that Git has chdir()'d to
+the top of the repository. We can do this with prefix_filename(), but
+there are a few special cases we handle ourselves.
+
+Unfortunately the memory allocation is inconsistent here; if we do make
+it to prefix_filename(), we'll allocate a string which the caller must
+free to avoid a leak. But if we hit our special cases, we'll return the
+string as-is, and a caller which tries to free it will crash. So there's
+no way to win.
+
+Let's consistently allocate, so that callers can do the right thing.
+
+There are now three cases to care about in the function (and hence a
+three-armed if/else):
+
+  1. we got a NULL input (and should leave it as NULL, though arguably
+     this is the sign of a bug; let's keep the status quo for now and we
+     can pick at that scab later)
+
+  2. we hit a special case that means we leave the name intact; we
+     should duplicate the string. This includes our special "-"
+     matching. Prior to this patch, it also included empty prefixes and
+     absolute filenames. But we can observe that prefix_filename()
+     already handles these, so we don't need to detect them.
+
+  3. everything else goes to prefix_filename()
+
+I've dropped the "const" from the "char **file" parameter to indicate
+that we're allocating, though in practice it's not really important.
+This is all being shuffled through a void pointer via opt->value before
+it hits code which ever looks at the string. And it's even a bit weird,
+because we are really taking _in_ a const string and using the same
+out-parameter for a non-const string. A better function signature would
+be:
+
+  static char *fix_filename(const char *prefix, const char *file);
+
+but that would mean the caller dereferences the double-pointer (and the
+NULL check is currently handled inside this function). So I took the
+path of least-change here.
+
+Note that we have to fix several callers in this commit, too, or we'll
+break the leak-checking tests. These are "new" leaks in the sense that
+they are now triggered by the test suite, but these spots have always
+been leaky when Git is run in a subdirectory of the repository. I fixed
+all of the cases that trigger with GIT_TEST_PASSING_SANITIZE_LEAK. There
+may be others in scripts that have other leaks, but we can fix them
+later along with those other leaks (and again, you _couldn't_ fix them
+before this patch, so this is the necessary first step).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/archive.c                   |  3 ++-
+ builtin/checkout.c                  |  3 ++-
+ builtin/reset.c                     |  4 +++-
+ builtin/tag.c                       |  4 +++-
+ parse-options.c                     | 14 ++++++++------
+ t/helper/test-parse-pathspec-file.c |  3 ++-
+ 6 files changed, 20 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/archive.c b/builtin/archive.c
+index f094390ee0..d0a583ea95 100644
+--- a/builtin/archive.c
++++ b/builtin/archive.c
+@@ -81,7 +81,7 @@ static int run_remote_archiver(int argc, const char **argv,
+ int cmd_archive(int argc, const char **argv, const char *prefix)
+ {
+ 	const char *exec = "git-upload-archive";
+-	const char *output = NULL;
++	char *output = NULL;
+ 	const char *remote = NULL;
+ 	struct option local_opts[] = {
+ 		OPT_FILENAME('o', "output", &output,
+@@ -106,5 +106,6 @@ int cmd_archive(int argc, const char **argv, const char *prefix)
+ 
+ 	setvbuf(stderr, NULL, _IOLBF, BUFSIZ);
+ 
++	UNLEAK(output);
+ 	return write_archive(argc, argv, prefix, the_repository, output, 0);
+ }
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index 3fa29a08ee..6875dc60c4 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -74,7 +74,7 @@ struct checkout_opts {
+ 	const char *ignore_unmerged_opt;
+ 	int ignore_unmerged;
+ 	int pathspec_file_nul;
+-	const char *pathspec_from_file;
++	char *pathspec_from_file;
+ 
+ 	const char *new_branch;
+ 	const char *new_branch_force;
+@@ -1872,6 +1872,7 @@ int cmd_checkout(int argc, const char **argv, const char *prefix)
+ 			    options, checkout_usage, &new_branch_info);
+ 	branch_info_release(&new_branch_info);
+ 	clear_pathspec(&opts.pathspec);
++	free(opts.pathspec_from_file);
+ 	FREE_AND_NULL(options);
+ 	return ret;
+ }
+diff --git a/builtin/reset.c b/builtin/reset.c
+index d2e0185e55..28083387cb 100644
+--- a/builtin/reset.c
++++ b/builtin/reset.c
+@@ -316,7 +316,8 @@ int cmd_reset(int argc, const char **argv, const char *prefix)
+ 	int reset_type = NONE, update_ref_status = 0, quiet = 0;
+ 	int no_refresh = 0;
+ 	int patch_mode = 0, pathspec_file_nul = 0, unborn;
+-	const char *rev, *pathspec_from_file = NULL;
++	const char *rev;
++	char *pathspec_from_file = NULL;
+ 	struct object_id oid;
+ 	struct pathspec pathspec;
+ 	int intent_to_add = 0;
+@@ -486,5 +487,6 @@ int cmd_reset(int argc, const char **argv, const char *prefix)
+ 	if (!pathspec.nr)
+ 		remove_branch_state(the_repository, 0);
+ 
++	free(pathspec_from_file);
+ 	return update_ref_status;
+ }
+diff --git a/builtin/tag.c b/builtin/tag.c
+index d428c45dc8..ccefcbd716 100644
+--- a/builtin/tag.c
++++ b/builtin/tag.c
+@@ -433,7 +433,8 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 	int create_reflog = 0;
+ 	int annotate = 0, force = 0;
+ 	int cmdmode = 0, create_tag_object = 0;
+-	const char *msgfile = NULL, *keyid = NULL;
++	char *msgfile = NULL;
++	const char *keyid = NULL;
+ 	struct msg_arg msg = { .buf = STRBUF_INIT };
+ 	struct ref_transaction *transaction;
+ 	struct strbuf err = STRBUF_INIT;
+@@ -643,5 +644,6 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 	strbuf_release(&reflog_msg);
+ 	strbuf_release(&msg.buf);
+ 	strbuf_release(&err);
++	free(msgfile);
+ 	return ret;
+ }
+diff --git a/parse-options.c b/parse-options.c
+index a1ec932f0f..70f827a073 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -59,12 +59,14 @@ static enum parse_opt_result get_arg(struct parse_opt_ctx_t *p,
+ 	return 0;
+ }
+ 
+-static void fix_filename(const char *prefix, const char **file)
++static void fix_filename(const char *prefix, char **file)
+ {
+-	if (!file || !*file || !prefix || is_absolute_path(*file)
+-	    || !strcmp("-", *file))
+-		return;
+-	*file = prefix_filename(prefix, *file);
++	if (!file || !*file)
++		; /* leave as NULL */
++	else if (!strcmp("-", *file))
++		*file = xstrdup(*file);
++	else
++		*file = prefix_filename(prefix, *file);
+ }
+ 
+ static enum parse_opt_result opt_command_mode_error(
+@@ -177,7 +179,7 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
+ 			err = get_arg(p, opt, flags, (const char **)opt->value);
+ 
+ 		if (!err)
+-			fix_filename(p->prefix, (const char **)opt->value);
++			fix_filename(p->prefix, (char **)opt->value);
+ 		return err;
+ 
+ 	case OPTION_CALLBACK:
+diff --git a/t/helper/test-parse-pathspec-file.c b/t/helper/test-parse-pathspec-file.c
+index b3e08cef4b..71d2131fba 100644
+--- a/t/helper/test-parse-pathspec-file.c
++++ b/t/helper/test-parse-pathspec-file.c
+@@ -6,7 +6,7 @@
+ int cmd__parse_pathspec_file(int argc, const char **argv)
+ {
+ 	struct pathspec pathspec;
+-	const char *pathspec_from_file = NULL;
++	char *pathspec_from_file = NULL;
+ 	int pathspec_file_nul = 0, i;
+ 
+ 	static const char *const usage[] = {
+@@ -29,5 +29,6 @@ int cmd__parse_pathspec_file(int argc, const char **argv)
+ 		printf("%s\n", pathspec.items[i].original);
+ 
+ 	clear_pathspec(&pathspec);
++	free(pathspec_from_file);
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

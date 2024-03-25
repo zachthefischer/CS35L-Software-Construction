@@ -1,0 +1,55 @@
+From 81fffb66d3f702c269a5aee6e403c3ec62fc0277 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Carlo=20Marcelo=20Arenas=20Bel=C3=B3n?= <carenas@gmail.com>
+Date: Wed, 31 Jan 2024 11:13:25 -0800
+Subject: [PATCH 2790/2871] ci: update FreeBSD cirrus job
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+FreeBSD 12 is EOL and no longer available, causing errors in this job.
+
+Upgrade to 13.2, which is the next oldest release with support and that
+should keep it for at least another 4 months.
+
+This will be upgraded again once 13.3 is released to avoid further
+surprises.
+
+The original report [*] of this problem mentions an error message
+"Not enough compute credits to prioritize tasks!".  It seems to be
+just a reminder that the credit allocate for the Free Tier by Cirrus
+is all used up and which might result in additional delays getting a
+result.
+
+[*] https://lore.kernel.org/git/d2d7da84-e2a3-a7b2-3f95-c8d53ad4dd5f@gmx.de/
+
+Signed-off-by: Carlo Marcelo Arenas Belón <carenas@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .cirrus.yml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.cirrus.yml b/.cirrus.yml
+index 4860bebd32..6f27b5d601 100644
+--- a/.cirrus.yml
++++ b/.cirrus.yml
+@@ -1,7 +1,7 @@
+ env:
+   CIRRUS_CLONE_DEPTH: 1
+ 
+-freebsd_12_task:
++freebsd_task:
+   env:
+     GIT_PROVE_OPTS: "--timer --jobs 10"
+     GIT_TEST_OPTS: "--no-chain-lint --no-bin-wrappers"
+@@ -9,7 +9,7 @@ freebsd_12_task:
+     DEFAULT_TEST_TARGET: prove
+     DEVELOPER: 1
+   freebsd_instance:
+-    image_family: freebsd-12-3
++    image_family: freebsd-13-2
+     memory: 2G
+   install_script:
+     pkg install -y gettext gmake perl5
+-- 
+2.39.3 (Apple Git-145)
+

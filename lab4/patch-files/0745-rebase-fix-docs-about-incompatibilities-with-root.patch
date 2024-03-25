@@ -1,0 +1,74 @@
+From b8ad365640192706e6742f47302e69e7aea62faf Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:48 +0000
+Subject: [PATCH 0745/2871] rebase: fix docs about incompatibilities with
+ --root
+
+In commit 5dacd4abdd ("git-rebase.txt: document incompatible options",
+2018-06-25), I added notes about incompatibilities between options for
+the apply and merge backends.  Unfortunately, I inverted the condition
+when --root was incompatible with the apply backend.  Fix the
+documentation, and add a testcase that verifies the documentation
+matches the code.
+
+While at it, the documentation for --root also tried to cover some of
+the backend differences between the apply and merge backends in relation
+to reapplying cherry picks.  The information:
+  * assumed that the apply backend was the default (it isn't anymore)
+  * was written before --reapply-cherry-picks became an option
+  * was written before the detailed information on backend differences
+All of these factors make the sentence under --root about reapplying
+cherry picks contradict information that is now available elsewhere in
+the manual, and the other references are correct.  So just strike this
+sentence.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt           | 7 ++-----
+ t/t3422-rebase-incompatible-options.sh | 4 ++++
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 7d01d1412d..846aeed1b6 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -574,10 +574,7 @@ See also INCOMPATIBLE OPTIONS below.
+ --root::
+ 	Rebase all commits reachable from `<branch>`, instead of
+ 	limiting them with an `<upstream>`.  This allows you to rebase
+-	the root commit(s) on a branch.  When used with `--onto`, it
+-	will skip changes already contained in `<newbase>` (instead of
+-	`<upstream>`) whereas without `--onto` it will operate on every
+-	change.
++	the root commit(s) on a branch.
+ +
+ See also INCOMPATIBLE OPTIONS below.
+ 
+@@ -656,7 +653,7 @@ are incompatible with the following options:
+  * --reapply-cherry-picks
+  * --edit-todo
+  * --update-refs
+- * --root when used in combination with --onto
++ * --root when used without --onto
+ 
+ In addition, the following pairs of options are incompatible:
+ 
+diff --git a/t/t3422-rebase-incompatible-options.sh b/t/t3422-rebase-incompatible-options.sh
+index 9b9e78479f..f86274990b 100755
+--- a/t/t3422-rebase-incompatible-options.sh
++++ b/t/t3422-rebase-incompatible-options.sh
+@@ -65,6 +65,10 @@ test_rebase_am_only () {
+ 		test_must_fail git rebase $opt --update-refs A
+ 	"
+ 
++	test_expect_success "$opt incompatible with --root without --onto" "
++		git checkout B^0 &&
++		test_must_fail git rebase $opt --root A
++	"
+ }
+ 
+ # Check options which imply --apply
+-- 
+2.39.3 (Apple Git-145)
+

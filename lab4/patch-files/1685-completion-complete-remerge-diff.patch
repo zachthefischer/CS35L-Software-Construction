@@ -1,0 +1,31 @@
+From 55245d669a6c427efd9f7c1782105bea4e97a431 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:47 +0000
+Subject: [PATCH 1685/2871] completion: complete --remerge-diff
+
+--remerge-diff only makes sense for 'git log' and 'git show', so add it
+to __git_log_show_options which is referenced in the completion for
+these two commands.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 8688f7c433..11f2edf47b 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2042,7 +2042,7 @@ __git_log_shortlog_options="
+ "
+ # Options accepted by log and show
+ __git_log_show_options="
+-	--diff-merges --diff-merges= --no-diff-merges
++	--diff-merges --diff-merges= --no-diff-merges --remerge-diff
+ "
+ 
+ __git_diff_merges_opts="off none on first-parent 1 separate m combined c dense-combined cc remerge r"
+-- 
+2.39.3 (Apple Git-145)
+

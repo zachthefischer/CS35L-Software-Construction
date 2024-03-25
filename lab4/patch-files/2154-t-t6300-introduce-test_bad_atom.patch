@@ -1,0 +1,60 @@
+From 0144f0de77edc96c6cd72ab9d50a68fc4c9c092e Mon Sep 17 00:00:00 2001
+From: Kousik Sanagavarapu <five231003@gmail.com>
+Date: Mon, 25 Sep 2023 23:13:09 +0530
+Subject: [PATCH 2154/2871] t/t6300: introduce test_bad_atom
+
+Introduce a new function "test_bad_atom", which is similar to
+"test_atom()" but should be used to check whether the correct error
+message is shown on stderr.
+
+Like "test_atom", the new function takes three arguments. The three
+arguments specify the ref, the format and the expected error message
+respectively, with an optional fourth argument for tweaking
+"test_expect_*" (which is by default "success").
+
+Mentored-by: Christian Couder <christian.couder@gmail.com>
+Mentored-by: Hariom Verma <hariom18599@gmail.com>
+Signed-off-by: Kousik Sanagavarapu <five231003@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6300-for-each-ref.sh | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 7ba9949376..e4ec2926d6 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -271,6 +271,30 @@ test_expect_success 'arguments to %(objectname:short=) must be positive integers
+ 	test_must_fail git for-each-ref --format="%(objectname:short=foo)"
+ '
+ 
++test_bad_atom () {
++	case "$1" in
++	head) ref=refs/heads/main ;;
++	 tag) ref=refs/tags/testtag ;;
++	 sym) ref=refs/heads/sym ;;
++	   *) ref=$1 ;;
++	esac
++	format=$2
++	test_do=test_expect_${4:-success}
++
++	printf '%s\n' "$3" >expect
++	$test_do $PREREQ "err basic atom: $ref $format" '
++		test_must_fail git for-each-ref \
++			--format="%($format)" "$ref" 2>error &&
++		test_cmp expect error
++	'
++}
++
++test_bad_atom head 'authoremail:foo' \
++	'fatal: unrecognized %(authoremail) argument: foo'
++
++test_bad_atom tag 'taggeremail:localpart trim' \
++	'fatal: unrecognized %(taggeremail) argument: localpart trim'
++
+ test_date () {
+ 	f=$1 &&
+ 	committer_date=$2 &&
+-- 
+2.39.3 (Apple Git-145)
+

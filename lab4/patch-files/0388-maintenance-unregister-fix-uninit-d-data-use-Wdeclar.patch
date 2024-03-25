@@ -1,0 +1,74 @@
+From be0fd5722853e56fab8bc99cea9791d7b90fd0dd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 15 Nov 2022 17:04:27 +0100
+Subject: [PATCH 0388/2871] maintenance --unregister: fix uninit'd data use &
+ -Wdeclaration-after-statement
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since (maintenance: add option to register in a specific config,
+2022-11-09) we've been unable to build with "DEVELOPER=1" without
+"DEVOPTS=no-error", as the added code triggers a
+"-Wdeclaration-after-statement" warning.
+
+And worse than that, the data handed to git_configset_clear() is
+uninitialized, as can be spotted with e.g.:
+
+	./t7900-maintenance.sh -vixd --run=23 --valgrind
+	[...]
+	+ git maintenance unregister --force
+	Conditional jump or move depends on uninitialised value(s)
+	   at 0x6B5F1E: git_configset_clear (config.c:2367)
+	   by 0x4BA64E: maintenance_unregister (gc.c:1619)
+	   by 0x4BD278: cmd_maintenance (gc.c:2650)
+	   by 0x409905: run_builtin (git.c:466)
+	   by 0x40A21C: handle_builtin (git.c:721)
+	   by 0x40A58E: run_argv (git.c:788)
+	   by 0x40AF68: cmd_main (git.c:926)
+	   by 0x5D39FE: main (common-main.c:57)
+	 Uninitialised value was created by a stack allocation
+	   at 0x4BA22C: maintenance_unregister (gc.c:1557)
+
+Let's fix both of these issues, and also move the scope of the
+variable to the "if" statement it's used in, to make it obvious where
+it's used.
+
+Helped-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/gc.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 56b107e7f0..d87cf84041 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -1550,11 +1550,13 @@ static int maintenance_unregister(int argc, const char **argv, const char *prefi
+ 		usage_with_options(builtin_maintenance_unregister_usage,
+ 				   options);
+ 
+-	struct config_set cs;
+ 	if (config_file) {
++		struct config_set cs;
++
+ 		git_configset_init(&cs);
+ 		git_configset_add_file(&cs, config_file);
+ 		list = git_configset_get_value_multi(&cs, key);
++		git_configset_clear(&cs);
+ 	} else {
+ 		list = git_config_get_value_multi(key);
+ 	}
+@@ -1590,7 +1592,6 @@ static int maintenance_unregister(int argc, const char **argv, const char *prefi
+ 		die(_("repository '%s' is not registered"), maintpath);
+ 	}
+ 
+-	git_configset_clear(&cs);
+ 	free(maintpath);
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

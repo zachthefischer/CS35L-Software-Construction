@@ -1,0 +1,38 @@
+From f0a39ba5047151a1bac5e79afcaa877afa0143b3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0t=C4=9Bp=C3=A1n=20N=C4=9Bmec?= <stepnem@smrk.net>
+Date: Thu, 5 Oct 2023 11:00:55 +0200
+Subject: [PATCH 2207/2871] t/README: fix multi-prerequisite example
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+With the broken quoting the test wouldn't even parse correctly, but
+there's also the '==' instead of POSIX '=' (of the shells I tested,
+busybox ash, bash and ksh (93 and OpenBSD) accept '==', dash and zsh do
+not), and 'print 2' from Python 2 days.
+
+(I assume the test failing due to 3 != 4 is intentional or immaterial.)
+
+Fixes: 93a572461386 ("test-lib: Add support for multiple test prerequisites")
+Signed-off-by: Štěpán Němec <stepnem@smrk.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/README | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/README b/t/README
+index 2ef89785f8..a0ebe29484 100644
+--- a/t/README
++++ b/t/README
+@@ -887,7 +887,7 @@ see test-lib-functions.sh for the full list and their options.
+    rare case where your test depends on more than one:
+ 
+ 	test_expect_success PERL,PYTHON 'yo dawg' \
+-	    ' test $(perl -E 'print eval "1 +" . qx[python -c "print 2"]') == "4" '
++	    ' test $(perl -E '\''print eval "1 +" . qx[python -c "print(2)"]'\'') = "4" '
+ 
+  - test_expect_failure [<prereq>] <message> <script>
+ 
+-- 
+2.39.3 (Apple Git-145)
+

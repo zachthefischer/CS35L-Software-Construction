@@ -1,0 +1,53 @@
+From e1a95b78d8a26762ea04332de8b7c3878da51522 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 2 Dec 2022 06:05:38 -0500
+Subject: [PATCH 0489/2871] git-compat-util: undefine system names before
+ redeclaring them
+
+When we define a macro to point a system function (e.g., flockfile) to
+our custom wrapper, we should make sure that the system did not already
+define it as a macro. This is rarely a problem, but can cause
+compilation failures if both of these are true:
+
+  - we decide to define our own wrapper even though the system provides
+    the function; we know this happens at least with uclibc, which may
+    declare flockfile, etc, without _POSIX_THREAD_SAFE_FUNCTIONS
+
+  - the system version is declared as a macro; we know this happens at
+    least with uclibc's version of getc_unlocked()
+
+So just handling getc_unlocked() would be sufficient to deal with the
+real-world case we've seen. But since it's easy to do, we may as well be
+defensive about the other macro wrappers added in the previous patch.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-compat-util.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/git-compat-util.h b/git-compat-util.h
+index c59443a97e..09a5f33859 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -279,6 +279,7 @@ static inline int git_setitimer(int which,
+ 				struct itimerval *newvalue) {
+ 	return 0; /* pretend success */
+ }
++#undef setitimer
+ #define setitimer(which,value,ovalue) git_setitimer(which,value,ovalue)
+ #endif
+ 
+@@ -1323,6 +1324,9 @@ static inline void git_funlockfile(FILE *fh)
+ {
+ 	; /* nothing */
+ }
++#undef flockfile
++#undef funlockfile
++#undef getc_unlocked
+ #define flockfile(fh) git_flockfile(fh)
+ #define funlockfile(fh) git_funlockfile(fh)
+ #define getc_unlocked(fh) getc(fh)
+-- 
+2.39.3 (Apple Git-145)
+

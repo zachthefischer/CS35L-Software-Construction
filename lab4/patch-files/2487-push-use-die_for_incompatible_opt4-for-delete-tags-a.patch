@@ -1,0 +1,64 @@
+From b3bf4701cf617e5dc76e27f318913c2c76c35334 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Wed, 6 Dec 2023 12:51:55 +0100
+Subject: [PATCH 2487/2871] push: use die_for_incompatible_opt4() for -
+ -delete/--tags/--all/--mirror
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The push option --delete is incompatible with --all, --mirror, and
+--tags; --tags is incompatible with --all and --mirror; --all is
+incompatible with --mirror.  This means they are all incompatible with
+each other.  And --branches is an alias for --all.
+
+Use the function for checking four mutually incompatible options,
+die_for_incompatible_opt4(), to perform this check in one place and
+without repetition.  This is shorter and clearer.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/push.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/builtin/push.c b/builtin/push.c
+index 2e708383c2..f77f424324 100644
+--- a/builtin/push.c
++++ b/builtin/push.c
+@@ -639,8 +639,10 @@ int cmd_push(int argc, const char **argv, const char *prefix)
+ 		: &push_options_config);
+ 	set_push_cert_flags(&flags, push_cert);
+ 
+-	if (deleterefs && (tags || (flags & (TRANSPORT_PUSH_ALL | TRANSPORT_PUSH_MIRROR))))
+-		die(_("options '%s' and '%s' cannot be used together"), "--delete", "--all/--branches/--mirror/--tags");
++	die_for_incompatible_opt4(deleterefs, "--delete",
++				  tags, "--tags",
++				  flags & TRANSPORT_PUSH_ALL, "--all/--branches",
++				  flags & TRANSPORT_PUSH_MIRROR, "--mirror");
+ 	if (deleterefs && argc < 2)
+ 		die(_("--delete doesn't make sense without any refs"));
+ 
+@@ -677,19 +679,13 @@ int cmd_push(int argc, const char **argv, const char *prefix)
+ 		flags |= (TRANSPORT_PUSH_MIRROR|TRANSPORT_PUSH_FORCE);
+ 
+ 	if (flags & TRANSPORT_PUSH_ALL) {
+-		if (tags)
+-			die(_("options '%s' and '%s' cannot be used together"), "--all", "--tags");
+ 		if (argc >= 2)
+ 			die(_("--all can't be combined with refspecs"));
+ 	}
+ 	if (flags & TRANSPORT_PUSH_MIRROR) {
+-		if (tags)
+-			die(_("options '%s' and '%s' cannot be used together"), "--mirror", "--tags");
+ 		if (argc >= 2)
+ 			die(_("--mirror can't be combined with refspecs"));
+ 	}
+-	if ((flags & TRANSPORT_PUSH_ALL) && (flags & TRANSPORT_PUSH_MIRROR))
+-		die(_("options '%s' and '%s' cannot be used together"), "--all", "--mirror");
+ 
+ 	if (!is_empty_cas(&cas) && (flags & TRANSPORT_PUSH_FORCE_IF_INCLUDES))
+ 		cas.use_force_if_includes = 1;
+-- 
+2.39.3 (Apple Git-145)
+

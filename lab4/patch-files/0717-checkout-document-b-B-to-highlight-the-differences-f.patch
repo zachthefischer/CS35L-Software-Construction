@@ -1,0 +1,45 @@
+From fedb8ea2df0325950285529b6e9e3f65cb227c67 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 19 Jan 2023 09:12:41 -0800
+Subject: [PATCH 0717/2871] checkout: document -b/-B to highlight the
+ differences from "git branch"
+
+The existing text read as if "git checkout -b/-B name" were
+equivalent to "git branch [-f] name", which clearly was not
+what we wanted to say.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-checkout.txt | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/git-checkout.txt b/Documentation/git-checkout.txt
+index 4cb9d555b4..dcff44196d 100644
+--- a/Documentation/git-checkout.txt
++++ b/Documentation/git-checkout.txt
+@@ -146,14 +146,16 @@ on your side branch as `theirs` (i.e. "one contributor's work on top
+ of it").
+ 
+ -b <new-branch>::
+-	Create a new branch named `<new-branch>` and start it at
+-	`<start-point>`; see linkgit:git-branch[1] for details.
++	Create a new branch named `<new-branch>`, start it at
++	`<start-point>`, and check the resulting branch out;
++	see linkgit:git-branch[1] for details.
+ 
+ -B <new-branch>::
+-	Creates the branch `<new-branch>` and start it at `<start-point>`;
+-	if it already exists, then reset it to `<start-point>`. This is
+-	equivalent to running "git branch" with "-f"; see
+-	linkgit:git-branch[1] for details.
++	Creates the branch `<new-branch>`, start it at `<start-point>`;
++	if it already exists, then reset it to `<start-point>`. And then
++	check the resulting branch out.  This is equivalent to running
++	"git branch" with "-f" followed by "git checkout" of that branch;
++	see linkgit:git-branch[1] for details.
+ 
+ -t::
+ --track[=(direct|inherit)]::
+-- 
+2.39.3 (Apple Git-145)
+

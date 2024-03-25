@@ -1,0 +1,105 @@
+From 8b9a42bf48abcead132b87834d19199a1b08373c Mon Sep 17 00:00:00 2001
+From: Josh Steadmon <steadmon@google.com>
+Date: Fri, 19 Jan 2024 13:38:12 -0800
+Subject: [PATCH 2721/2871] fuzz: fix fuzz test build rules
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When we originally added the fuzz tests in 5e47215080 (fuzz: add basic
+fuzz testing target., 2018-10-12), we went to some trouble to create a
+Makefile rule that allowed linking the fuzz executables without pulling
+in common-main.o. This was necessary to prevent the
+fuzzing-engine-provided main() from clashing with Git's main().
+
+However, since 19d75948ef (common-main.c: move non-trace2 exit()
+behavior out of trace2.c, 2022-06-02), it has been necessary to link
+common-main.o due to moving the common_exit() function to that file.
+Ævar suggested a set of compiler flags to allow this in [1], but this
+was never reflected in the Makefile.
+
+Since we now must include common-main.o, there's no reason to pick and
+choose a subset of object files to link, so simplify the Makefile rule
+for the fuzzer executables to just use libgit.a. While we're at it,
+include the necessary linker flag to allow multiple definitions
+directly in the Makefile rule, rather than requiring it to be passed on
+the command-line each time. This means the Makefile rule as written is
+now more compiler-specific, but this was already the case for the
+fuzzers themselves anyway.
+
+[1] https://lore.kernel.org/git/220607.8635ggupws.gmgdl@evledraar.gmail.com/
+
+Signed-off-by: Josh Steadmon <steadmon@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile                  | 14 ++++++++------
+ oss-fuzz/dummy-cmd-main.c | 14 ++++++++++++++
+ 2 files changed, 22 insertions(+), 6 deletions(-)
+ create mode 100644 oss-fuzz/dummy-cmd-main.c
+
+diff --git a/Makefile b/Makefile
+index 03adcb5a48..c0cbed69d8 100644
+--- a/Makefile
++++ b/Makefile
+@@ -749,6 +749,7 @@ SCRIPTS = $(SCRIPT_SH_GEN) \
+ 
+ ETAGS_TARGET = TAGS
+ 
++FUZZ_OBJS += oss-fuzz/dummy-cmd-main.o
+ FUZZ_OBJS += oss-fuzz/fuzz-commit-graph.o
+ FUZZ_OBJS += oss-fuzz/fuzz-pack-headers.o
+ FUZZ_OBJS += oss-fuzz/fuzz-pack-idx.o
+@@ -758,7 +759,7 @@ fuzz-objs: $(FUZZ_OBJS)
+ # Always build fuzz objects even if not testing, to prevent bit-rot.
+ all:: $(FUZZ_OBJS)
+ 
+-FUZZ_PROGRAMS += $(patsubst %.o,%,$(FUZZ_OBJS))
++FUZZ_PROGRAMS += $(patsubst %.o,%,$(filter-out %dummy-cmd-main.o,$(FUZZ_OBJS)))
+ 
+ # Empty...
+ EXTRA_PROGRAMS =
+@@ -3838,15 +3839,16 @@ cover_db_html: cover_db
+ #
+ # make CC=clang CXX=clang++ \
+ #      CFLAGS="-fsanitize=fuzzer-no-link,address" \
+-#      LIB_FUZZING_ENGINE="-fsanitize=fuzzer" \
++#      LIB_FUZZING_ENGINE="-fsanitize=fuzzer,address" \
+ #      fuzz-all
+ #
+-FUZZ_CXXFLAGS ?= $(CFLAGS)
++FUZZ_CXXFLAGS ?= $(ALL_CFLAGS)
+ 
+ .PHONY: fuzz-all
+ 
+-$(FUZZ_PROGRAMS): all
+-	$(QUIET_LINK)$(CXX) $(FUZZ_CXXFLAGS) $(LIB_OBJS) $(BUILTIN_OBJS) \
+-		$(XDIFF_OBJS) $(EXTLIBS) git.o $@.o $(LIB_FUZZING_ENGINE) -o $@
++$(FUZZ_PROGRAMS): %: %.o oss-fuzz/dummy-cmd-main.o $(GITLIBS) GIT-LDFLAGS
++	$(QUIET_LINK)$(CXX) $(FUZZ_CXXFLAGS) -o $@ $(ALL_LDFLAGS) \
++		-Wl,--allow-multiple-definition \
++		$(filter %.o,$^) $(filter %.a,$^) $(LIBS) $(LIB_FUZZING_ENGINE)
+ 
+ fuzz-all: $(FUZZ_PROGRAMS)
+diff --git a/oss-fuzz/dummy-cmd-main.c b/oss-fuzz/dummy-cmd-main.c
+new file mode 100644
+index 0000000000..071cb231ba
+--- /dev/null
++++ b/oss-fuzz/dummy-cmd-main.c
+@@ -0,0 +1,14 @@
++#include "git-compat-util.h"
++
++/*
++ * When linking the fuzzers, we link against common-main.o to pick up some
++ * symbols. However, even though we ignore common-main:main(), we still need to
++ * provide all the symbols it references. In the fuzzers' case, we need to
++ * provide a dummy cmd_main() for the linker to be happy. It will never be
++ * executed.
++ */
++
++int cmd_main(int argc, const char **argv) {
++	BUG("We should not execute cmd_main() from a fuzz target");
++	return 1;
++}
+-- 
+2.39.3 (Apple Git-145)
+

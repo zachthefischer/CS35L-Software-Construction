@@ -1,0 +1,29 @@
+From fc0825d56130ee3d7542c1711bd61cd1cf9bedb5 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Fri, 14 Jul 2023 06:01:29 +0000
+Subject: [PATCH 1806/2871] SubmittingPatches: reword awkward phrasing
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index b218e27357..b89678cedc 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -3,8 +3,8 @@ Submitting Patches
+ 
+ == Guidelines
+ 
+-Here are some guidelines for people who want to contribute their code to this
+-software. There is also a link:MyFirstContribution.html[step-by-step tutorial]
++Here are some guidelines for contributing back to this
++project. There is also a link:MyFirstContribution.html[step-by-step tutorial]
+ available which covers many of these same guidelines.
+ 
+ [[base-branch]]
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,39 @@
+From d85e9448dd539032b05eb1d79531b65af1937b80 Mon Sep 17 00:00:00 2001
+From: Wes Lord <weslord@gmail.com>
+Date: Sat, 4 Feb 2023 02:27:39 +0000
+Subject: [PATCH 0797/2871] new-command.txt: update reference to builtin docs
+
+Commit ec14d4ecb5 (builtin.h: take over documentation from
+api-builtin.txt, 2017-08-02) deleted api-builtin.txt and moved the
+contents into builtin.h, but new-command.txt still references the old
+file.
+
+Signed-off-by: Wes Lord <weslord@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/howto/new-command.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/howto/new-command.txt b/Documentation/howto/new-command.txt
+index 15a4c8031f..880c51112b 100644
+--- a/Documentation/howto/new-command.txt
++++ b/Documentation/howto/new-command.txt
+@@ -1,13 +1,13 @@
+ From: Eric S. Raymond <esr@thyrsus.com>
+ Abstract: This is how-to documentation for people who want to add extension
+- commands to Git.  It should be read alongside api-builtin.txt.
++ commands to Git.  It should be read alongside builtin.h.
+ Content-type: text/asciidoc
+ 
+ How to integrate new subcommands
+ ================================
+ 
+ This is how-to documentation for people who want to add extension
+-commands to Git.  It should be read alongside api-builtin.txt.
++commands to Git.  It should be read alongside builtin.h.
+ 
+ Runtime environment
+ -------------------
+-- 
+2.39.3 (Apple Git-145)
+

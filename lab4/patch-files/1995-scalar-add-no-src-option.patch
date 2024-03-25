@@ -1,0 +1,111 @@
+From 4527db8ff8c61b173e4c2533b53d34d019a6f061 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Mon, 28 Aug 2023 13:52:24 +0000
+Subject: [PATCH 1995/2871] scalar: add --[no-]src option
+
+Some users have strong aversions to Scalar's opinion that the repository
+should be in a 'src' directory, even though this creates a clean slate
+for placing build artifacts in adjacent directories.
+
+The new --no-src option allows users to opt out of the default behavior.
+
+While adding options, make sure the usage output by 'scalar clone -h'
+reports the same as the SYNOPSIS line in Documentation/scalar.txt.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/scalar.txt |  8 +++++++-
+ scalar.c                 | 11 +++++++++--
+ t/t9211-scalar-clone.sh  | 12 ++++++++++++
+ 3 files changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/scalar.txt b/Documentation/scalar.txt
+index f33436c7f6..361f51a647 100644
+--- a/Documentation/scalar.txt
++++ b/Documentation/scalar.txt
+@@ -8,7 +8,8 @@ scalar - A tool for managing large Git repositories
+ SYNOPSIS
+ --------
+ [verse]
+-scalar clone [--single-branch] [--branch <main-branch>] [--full-clone] <url> [<enlistment>]
++scalar clone [--single-branch] [--branch <main-branch>] [--full-clone]
++	[--[no-]src] <url> [<enlistment>]
+ scalar list
+ scalar register [<enlistment>]
+ scalar unregister [<enlistment>]
+@@ -80,6 +81,11 @@ remote-tracking branch for the branch this option was used for the initial
+ cloning. If the HEAD at the remote did not point at any branch when
+ `--single-branch` clone was made, no remote-tracking branch is created.
+ 
++--[no-]src::
++	By default, `scalar clone` places the cloned repository within a
++	`<entlistment>/src` directory. Use `--no-src` to place the cloned
++	repository directly in the `<enlistment>` directory.
++
+ --[no-]full-clone::
+ 	A sparse-checkout is initialized by default. This behavior can be
+ 	turned off via `--full-clone`.
+diff --git a/scalar.c b/scalar.c
+index 1326e1f608..981d014837 100644
+--- a/scalar.c
++++ b/scalar.c
+@@ -409,6 +409,7 @@ static int cmd_clone(int argc, const char **argv)
+ {
+ 	const char *branch = NULL;
+ 	int full_clone = 0, single_branch = 0, show_progress = isatty(2);
++	int src = 1;
+ 	struct option clone_options[] = {
+ 		OPT_STRING('b', "branch", &branch, N_("<branch>"),
+ 			   N_("branch to checkout after clone")),
+@@ -417,10 +418,13 @@ static int cmd_clone(int argc, const char **argv)
+ 		OPT_BOOL(0, "single-branch", &single_branch,
+ 			 N_("only download metadata for the branch that will "
+ 			    "be checked out")),
++		OPT_BOOL(0, "src", &src,
++			 N_("create repository within 'src' directory")),
+ 		OPT_END(),
+ 	};
+ 	const char * const clone_usage[] = {
+-		N_("scalar clone [<options>] [--] <repo> [<dir>]"),
++		N_("scalar clone [--single-branch] [--branch <main-branch>] [--full-clone]\n"
++		   "\t[--[no-]src] <url> [<enlistment>]"),
+ 		NULL
+ 	};
+ 	const char *url;
+@@ -456,7 +460,10 @@ static int cmd_clone(int argc, const char **argv)
+ 	if (is_directory(enlistment))
+ 		die(_("directory '%s' exists already"), enlistment);
+ 
+-	dir = xstrfmt("%s/src", enlistment);
++	if (src)
++		dir = xstrfmt("%s/src", enlistment);
++	else
++		dir = xstrdup(enlistment);
+ 
+ 	strbuf_reset(&buf);
+ 	if (branch)
+diff --git a/t/t9211-scalar-clone.sh b/t/t9211-scalar-clone.sh
+index 872ad1c9c2..7869f45ee6 100755
+--- a/t/t9211-scalar-clone.sh
++++ b/t/t9211-scalar-clone.sh
+@@ -180,4 +180,16 @@ test_expect_success 'scalar clone warns when background maintenance fails' '
+ 	grep "could not turn on maintenance" err
+ '
+ 
++test_expect_success '`scalar clone --no-src`' '
++	scalar clone --src "file://$(pwd)/to-clone" with-src &&
++	scalar clone --no-src "file://$(pwd)/to-clone" without-src &&
++
++	test_path_is_dir with-src/src &&
++	test_path_is_missing without-src/src &&
++
++	(cd with-src/src && ls ?*) >with &&
++	(cd without-src && ls ?*) >without &&
++	test_cmp with without
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

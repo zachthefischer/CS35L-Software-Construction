@@ -1,0 +1,35 @@
+From e9cc3a027b0ab97e360748a5a9187fbf22b8a660 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 16 Oct 2023 09:19:51 +0200
+Subject: [PATCH 2285/2871] doc/git-repack: fix syntax for `-g` shorthand
+ option
+
+The `-g` switch is a shorthand for `--geometric=` and allows the user to
+specify the geometric. The documentation is wrong though and indicates
+that the syntax for the shorthand is `-g=<factor>`. In fact though, the
+option must be specified without the equals sign via `-g<factor>`.
+
+Fix the syntax accordingly.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-repack.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-repack.txt b/Documentation/git-repack.txt
+index 4017157949..60ffe830a6 100644
+--- a/Documentation/git-repack.txt
++++ b/Documentation/git-repack.txt
+@@ -186,7 +186,7 @@ depth is 4095.
+ 	Pass the `--delta-islands` option to `git-pack-objects`, see
+ 	linkgit:git-pack-objects[1].
+ 
+--g=<factor>::
++-g<factor>::
+ --geometric=<factor>::
+ 	Arrange resulting pack structure so that each successive pack
+ 	contains at least `<factor>` times the number of objects as the
+-- 
+2.39.3 (Apple Git-145)
+

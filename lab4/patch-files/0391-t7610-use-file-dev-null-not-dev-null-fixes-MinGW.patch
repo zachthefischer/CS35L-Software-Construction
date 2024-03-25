@@ -1,0 +1,53 @@
+From 23fb328c8de7d4ad07360629109cf1b5fa42daa6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Wed, 16 Nov 2022 00:40:14 +0100
+Subject: [PATCH 0391/2871] t7610: use "file:///dev/null", not "/dev/null",
+ fixes MinGW
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On MinGW the "/dev/null" is translated to "nul" on command-lines, even
+though as in this case it'll never end up referring to an actual file.
+
+So on Windows the fix for the previous "example.com" timeout issue in
+8354cf752ec (t7610: fix flaky timeout issue, don't clone from
+example.com, 2022-11-05) would yield:
+
+  fatal: repo URL: 'nul' must be absolute or begin with ./|../
+
+Let's evade this yet again by prefixing this with "file://", which
+makes this pass in the Windows CI.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t7610-mergetool.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t7610-mergetool.sh b/t/t7610-mergetool.sh
+index b1ba0d9a08..7b957022f1 100755
+--- a/t/t7610-mergetool.sh
++++ b/t/t7610-mergetool.sh
+@@ -33,7 +33,7 @@ test_expect_success 'setup' '
+ 		git add foo &&
+ 		git commit -m "Add foo"
+ 	) &&
+-	git submodule add /dev/null submod &&
++	git submodule add file:///dev/null submod &&
+ 	git add file1 "spaced name" file1[1-4] subdir/file3 .gitmodules submod &&
+ 	git commit -m "add initial versions" &&
+ 
+@@ -614,7 +614,7 @@ test_expect_success 'submodule in subdirectory' '
+ 		)
+ 	) &&
+ 	test_when_finished "rm -rf subdir/subdir_module" &&
+-	git submodule add /dev/null subdir/subdir_module &&
++	git submodule add file:///dev/null subdir/subdir_module &&
+ 	git add subdir/subdir_module &&
+ 	git commit -m "add submodule in subdirectory" &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,47 @@
+From bac3ccc290de15c3be30a492ba194d526ebb298b Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 28 Aug 2023 18:53:01 -0400
+Subject: [PATCH 2001/2871] leak tests: mark t3321-notes-stripspace.sh as
+ leak-free
+
+This test was leak-free when t3321 was originally introduced, but never
+marked as such:
+
+    $ rev="$(git log --format='%H' --reverse -1 HEAD^ -- t/t3321-notes-stripspace.sh)"
+    $ git checkout $rev
+
+    $ make SANITIZE=leak
+    [...]
+
+    $ make -C t GIT_TEST_PASSING_SANITIZE_LEAK=check GIT_TEST_OPTS=--immediate t3321-notes-stripspace.sh
+    [...]
+    # passed all 27 test(s)
+    1..27
+    # faking up non-zero exit with --invert-exit-code
+    make: *** [Makefile:66: t3321-notes-stripspace.sh] Error 1
+    make: Leaving directory '/home/ttaylorr/src/git/t'
+
+Mark this test as leak-free accordingly.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3321-notes-stripspace.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/t3321-notes-stripspace.sh b/t/t3321-notes-stripspace.sh
+index 028d825e8f..36abdca5ee 100755
+--- a/t/t3321-notes-stripspace.sh
++++ b/t/t3321-notes-stripspace.sh
+@@ -5,6 +5,7 @@
+ 
+ test_description='Test commit notes with stripspace behavior'
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ MULTI_LF="$LF$LF$LF"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,97 @@
+From fbc806acd106ee1c05fd0a0a83b7c59aa79629d8 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 24 May 2023 15:51:43 -0400
+Subject: [PATCH 1530/2871] builtin/submodule--helper.c: handle missing
+ submodule URLs
+
+In e0a862fdaf (submodule helper: convert relative URL to absolute URL if
+needed, 2018-10-16), `prepare_to_clone_next_submodule()` lost the
+ability to handle URL-less submodules, due to a change from:
+
+    if (repo_get_config_string_const(the_repostiory, sb.buf, &url))
+        url = sub->url;
+
+to
+
+    if (repo_get_config_string_const(the_repostiory, sb.buf, &url)) {
+        if (starts_with_dot_slash(sub->url) ||
+            starts_with_dot_dot_slash(sub->url)) {
+                /* ... */
+            }
+    }
+
+, which will segfault when `sub->url` is NULL, since both
+`starts_with_dot_slash()` does not guard its arguments as non-NULL.
+
+Guard the checks to both of the above functions by first checking
+whether `sub->url` is non-NULL. There is no need to check whether `sub`
+itself is NULL, since we already perform this check earlier in
+`prepare_to_clone_next_submodule()`.
+
+By adding a NULL-ness check on `sub->url`, we'll fall into the 'else'
+branch, setting `url` to `sub->url` (which is NULL). Before attempting
+to invoke `git submodule--helper clone`, check whether `url` is NULL,
+and die() if it is.
+
+Reported-by: Tribo Dar <3bodar@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/submodule--helper.c |  7 +++++--
+ t/t7400-submodule-basic.sh  | 16 ++++++++++++++++
+ 2 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/submodule--helper.c b/builtin/submodule--helper.c
+index 4c173d8b37..4c857950c5 100644
+--- a/builtin/submodule--helper.c
++++ b/builtin/submodule--helper.c
+@@ -2016,14 +2016,17 @@ static int prepare_to_clone_next_submodule(const struct cache_entry *ce,
+ 	strbuf_reset(&sb);
+ 	strbuf_addf(&sb, "submodule.%s.url", sub->name);
+ 	if (repo_config_get_string_tmp(the_repository, sb.buf, &url)) {
+-		if (starts_with_dot_slash(sub->url) ||
+-		    starts_with_dot_dot_slash(sub->url)) {
++		if (sub->url && (starts_with_dot_slash(sub->url) ||
++				 starts_with_dot_dot_slash(sub->url))) {
+ 			url = resolve_relative_url(sub->url, NULL, 0);
+ 			need_free_url = 1;
+ 		} else
+ 			url = sub->url;
+ 	}
+ 
++	if (!url)
++		die(_("cannot clone submodule '%s' without a URL"), sub->name);
++
+ 	strbuf_reset(&sb);
+ 	strbuf_addf(&sb, "%s/.git", ce->name);
+ 	needs_cloning = !file_exists(sb.buf);
+diff --git a/t/t7400-submodule-basic.sh b/t/t7400-submodule-basic.sh
+index eae6a46ef3..d9fbabb2b9 100755
+--- a/t/t7400-submodule-basic.sh
++++ b/t/t7400-submodule-basic.sh
+@@ -1351,6 +1351,22 @@ test_expect_success 'clone active submodule without submodule url set' '
+ 	)
+ '
+ 
++test_expect_success 'update submodules without url set in .gitconfig' '
++	test_when_finished "rm -rf multisuper_clone" &&
++	git clone file://"$pwd"/multisuper multisuper_clone &&
++
++	git -C multisuper_clone submodule init &&
++	for s in sub0 sub1 sub2 sub3
++	do
++		key=submodule.$s.url &&
++		git -C multisuper_clone config --local --unset $key &&
++		git -C multisuper_clone config --file .gitmodules --unset $key || return 1
++	done &&
++
++	test_must_fail git -C multisuper_clone submodule update 2>err &&
++	grep "cannot clone submodule .sub[0-3]. without a URL" err
++'
++
+ test_expect_success 'clone --recurse-submodules with a pathspec works' '
+ 	test_when_finished "rm -rf multisuper_clone" &&
+ 	cat >expected <<-\EOF &&
+-- 
+2.39.3 (Apple Git-145)
+

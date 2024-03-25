@@ -1,0 +1,45 @@
+From 8aae4897567f4cd720f553b40b2f11c21cb5599e Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Tue, 12 Sep 2023 12:42:36 +0200
+Subject: [PATCH 2100/2871] t3404-rebase-interactive.sh: fix typos in title of
+ a rewording test
+
+This test was introduced by commit 0c164ae7a ("rebase -i: add another
+reword test", 2021-08-20). I didn't quite get what it was meant to do,
+so here's an explanation from Phillip:
+
+The purpose of the test is to ensure that
+
+  (i) There are no uncommitted changes when the editor runs. i.e., we
+      commit without running the editor and then reword by amending
+      that commit. This ensures that we have the same user experience
+      whether or not the commit was fast-forwarded [1].
+
+ (ii) That the todo list is re-read after the commit has been reworded.
+      This is to allow the user to update the todo list while the rebase
+      is paused for editing the commit message.
+
+[1] https://lore.kernel.org/git/20190812175046.GM20404@szeder.dev/
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3404-rebase-interactive.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t3404-rebase-interactive.sh b/t/t3404-rebase-interactive.sh
+index 96a56aafbe..bf94eb28b9 100755
+--- a/t/t3404-rebase-interactive.sh
++++ b/t/t3404-rebase-interactive.sh
+@@ -758,7 +758,7 @@ test_expect_success 'reword' '
+ 	git show HEAD~2 | grep "C changed"
+ '
+ 
+-test_expect_success 'no uncommited changes when rewording the todo list is reloaded' '
++test_expect_success 'no uncommitted changes when rewording and the todo list is reloaded' '
+ 	git checkout E &&
+ 	test_when_finished "git checkout @{-1}" &&
+ 	(
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,78 @@
+From 252060be77f1d9ba7696bb3540f61451e147bf8b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=90o=C3=A0n=20Tr=E1=BA=A7n=20C=C3=B4ng=20Danh?=
+ <congdanhqx@gmail.com>
+Date: Thu, 10 Nov 2022 23:36:41 +0700
+Subject: [PATCH 0366/2871] bisect--helper: identify as bisect when report
+ error
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In a later change, we will convert the bisect--helper to be builtin
+bisect. Let's start by self-identifying it's the real bisect when reporting
+error.
+
+This change is safe since 'git bisect--helper' is an implementation
+detail, users aren't expected to call 'git bisect--helper'.
+
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/bisect--helper.c | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/bisect--helper.c b/builtin/bisect--helper.c
+index e214190599..f28bedac6a 100644
+--- a/builtin/bisect--helper.c
++++ b/builtin/bisect--helper.c
+@@ -1282,7 +1282,8 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ static int cmd_bisect__reset(int argc, const char **argv, const char *prefix UNUSED)
+ {
+ 	if (argc > 1)
+-		return error(_("--bisect-reset requires either no argument or a commit"));
++		return error(_("'%s' requires either no argument or a commit"),
++			     "git bisect reset");
+ 	return bisect_reset(argc ? argv[0] : NULL);
+ }
+ 
+@@ -1292,7 +1293,8 @@ static int cmd_bisect__terms(int argc, const char **argv, const char *prefix UNU
+ 	struct bisect_terms terms = { 0 };
+ 
+ 	if (argc > 1)
+-		return error(_("--bisect-terms requires 0 or 1 argument"));
++		return error(_("'%s' requires 0 or 1 argument"),
++			     "git bisect terms");
+ 	res = bisect_terms(&terms, argc == 1 ? argv[0] : NULL);
+ 	free_terms(&terms);
+ 	return res;
+@@ -1315,7 +1317,8 @@ static int cmd_bisect__next(int argc, const char **argv UNUSED, const char *pref
+ 	struct bisect_terms terms = { 0 };
+ 
+ 	if (argc)
+-		return error(_("--bisect-next requires 0 arguments"));
++		return error(_("'%s' requires 0 arguments"),
++			     "git bisect next");
+ 	get_terms(&terms);
+ 	res = bisect_next(&terms, prefix);
+ 	free_terms(&terms);
+@@ -1337,7 +1340,7 @@ static int cmd_bisect__state(int argc, const char **argv, const char *prefix UNU
+ static int cmd_bisect__log(int argc, const char **argv UNUSED, const char *prefix UNUSED)
+ {
+ 	if (argc)
+-		return error(_("--bisect-log requires 0 arguments"));
++		return error(_("'%s' requires 0 arguments"), "git bisect log");
+ 	return bisect_log();
+ }
+ 
+@@ -1383,7 +1386,7 @@ static int cmd_bisect__run(int argc, const char **argv, const char *prefix UNUSE
+ 	struct bisect_terms terms = { 0 };
+ 
+ 	if (!argc)
+-		return error(_("bisect run failed: no command provided."));
++		return error(_("'%s' failed: no command provided."), "git bisect run");
+ 	get_terms(&terms);
+ 	res = bisect_run(&terms, argv, argc);
+ 	free_terms(&terms);
+-- 
+2.39.3 (Apple Git-145)
+

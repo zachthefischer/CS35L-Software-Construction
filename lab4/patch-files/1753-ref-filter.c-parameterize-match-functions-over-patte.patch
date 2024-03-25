@@ -1,0 +1,84 @@
+From 284c55deb53921457929ca2afe231c48e6cada85 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 10 Jul 2023 17:12:16 -0400
+Subject: [PATCH 1753/2871] ref-filter.c: parameterize match functions over
+ patterns
+
+`match_pattern()` and `match_name_as_path()` both take a `struct
+ref_filter *`, and then store a stack variable `patterns` pointing at
+`filter->patterns`.
+
+The subsequent patch will add a new array of patterns to match over (the
+excluded patterns, via a new `git for-each-ref --exclude` option),
+treating the return value of these functions differently depending on
+which patterns are being used to match.
+
+Tweak `match_pattern()` and `match_name_as_path()` to take an array of
+patterns to prepare for passing either in.
+
+Once we start passing either in, `match_pattern()` will have little to
+do with a particular `struct ref_filter *` instance. To clarify this,
+drop it from the argument list, and replace it with the only bit of the
+`ref_filter` that we care about (`filter->ignore_case`).
+
+Co-authored-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index d32f426898..91acf53ef9 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -2104,12 +2104,12 @@ static int get_ref_atom_value(struct ref_array_item *ref, int atom,
+  * matches a pattern "refs/heads/mas") or a wildcard (e.g. the same ref
+  * matches "refs/heads/mas*", too).
+  */
+-static int match_pattern(const struct ref_filter *filter, const char *refname)
++static int match_pattern(const char **patterns, const char *refname,
++			 int ignore_case)
+ {
+-	const char **patterns = filter->name_patterns;
+ 	unsigned flags = 0;
+ 
+-	if (filter->ignore_case)
++	if (ignore_case)
+ 		flags |= WM_CASEFOLD;
+ 
+ 	/*
+@@ -2134,13 +2134,13 @@ static int match_pattern(const struct ref_filter *filter, const char *refname)
+  * matches a pattern "refs/heads/" but not "refs/heads/m") or a
+  * wildcard (e.g. the same ref matches "refs/heads/m*", too).
+  */
+-static int match_name_as_path(const struct ref_filter *filter, const char *refname)
++static int match_name_as_path(const char **pattern, const char *refname,
++			      int ignore_case)
+ {
+-	const char **pattern = filter->name_patterns;
+ 	int namelen = strlen(refname);
+ 	unsigned flags = WM_PATHNAME;
+ 
+-	if (filter->ignore_case)
++	if (ignore_case)
+ 		flags |= WM_CASEFOLD;
+ 
+ 	for (; *pattern; pattern++) {
+@@ -2165,8 +2165,10 @@ static int filter_pattern_match(struct ref_filter *filter, const char *refname)
+ 	if (!*filter->name_patterns)
+ 		return 1; /* No pattern always matches */
+ 	if (filter->match_as_path)
+-		return match_name_as_path(filter, refname);
+-	return match_pattern(filter, refname);
++		return match_name_as_path(filter->name_patterns, refname,
++					  filter->ignore_case);
++	return match_pattern(filter->name_patterns, refname,
++			     filter->ignore_case);
+ }
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,35 @@
+From 78b6369e6761c04d6aff2d115bafd8845e90e530 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Wed, 5 Apr 2023 02:28:29 +0000
+Subject: [PATCH 1206/2871] MyFirstContribution: render literal *
+
+The HTML version of MyFirstContribution [1] does not render the
+asterisks (*) meant to be typed in as glob patterns by the user, because
+they are being interpreted as bold text delimiters.
+
+[1]: Search for "pattern" in
+https://git-scm.com/docs/MyFirstContribution#v2-git-send-email
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/MyFirstContribution.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/MyFirstContribution.txt b/Documentation/MyFirstContribution.txt
+index 1a4be8ee0a..74150349e7 100644
+--- a/Documentation/MyFirstContribution.txt
++++ b/Documentation/MyFirstContribution.txt
+@@ -1164,7 +1164,7 @@ After you run this command, `format-patch` will output the patches to the `psuh/
+ directory, alongside the v1 patches. Using a single directory makes it easy to
+ refer to the old v1 patches while proofreading the v2 patches, but you will need
+ to be careful to send out only the v2 patches. We will use a pattern like
+-"psuh/v2-*.patch" (not "psuh/*.patch", which would match v1 and v2 patches).
++`psuh/v2-*.patch` (not `psuh/*.patch`, which would match v1 and v2 patches).
+ 
+ Edit your cover letter again. Now is a good time to mention what's different
+ between your last version and now, if it's something significant. You do not
+-- 
+2.39.3 (Apple Git-145)
+

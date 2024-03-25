@@ -1,0 +1,38 @@
+From 1ec40a83a54c9957636b1bf708ab3d8e261b751b Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Fri, 31 Mar 2023 16:36:04 +0200
+Subject: [PATCH 1188/2871] t2107: fix mention of the_index.cache_changed
+
+Commit [1] added a test to t2107-update-index-basic.sh with a comment
+that mentions macro "active_cache_changed".  Later in [2], the macro was
+removed and its usage in function cmd_update_index in file
+builtin/update-index.c was replaced with "the_index.cache_changed".
+
+Fix the outdated comment in file t2107-update-index-basic.sh.
+
+[1] fa137f67a4 (lockfile.c: store absolute path, 2014-11-02)
+[2] dc594180d9 (cocci & cache.h: apply variable section of "pending"
+    index-compatibility, 2022-11-19)
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2107-update-index-basic.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t2107-update-index-basic.sh b/t/t2107-update-index-basic.sh
+index 07e6de84e6..89b285fa3a 100755
+--- a/t/t2107-update-index-basic.sh
++++ b/t/t2107-update-index-basic.sh
+@@ -83,7 +83,7 @@ test_expect_success '.lock files cleaned up' '
+ 	cd repo &&
+ 	git config core.worktree ../../worktree &&
+ 	# --refresh triggers late setup_work_tree,
+-	# active_cache_changed is zero, rollback_lock_file fails
++	# the_index.cache_changed is zero, rollback_lock_file fails
+ 	git update-index --refresh --verbose >out &&
+ 	test_must_be_empty out &&
+ 	! test -f .git/index.lock
+-- 
+2.39.3 (Apple Git-145)
+

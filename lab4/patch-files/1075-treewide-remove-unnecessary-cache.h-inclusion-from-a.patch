@@ -1,0 +1,371 @@
+From a6dc3d364cdf89075582cd521f33d599e6b53cf2 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 21 Mar 2023 06:25:53 +0000
+Subject: [PATCH 1075/2871] treewide: remove unnecessary cache.h inclusion from
+ a few headers
+
+Ever since a64215b6cd ("object.h: stop depending on cache.h; make
+cache.h depend on object.h", 2023-02-24), we have a few headers that
+could have replaced their include of cache.h with an include of
+object.h.  Make that change now.
+
+Some C files had to start including cache.h after this change (or some
+smaller header it had brought in), because the C files were depending
+on things from cache.h but were only formerly implicitly getting
+cache.h through one of these headers being modified in this patch.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bulk-checkin.h              | 2 +-
+ bundle.h                    | 1 -
+ cache-tree.c                | 2 +-
+ config.c                    | 2 +-
+ fmt-merge-msg.c             | 2 +-
+ fsck.c                      | 2 +-
+ http-backend.c              | 2 +-
+ pack-mtimes.c               | 2 +-
+ packfile.h                  | 4 +++-
+ prune-packed.c              | 2 +-
+ ref-filter.c                | 2 +-
+ refs.c                      | 2 +-
+ refs.h                      | 1 -
+ refs/packed-backend.c       | 2 +-
+ refspec.c                   | 1 +
+ remote.c                    | 2 +-
+ server-info.c               | 2 +-
+ shallow.c                   | 2 +-
+ strbuf.c                    | 2 +-
+ streaming.h                 | 4 +++-
+ submodule.c                 | 2 +-
+ t/helper/test-bundle-uri.c  | 1 +
+ t/helper/test-fast-rebase.c | 2 +-
+ t/helper/test-pack-mtimes.c | 2 +-
+ t/helper/test-reach.c       | 1 +
+ transport.c                 | 2 +-
+ transport.h                 | 1 -
+ worktree.c                  | 2 +-
+ 28 files changed, 29 insertions(+), 25 deletions(-)
+
+diff --git a/bulk-checkin.h b/bulk-checkin.h
+index 8281b9cb15..48fe9a6e91 100644
+--- a/bulk-checkin.h
++++ b/bulk-checkin.h
+@@ -4,7 +4,7 @@
+ #ifndef BULK_CHECKIN_H
+ #define BULK_CHECKIN_H
+ 
+-#include "cache.h"
++#include "object.h"
+ 
+ void prepare_loose_object_bulk_checkin(void);
+ void fsync_loose_object_bulk_checkin(int fd, const char *filename);
+diff --git a/bundle.h b/bundle.h
+index 9f2bd733a6..021adbdcbb 100644
+--- a/bundle.h
++++ b/bundle.h
+@@ -2,7 +2,6 @@
+ #define BUNDLE_H
+ 
+ #include "strvec.h"
+-#include "cache.h"
+ #include "string-list.h"
+ #include "list-objects-filter-options.h"
+ 
+diff --git a/cache-tree.c b/cache-tree.c
+index 9d46ecef09..6f899beb04 100644
+--- a/cache-tree.c
++++ b/cache-tree.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "hex.h"
+ #include "lockfile.h"
+diff --git a/config.c b/config.c
+index d0aff55fa6..983c45fc37 100644
+--- a/config.c
++++ b/config.c
+@@ -5,7 +5,7 @@
+  * Copyright (C) Johannes Schindelin, 2005
+  *
+  */
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "date.h"
+ #include "branch.h"
+diff --git a/fmt-merge-msg.c b/fmt-merge-msg.c
+index 24cc44bdbc..c870cb95b9 100644
+--- a/fmt-merge-msg.c
++++ b/fmt-merge-msg.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "refs.h"
+diff --git a/fsck.c b/fsck.c
+index 871c0a9a25..70e1249787 100644
+--- a/fsck.c
++++ b/fsck.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "hex.h"
+ #include "object-store.h"
+diff --git a/http-backend.c b/http-backend.c
+index 9cfc6f2541..7e7c19e66b 100644
+--- a/http-backend.c
++++ b/http-backend.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "hex.h"
+diff --git a/pack-mtimes.c b/pack-mtimes.c
+index 0f9785fc5e..cd92fc1d86 100644
+--- a/pack-mtimes.c
++++ b/pack-mtimes.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "pack-mtimes.h"
+ #include "object-store.h"
+ #include "packfile.h"
+diff --git a/packfile.h b/packfile.h
+index a3f6723857..648be62bf2 100644
+--- a/packfile.h
++++ b/packfile.h
+@@ -1,11 +1,13 @@
+ #ifndef PACKFILE_H
+ #define PACKFILE_H
+ 
+-#include "cache.h"
++#include "object.h"
+ #include "oidset.h"
+ 
+ /* in object-store.h */
+ struct packed_git;
++struct pack_entry;
++struct pack_window;
+ struct object_info;
+ 
+ /*
+diff --git a/prune-packed.c b/prune-packed.c
+index d2813f6a40..e02f466c2e 100644
+--- a/prune-packed.c
++++ b/prune-packed.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "object-store.h"
+ #include "packfile.h"
+ #include "progress.h"
+diff --git a/ref-filter.c b/ref-filter.c
+index ed802778da..38141bce8d 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "hex.h"
+ #include "parse-options.h"
+diff --git a/refs.c b/refs.c
+index 53240bcc07..4e5cc73fb1 100644
+--- a/refs.c
++++ b/refs.c
+@@ -2,7 +2,7 @@
+  * The backend-independent part of the reference module.
+  */
+ 
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "hashmap.h"
+diff --git a/refs.h b/refs.h
+index 935cdd1ece..5741b69d0d 100644
+--- a/refs.h
++++ b/refs.h
+@@ -1,7 +1,6 @@
+ #ifndef REFS_H
+ #define REFS_H
+ 
+-#include "cache.h"
+ #include "commit.h"
+ 
+ struct object_id;
+diff --git a/refs/packed-backend.c b/refs/packed-backend.c
+index b665d0f7d9..6f97518599 100644
+--- a/refs/packed-backend.c
++++ b/refs/packed-backend.c
+@@ -1,4 +1,4 @@
+-#include "../git-compat-util.h"
++#include "../cache.h"
+ #include "../alloc.h"
+ #include "../config.h"
+ #include "../hex.h"
+diff --git a/refspec.c b/refspec.c
+index 28d90911aa..7b5c305514 100644
+--- a/refspec.c
++++ b/refspec.c
+@@ -1,5 +1,6 @@
+ #include "git-compat-util.h"
+ #include "alloc.h"
++#include "gettext.h"
+ #include "hex.h"
+ #include "strvec.h"
+ #include "refs.h"
+diff --git a/remote.c b/remote.c
+index b04e5da338..2daddb85cb 100644
+--- a/remote.c
++++ b/remote.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "hex.h"
+diff --git a/server-info.c b/server-info.c
+index 4043689202..7864337705 100644
+--- a/server-info.c
++++ b/server-info.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "dir.h"
+ #include "hex.h"
+diff --git a/shallow.c b/shallow.c
+index 1cbb05ba0e..c5433a4fd3 100644
+--- a/shallow.c
++++ b/shallow.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "hex.h"
+ #include "repository.h"
+diff --git a/strbuf.c b/strbuf.c
+index 1c57ac6574..8800830ebf 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "hex.h"
+ #include "refs.h"
+diff --git a/streaming.h b/streaming.h
+index 5e4e6acfd0..bd27f59e57 100644
+--- a/streaming.h
++++ b/streaming.h
+@@ -3,10 +3,12 @@
+  */
+ #ifndef STREAMING_H
+ #define STREAMING_H 1
+-#include "cache.h"
++
++#include "object.h"
+ 
+ /* opaque */
+ struct git_istream;
++struct stream_filter;
+ 
+ struct git_istream *open_istream(struct repository *, const struct object_id *,
+ 				 enum object_type *, unsigned long *,
+diff --git a/submodule.c b/submodule.c
+index 2a057c35b7..0baf97cf77 100644
+--- a/submodule.c
++++ b/submodule.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "repository.h"
+ #include "config.h"
+diff --git a/t/helper/test-bundle-uri.c b/t/helper/test-bundle-uri.c
+index b18e760310..475058592d 100644
+--- a/t/helper/test-bundle-uri.c
++++ b/t/helper/test-bundle-uri.c
+@@ -1,6 +1,7 @@
+ #include "test-tool.h"
+ #include "parse-options.h"
+ #include "bundle-uri.h"
++#include "gettext.h"
+ #include "strbuf.h"
+ #include "string-list.h"
+ #include "transport.h"
+diff --git a/t/helper/test-fast-rebase.c b/t/helper/test-fast-rebase.c
+index b1edb92a03..1e975df904 100644
+--- a/t/helper/test-fast-rebase.c
++++ b/t/helper/test-fast-rebase.c
+@@ -12,7 +12,7 @@
+ 
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-
++#include "cache.h"
+ #include "cache-tree.h"
+ #include "commit.h"
+ #include "hex.h"
+diff --git a/t/helper/test-pack-mtimes.c b/t/helper/test-pack-mtimes.c
+index f68b3761b6..0e53dee9e5 100644
+--- a/t/helper/test-pack-mtimes.c
++++ b/t/helper/test-pack-mtimes.c
+@@ -1,5 +1,5 @@
+-#include "git-compat-util.h"
+ #include "test-tool.h"
++#include "cache.h"
+ #include "hex.h"
+ #include "strbuf.h"
+ #include "object-store.h"
+diff --git a/t/helper/test-reach.c b/t/helper/test-reach.c
+index de8f26639d..05d56267a9 100644
+--- a/t/helper/test-reach.c
++++ b/t/helper/test-reach.c
+@@ -1,4 +1,5 @@
+ #include "test-tool.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "commit.h"
+ #include "commit-reach.h"
+diff --git a/transport.c b/transport.c
+index 906dbad5a0..80059124c0 100644
+--- a/transport.c
++++ b/transport.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "hex.h"
+diff --git a/transport.h b/transport.h
+index 85150f504f..6393cd9823 100644
+--- a/transport.h
++++ b/transport.h
+@@ -1,7 +1,6 @@
+ #ifndef TRANSPORT_H
+ #define TRANSPORT_H
+ 
+-#include "cache.h"
+ #include "run-command.h"
+ #include "remote.h"
+ #include "list-objects-filter-options.h"
+diff --git a/worktree.c b/worktree.c
+index e10594ef33..cbb0db2d7c 100644
+--- a/worktree.c
++++ b/worktree.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "repository.h"
+ #include "refs.h"
+-- 
+2.39.3 (Apple Git-145)
+

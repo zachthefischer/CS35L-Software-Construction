@@ -1,0 +1,67 @@
+From e2d003dbedf05906c0cc22493a96124c94521973 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 8 Mar 2023 18:47:32 +0000
+Subject: [PATCH 1011/2871] object-file: reprepare alternates when necessary
+
+When an object is not found in a repository's object store, we sometimes
+call reprepare_packed_git() to see if the object was temporarily moved
+into a new pack-file (and its old pack-file or loose object was
+deleted). This process does a scan of each pack directory within each
+odb, but does not reevaluate if the odb list needs updating.
+
+Extend reprepare_packed_git() to also reprepare the alternate odb list
+by setting loaded_alternates to zero and calling prepare_alt_odb(). This
+will add newly-discoverd odbs to the linked list, but will not duplicate
+existing ones nor will it remove existing ones that are no longer listed
+in the alternates file. Do this under the object read lock to avoid
+readers from interacting with a potentially incomplete odb being added
+to the odb list.
+
+If the alternates file was edited to _remove_ some alternates during the
+course of the Git process, Git will continue to see alternates that were
+ever valid for that repository. ODBs are not removed from the list, the
+same as the existing behavior before this change. Git already has
+protections against an alternate directory disappearing from the
+filesystem during the lifetime of a process, and those are still in
+effect.
+
+This change is specifically for concurrent changes to the repository, so
+it is difficult to create a test that guarantees this behavior is
+correct. I manually verified by introducing a reprepare_packed_git() call
+into get_revision() and stepped into that call in a debugger with a
+parent 'git log' process. Multiple runs of prepare_alt_odb() kept
+the_repository->objects->odb as a single-item chain until I added a
+.git/objects/info/alternates file in a different process. The next run
+added the new odb to the chain and subsequent runs did not add to the
+chain.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ packfile.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/packfile.c b/packfile.c
+index c0d7dd93f4..9d4eecfc1c 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -1008,6 +1008,16 @@ void reprepare_packed_git(struct repository *r)
+ 	struct object_directory *odb;
+ 
+ 	obj_read_lock();
++
++	/*
++	 * Reprepare alt odbs, in case the alternates file was modified
++	 * during the course of this process. This only _adds_ odbs to
++	 * the linked list, so existing odbs will continue to exist for
++	 * the lifetime of the process.
++	 */
++	r->objects->loaded_alternates = 0;
++	prepare_alt_odb(r);
++
+ 	for (odb = r->objects->odb; odb; odb = odb->next)
+ 		odb_clear_loose_cache(odb);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

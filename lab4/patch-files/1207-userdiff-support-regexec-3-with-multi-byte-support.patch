@@ -1,0 +1,151 @@
+From be391449542d8a67cb343ec9d0b2f6854d665354 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Thu, 6 Apr 2023 22:19:11 +0200
+Subject: [PATCH 1207/2871] userdiff: support regexec(3) with multi-byte
+ support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 1819ad327b (grep: fix multibyte regex handling under macOS,
+2022-08-26) we use the system library for all regular expression
+matching on macOS, not just for git grep.  It supports multi-byte
+strings and rejects invalid multi-byte characters.
+
+This broke all built-in userdiff word regexes in UTF-8 locales because
+they all include such invalid bytes in expressions that are intended to
+match multi-byte characters without explicit support for that from the
+regex engine.
+
+"|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+" is added to all built-in word
+regexes to match a single non-space or multi-byte character.  The \xNN
+characters are invalid if interpreted as UTF-8 because they have their
+high bit set, which indicates they are part of a multi-byte character,
+but they are surrounded by single-byte characters.
+
+Replace that expression with "|[^[:space:]]" if the regex engine
+supports multi-byte matching, as there is no need to have an explicit
+range for multi-byte characters then.  Check for that capability at
+runtime, because it depends on the locale and thus on environment
+variables.  Construct the full replacement expression at build time
+and just switch it in if necessary to avoid string manipulation and
+allocations at runtime.
+
+Additionally the word regex for tex contains the expression
+"[a-zA-Z0-9\x80-\xff]+" with a similarly invalid range.  The best
+replacement with only valid characters that I can come up with is
+"([a-zA-Z0-9]|[^\x01-\x7f])+".  Unlike the original it matches NUL
+characters, though.  Assuming that tex files usually don't contain NUL
+this should be acceptable.
+
+Reported-by: D. Ben Knoble <ben.knoble@gmail.com>
+Reported-by: Eric Sunshine <sunshine@sunshineco.com>
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4034-diff-words.sh |  4 ++++
+ userdiff.c            | 31 +++++++++++++++++++++++++++++--
+ userdiff.h            |  1 +
+ 3 files changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/t/t4034-diff-words.sh b/t/t4034-diff-words.sh
+index 15764ee9ac..74586f3813 100755
+--- a/t/t4034-diff-words.sh
++++ b/t/t4034-diff-words.sh
+@@ -69,6 +69,10 @@ test_language_driver () {
+ 		echo "* diff='"$lang"'" >.gitattributes &&
+ 		word_diff --color-words
+ 	'
++	test_expect_success "diff driver '$lang' in Islandic" '
++		LANG=is_IS.UTF-8 LANGUAGE=is LC_ALL="$is_IS_locale" \
++		word_diff --color-words
++	'
+ }
+ 
+ test_expect_success setup '
+diff --git a/userdiff.c b/userdiff.c
+index e25356a061..8bb7b7a4ba 100644
+--- a/userdiff.c
++++ b/userdiff.c
+@@ -15,6 +15,7 @@ static int drivers_alloc;
+ 		.cflags = REG_EXTENDED, \
+ 	}, \
+ 	.word_regex = wrx "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+", \
++	.word_regex_multi_byte = wrx "|[^[:space:]]", \
+ }
+ #define IPATTERN(lang, rx, wrx) { \
+ 	.name = lang, \
+@@ -24,6 +25,7 @@ static int drivers_alloc;
+ 		.cflags = REG_EXTENDED | REG_ICASE, \
+ 	}, \
+ 	.word_regex = wrx "|[^[:space:]]|[\xc0-\xff][\x80-\xbf]+", \
++	.word_regex_multi_byte = wrx "|[^[:space:]]", \
+ }
+ 
+ /*
+@@ -292,7 +294,7 @@ PATTERNS("scheme",
+ 	 /* All other words should be delimited by spaces or parentheses */
+ 	 "|([^][)(}{[ \t])+"),
+ PATTERNS("tex", "^(\\\\((sub)*section|chapter|part)\\*{0,1}\\{.*)$",
+-	 "\\\\[a-zA-Z@]+|\\\\.|[a-zA-Z0-9\x80-\xff]+"),
++	 "\\\\[a-zA-Z@]+|\\\\.|([a-zA-Z0-9]|[^\x01-\x7f])+"),
+ { "default", NULL, -1, { NULL, 0 } },
+ };
+ #undef PATTERNS
+@@ -328,6 +330,25 @@ static int userdiff_find_by_namelen_cb(struct userdiff_driver *driver,
+ 	return 0;
+ }
+ 
++static int regexec_supports_multi_byte_chars(void)
++{
++	static const char not_space[] = "[^[:space:]]";
++	static const char utf8_multi_byte_char[] = "\xc2\xa3";
++	regex_t re;
++	regmatch_t match;
++	static int result = -1;
++
++	if (result != -1)
++		return result;
++	if (regcomp(&re, not_space, REG_EXTENDED))
++		BUG("invalid regular expression: %s", not_space);
++	result = !regexec(&re, utf8_multi_byte_char, 1, &match, 0) &&
++		match.rm_so == 0 &&
++		match.rm_eo == strlen(utf8_multi_byte_char);
++	regfree(&re);
++	return result;
++}
++
+ static struct userdiff_driver *userdiff_find_by_namelen(const char *name, size_t len)
+ {
+ 	struct find_by_namelen_data udcbdata = {
+@@ -401,7 +422,13 @@ int userdiff_config(const char *k, const char *v)
+ struct userdiff_driver *userdiff_find_by_name(const char *name)
+ {
+ 	int len = strlen(name);
+-	return userdiff_find_by_namelen(name, len);
++	struct userdiff_driver *driver = userdiff_find_by_namelen(name, len);
++	if (driver && driver->word_regex_multi_byte) {
++		if (regexec_supports_multi_byte_chars())
++			driver->word_regex = driver->word_regex_multi_byte;
++		driver->word_regex_multi_byte = NULL;
++	}
++	return driver;
+ }
+ 
+ struct userdiff_driver *userdiff_find_by_path(struct index_state *istate,
+diff --git a/userdiff.h b/userdiff.h
+index aee91bc77e..b09974f6b2 100644
+--- a/userdiff.h
++++ b/userdiff.h
+@@ -17,6 +17,7 @@ struct userdiff_driver {
+ 	int binary;
+ 	struct userdiff_funcname funcname;
+ 	const char *word_regex;
++	const char *word_regex_multi_byte;
+ 	const char *textconv;
+ 	struct notes_cache *textconv_cache;
+ 	int textconv_want_cache;
+-- 
+2.39.3 (Apple Git-145)
+

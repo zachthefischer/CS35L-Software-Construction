@@ -1,0 +1,35 @@
+From 37e8d795bed7b93d3f12bcdd3fbb86dfe57921e6 Mon Sep 17 00:00:00 2001
+From: Shreyansh Paliwal <shreyanshpaliwalcmsmn@gmail.com>
+Date: Sun, 3 Dec 2023 22:47:59 +0530
+Subject: [PATCH 2578/2871] test-lib-functions.sh: fix test_grep fail message
+ wording
+
+In the recent commit 2e87fca189 (test framework: further deprecate
+test_i18ngrep, 2023-10-31), the test_i18ngrep function was
+deprecated, and all the callers were updated to call the test_grep
+function instead.  But test_grep inherited an error message that
+still refers to test_i18ngrep by mistake.  Correct it so that a
+broken call to the test_grep will identify itself as such.
+
+Signed-off-by: Shreyansh Paliwal <shreyanshpaliwalcmsmn@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib-functions.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index c50bc18861..502f892fad 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1222,7 +1222,7 @@ test_grep () {
+ 	if test $# -lt 2 ||
+ 	   { test "x!" = "x$1" && test $# -lt 3 ; }
+ 	then
+-		BUG "too few parameters to test_i18ngrep"
++		BUG "too few parameters to test_grep"
+ 	fi
+ 
+ 	if test "x!" = "x$1"
+-- 
+2.39.3 (Apple Git-145)
+

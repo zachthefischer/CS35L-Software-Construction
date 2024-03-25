@@ -1,0 +1,83 @@
+From c512643e67d33673933fa3d245be28b08b974755 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 18 Jul 2023 15:58:00 -0700
+Subject: [PATCH 1833/2871] short help: allow a gap smaller than USAGE_GAP
+
+The parse-options API responds to "git cmd -h" by listing the option
+flag (padded to the USAGE_OPTS_WIDTH column), followed by USAGE_GAP
+(set to 2) whitespaces, followed by the help text.  If the flags
+part does not fit within the USAGE_OPTS_WIDTH, the help text is given
+on its own line.  Imagine that "@" below depicts the USAGE_OPTS_WIDTH'th
+column, and "#" are for the usage help text, the output may look
+like this:
+
+    @@@@@@@@@@@@@  ########################################
+    -f		   description of the flag '-f' comes here
+    --short=<num>  description of the flag '--short'
+    --very-long-option=<number>
+                   description of the flag '--very-long-option'
+
+This is all good and nice in principle, but it becomes awkward when
+the flags part is just one column over the limit and forces a line
+break.  See the description of the "--almost" option below:
+
+    @@@@@@@@@@@@@  ########################################
+    -f		   description of the flag '-f' comes here
+    --short=<num>  description of the flag '--short'
+    --almost=<num>
+                   description of the flag '--almost'
+    --very-long-option=<number>
+                   description of the flag '--very-long-option'
+
+If we allow shrinking the gap to a single whitespace only in such a
+case, we would instead get:
+
+    @@@@@@@@@@@@@  ########################################
+    -f		   description of the flag '-f' comes here
+    --short=<num>  description of the flag '--short'
+    --almost=<num> description of the flag '--almost'
+    --very-long-option=<number>
+                   description of the flag '--very-long-option'
+
+and the boundary between the flags and their descriptions does not
+become any harder to see, while saving precious vertical screen real
+estate.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c          | 4 +++-
+ t/t0040-parse-options.sh | 3 +--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index 817416db99..87c9fae634 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1146,7 +1146,9 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 		    !(opts->flags & PARSE_OPT_NOARG))
+ 			pos += usage_argh(opts, outfile);
+ 
+-		if (pos <= USAGE_OPTS_WIDTH)
++		if (pos == USAGE_OPTS_WIDTH + 1)
++			pad = -1;
++		else if (pos <= USAGE_OPTS_WIDTH)
+ 			pad = USAGE_OPTS_WIDTH - pos;
+ 		else {
+ 			fputc('\n', outfile);
+diff --git a/t/t0040-parse-options.sh b/t/t0040-parse-options.sh
+index 83e5d4eeb6..e19a199636 100755
+--- a/t/t0040-parse-options.sh
++++ b/t/t0040-parse-options.sh
+@@ -30,8 +30,7 @@ usage: test-tool parse-options <options>
+     -F, --file <file>     set file to <file>
+ 
+ String options
+-    -s, --string <string>
+-                          get a string
++    -s, --string <string> get a string
+     --string2 <str>       get another string
+     --st <st>             get another string (pervert ordering)
+     -o <str>              get another string
+-- 
+2.39.3 (Apple Git-145)
+

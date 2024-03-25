@@ -1,0 +1,3 @@
+#!/bin/bash
+
+cat /usr/share/dict/linux.words > my.words

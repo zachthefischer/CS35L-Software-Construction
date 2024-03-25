@@ -1,0 +1,65 @@
+From e603a140aed8fc362320d949bfc0b47adcefc32f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 1 Nov 2022 23:35:45 +0100
+Subject: [PATCH 0290/2871] Makefile: add ability to TAB-complete cocci *.patch
+ rules
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Declare the contrib/coccinelle/<rule>.cocci.patch rules in such a way
+as to allow TAB-completion, and slightly optimize the Makefile by
+cutting down on the number of $(wildcard) in favor of defining
+"coccicheck" and "coccicheck-pending" in terms of the same
+incrementally filtered list.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Makefile | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index e5fcf96849..5d4e55a5e0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3139,9 +3139,20 @@ check: $(GENERATED_H)
+ 		exit 1; \
+ 	fi
+ 
++COCCI_GLOB = $(wildcard contrib/coccinelle/*.cocci)
++COCCI_RULES = $(COCCI_GLOB)
++
++COCCICHECK_PENDING = $(filter %.pending.cocci,$(COCCI_RULES))
++COCCICHECK = $(filter-out $(COCCICHECK_PENDING),$(COCCI_RULES))
++
++COCCICHECK_PATCHES = $(COCCICHECK:%=%.patch)
++COCCICHECK_PATCHES_PENDING = $(COCCICHECK_PENDING:%=%.patch)
++
+ COCCI_TEST_RES = $(wildcard contrib/coccinelle/tests/*.res)
+ 
+-%.cocci.patch: %.cocci $(COCCI_SOURCES)
++COCCI_PATCHES = $(COCCI_RULES:%=%.patch)
++$(COCCI_PATCHES): $(COCCI_SOURCES)
++$(COCCI_PATCHES): %.patch: %
+ 	$(QUIET_SPATCH) \
+ 	if test $(SPATCH_BATCH_SIZE) = 0; then \
+ 		limit=; \
+@@ -3178,11 +3189,11 @@ $(COCCI_TEST_RES_GEN): .build/contrib/coccinelle/tests/%.res : contrib/coccinell
+ coccicheck-test: $(COCCI_TEST_RES_GEN)
+ 
+ coccicheck: coccicheck-test
+-coccicheck: $(addsuffix .patch,$(filter-out %.pending.cocci,$(wildcard contrib/coccinelle/*.cocci)))
++coccicheck: $(COCCICHECK_PATCHES)
+ 
+ # See contrib/coccinelle/README
+ coccicheck-pending: coccicheck-test
+-coccicheck-pending: $(addsuffix .patch,$(wildcard contrib/coccinelle/*.pending.cocci))
++coccicheck-pending: $(COCCICHECK_PATCHES_PENDING)
+ 
+ .PHONY: coccicheck coccicheck-pending
+ 
+-- 
+2.39.3 (Apple Git-145)
+

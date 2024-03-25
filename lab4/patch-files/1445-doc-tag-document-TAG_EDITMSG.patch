@@ -1,0 +1,54 @@
+From 719515fdd0a951f51751e12fefa79cb25c6ae15d Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Tue, 16 May 2023 19:55:44 +0200
+Subject: [PATCH 1445/2871] doc: tag: document `TAG_EDITMSG`
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Document `TAG_EDITMSG` which we have told the user about on unsuccessful
+command invocations since commit 3927bbe9a4 (tag: delete TAG_EDITMSG
+only on successful tag, 2008-12-06).
+
+Introduce this documentation since we are going to add tests for the
+lifetime of this file in the case of command failure and success.
+
+Use the documentation for `COMMIT_EDITMSG` from `git-commit.txt` as a
+template since these two files share the same purpose.[1]
+
+† 1: from commit 3927bbe9a4:
+
+     “ This matches the behavior of COMMIT_EDITMSG, which stays around
+       in case of error.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-tag.txt | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/Documentation/git-tag.txt b/Documentation/git-tag.txt
+index 7f61c1edb3..d42efb3112 100644
+--- a/Documentation/git-tag.txt
++++ b/Documentation/git-tag.txt
+@@ -381,6 +381,16 @@ $ GIT_COMMITTER_DATE="2006-10-02 10:31" git tag -s v1.0.1
+ 
+ include::date-formats.txt[]
+ 
++FILES
++-----
++
++`$GIT_DIR/TAG_EDITMSG`::
++	This file contains the message of an in-progress annotated
++	tag. If `git tag` exits due to an error before creating an
++	annotated tag then the tag message that has been provided by the
++	user in an editor session will be available in this file, but
++	may be overwritten by the next invocation of `git tag`.
++
+ NOTES
+ -----
+ 
+-- 
+2.39.3 (Apple Git-145)
+

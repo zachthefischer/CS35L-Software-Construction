@@ -1,0 +1,96 @@
+From 0178420b9ca67fd4c23df1bea49f45b2aa2a5330 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Fri, 25 Nov 2022 17:59:51 +0800
+Subject: [PATCH 0441/2871] github-actions: run gcc-8 on ubuntu-20.04 image
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+GitHub starts to upgrade its runner image "ubuntu-latest" from version
+"ubuntu-20.04" to version "ubuntu-22.04". It will fail to find and
+install "gcc-8" package on the new runner image.
+
+Change some of the runner images from "ubuntu-latest" to "ubuntu-20.04"
+in order to install "gcc-8" as a dependency.
+
+The first revision of this patch tried to replace "$runs_on_pool" in
+"ci/*.sh" with a new "$runs_on_os" environment variable based on the
+"os" field in the matrix strategy. But these "os" fields in matrix
+strategies are obsolete legacies from commit [1] and commit [2], and
+are no longer useful. So remove these unused "os" fields.
+
+[1]: c08bb26010 (CI: rename the "Linux32" job to lower-case "linux32",
+                 2021-11-23)
+[2]: 25715419bf (CI: don't run "make test" twice in one job, 2021-11-23)
+
+Reviewed-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Helped-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 7 ++-----
+ ci/install-dependencies.sh | 2 +-
+ ci/lib.sh                  | 2 +-
+ 3 files changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 831f4df56c..831a81f61d 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -227,17 +227,15 @@ jobs:
+             pool: ubuntu-latest
+           - jobname: linux-sha256
+             cc: clang
+-            os: ubuntu
+             pool: ubuntu-latest
+           - jobname: linux-gcc
+             cc: gcc
+             cc_package: gcc-8
+-            pool: ubuntu-latest
++            pool: ubuntu-20.04
+           - jobname: linux-TEST-vars
+             cc: gcc
+-            os: ubuntu
+             cc_package: gcc-8
+-            pool: ubuntu-latest
++            pool: ubuntu-20.04
+           - jobname: osx-clang
+             cc: clang
+             pool: macos-latest
+@@ -282,7 +280,6 @@ jobs:
+         - jobname: linux-musl
+           image: alpine
+         - jobname: linux32
+-          os: ubuntu32
+           image: daald/ubuntu32:xenial
+         - jobname: pedantic
+           image: fedora
+diff --git a/ci/install-dependencies.sh b/ci/install-dependencies.sh
+index 107757a1fe..feefd6e9bb 100755
+--- a/ci/install-dependencies.sh
++++ b/ci/install-dependencies.sh
+@@ -12,7 +12,7 @@ UBUNTU_COMMON_PKGS="make libssl-dev libcurl4-openssl-dev libexpat-dev
+  libemail-valid-perl libio-socket-ssl-perl libnet-smtp-ssl-perl"
+ 
+ case "$runs_on_pool" in
+-ubuntu-latest)
++ubuntu-*)
+ 	sudo apt-get -q update
+ 	sudo apt-get -q -y install language-pack-is libsvn-perl apache2 \
+ 		$UBUNTU_COMMON_PKGS $CC_PACKAGE
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 1b0cc2b57d..3c5d2d0cb6 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -226,7 +226,7 @@ export GIT_TEST_CLONE_2GB=true
+ export SKIP_DASHED_BUILT_INS=YesPlease
+ 
+ case "$runs_on_pool" in
+-ubuntu-latest)
++ubuntu-*)
+ 	if test "$jobname" = "linux-gcc-default"
+ 	then
+ 		break
+-- 
+2.39.3 (Apple Git-145)
+

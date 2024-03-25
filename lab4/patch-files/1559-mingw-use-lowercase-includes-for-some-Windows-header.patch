@@ -1,0 +1,49 @@
+From 4a53d0d0bc1c04f012773d23e918ba45e96ddefb Mon Sep 17 00:00:00 2001
+From: Mike Hommey <mh@glandium.org>
+Date: Mon, 5 Jun 2023 06:19:34 +0900
+Subject: [PATCH 1559/2871] mingw: use lowercase includes for some Windows
+ headers
+
+When cross-compiling with the mingw toolchain on a system with a case
+sensitive filesystem, the mixed case (which is technically correct as
+per the contents of MS Visual C++) doesn't work (the corresponding mingw
+headers are all lowercase for some reason).
+
+Signed-off-by: Mike Hommey <mh@glandium.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/win32/trace2_win32_process_info.c | 4 ++--
+ wrapper.c                                | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/compat/win32/trace2_win32_process_info.c b/compat/win32/trace2_win32_process_info.c
+index a4e33768f4..438af8f818 100644
+--- a/compat/win32/trace2_win32_process_info.c
++++ b/compat/win32/trace2_win32_process_info.c
+@@ -3,8 +3,8 @@
+ #include "../../repository.h"
+ #include "../../trace2.h"
+ #include "lazyload.h"
+-#include <Psapi.h>
+-#include <tlHelp32.h>
++#include <psapi.h>
++#include <tlhelp32.h>
+ 
+ /*
+  * An arbitrarily chosen value to limit the size of the ancestor
+diff --git a/wrapper.c b/wrapper.c
+index 67f5f5dbe1..5dc48e815a 100644
+--- a/wrapper.c
++++ b/wrapper.c
+@@ -17,7 +17,7 @@ static intmax_t count_fsync_hardware_flush;
+ #ifdef HAVE_RTLGENRANDOM
+ /* This is required to get access to RtlGenRandom. */
+ #define SystemFunction036 NTAPI SystemFunction036
+-#include <NTSecAPI.h>
++#include <ntsecapi.h>
+ #undef SystemFunction036
+ #endif
+ 
+-- 
+2.39.3 (Apple Git-145)
+

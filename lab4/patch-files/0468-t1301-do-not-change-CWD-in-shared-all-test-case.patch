@@ -1,0 +1,60 @@
+From bcb71d45bf7663c181eec81931ee334d29bb16f7 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Tue, 29 Nov 2022 21:15:11 +0800
+Subject: [PATCH 0468/2871] t1301: do not change $CWD in "shared=all" test case
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In test case "shared=all", the working directory is permanently changed
+to the "sub" directory. This leads to a strange behavior that the
+temporary repositories created by subsequent test cases are all in this
+"sub" directory, such as "sub/new", "sub/child.git". If we bypass this
+test case, all subsequent test cases will have different working
+directory.
+
+Besides, all subsequent test cases assuming they are in the "sub"
+directory do not run any destructive operations in their parent
+directory (".."), and will not make damage out side of $TRASH_DIRECTORY.
+
+So it is a safe change for us to run the test case "shared=all" in
+current repository instead of creating and changing to "sub".
+
+For the next test case, the path ".git/info" is assumed to be missing,
+but we no longer run the test case in the "sub" repository which is
+initialized from an empty template. In order for the test case to run
+properly, we can set "TEST_CREATE_REPO_NO_TEMPLATE=1" to initialize the
+default repository without a template.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Helped-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1301-shared-repo.sh | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/t/t1301-shared-repo.sh b/t/t1301-shared-repo.sh
+index 1225abbb6d..58d6da7feb 100755
+--- a/t/t1301-shared-repo.sh
++++ b/t/t1301-shared-repo.sh
+@@ -8,6 +8,7 @@ test_description='Test shared repository initialization'
+ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ 
++TEST_CREATE_REPO_NO_TEMPLATE=1
+ . ./test-lib.sh
+ 
+ # Remove a default ACL from the test dir if possible.
+@@ -46,8 +47,6 @@ do
+ done
+ 
+ test_expect_success 'shared=all' '
+-	mkdir sub &&
+-	cd sub &&
+ 	git init --template= --shared=all &&
+ 	test 2 = $(git config core.sharedrepository)
+ '
+-- 
+2.39.3 (Apple Git-145)
+

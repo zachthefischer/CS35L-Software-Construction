@@ -1,0 +1,133 @@
+From 0f7443bdc7284ad36e5d0cd8b2526e2123b8aa4f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:41 +0000
+Subject: [PATCH 1628/2871] init-db: document existing bug with core.bare in
+ template config
+
+The comments in create_default_files() talks about reading config from
+the config file in the specified `--templates` directory, which leads to
+the question of whether core.bare could be set in such a config file and
+thus whether the code is doing the right thing.  It turns out, that it
+doesn't; it unconditionally ignores core.bare in the config file in any
+--templates directory.  It is not clear to me that fixing it can be done
+within this function; it seems to occur too late:
+  * create_default_files() is called by init_db()
+  * init_db() is called by both builtin/{clone.c,init-db.c}
+  * both callers of init_db() call set_git_work_tree() before init_db()
+and in order to actual affect whether a repository is bear, we'd need to
+somewhere reset these values, not just the is_bare_repository_cfg
+setting.
+
+I do not want to open this can of worms at this time; I'm trying to
+clean up some headers, for which I need to move some functions, for
+which I need to clean up some globals, and that's far enough down the
+rabbit hole.  So, simply document the issue with a careful TODO comment
+and a few testcases.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/init-db.c        | 29 ++++++++++++++++++++++++++++-
+ t/t1301-shared-repo.sh   | 22 ++++++++++++++++++++++
+ t/t5606-clone-options.sh | 10 ++++++++++
+ 3 files changed, 60 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/init-db.c b/builtin/init-db.c
+index aef4036105..87a7021c3c 100644
+--- a/builtin/init-db.c
++++ b/builtin/init-db.c
+@@ -231,9 +231,36 @@ static int create_default_files(const char *template_path,
+ 	 * We must make sure command-line options continue to override any
+ 	 * values we might have just re-read from the config.
+ 	 */
+-	is_bare_repository_cfg = init_is_bare_repository || !work_tree;
+ 	if (init_shared_repository != -1)
+ 		set_shared_repository(init_shared_repository);
++	/*
++	 * TODO: heed core.bare from config file in templates if no
++	 *       command-line override given
++	 */
++	is_bare_repository_cfg = init_is_bare_repository || !work_tree;
++	/* TODO (continued):
++	 *
++	 * Unfortunately, the line above is equivalent to
++	 *    is_bare_repository_cfg = !work_tree;
++	 * which ignores the config entirely even if no `--[no-]bare`
++	 * command line option was present.
++	 *
++	 * To see why, note that before this function, there was this call:
++	 *    init_is_bare_repository = is_bare_repository()
++	 * expanding the right hand side:
++	 *                 = is_bare_repository_cfg && !get_git_work_tree()
++	 *                 = is_bare_repository_cfg && !work_tree
++	 * note that the last simplification above is valid because nothing
++	 * calls repo_init() or set_git_work_tree() between any of the
++	 * relevant calls in the code, and thus the !get_git_work_tree()
++	 * calls will return the same result each time.  So, what we are
++	 * interested in computing is the right hand side of the line of
++	 * code just above this comment:
++	 *     init_is_bare_repository || !work_tree
++	 *        = is_bare_repository_cfg && !work_tree || !work_tree
++	 *        = !work_tree
++	 * because "A && !B || !B == !B" for all boolean values of A & B.
++	 */
+ 
+ 	/*
+ 	 * We would have created the above under user's umask -- under
+diff --git a/t/t1301-shared-repo.sh b/t/t1301-shared-repo.sh
+index ae5cd3f5a0..e5a0d65caa 100755
+--- a/t/t1301-shared-repo.sh
++++ b/t/t1301-shared-repo.sh
+@@ -52,6 +52,28 @@ test_expect_success 'shared=all' '
+ 	test 2 = $(git config core.sharedrepository)
+ '
+ 
++test_expect_failure 'template can set core.bare' '
++	test_when_finished "rm -rf subdir" &&
++	test_when_finished "rm -rf templates" &&
++	test_config core.bare true &&
++	umask 0022 &&
++	mkdir -p templates/ &&
++	cp .git/config templates/config &&
++	git init --template=templates subdir &&
++	test_path_exists subdir/HEAD
++'
++
++test_expect_success 'template can set core.bare but overridden by command line' '
++	test_when_finished "rm -rf subdir" &&
++	test_when_finished "rm -rf templates" &&
++	test_config core.bare true &&
++	umask 0022 &&
++	mkdir -p templates/ &&
++	cp .git/config templates/config &&
++	git init --no-bare --template=templates subdir &&
++	test_path_exists subdir/.git/HEAD
++'
++
+ test_expect_success POSIXPERM 'update-server-info honors core.sharedRepository' '
+ 	: > a1 &&
+ 	git add a1 &&
+diff --git a/t/t5606-clone-options.sh b/t/t5606-clone-options.sh
+index 27f9f77638..5890319b97 100755
+--- a/t/t5606-clone-options.sh
++++ b/t/t5606-clone-options.sh
+@@ -120,6 +120,16 @@ test_expect_success 'prefers -c config over --template config' '
+ 
+ '
+ 
++test_expect_failure 'prefers --template config even for core.bare' '
++
++	template="$TRASH_DIRECTORY/template-with-bare-config" &&
++	mkdir "$template" &&
++	git config --file "$template/config" core.bare true &&
++	git clone "--template=$template" parent clone-bare-config &&
++	test "$(git -C clone-bare-config config --local core.bare)" = "true" &&
++	test_path_is_file clone-bare-config/HEAD
++'
++
+ test_expect_success 'prefers config "clone.defaultRemoteName" over default' '
+ 
+ 	test_config_global clone.defaultRemoteName from_config &&
+-- 
+2.39.3 (Apple Git-145)
+

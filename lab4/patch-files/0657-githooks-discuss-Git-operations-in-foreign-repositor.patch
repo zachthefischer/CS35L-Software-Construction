@@ -1,0 +1,66 @@
+From 772f8ff826fcb15cba94bfd8f23eb0917f3e9edc Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Mon, 9 Jan 2023 19:45:08 +0000
+Subject: [PATCH 0657/2871] githooks: discuss Git operations in foreign
+ repositories
+
+Hook authors are periodically caught off-guard by difficult-to-diagnose
+errors when their hook invokes Git commands in a repository other than
+the local one. In particular, Git environment variables, such as GIT_DIR
+and GIT_WORK_TREE, which reference the local repository cause the Git
+commands to operate on the local repository rather than on the
+repository which the author intended. This is true whether the
+environment variables have been set manually by the user or
+automatically by Git itself. The same problem crops up when a hook
+invokes Git commands in a different worktree of the same repository, as
+well.
+
+Recommended best-practice[1,2,3,4,5,6] for avoiding this problem is for
+the hook to ensure that Git variables are unset before invoking Git
+commands in foreign repositories or other worktrees:
+
+    unset $(git rev-parse --local-env-vars)
+
+However, this advice is not documented anywhere. Rectify this
+shortcoming by mentioning it in githooks.txt documentation.
+
+[1]: https://lore.kernel.org/git/YFuHd1MMlJAvtdzb@coredump.intra.peff.net/
+[2]: https://lore.kernel.org/git/20200228190218.GC1408759@coredump.intra.peff.net/
+[3]: https://lore.kernel.org/git/20190516221702.GA11784@sigill.intra.peff.net/
+[4]: https://lore.kernel.org/git/20190422162127.GC9680@sigill.intra.peff.net/
+[5]: https://lore.kernel.org/git/20180716183942.GB22298@sigill.intra.peff.net/
+[6]: https://lore.kernel.org/git/20150203163235.GA9325@peff.net/
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/githooks.txt | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Documentation/githooks.txt b/Documentation/githooks.txt
+index a16e62bc8c..62908602e7 100644
+--- a/Documentation/githooks.txt
++++ b/Documentation/githooks.txt
+@@ -27,6 +27,18 @@ repository. An exception are hooks triggered during a push ('pre-receive',
+ 'update', 'post-receive', 'post-update', 'push-to-checkout') which are always
+ executed in $GIT_DIR.
+ 
++Environment variables, such as `GIT_DIR`, `GIT_WORK_TREE`, etc., are exported
++so that Git commands run by the hook can correctly locate the repository.  If
++your hook needs to invoke Git commands in a foreign repository or in a
++different working tree of the same repository, then it should clear these
++environment variables so they do not interfere with Git operations at the
++foreign location.  For example:
++
++------------
++local_desc=$(git describe)
++foreign_desc=$(unset $(git rev-parse --local-env-vars); git -C ../foreign-repo describe)
++------------
++
+ Hooks can get their arguments via the environment, command-line
+ arguments, and stdin. See the documentation for each hook below for
+ details.
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,134 @@
+From 188782ecb1d326ff724e41a77ea8ccb72f21ad44 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Tue, 14 Nov 2023 19:53:57 +0000
+Subject: [PATCH 2426/2871] ref-filter.c: use peeled tag for '*' format fields
+
+In most builtins ('rev-parse <revision>^{}', 'show-ref --dereference'),
+"dereferencing" a tag refers to a recursive peel of the tag object. Unlike
+these cases, the dereferencing prefix ('*') in 'for-each-ref' format
+specifiers triggers only a single, non-recursive dereference of a given tag
+object. For most annotated tags, a single dereference is all that is needed
+to access the tag's associated commit or tree; "recursive" and
+"non-recursive" dereferencing are functionally equivalent in these cases.
+However, nested tags (annotated tags whose target is another annotated tag)
+dereferenced once return another tag, where a recursive dereference would
+return the commit or tree.
+
+Currently, if a user wants to filter & format refs and include information
+about a recursively-dereferenced tag, they can do so with something like
+'cat-file --batch-check':
+
+    git for-each-ref --format="%(objectname)^{} %(refname)" <pattern> |
+        git cat-file --batch-check="%(objectname) %(rest)"
+
+But the combination of commands is inefficient. So, to improve the
+performance of this use case and align the defererencing behavior of
+'for-each-ref' with that of other commands, update the ref formatting code
+to use the peeled tag (from 'peel_iterated_oid()') to populate '*' fields
+rather than the tag's immediate target object (from 'get_tagged_oid()').
+
+Additionally, add a test to 't6300-for-each-ref' to verify new nested tag
+behavior and update 't6302-for-each-ref-filter.sh' to print the correct
+value for nested dereferenced fields.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-for-each-ref.txt |  4 ++--
+ ref-filter.c                       | 13 ++++---------
+ t/t6300-for-each-ref.sh            | 22 ++++++++++++++++++++++
+ t/t6302-for-each-ref-filter.sh     |  4 ++--
+ 4 files changed, 30 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/git-for-each-ref.txt b/Documentation/git-for-each-ref.txt
+index f64fa8b406..9fa98e5872 100644
+--- a/Documentation/git-for-each-ref.txt
++++ b/Documentation/git-for-each-ref.txt
+@@ -296,8 +296,8 @@ from the `committer` or `tagger` fields depending on the object type.
+ These are intended for working on a mix of annotated and lightweight tags.
+ 
+ For tag objects, a `fieldname` prefixed with an asterisk (`*`) expands to
+-the `fieldname` value of object the tag points at, rather than that of the
+-tag object itself.
++the `fieldname` value of the peeled object, rather than that of the tag
++object itself.
+ 
+ Fields that have name-email-date tuple as its value (`author`,
+ `committer`, and `tagger`) can be suffixed with `name`, `email`,
+diff --git a/ref-filter.c b/ref-filter.c
+index ca4ebed4eb..b1093aebb8 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -2424,17 +2424,12 @@ static int populate_value(struct ref_array_item *ref, struct strbuf *err)
+ 		return 0;
+ 
+ 	/*
+-	 * If it is a tag object, see if we use a value that derefs
+-	 * the object, and if we do grab the object it refers to.
++	 * If it is a tag object, see if we use the peeled value. If we do,
++	 * grab the peeled OID.
+ 	 */
+-	oi_deref.oid = *get_tagged_oid((struct tag *)obj);
++	if (need_tagged && peel_iterated_oid(&obj->oid, &oi_deref.oid))
++		die("bad tag");
+ 
+-	/*
+-	 * NEEDSWORK: This derefs tag only once, which
+-	 * is good to deal with chains of trust, but
+-	 * is not consistent with what deref_tag() does
+-	 * which peels the onion to the core.
+-	 */
+ 	return get_object(ref, 1, &obj, &oi_deref, err);
+ }
+ 
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 119720495e..d62ba985da 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1728,6 +1728,28 @@ test_expect_success 'git for-each-ref with non-existing refs' '
+ 	test_must_be_empty actual
+ '
+ 
++test_expect_success 'git for-each-ref with nested tags' '
++	git tag -am "Normal tag" nested/base HEAD &&
++	git tag -am "Nested tag" nested/nest1 refs/tags/nested/base &&
++	git tag -am "Double nested tag" nested/nest2 refs/tags/nested/nest1 &&
++
++	head_oid="$(git rev-parse HEAD)" &&
++	base_tag_oid="$(git rev-parse refs/tags/nested/base)" &&
++	nest1_tag_oid="$(git rev-parse refs/tags/nested/nest1)" &&
++	nest2_tag_oid="$(git rev-parse refs/tags/nested/nest2)" &&
++
++	cat >expect <<-EOF &&
++	refs/tags/nested/base $base_tag_oid tag $head_oid commit
++	refs/tags/nested/nest1 $nest1_tag_oid tag $head_oid commit
++	refs/tags/nested/nest2 $nest2_tag_oid tag $head_oid commit
++	EOF
++
++	git for-each-ref \
++		--format="%(refname) %(objectname) %(objecttype) %(*objectname) %(*objecttype)" \
++		refs/tags/nested/ >actual &&
++	test_cmp expect actual
++'
++
+ GRADE_FORMAT="%(signature:grade)%0a%(signature:key)%0a%(signature:signer)%0a%(signature:fingerprint)%0a%(signature:primarykeyfingerprint)"
+ TRUSTLEVEL_FORMAT="%(signature:trustlevel)%0a%(signature:key)%0a%(signature:signer)%0a%(signature:fingerprint)%0a%(signature:primarykeyfingerprint)"
+ 
+diff --git a/t/t6302-for-each-ref-filter.sh b/t/t6302-for-each-ref-filter.sh
+index af223e44d6..82f3d1ea0f 100755
+--- a/t/t6302-for-each-ref-filter.sh
++++ b/t/t6302-for-each-ref-filter.sh
+@@ -45,8 +45,8 @@ test_expect_success 'check signed tags with --points-at' '
+ 	sed -e "s/Z$//" >expect <<-\EOF &&
+ 	refs/heads/side Z
+ 	refs/tags/annotated-tag four
+-	refs/tags/doubly-annotated-tag An annotated tag
+-	refs/tags/doubly-signed-tag A signed tag
++	refs/tags/doubly-annotated-tag four
++	refs/tags/doubly-signed-tag four
+ 	refs/tags/four Z
+ 	refs/tags/signed-tag four
+ 	EOF
+-- 
+2.39.3 (Apple Git-145)
+

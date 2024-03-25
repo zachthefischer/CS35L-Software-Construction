@@ -1,0 +1,61 @@
+From 4654134976fd4d80ea664c159f798f21c7917d8c Mon Sep 17 00:00:00 2001
+From: Jonathan Tan <jonathantanmy@google.com>
+Date: Tue, 25 Oct 2022 16:29:34 -0700
+Subject: [PATCH 0248/2871] negotiator/skipping: avoid stack overflow
+
+mark_common() in negotiator/skipping.c may overflow the stack due to
+recursive function calls. Avoid this by instead recursing using a
+heap-allocated data structure.
+
+Signed-off-by: Jonathan Tan <jonathantanmy@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ negotiator/skipping.c | 29 +++++++++++++++++------------
+ 1 file changed, 17 insertions(+), 12 deletions(-)
+
+diff --git a/negotiator/skipping.c b/negotiator/skipping.c
+index c4398f5ae1..0f5ac48e87 100644
+--- a/negotiator/skipping.c
++++ b/negotiator/skipping.c
+@@ -86,21 +86,26 @@ static int clear_marks(const char *refname, const struct object_id *oid,
+ /*
+  * Mark this SEEN commit and all its SEEN ancestors as COMMON.
+  */
+-static void mark_common(struct data *data, struct commit *c)
++static void mark_common(struct data *data, struct commit *seen_commit)
+ {
+-	struct commit_list *p;
++	struct prio_queue queue = { NULL };
++	struct commit *c;
+ 
+-	if (c->object.flags & COMMON)
+-		return;
+-	c->object.flags |= COMMON;
+-	if (!(c->object.flags & POPPED))
+-		data->non_common_revs--;
++	prio_queue_put(&queue, seen_commit);
++	while ((c = prio_queue_get(&queue))) {
++		struct commit_list *p;
++		if (c->object.flags & COMMON)
++			return;
++		c->object.flags |= COMMON;
++		if (!(c->object.flags & POPPED))
++			data->non_common_revs--;
+ 
+-	if (!c->object.parsed)
+-		return;
+-	for (p = c->parents; p; p = p->next) {
+-		if (p->item->object.flags & SEEN)
+-			mark_common(data, p->item);
++		if (!c->object.parsed)
++			return;
++		for (p = c->parents; p; p = p->next) {
++			if (p->item->object.flags & SEEN)
++				prio_queue_put(&queue, p->item);
++		}
+ 	}
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

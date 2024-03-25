@@ -1,0 +1,74 @@
+From dee182941fb685f5d85e61a0e9d97e8e91512f6c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 14 Dec 2023 16:48:59 -0500
+Subject: [PATCH 2541/2871] mailinfo: avoid recursion when unquoting From
+ headers
+
+Our unquote_comment() function is recursive; when it sees a comment
+within a comment, like:
+
+  (this is an (embedded) comment)
+
+it recurses to handle the inner comment. This is fine for practical use,
+but it does mean that you can easily run out of stack space with a
+malicious header. For example:
+
+  perl -e 'print "From: ", "(" x 2**18;' |
+  git mailinfo /dev/null /dev/null
+
+segfaults on my system. And since mailinfo is likely to be fed untrusted
+input from the Internet (if not by human users, who might recognize a
+garbage header, but certainly there are automated systems that apply
+patches from a list) it may be possible for an attacker to trigger the
+problem.
+
+That said, I don't think there's an interesting security vulnerability
+here. All an attacker can do is make it impossible to parse their email
+and apply their patch, and there are lots of ways to generate bogus
+emails. So it's more of an annoyance than anything.
+
+But it's pretty easy to fix it. The recursion is not helping us preserve
+any particular state from each level. The only flag in our parsing is
+take_next_literally, and we can never recurse when it is set (since the
+start of a new comment implies it was not backslash-escaped). So it is
+really only useful for finding the end of the matched pair of
+parentheses. We can do that easily with a simple depth counter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ mailinfo.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/mailinfo.c b/mailinfo.c
+index 542d4458f6..4acf7cb601 100644
+--- a/mailinfo.c
++++ b/mailinfo.c
+@@ -57,6 +57,7 @@ static void parse_bogus_from(struct mailinfo *mi, const struct strbuf *line)
+ static const char *unquote_comment(struct strbuf *outbuf, const char *in)
+ {
+ 	int take_next_literally = 0;
++	int depth = 1;
+ 
+ 	strbuf_addch(outbuf, '(');
+ 
+@@ -70,11 +71,14 @@ static const char *unquote_comment(struct strbuf *outbuf, const char *in)
+ 				take_next_literally = 1;
+ 				continue;
+ 			case '(':
+-				in = unquote_comment(outbuf, in);
++				strbuf_addch(outbuf, '(');
++				depth++;
+ 				continue;
+ 			case ')':
+ 				strbuf_addch(outbuf, ')');
+-				return in;
++				if (!--depth)
++					return in;
++				continue;
+ 			}
+ 		}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,135 @@
+From b7b189cd5ae99f336c1185f8f8c27a118314ced1 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:42:03 -0700
+Subject: [PATCH 1240/2871] treewide: reduce includes of cache.h in other
+ headers
+
+We had a handful of headers including cache.h that didn't need to
+anymore.  Drop those includes and replace them with includes of
+smaller files, or forward declarations.  However, note that two .c
+files now need to directly include cache.h, though they should have
+been including it all along given they are directly using structs
+defined in it.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ archive.h        | 2 +-
+ chdir-notify.c   | 3 ++-
+ quote.c          | 3 ++-
+ refs/ref-cache.h | 2 +-
+ rerere.c         | 2 +-
+ resolve-undo.h   | 7 ++++++-
+ revision.c       | 2 +-
+ split-index.h    | 2 +-
+ 8 files changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/archive.h b/archive.h
+index f96839ef38..3a4bdfbd07 100644
+--- a/archive.h
++++ b/archive.h
+@@ -1,9 +1,9 @@
+ #ifndef ARCHIVE_H
+ #define ARCHIVE_H
+ 
+-#include "cache.h"
+ #include "object-name.h"
+ #include "pathspec.h"
++#include "string-list.h"
+ 
+ struct repository;
+ struct pretty_print_context;
+diff --git a/chdir-notify.c b/chdir-notify.c
+index 8e38cd6f3a..0d7bc04607 100644
+--- a/chdir-notify.c
++++ b/chdir-notify.c
+@@ -1,7 +1,8 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "chdir-notify.h"
+ #include "list.h"
++#include "path.h"
+ #include "strbuf.h"
+ #include "trace.h"
+ 
+diff --git a/quote.c b/quote.c
+index 7ccb5a06cd..43c739671e 100644
+--- a/quote.c
++++ b/quote.c
+@@ -1,5 +1,6 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
++#include "path.h"
+ #include "quote.h"
+ #include "strbuf.h"
+ #include "strvec.h"
+diff --git a/refs/ref-cache.h b/refs/ref-cache.h
+index 850d9d3744..cf4ad9070b 100644
+--- a/refs/ref-cache.h
++++ b/refs/ref-cache.h
+@@ -1,7 +1,7 @@
+ #ifndef REFS_REF_CACHE_H
+ #define REFS_REF_CACHE_H
+ 
+-#include "cache.h"
++#include "hash.h"
+ 
+ struct ref_dir;
+ struct ref_store;
+diff --git a/rerere.c b/rerere.c
+index 093c0f6f99..7abc94bf44 100644
+--- a/rerere.c
++++ b/rerere.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
+diff --git a/resolve-undo.h b/resolve-undo.h
+index 2b3f0f901e..d1ea972771 100644
+--- a/resolve-undo.h
++++ b/resolve-undo.h
+@@ -1,7 +1,12 @@
+ #ifndef RESOLVE_UNDO_H
+ #define RESOLVE_UNDO_H
+ 
+-#include "cache.h"
++struct cache_entry;
++struct index_state;
++struct pathspec;
++struct string_list;
++
++#include "hash.h"
+ 
+ struct resolve_undo_info {
+ 	unsigned int mode[3];
+diff --git a/revision.c b/revision.c
+index 3d86e07abb..43f88eaf56 100644
+--- a/revision.c
++++ b/revision.c
+@@ -1,4 +1,4 @@
+-#include "git-compat-util.h"
++#include "cache.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "environment.h"
+diff --git a/split-index.h b/split-index.h
+index 7a435ca2c9..1a153f47ba 100644
+--- a/split-index.h
++++ b/split-index.h
+@@ -1,7 +1,7 @@
+ #ifndef SPLIT_INDEX_H
+ #define SPLIT_INDEX_H
+ 
+-#include "cache.h"
++#include "hash.h"
+ 
+ struct index_state;
+ struct strbuf;
+-- 
+2.39.3 (Apple Git-145)
+

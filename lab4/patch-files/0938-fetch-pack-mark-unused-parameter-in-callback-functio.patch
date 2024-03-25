@@ -1,0 +1,32 @@
+From 65daa9ba1c86052d7a889a407b95c3ffa61be47b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:35 -0500
+Subject: [PATCH 0938/2871] fetch-pack: mark unused parameter in callback
+ function
+
+The for_each_cached_alternate() interface requires a callback that takes
+a negotiator parameter, but not all implementations need it. Mark the
+unused one as such to appease -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ fetch-pack.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fetch-pack.c b/fetch-pack.c
+index 04016d1e32..67a7786865 100644
+--- a/fetch-pack.c
++++ b/fetch-pack.c
+@@ -722,7 +722,7 @@ static void filter_refs(struct fetch_pack_args *args,
+ 	*refs = newlist;
+ }
+ 
+-static void mark_alternate_complete(struct fetch_negotiator *unused,
++static void mark_alternate_complete(struct fetch_negotiator *negotiator UNUSED,
+ 				    struct object *obj)
+ {
+ 	mark_complete(&obj->oid);
+-- 
+2.39.3 (Apple Git-145)
+

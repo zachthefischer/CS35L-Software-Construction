@@ -1,0 +1,82 @@
+From f9815878c16892aae7c5be11ac67200aef6e4ff6 Mon Sep 17 00:00:00 2001
+From: Shuqi Liang <cheskaqiqi@gmail.com>
+Date: Fri, 11 Aug 2023 10:22:11 -0400
+Subject: [PATCH 1934/2871] check-attr: integrate with sparse-index
+
+Set the requires-full-index to false for "check-attr".
+
+Add a test to ensure that the index is not expanded whether the files
+are outside or inside the sparse-checkout cone when the sparse index is
+enabled.
+
+The `p2000` tests demonstrate a ~63% execution time reduction for
+'git check-attr' using a sparse index.
+
+Test                                            before  after
+-----------------------------------------------------------------------
+2000.106: git check-attr -a f2/f4/a (full-v3)    0.05   0.05 +0.0%
+2000.107: git check-attr -a f2/f4/a (full-v4)    0.05   0.05 +0.0%
+2000.108: git check-attr -a f2/f4/a (sparse-v3)  0.04   0.02 -50.0%
+2000.109: git check-attr -a f2/f4/a (sparse-v4)  0.04   0.01 -75.0%
+
+Helped-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Shuqi Liang <cheskaqiqi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/check-attr.c                     |  3 +++
+ t/perf/p2000-sparse-operations.sh        |  1 +
+ t/t1092-sparse-checkout-compatibility.sh | 15 +++++++++++++++
+ 3 files changed, 19 insertions(+)
+
+diff --git a/builtin/check-attr.c b/builtin/check-attr.c
+index b22ff748c3..c1da1d184e 100644
+--- a/builtin/check-attr.c
++++ b/builtin/check-attr.c
+@@ -122,6 +122,9 @@ int cmd_check_attr(int argc, const char **argv, const char *prefix)
+ 	argc = parse_options(argc, argv, prefix, check_attr_options,
+ 			     check_attr_usage, PARSE_OPT_KEEP_DASHDASH);
+ 
++	prepare_repo_settings(the_repository);
++	the_repository->settings.command_requires_full_index = 0;
++
+ 	if (repo_read_index(the_repository) < 0) {
+ 		die("invalid cache");
+ 	}
+diff --git a/t/perf/p2000-sparse-operations.sh b/t/perf/p2000-sparse-operations.sh
+index 96ed3e1d69..39e92b0841 100755
+--- a/t/perf/p2000-sparse-operations.sh
++++ b/t/perf/p2000-sparse-operations.sh
+@@ -134,5 +134,6 @@ test_perf_on_all git diff-files -- $SPARSE_CONE/a
+ test_perf_on_all git diff-tree HEAD
+ test_perf_on_all git diff-tree HEAD -- $SPARSE_CONE/a
+ test_perf_on_all "git worktree add ../temp && git worktree remove ../temp"
++test_perf_on_all git check-attr -a -- $SPARSE_CONE/a
+ 
+ test_done
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index dc84b3e2e1..2a4f35e984 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -2316,4 +2316,19 @@ test_expect_failure 'diff --check with pathspec outside sparse definition' '
+ 	test_all_match test_must_fail git diff --check --cached -- folder1/a
+ '
+ 
++test_expect_success 'sparse-index is not expanded: check-attr' '
++	init_repos &&
++
++	echo "a -crlf myAttr" >>.gitattributes &&
++	mkdir ./sparse-index/folder1 &&
++	cp ./sparse-index/a ./sparse-index/folder1/a &&
++	cp .gitattributes ./sparse-index/deep &&
++	cp .gitattributes ./sparse-index/folder1 &&
++
++	git -C sparse-index add deep/.gitattributes &&
++	git -C sparse-index add --sparse folder1/.gitattributes &&
++	ensure_not_expanded check-attr -a --cached -- deep/a &&
++	ensure_not_expanded check-attr -a --cached -- folder1/a
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

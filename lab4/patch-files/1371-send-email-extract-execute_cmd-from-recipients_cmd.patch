@@ -1,0 +1,64 @@
+From 03056ce796e3a0cde71b8e4776d3453364cfda78 Mon Sep 17 00:00:00 2001
+From: Maxim Cournoyer <maxim.cournoyer@gmail.com>
+Date: Mon, 1 May 2023 10:38:46 -0400
+Subject: [PATCH 1371/2871] send-email: extract execute_cmd from recipients_cmd
+
+This refactor is to pave the way for the addition of the new
+'--header-cmd' option to the send-email command.
+
+Signed-off-by: Maxim Cournoyer <maxim.cournoyer@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl | 24 ++++++++++++++++++------
+ 1 file changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 66c9171109..04503e3c3c 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -2021,15 +2021,29 @@ sub process_file {
+ 	}
+ }
+ 
++# Execute a command and return its output lines as an array.
++sub execute_cmd {
++	my ($prefix, $cmd, $file) = @_;
++	my @lines = ();
++	open my $fh, "-|", "$cmd \Q$file\E"
++		or die sprintf(__("(%s) Could not execute '%s'"), $prefix, $cmd);
++	while (my $line = <$fh>) {
++		last if $line =~ /^$/;
++		push @lines, $line;
++	}
++	close $fh
++	    or die sprintf(__("(%s) failed to close pipe to '%s'"), $prefix, $cmd);
++	return @lines;
++}
++
+ # Execute a command (e.g. $to_cmd) to get a list of email addresses
+ # and return a results array
+ sub recipients_cmd {
+ 	my ($prefix, $what, $cmd, $file) = @_;
+-
++	my @lines = ();
+ 	my @addresses = ();
+-	open my $fh, "-|", "$cmd \Q$file\E"
+-	    or die sprintf(__("(%s) Could not execute '%s'"), $prefix, $cmd);
+-	while (my $address = <$fh>) {
++	@lines = execute_cmd($prefix, $cmd, $file);
++	for my $address (@lines) {
+ 		$address =~ s/^\s*//g;
+ 		$address =~ s/\s*$//g;
+ 		$address = sanitize_address($address);
+@@ -2038,8 +2052,6 @@ sub recipients_cmd {
+ 		printf(__("(%s) Adding %s: %s from: '%s'\n"),
+ 		       $prefix, $what, $address, $cmd) unless $quiet;
+ 		}
+-	close $fh
+-	    or die sprintf(__("(%s) failed to close pipe to '%s'"), $prefix, $cmd);
+ 	return @addresses;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

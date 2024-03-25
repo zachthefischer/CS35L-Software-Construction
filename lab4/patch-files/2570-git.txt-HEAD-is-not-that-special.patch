@@ -1,0 +1,46 @@
+From d9a4bb3385329c391096fce51fa0dedce838fc8b Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 15 Dec 2023 12:32:41 -0800
+Subject: [PATCH 2570/2871] git.txt: HEAD is not that special
+
+The introductory text in "git help git" that describes HEAD called
+it "a special ref".  It is special compared to the more regular refs
+like refs/heads/master and refs/tags/v1.0.0, but not that special,
+unlike truly special ones like FETCH_HEAD.
+
+Rewrite a few sentences to also introduce the distinction between a
+regular ref that contain the object name and a symbolic ref that
+contain the name of another ref.  Update the description of HEAD
+that point at the current branch to use the more correct term, a
+"symbolic ref".
+
+This was found as part of auditing the documentation and in-code
+comments for uses of "special ref" that refer merely a "pseudo ref".
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git.txt | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git.txt b/Documentation/git.txt
+index 2535a30194..e27e9f8bfb 100644
+--- a/Documentation/git.txt
++++ b/Documentation/git.txt
+@@ -1025,10 +1025,11 @@ When first created, objects are stored in individual files, but for
+ efficiency may later be compressed together into "pack files".
+ 
+ Named pointers called refs mark interesting points in history.  A ref
+-may contain the SHA-1 name of an object or the name of another ref.  Refs
+-with names beginning `ref/head/` contain the SHA-1 name of the most
++may contain the SHA-1 name of an object or the name of another ref (the
++latter is called a "symbolic ref").
++Refs with names beginning `refs/head/` contain the SHA-1 name of the most
+ recent commit (or "head") of a branch under development.  SHA-1 names of
+-tags of interest are stored under `ref/tags/`.  A special ref named
++tags of interest are stored under `refs/tags/`.  A symbolic ref named
+ `HEAD` contains the name of the currently checked-out branch.
+ 
+ The index file is initialized with a list of all paths and, for each
+-- 
+2.39.3 (Apple Git-145)
+

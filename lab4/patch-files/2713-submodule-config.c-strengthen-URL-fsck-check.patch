@@ -1,0 +1,93 @@
+From 8430b438f628f2f0df08622a550e750158167f28 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Thu, 18 Jan 2024 01:55:18 +0000
+Subject: [PATCH 2713/2871] submodule-config.c: strengthen URL fsck check
+
+Update the validation of "curl URL" submodule URLs (i.e. those that specify
+an "http[s]" or "ftp[s]" protocol) in 'check_submodule_url()' to catch more
+invalid URLs. The existing validation using 'credential_from_url_gently()'
+parses certain URLs incorrectly, leading to invalid submodule URLs passing
+'git fsck' checks. Conversely, 'url_normalize()' - used to validate remote
+URLs in 'remote_get()' - correctly identifies the invalid URLs missed by
+'credential_from_url_gently()'.
+
+To catch more invalid cases, replace 'credential_from_url_gently()' with
+'url_normalize()' followed by a 'url_decode()' and a check for newlines
+(mirroring 'check_url_component()' in the 'credential_from_url_gently()'
+validation).
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ submodule-config.c          | 16 +++++++++++-----
+ t/t7450-bad-git-dotfiles.sh | 11 +----------
+ 2 files changed, 12 insertions(+), 15 deletions(-)
+
+diff --git a/submodule-config.c b/submodule-config.c
+index cbec13b3a2..e9b94cb28d 100644
+--- a/submodule-config.c
++++ b/submodule-config.c
+@@ -15,7 +15,7 @@
+ #include "thread-utils.h"
+ #include "tree-walk.h"
+ #include "url.h"
+-#include "credential.h"
++#include "urlmatch.h"
+ 
+ /*
+  * submodule cache lookup structure
+@@ -350,12 +350,18 @@ int check_submodule_url(const char *url)
+ 	}
+ 
+ 	else if (url_to_curl_url(url, &curl_url)) {
+-		struct credential c = CREDENTIAL_INIT;
+ 		int ret = 0;
+-		if (credential_from_url_gently(&c, curl_url, 1) ||
+-		    !*c.host)
++		char *normalized = url_normalize(curl_url, NULL);
++		if (normalized) {
++			char *decoded = url_decode(normalized);
++			if (strchr(decoded, '\n'))
++				ret = -1;
++			free(normalized);
++			free(decoded);
++		} else {
+ 			ret = -1;
+-		credential_clear(&c);
++		}
++
+ 		return ret;
+ 	}
+ 
+diff --git a/t/t7450-bad-git-dotfiles.sh b/t/t7450-bad-git-dotfiles.sh
+index c73b1c92ec..46d4fb0354 100755
+--- a/t/t7450-bad-git-dotfiles.sh
++++ b/t/t7450-bad-git-dotfiles.sh
+@@ -63,6 +63,7 @@ test_expect_success 'check urls' '
+ 	./%0ahost=example.com/foo.git
+ 	https://one.example.com/evil?%0ahost=two.example.com
+ 	https:///example.com/foo.git
++	http://example.com:test/foo.git
+ 	https::example.com/foo.git
+ 	http:::example.com/foo.git
+ 	EOF
+@@ -70,16 +71,6 @@ test_expect_success 'check urls' '
+ 	test_cmp expect actual
+ '
+ 
+-# NEEDSWORK: the URL checked here is not valid (and will not work as a remote if
+-# a user attempts to clone it), but the fsck check passes.
+-test_expect_failure 'url check misses invalid cases' '
+-	test-tool submodule check-url >actual <<-\EOF &&
+-	http://example.com:test/foo.git
+-	EOF
+-
+-	test_must_be_empty actual
+-'
+-
+ test_expect_success 'create innocent subrepo' '
+ 	git init innocent &&
+ 	git -C innocent commit --allow-empty -m foo
+-- 
+2.39.3 (Apple Git-145)
+

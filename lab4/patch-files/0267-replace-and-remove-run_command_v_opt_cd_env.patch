@@ -1,0 +1,87 @@
+From eb5b6b57d0e9fba0e50871ece4ea79e76cd61a36 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 30 Oct 2022 12:51:55 +0100
+Subject: [PATCH 0267/2871] replace and remove run_command_v_opt_cd_env()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+run_command_v_opt_cd_env() is only used in an example in a comment.  Use
+the struct child_process member "env" and run_command() directly instead
+and then remove the unused convenience function.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ run-command.c | 7 +------
+ run-command.h | 3 +--
+ tmp-objdir.h  | 6 ++++--
+ 3 files changed, 6 insertions(+), 10 deletions(-)
+
+diff --git a/run-command.c b/run-command.c
+index 5ec3a46dcc..1c9ed510f8 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -1006,7 +1006,7 @@ int run_command(struct child_process *cmd)
+ 
+ int run_command_v_opt(const char **argv, int opt)
+ {
+-	return run_command_v_opt_cd_env(argv, opt, NULL, NULL);
++	return run_command_v_opt_cd_env_tr2(argv, opt, NULL, NULL, NULL);
+ }
+ 
+ int run_command_v_opt_tr2(const char **argv, int opt, const char *tr2_class)
+@@ -1014,11 +1014,6 @@ int run_command_v_opt_tr2(const char **argv, int opt, const char *tr2_class)
+ 	return run_command_v_opt_cd_env_tr2(argv, opt, NULL, NULL, tr2_class);
+ }
+ 
+-int run_command_v_opt_cd_env(const char **argv, int opt, const char *dir, const char *const *env)
+-{
+-	return run_command_v_opt_cd_env_tr2(argv, opt, dir, env, NULL);
+-}
+-
+ int run_command_v_opt_cd_env_tr2(const char **argv, int opt, const char *dir,
+ 				 const char *const *env, const char *tr2_class)
+ {
+diff --git a/run-command.h b/run-command.h
+index 61073fc589..39e5eae8ba 100644
+--- a/run-command.h
++++ b/run-command.h
+@@ -151,7 +151,7 @@ struct child_process {
+ 
+ /**
+  * The functions: start_command, finish_command, run_command,
+- * run_command_v_opt, run_command_v_opt_cd_env do the following:
++ * run_command_v_opt do the following:
+  *
+  * - If a system call failed, errno is set and -1 is returned. A diagnostic
+  *   is printed.
+@@ -249,7 +249,6 @@ int run_command_v_opt_tr2(const char **argv, int opt, const char *tr2_class);
+  * env (the environment) is to be formatted like environ: "VAR=VALUE".
+  * To unset an environment variable use just "VAR".
+  */
+-int run_command_v_opt_cd_env(const char **argv, int opt, const char *dir, const char *const *env);
+ int run_command_v_opt_cd_env_tr2(const char **argv, int opt, const char *dir,
+ 				 const char *const *env, const char *tr2_class);
+ 
+diff --git a/tmp-objdir.h b/tmp-objdir.h
+index 76efc7edee..237d96b660 100644
+--- a/tmp-objdir.h
++++ b/tmp-objdir.h
+@@ -10,9 +10,11 @@
+  *
+  * Example:
+  *
++ *	struct child_process child = CHILD_PROCESS_INIT;
+  *	struct tmp_objdir *t = tmp_objdir_create("incoming");
+- *	if (!run_command_v_opt_cd_env(cmd, 0, NULL, tmp_objdir_env(t)) &&
+- *	    !tmp_objdir_migrate(t))
++ *	strvec_push(&child.args, cmd);
++ *	strvec_pushv(&child.env, tmp_objdir_env(t));
++ *	if (!run_command(&child)) && !tmp_objdir_migrate(t))
+  *		printf("success!\n");
+  *	else
+  *		die("failed...tmp_objdir will clean up for us");
+-- 
+2.39.3 (Apple Git-145)
+

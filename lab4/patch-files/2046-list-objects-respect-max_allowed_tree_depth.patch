@@ -1,0 +1,108 @@
+From 670a1dadc7d98b774cc0f870a4c75f57d1cfa9d4 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 02:22:03 -0400
+Subject: [PATCH 2046/2871] list-objects: respect max_allowed_tree_depth
+
+The tree traversal in list-objects.c, which is used by "rev-list
+--objects", etc, uses recursion and may run out of stack space. Let's
+teach it about the new core.maxTreeDepth config option.
+
+We unfortunately can't return an error here, as this code doesn't
+produce an error return at all. We'll die() instead, which matches the
+behavior when we see an otherwise broken tree.
+
+Note that this will also generally reject such deep trees from entering
+the repository from a fetch or push, due to the use of rev-list in the
+connectivity check. But it's not foolproof! We stop traversing when we
+see an UNINTERESTING object, and the connectivity check marks existing
+ref tips as UNINTERESTING. So imagine commit X has a tree
+with maximum depth N. If you then create a new commit Y with a tree
+entry "Y:subdir" that points to "X^{tree}", then the depth of Y will be
+N+1. But a connectivity check running "git rev-list --objects Y --not X"
+won't realize that; it will stop traversing at X^{tree}, since that was
+already reachable.
+
+So this will stop naive pushes of too-deep trees, but not carefully
+crafted malicious ones. Doing it robustly and efficiently would require
+caching the maximum depth of each tree (i.e., the longest path to any
+leaf entry). That's much more complex and not strictly needed. If each
+recursive algorithm limits itself already, then that's sufficient.
+Blocking the objects from entering the repo would be a nice
+belt-and-suspenders addition, but it's not worth the extra cost.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ list-objects.c        | 8 ++++++++
+ t/t6700-tree-depth.sh | 9 +++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/list-objects.c b/list-objects.c
+index e60a6cd5b4..c25c72b32c 100644
+--- a/list-objects.c
++++ b/list-objects.c
+@@ -14,6 +14,7 @@
+ #include "packfile.h"
+ #include "object-store-ll.h"
+ #include "trace.h"
++#include "environment.h"
+ 
+ struct traversal_context {
+ 	struct rev_info *revs;
+@@ -21,6 +22,7 @@ struct traversal_context {
+ 	show_commit_fn show_commit;
+ 	void *show_data;
+ 	struct filter *filter;
++	int depth;
+ };
+ 
+ static void show_commit(struct traversal_context *ctx,
+@@ -118,7 +120,9 @@ static void process_tree_contents(struct traversal_context *ctx,
+ 				    entry.path, oid_to_hex(&tree->object.oid));
+ 			}
+ 			t->object.flags |= NOT_USER_GIVEN;
++			ctx->depth++;
+ 			process_tree(ctx, t, base, entry.path);
++			ctx->depth--;
+ 		}
+ 		else if (S_ISGITLINK(entry.mode))
+ 			; /* ignore gitlink */
+@@ -156,6 +160,9 @@ static void process_tree(struct traversal_context *ctx,
+ 	    !revs->include_check_obj(&tree->object, revs->include_check_data))
+ 		return;
+ 
++	if (ctx->depth > max_allowed_tree_depth)
++		die("exceeded maximum allowed tree depth");
++
+ 	failed_parse = parse_tree_gently(tree, 1);
+ 	if (failed_parse) {
+ 		if (revs->ignore_missing_links)
+@@ -349,6 +356,7 @@ static void traverse_non_commits(struct traversal_context *ctx,
+ 		if (!path)
+ 			path = "";
+ 		if (obj->type == OBJ_TREE) {
++			ctx->depth = 0;
+ 			process_tree(ctx, (struct tree *)obj, base, path);
+ 			continue;
+ 		}
+diff --git a/t/t6700-tree-depth.sh b/t/t6700-tree-depth.sh
+index 93ec41df03..f5d284b16e 100755
+--- a/t/t6700-tree-depth.sh
++++ b/t/t6700-tree-depth.sh
+@@ -72,4 +72,13 @@ test_expect_success 'default limit for ls-tree fails gracefully' '
+ 	test_must_fail git ls-tree -r big >/dev/null
+ '
+ 
++test_expect_success 'limit recursion of rev-list --objects' '
++	git $small_ok rev-list --objects small >/dev/null &&
++	test_must_fail git $small_no rev-list --objects small >/dev/null
++'
++
++test_expect_success 'default limit for rev-list fails gracefully' '
++	test_must_fail git rev-list --objects big >/dev/null
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

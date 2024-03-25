@@ -1,0 +1,129 @@
+From 5ff36c9b6bff6e0607ad50d212762ea019c85380 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 17 Nov 2022 06:47:00 +0100
+Subject: [PATCH 0398/2871] rev-parse: add `--exclude-hidden=` option
+
+Add a new `--exclude-hidden=` option that is similar to the one we just
+added to git-rev-list(1). Given a section name `uploadpack` or `receive`
+as argument, it causes us to exclude all references that would be hidden
+by the respective `$section.hideRefs` configuration.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/git-rev-parse.txt |  7 ++++++
+ builtin/rev-parse.c             | 10 +++++++++
+ t/t6018-rev-list-glob.sh        | 40 +++++++++++++++++++++++++++++++++
+ 3 files changed, 57 insertions(+)
+
+diff --git a/Documentation/git-rev-parse.txt b/Documentation/git-rev-parse.txt
+index 6b8ca085aa..bcd8069287 100644
+--- a/Documentation/git-rev-parse.txt
++++ b/Documentation/git-rev-parse.txt
+@@ -197,6 +197,13 @@ respectively, and they must begin with `refs/` when applied to `--glob`
+ or `--all`. If a trailing '/{asterisk}' is intended, it must be given
+ explicitly.
+ 
++--exclude-hidden=[receive|uploadpack]::
++	Do not include refs that would be hidden by `git-receive-pack` or
++	`git-upload-pack` by consulting the appropriate `receive.hideRefs` or
++	`uploadpack.hideRefs` configuration along with `transfer.hideRefs` (see
++	linkgit:git-config[1]). This option affects the next pseudo-ref option
++	`--all` or `--glob` and is cleared after processing them.
++
+ --disambiguate=<prefix>::
+ 	Show every object whose name begins with the given prefix.
+ 	The <prefix> must be at least 4 hexadecimal digits long to
+diff --git a/builtin/rev-parse.c b/builtin/rev-parse.c
+index 7fa5b6991b..b5666a03bd 100644
+--- a/builtin/rev-parse.c
++++ b/builtin/rev-parse.c
+@@ -876,10 +876,14 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
+ 				continue;
+ 			}
+ 			if (opt_with_value(arg, "--branches", &arg)) {
++				if (ref_excludes.hidden_refs_configured)
++					return error(_("--exclude-hidden cannot be used together with --branches"));
+ 				handle_ref_opt(arg, "refs/heads/");
+ 				continue;
+ 			}
+ 			if (opt_with_value(arg, "--tags", &arg)) {
++				if (ref_excludes.hidden_refs_configured)
++					return error(_("--exclude-hidden cannot be used together with --tags"));
+ 				handle_ref_opt(arg, "refs/tags/");
+ 				continue;
+ 			}
+@@ -888,6 +892,8 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
+ 				continue;
+ 			}
+ 			if (opt_with_value(arg, "--remotes", &arg)) {
++				if (ref_excludes.hidden_refs_configured)
++					return error(_("--exclude-hidden cannot be used together with --remotes"));
+ 				handle_ref_opt(arg, "refs/remotes/");
+ 				continue;
+ 			}
+@@ -895,6 +901,10 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
+ 				add_ref_exclusion(&ref_excludes, arg);
+ 				continue;
+ 			}
++			if (skip_prefix(arg, "--exclude-hidden=", &arg)) {
++				exclude_hidden_refs(&ref_excludes, arg);
++				continue;
++			}
+ 			if (!strcmp(arg, "--show-toplevel")) {
+ 				const char *work_tree = get_git_work_tree();
+ 				if (work_tree)
+diff --git a/t/t6018-rev-list-glob.sh b/t/t6018-rev-list-glob.sh
+index e1abc5c2b3..aabf590dda 100755
+--- a/t/t6018-rev-list-glob.sh
++++ b/t/t6018-rev-list-glob.sh
+@@ -187,6 +187,46 @@ test_expect_success 'rev-parse --exclude=ref with --remotes=glob' '
+ 	compare rev-parse "--exclude=upstream/x --remotes=upstream/*" "upstream/one upstream/two"
+ '
+ 
++for section in receive uploadpack
++do
++	test_expect_success "rev-parse --exclude-hidden=$section with --all" '
++		compare "-c transfer.hideRefs=refs/remotes/ rev-parse" "--branches --tags" "--exclude-hidden=$section --all"
++	'
++
++	test_expect_success "rev-parse --exclude-hidden=$section with --all" '
++		compare "-c transfer.hideRefs=refs/heads/subspace/ rev-parse" "--exclude=refs/heads/subspace/* --all" "--exclude-hidden=$section --all"
++	'
++
++	test_expect_success "rev-parse --exclude-hidden=$section with --glob" '
++		compare "-c transfer.hideRefs=refs/heads/subspace/ rev-parse" "--exclude=refs/heads/subspace/* --glob=refs/heads/*" "--exclude-hidden=$section --glob=refs/heads/*"
++	'
++
++	test_expect_success "rev-parse --exclude-hidden=$section can be passed once per pseudo-ref" '
++		compare "-c transfer.hideRefs=refs/remotes/ rev-parse" "--branches --tags --branches --tags" "--exclude-hidden=$section --all --exclude-hidden=$section --all"
++	'
++
++	test_expect_success "rev-parse --exclude-hidden=$section can only be passed once per pseudo-ref" '
++		echo "fatal: --exclude-hidden= passed more than once" >expected &&
++		test_must_fail git rev-parse --exclude-hidden=$section --exclude-hidden=$section 2>err &&
++		test_cmp expected err
++	'
++
++	for pseudoopt in branches tags remotes
++	do
++		test_expect_success "rev-parse --exclude-hidden=$section fails with --$pseudoopt" '
++			echo "error: --exclude-hidden cannot be used together with --$pseudoopt" >expected &&
++			test_must_fail git rev-parse --exclude-hidden=$section --$pseudoopt 2>err &&
++			test_cmp expected err
++		'
++
++		test_expect_success "rev-parse --exclude-hidden=$section fails with --$pseudoopt=pattern" '
++			echo "error: --exclude-hidden cannot be used together with --$pseudoopt" >expected &&
++			test_must_fail git rev-parse --exclude-hidden=$section --$pseudoopt=pattern 2>err &&
++			test_cmp expected err
++		'
++	done
++done
++
+ test_expect_success 'rev-list --exclude=glob with --branches=glob' '
+ 	compare rev-list "--exclude=subspace-* --branches=sub*" "subspace/one subspace/two"
+ '
+-- 
+2.39.3 (Apple Git-145)
+

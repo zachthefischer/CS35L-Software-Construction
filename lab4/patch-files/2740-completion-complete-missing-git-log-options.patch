@@ -1,0 +1,30 @@
+From 544ea7f37586ce619c5e14622ba73494661e9770 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Sun, 21 Jan 2024 04:07:51 +0000
+Subject: [PATCH 2740/2871] completion: complete missing 'git log' options
+
+Some options specific to 'git log' are missing from the Bash completion
+script. Add them to _git_log.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index a7ae2cbe55..2f1412d85e 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2180,6 +2180,8 @@ _git_log ()
+ 			--no-walk --no-walk= --do-walk
+ 			--parents --children
+ 			--expand-tabs --expand-tabs= --no-expand-tabs
++			--clear-decorations --decorate-refs=
++			--decorate-refs-exclude=
+ 			$merge
+ 			$__git_diff_common_options
+ 			"
+-- 
+2.39.3 (Apple Git-145)
+

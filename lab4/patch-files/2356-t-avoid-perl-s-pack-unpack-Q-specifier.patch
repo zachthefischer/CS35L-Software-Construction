@@ -1,0 +1,90 @@
+From 4815c3c4b26a91301c51360297ebfdef3b96a4ce Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 3 Nov 2023 12:20:19 -0400
+Subject: [PATCH 2356/2871] t: avoid perl's pack/unpack "Q" specifier
+
+The perl script introduced by 86b008ee61 (t: add library for munging
+chunk-format files, 2023-10-09) uses pack("Q") and unpack("Q") to read
+and write 64-bit values ("quadwords" in perl parlance) from the on-disk
+chunk files. However, some builds of perl may not support 64-bit
+integers at all, and throw an exception here. While some 32-bit
+platforms may still support 64-bit integers in perl (such as our linux32
+CI environment), others reportedly don't (the NonStop 32-bit builds).
+
+We can work around this by treating the 64-bit values as two 32-bit
+values. We can't ever combine them into a single 64-bit value, but in
+practice this is OK. These are representing file offsets, and our files
+are much smaller than 4GB. So the upper half of the 64-bit value will
+always be 0.
+
+We can just introduce a few helper functions which perform the
+translation and double-check our assumptions.
+
+Reported-by: Randall S. Becker <randall.becker@nexbridge.ca>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-chunk/corrupt-chunk-file.pl | 30 +++++++++++++++++++++++++++---
+ 1 file changed, 27 insertions(+), 3 deletions(-)
+
+diff --git a/t/lib-chunk/corrupt-chunk-file.pl b/t/lib-chunk/corrupt-chunk-file.pl
+index cd6d386fef..0e11aadda8 100644
+--- a/t/lib-chunk/corrupt-chunk-file.pl
++++ b/t/lib-chunk/corrupt-chunk-file.pl
+@@ -21,6 +21,30 @@ sub copy {
+ 	return $buf;
+ }
+ 
++# Some platforms' perl builds don't support 64-bit integers, and hence do not
++# allow packing/unpacking quadwords with "Q". The chunk format uses 64-bit file
++# offsets to support files of any size, but in practice our test suite will
++# only use small files. So we can fake it by asking for two 32-bit values and
++# discarding the first (most significant) one, which is equivalent as long as
++# it's just zero.
++sub unpack_quad {
++	my $bytes = shift;
++	my ($n1, $n2) = unpack("NN", $bytes);
++	die "quad value exceeds 32 bits" if $n1;
++	return $n2;
++}
++sub pack_quad {
++	my $n = shift;
++	my $ret = pack("NN", 0, $n);
++	# double check that our original $n did not exceed the 32-bit limit.
++	# This is presumably impossible on a 32-bit system (which would have
++	# truncated much earlier), but would still alert us on a 64-bit build
++	# of a new test that would fail on a 32-bit build (though we'd
++	# presumably see the die() from unpack_quad() in such a case).
++	die "quad round-trip failed" if unpack_quad($ret) != $n;
++	return $ret;
++}
++
+ # read until we find table-of-contents entry for chunk;
+ # note that we cheat a bit by assuming 4-byte alignment and
+ # that no ToC entry will accidentally look like a header.
+@@ -28,7 +52,7 @@ sub copy {
+ # If we don't find the entry, copy() will hit EOF and exit
+ # (which should cause the caller to fail the test).
+ while (copy(4) ne $chunk) { }
+-my $offset = unpack("Q>", copy(8));
++my $offset = unpack_quad(copy(8));
+ 
+ # In clear mode, our length will change. So figure out
+ # the length by comparing to the offset of the next chunk, and
+@@ -38,11 +62,11 @@ sub copy {
+ 	my $id;
+ 	do {
+ 		$id = copy(4);
+-		my $next = unpack("Q>", get(8));
++		my $next = unpack_quad(get(8));
+ 		if (!defined $len) {
+ 			$len = $next - $offset;
+ 		}
+-		print pack("Q>", $next - $len + length($bytes));
++		print pack_quad($next - $len + length($bytes));
+ 	} while (unpack("N", $id));
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

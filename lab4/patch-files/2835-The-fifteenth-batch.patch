@@ -1,0 +1,52 @@
+From 5216f8f5c4089ec29ce49afa147434c23e0f0163 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 8 Feb 2024 13:20:41 -0800
+Subject: [PATCH 2835/2871] The fifteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.44.0.txt | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.44.0.txt b/Documentation/RelNotes/2.44.0.txt
+index 8615306eed..148d18d091 100644
+--- a/Documentation/RelNotes/2.44.0.txt
++++ b/Documentation/RelNotes/2.44.0.txt
+@@ -84,6 +84,13 @@ UI, Workflows & Features
+  * The write codepath for the reftable data learned to honor
+    core.fsync configuration.
+ 
++ * The "--fsck-objects" option of "git index-pack" now can take the
++   optional parameter to tweak severity of different fsck errors.
++
++ * The wincred credential backend has been taught to support oauth
++   refresh token the same way as credential-cache and
++   credential-libsecret backends.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -141,6 +148,9 @@ Performance, Internal Implementation, Development Support etc.
+    the path to the same library directory for link time and runtime.
+    A Makefile template is used to reduce such repetition.
+ 
++ * The priority queue test has been migrated to the unit testing
++   framework.
++
+ 
+ Fixes since v2.43
+ -----------------
+@@ -284,6 +294,10 @@ Fixes since v2.43
+    FreeBSD that is no longer available, which has been corrected.
+    (merge 81fffb66d3 cb/use-freebsd-13-2-at-cirrus-ci later to maint).
+ 
++ * A caller called index_file_exists() that takes a string expressed
++   as <ptr, length> with a wrong length, which has been corrected.
++   (merge 156e28b36d jh/sparse-index-expand-to-path-fix later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 50f1abcff6 js/packfile-h-typofix later to maint).
+    (merge cbf498eb53 jb/reflog-expire-delete-dry-run-options later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

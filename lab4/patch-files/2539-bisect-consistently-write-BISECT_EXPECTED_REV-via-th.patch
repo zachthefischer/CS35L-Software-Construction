@@ -1,0 +1,156 @@
+From 0a06892ddde5bc3a82a4fe2963e3ea294252ffdd Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 14 Dec 2023 14:37:13 +0100
+Subject: [PATCH 2539/2871] bisect: consistently write BISECT_EXPECTED_REV via
+ the refdb
+
+We're inconsistently writing BISECT_EXPECTED_REV both via the filesystem
+and via the refdb, which violates the newly established rules for how
+special refs must be treated. This works alright in practice with the
+reffiles reference backend, but will cause bugs once we gain additional
+backends.
+
+Fix this issue and consistently write BISECT_EXPECTED_REV via the refdb
+so that it is no longer a special ref.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bisect.c                    | 25 ++++---------------------
+ builtin/bisect.c            |  8 ++------
+ refs.c                      |  3 ++-
+ t/t6030-bisect-porcelain.sh |  2 +-
+ 4 files changed, 9 insertions(+), 29 deletions(-)
+
+diff --git a/bisect.c b/bisect.c
+index 1be8e0a271..985b96ed13 100644
+--- a/bisect.c
++++ b/bisect.c
+@@ -471,7 +471,6 @@ static int read_bisect_refs(void)
+ }
+ 
+ static GIT_PATH_FUNC(git_path_bisect_names, "BISECT_NAMES")
+-static GIT_PATH_FUNC(git_path_bisect_expected_rev, "BISECT_EXPECTED_REV")
+ static GIT_PATH_FUNC(git_path_bisect_ancestors_ok, "BISECT_ANCESTORS_OK")
+ static GIT_PATH_FUNC(git_path_bisect_run, "BISECT_RUN")
+ static GIT_PATH_FUNC(git_path_bisect_start, "BISECT_START")
+@@ -707,26 +706,10 @@ static enum bisect_error error_if_skipped_commits(struct commit_list *tried,
+ 
+ static int is_expected_rev(const struct object_id *oid)
+ {
+-	const char *filename = git_path_bisect_expected_rev();
+-	struct stat st;
+-	struct strbuf str = STRBUF_INIT;
+-	FILE *fp;
+-	int res = 0;
+-
+-	if (stat(filename, &st) || !S_ISREG(st.st_mode))
++	struct object_id expected_oid;
++	if (read_ref("BISECT_EXPECTED_REV", &expected_oid))
+ 		return 0;
+-
+-	fp = fopen_or_warn(filename, "r");
+-	if (!fp)
+-		return 0;
+-
+-	if (strbuf_getline_lf(&str, fp) != EOF)
+-		res = !strcmp(str.buf, oid_to_hex(oid));
+-
+-	strbuf_release(&str);
+-	fclose(fp);
+-
+-	return res;
++	return oideq(oid, &expected_oid);
+ }
+ 
+ enum bisect_error bisect_checkout(const struct object_id *bisect_rev,
+@@ -1185,10 +1168,10 @@ int bisect_clean_state(void)
+ 	struct string_list refs_for_removal = STRING_LIST_INIT_NODUP;
+ 	for_each_ref_in("refs/bisect", mark_for_removal, (void *) &refs_for_removal);
+ 	string_list_append(&refs_for_removal, xstrdup("BISECT_HEAD"));
++	string_list_append(&refs_for_removal, xstrdup("BISECT_EXPECTED_REV"));
+ 	result = delete_refs("bisect: remove", &refs_for_removal, REF_NO_DEREF);
+ 	refs_for_removal.strdup_strings = 1;
+ 	string_list_clear(&refs_for_removal, 0);
+-	unlink_or_warn(git_path_bisect_expected_rev());
+ 	unlink_or_warn(git_path_bisect_ancestors_ok());
+ 	unlink_or_warn(git_path_bisect_log());
+ 	unlink_or_warn(git_path_bisect_names());
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index 35938b05fd..4e2c43daf5 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -17,7 +17,6 @@
+ #include "revision.h"
+ 
+ static GIT_PATH_FUNC(git_path_bisect_terms, "BISECT_TERMS")
+-static GIT_PATH_FUNC(git_path_bisect_expected_rev, "BISECT_EXPECTED_REV")
+ static GIT_PATH_FUNC(git_path_bisect_ancestors_ok, "BISECT_ANCESTORS_OK")
+ static GIT_PATH_FUNC(git_path_bisect_start, "BISECT_START")
+ static GIT_PATH_FUNC(git_path_bisect_log, "BISECT_LOG")
+@@ -921,7 +920,6 @@ static enum bisect_error bisect_state(struct bisect_terms *terms, int argc,
+ 	const char *state;
+ 	int i, verify_expected = 1;
+ 	struct object_id oid, expected;
+-	struct strbuf buf = STRBUF_INIT;
+ 	struct oid_array revs = OID_ARRAY_INIT;
+ 
+ 	if (!argc)
+@@ -976,10 +974,8 @@ static enum bisect_error bisect_state(struct bisect_terms *terms, int argc,
+ 		oid_array_append(&revs, &commit->object.oid);
+ 	}
+ 
+-	if (strbuf_read_file(&buf, git_path_bisect_expected_rev(), 0) < the_hash_algo->hexsz ||
+-	    get_oid_hex(buf.buf, &expected) < 0)
++	if (read_ref("BISECT_EXPECTED_REV", &expected))
+ 		verify_expected = 0; /* Ignore invalid file contents */
+-	strbuf_release(&buf);
+ 
+ 	for (i = 0; i < revs.nr; i++) {
+ 		if (bisect_write(state, oid_to_hex(&revs.oid[i]), terms, 0)) {
+@@ -988,7 +984,7 @@ static enum bisect_error bisect_state(struct bisect_terms *terms, int argc,
+ 		}
+ 		if (verify_expected && !oideq(&revs.oid[i], &expected)) {
+ 			unlink_or_warn(git_path_bisect_ancestors_ok());
+-			unlink_or_warn(git_path_bisect_expected_rev());
++			delete_ref(NULL, "BISECT_EXPECTED_REV", NULL, REF_NO_DEREF);
+ 			verify_expected = 0;
+ 		}
+ 	}
+diff --git a/refs.c b/refs.c
+index 8fe34d51e4..c76ce86bef 100644
+--- a/refs.c
++++ b/refs.c
+@@ -1840,6 +1840,8 @@ static int is_special_ref(const char *refname)
+ 	 * There are some exceptions that you might expect to see on this list
+ 	 * but which are handled exclusively via the reference backend:
+ 	 *
++	 * - BISECT_EXPECTED_REV
++	 *
+ 	 * - CHERRY_PICK_HEAD
+ 	 *
+ 	 * - HEAD
+@@ -1857,7 +1859,6 @@ static int is_special_ref(const char *refname)
+ 	 */
+ 	static const char * const special_refs[] = {
+ 		"AUTO_MERGE",
+-		"BISECT_EXPECTED_REV",
+ 		"FETCH_HEAD",
+ 		"MERGE_AUTOSTASH",
+ 		"MERGE_HEAD",
+diff --git a/t/t6030-bisect-porcelain.sh b/t/t6030-bisect-porcelain.sh
+index 2a5b7d8379..792c1504bc 100755
+--- a/t/t6030-bisect-porcelain.sh
++++ b/t/t6030-bisect-porcelain.sh
+@@ -1176,7 +1176,7 @@ test_expect_success 'git bisect reset cleans bisection state properly' '
+ 	git bisect bad $HASH4 &&
+ 	git bisect reset &&
+ 	test -z "$(git for-each-ref "refs/bisect/*")" &&
+-	test_path_is_missing ".git/BISECT_EXPECTED_REV" &&
++	test_ref_missing BISECT_EXPECTED_REV &&
+ 	test_path_is_missing ".git/BISECT_ANCESTORS_OK" &&
+ 	test_path_is_missing ".git/BISECT_LOG" &&
+ 	test_path_is_missing ".git/BISECT_RUN" &&
+-- 
+2.39.3 (Apple Git-145)
+

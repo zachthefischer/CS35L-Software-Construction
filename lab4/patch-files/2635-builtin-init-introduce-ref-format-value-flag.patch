@@ -1,0 +1,135 @@
+From 48fa45f5fb80de821a380a7ff81ab2c568d69e35 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 29 Dec 2023 08:27:04 +0100
+Subject: [PATCH 2635/2871] builtin/init: introduce `--ref-format=` value flag
+
+Introduce a new `--ref-format` value flag for git-init(1) that allows
+the user to specify the ref format that is to be used for a newly
+initialized repository.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-init.txt |  7 +++++++
+ builtin/init-db.c          | 13 ++++++++++++-
+ t/t0001-init.sh            | 26 ++++++++++++++++++++++++++
+ 3 files changed, 45 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/git-init.txt b/Documentation/git-init.txt
+index 6f0d2973bf..e8dc645bb5 100644
+--- a/Documentation/git-init.txt
++++ b/Documentation/git-init.txt
+@@ -11,6 +11,7 @@ SYNOPSIS
+ [verse]
+ 'git init' [-q | --quiet] [--bare] [--template=<template-directory>]
+ 	  [--separate-git-dir <git-dir>] [--object-format=<format>]
++	  [--ref-format=<format>]
+ 	  [-b <branch-name> | --initial-branch=<branch-name>]
+ 	  [--shared[=<permissions>]] [<directory>]
+ 
+@@ -57,6 +58,12 @@ values are 'sha1' and (if enabled) 'sha256'.  'sha1' is the default.
+ +
+ include::object-format-disclaimer.txt[]
+ 
++--ref-format=<format>::
++
++Specify the given ref storage format for the repository. The valid values are:
+++
++include::ref-storage-format.txt[]
++
+ --template=<template-directory>::
+ 
+ Specify the directory from which templates will be used.  (See the "TEMPLATE
+diff --git a/builtin/init-db.c b/builtin/init-db.c
+index b6e80feab6..a4f81e2af5 100644
+--- a/builtin/init-db.c
++++ b/builtin/init-db.c
+@@ -58,6 +58,7 @@ static int shared_callback(const struct option *opt, const char *arg, int unset)
+ static const char *const init_db_usage[] = {
+ 	N_("git init [-q | --quiet] [--bare] [--template=<template-directory>]\n"
+ 	   "         [--separate-git-dir <git-dir>] [--object-format=<format>]\n"
++	   "         [--ref-format=<format>]\n"
+ 	   "         [-b <branch-name> | --initial-branch=<branch-name>]\n"
+ 	   "         [--shared[=<permissions>]] [<directory>]"),
+ 	NULL
+@@ -77,8 +78,10 @@ int cmd_init_db(int argc, const char **argv, const char *prefix)
+ 	const char *template_dir = NULL;
+ 	unsigned int flags = 0;
+ 	const char *object_format = NULL;
++	const char *ref_format = NULL;
+ 	const char *initial_branch = NULL;
+ 	int hash_algo = GIT_HASH_UNKNOWN;
++	unsigned int ref_storage_format = REF_STORAGE_FORMAT_UNKNOWN;
+ 	int init_shared_repository = -1;
+ 	const struct option init_db_options[] = {
+ 		OPT_STRING(0, "template", &template_dir, N_("template-directory"),
+@@ -96,6 +99,8 @@ int cmd_init_db(int argc, const char **argv, const char *prefix)
+ 			   N_("override the name of the initial branch")),
+ 		OPT_STRING(0, "object-format", &object_format, N_("hash"),
+ 			   N_("specify the hash algorithm to use")),
++		OPT_STRING(0, "ref-format", &ref_format, N_("format"),
++			   N_("specify the reference format to use")),
+ 		OPT_END()
+ 	};
+ 
+@@ -159,6 +164,12 @@ int cmd_init_db(int argc, const char **argv, const char *prefix)
+ 			die(_("unknown hash algorithm '%s'"), object_format);
+ 	}
+ 
++	if (ref_format) {
++		ref_storage_format = ref_storage_format_by_name(ref_format);
++		if (ref_storage_format == REF_STORAGE_FORMAT_UNKNOWN)
++			die(_("unknown ref storage format '%s'"), ref_format);
++	}
++
+ 	if (init_shared_repository != -1)
+ 		set_shared_repository(init_shared_repository);
+ 
+@@ -237,6 +248,6 @@ int cmd_init_db(int argc, const char **argv, const char *prefix)
+ 
+ 	flags |= INIT_DB_EXIST_OK;
+ 	return init_db(git_dir, real_git_dir, template_dir, hash_algo,
+-		       REF_STORAGE_FORMAT_UNKNOWN, initial_branch,
++		       ref_storage_format, initial_branch,
+ 		       init_shared_repository, flags);
+ }
+diff --git a/t/t0001-init.sh b/t/t0001-init.sh
+index 30ce752cc1..b131d665db 100755
+--- a/t/t0001-init.sh
++++ b/t/t0001-init.sh
+@@ -576,6 +576,32 @@ test_expect_success 'init with GIT_DEFAULT_REF_FORMAT=garbage' '
+ 	test_cmp expect err
+ '
+ 
++test_expect_success 'init with --ref-format=files' '
++	test_when_finished "rm -rf refformat" &&
++	git init --ref-format=files refformat &&
++	echo files >expect &&
++	git -C refformat rev-parse --show-ref-format >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 're-init with same format' '
++	test_when_finished "rm -rf refformat" &&
++	git init --ref-format=files refformat &&
++	git init --ref-format=files refformat &&
++	echo files >expect &&
++	git -C refformat rev-parse --show-ref-format >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'init with --ref-format=garbage' '
++	test_when_finished "rm -rf refformat" &&
++	cat >expect <<-EOF &&
++	fatal: unknown ref storage format ${SQ}garbage${SQ}
++	EOF
++	test_must_fail git init --ref-format=garbage refformat 2>err &&
++	test_cmp expect err
++'
++
+ test_expect_success MINGW 'core.hidedotfiles = false' '
+ 	git config --global core.hidedotfiles false &&
+ 	rm -rf newdir &&
+-- 
+2.39.3 (Apple Git-145)
+

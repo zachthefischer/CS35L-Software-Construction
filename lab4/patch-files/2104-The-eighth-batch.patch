@@ -1,0 +1,23 @@
+From d6c51973e4a0e889d1a426da08f52b9203fa1df2 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 13 Sep 2023 09:30:46 -0700
+Subject: [PATCH 2104/2871] The eighth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index a57476cb8c..d25f0e8f88 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -118,3 +118,5 @@ Fixes since v2.42
+    (merge d0fc552bfc ch/t6300-verify-commit-test-cleanup later to maint).
+    (merge aa4b83dd5e ws/git-svn-retire-faketerm later to maint).
+    (merge edf80d23f1 jk/ci-retire-allow-ref later to maint).
++   (merge 256a94ef6c bc/more-git-var later to maint).
++   (merge 82af2c639c ob/sequencer-reword-error-message later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

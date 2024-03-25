@@ -1,0 +1,256 @@
+From 6b8dda9a4fdec1638b047506a121df8e15872492 Mon Sep 17 00:00:00 2001
+From: Matthew John Cheetham <mjcheetham@outlook.com>
+Date: Mon, 27 Feb 2023 17:20:19 +0000
+Subject: [PATCH 0974/2871] http: read HTTP WWW-Authenticate response headers
+
+Read and store the HTTP WWW-Authenticate response headers made for
+a particular request.
+
+This will allow us to pass important authentication challenge
+information to credential helpers or others that would otherwise have
+been lost.
+
+libcurl only provides us with the ability to read all headers recieved
+for a particular request, including any intermediate redirect requests
+or proxies. The lines returned by libcurl include HTTP status lines
+delinating any intermediate requests such as "HTTP/1.1 200". We use
+these lines to reset the strvec of WWW-Authenticate header values as
+we encounter them in order to only capture the final response headers.
+
+The collection of all header values matching the WWW-Authenticate
+header is complicated by the fact that it is legal for header fields to
+be continued over multiple lines, but libcurl only gives us each
+physical line a time, not each logical header. This line folding feature
+is deprecated in RFC 7230 [1] but older servers may still emit them, so
+we need to handle them.
+
+In the future [2] we may be able to leverage functions to read headers
+from libcurl itself, but as of today we must do this ourselves.
+
+[1] https://www.rfc-editor.org/rfc/rfc7230#section-3.2
+[2] https://daniel.haxx.se/blog/2022/03/22/a-headers-api-for-libcurl/
+
+Signed-off-by: Matthew John Cheetham <mjcheetham@outlook.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ credential.c      |   1 +
+ credential.h      |  16 +++++++
+ git-compat-util.h |  19 ++++++++
+ http.c            | 111 ++++++++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 147 insertions(+)
+
+diff --git a/credential.c b/credential.c
+index f6389a5068..897b467933 100644
+--- a/credential.c
++++ b/credential.c
+@@ -22,6 +22,7 @@ void credential_clear(struct credential *c)
+ 	free(c->username);
+ 	free(c->password);
+ 	string_list_clear(&c->helpers, 0);
++	strvec_clear(&c->wwwauth_headers);
+ 
+ 	credential_init(c);
+ }
+diff --git a/credential.h b/credential.h
+index f430e77fea..3756a54c74 100644
+--- a/credential.h
++++ b/credential.h
+@@ -2,6 +2,7 @@
+ #define CREDENTIAL_H
+ 
+ #include "string-list.h"
++#include "strvec.h"
+ 
+ /**
+  * The credentials API provides an abstracted way of gathering username and
+@@ -115,6 +116,20 @@ struct credential {
+ 	 */
+ 	struct string_list helpers;
+ 
++	/**
++	 * A `strvec` of WWW-Authenticate header values. Each string
++	 * is the value of a WWW-Authenticate header in an HTTP response,
++	 * in the order they were received in the response.
++	 */
++	struct strvec wwwauth_headers;
++
++	/**
++	 * Internal use only. Keeps track of if we previously matched against a
++	 * WWW-Authenticate header line in order to re-fold future continuation
++	 * lines into one value.
++	 */
++	unsigned header_is_last_match:1;
++
+ 	unsigned approved:1,
+ 		 configured:1,
+ 		 quit:1,
+@@ -130,6 +145,7 @@ struct credential {
+ 
+ #define CREDENTIAL_INIT { \
+ 	.helpers = STRING_LIST_INIT_DUP, \
++	.wwwauth_headers = STRVEC_INIT, \
+ }
+ 
+ /* Initialize a credential structure, setting all fields to empty. */
+diff --git a/git-compat-util.h b/git-compat-util.h
+index 4f0028ce60..f671a0ec3f 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -1287,6 +1287,25 @@ static inline int skip_iprefix(const char *str, const char *prefix,
+ 	return 0;
+ }
+ 
++/*
++ * Like skip_prefix_mem, but compare case-insensitively. Note that the
++ * comparison is done via tolower(), so it is strictly ASCII (no multi-byte
++ * characters or locale-specific conversions).
++ */
++static inline int skip_iprefix_mem(const char *buf, size_t len,
++				   const char *prefix,
++				   const char **out, size_t *outlen)
++{
++	do {
++		if (!*prefix) {
++			*out = buf;
++			*outlen = len;
++			return 1;
++		}
++	} while (len-- > 0 && tolower(*buf++) == tolower(*prefix++));
++	return 0;
++}
++
+ static inline int strtoul_ui(char const *s, int base, unsigned int *result)
+ {
+ 	unsigned long ul;
+diff --git a/http.c b/http.c
+index c4b6ddef28..32906eb2ac 100644
+--- a/http.c
++++ b/http.c
+@@ -181,6 +181,115 @@ size_t fwrite_buffer(char *ptr, size_t eltsize, size_t nmemb, void *buffer_)
+ 	return nmemb;
+ }
+ 
++/*
++ * A folded header continuation line starts with any number of spaces or
++ * horizontal tab characters (SP or HTAB) as per RFC 7230 section 3.2.
++ * It is not a continuation line if the line starts with any other character.
++ */
++static inline int is_hdr_continuation(const char *ptr, const size_t size)
++{
++	return size && (*ptr == ' ' || *ptr == '\t');
++}
++
++static size_t fwrite_wwwauth(char *ptr, size_t eltsize, size_t nmemb, void *p)
++{
++	size_t size = eltsize * nmemb;
++	struct strvec *values = &http_auth.wwwauth_headers;
++	struct strbuf buf = STRBUF_INIT;
++	const char *val;
++	size_t val_len;
++
++	/*
++	 * Header lines may not come NULL-terminated from libcurl so we must
++	 * limit all scans to the maximum length of the header line, or leverage
++	 * strbufs for all operations.
++	 *
++	 * In addition, it is possible that header values can be split over
++	 * multiple lines as per RFC 7230. 'Line folding' has been deprecated
++	 * but older servers may still emit them. A continuation header field
++	 * value is identified as starting with a space or horizontal tab.
++	 *
++	 * The formal definition of a header field as given in RFC 7230 is:
++	 *
++	 * header-field   = field-name ":" OWS field-value OWS
++	 *
++	 * field-name     = token
++	 * field-value    = *( field-content / obs-fold )
++	 * field-content  = field-vchar [ 1*( SP / HTAB ) field-vchar ]
++	 * field-vchar    = VCHAR / obs-text
++	 *
++	 * obs-fold       = CRLF 1*( SP / HTAB )
++	 *                ; obsolete line folding
++	 *                ; see Section 3.2.4
++	 */
++
++	/* Start of a new WWW-Authenticate header */
++	if (skip_iprefix_mem(ptr, size, "www-authenticate:", &val, &val_len)) {
++		strbuf_add(&buf, val, val_len);
++
++		/*
++		 * Strip the CRLF that should be present at the end of each
++		 * field as well as any trailing or leading whitespace from the
++		 * value.
++		 */
++		strbuf_trim(&buf);
++
++		strvec_push(values, buf.buf);
++		http_auth.header_is_last_match = 1;
++		goto exit;
++	}
++
++	/*
++	 * This line could be a continuation of the previously matched header
++	 * field. If this is the case then we should append this value to the
++	 * end of the previously consumed value.
++	 */
++	if (http_auth.header_is_last_match && is_hdr_continuation(ptr, size)) {
++		/*
++		 * Trim the CRLF and any leading or trailing from this line.
++		 */
++		strbuf_add(&buf, ptr, size);
++		strbuf_trim(&buf);
++
++		/*
++		 * At this point we should always have at least one existing
++		 * value, even if it is empty. Do not bother appending the new
++		 * value if this continuation header is itself empty.
++		 */
++		if (!values->nr) {
++			BUG("should have at least one existing header value");
++		} else if (buf.len) {
++			char *prev = xstrdup(values->v[values->nr - 1]);
++
++			/* Join two non-empty values with a single space. */
++			const char *const sp = *prev ? " " : "";
++
++			strvec_pop(values);
++			strvec_pushf(values, "%s%s%s", prev, sp, buf.buf);
++			free(prev);
++		}
++
++		goto exit;
++	}
++
++	/* Not a continuation of a previously matched auth header line. */
++	http_auth.header_is_last_match = 0;
++
++	/*
++	 * If this is a HTTP status line and not a header field, this signals
++	 * a different HTTP response. libcurl writes all the output of all
++	 * response headers of all responses, including redirects.
++	 * We only care about the last HTTP request response's headers so clear
++	 * the existing array.
++	 */
++	if (skip_iprefix_mem(ptr, size, "http/", &val, &val_len))
++		strvec_clear(values);
++
++exit:
++	strbuf_release(&buf);
++	return size;
++}
++
+ size_t fwrite_null(char *ptr, size_t eltsize, size_t nmemb, void *strbuf)
+ {
+ 	return nmemb;
+@@ -1895,6 +2004,8 @@ static int http_request(const char *url,
+ 					 fwrite_buffer);
+ 	}
+ 
++	curl_easy_setopt(slot->curl, CURLOPT_HEADERFUNCTION, fwrite_wwwauth);
++
+ 	accept_language = http_get_accept_language_header();
+ 
+ 	if (accept_language)
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,82 @@
+From be1fce6dae6d25e36de8e920a3b1386b149b758f Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Sat, 20 May 2023 16:13:55 +0000
+Subject: [PATCH 1519/2871] t9100-git-svn-basic: modernize test format
+
+Some tests still use the old format with four spaces indentation.
+Standardize the tests to the new format with tab indentation.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9100-git-svn-basic.sh | 31 +++++++++++++++----------------
+ 1 file changed, 15 insertions(+), 16 deletions(-)
+
+diff --git a/t/t9100-git-svn-basic.sh b/t/t9100-git-svn-basic.sh
+index fea41b3c36..af28b01fef 100755
+--- a/t/t9100-git-svn-basic.sh
++++ b/t/t9100-git-svn-basic.sh
+@@ -21,7 +21,7 @@ test_expect_success 'git svn help works anywhere' '
+ '
+ 
+ test_expect_success \
+-    'initialize git svn' '
++	'initialize git svn' '
+ 	mkdir import &&
+ 	(
+ 		cd import &&
+@@ -38,9 +38,9 @@ test_expect_success \
+ 	rm -rf import &&
+ 	git svn init "$svnrepo"'
+ 
+-test_expect_success \
+-    'import an SVN revision into git' \
+-    'git svn fetch'
++test_expect_success 'import an SVN revision into git' '
++	git svn fetch
++'
+ 
+ test_expect_success "checkout from svn" 'svn co "$svnrepo" "$SVN_TREE"'
+ 
+@@ -233,27 +233,26 @@ test_expect_success POSIXPERM,SYMLINKS "$name" '
+ '
+ 
+ test_expect_success 'exit if remote refs are ambigious' '
+-        git config --add svn-remote.svn.fetch \
++	git config --add svn-remote.svn.fetch \
+ 		bar:refs/remotes/git-svn &&
+ 	test_must_fail git svn migrate
+ '
+ 
+ test_expect_success 'exit if init-ing a would clobber a URL' '
+-        svnadmin create "${PWD}/svnrepo2" &&
+-        svn mkdir -m "mkdir bar" "${svnrepo}2/bar" &&
+-        git config --unset svn-remote.svn.fetch \
++	svnadmin create "${PWD}/svnrepo2" &&
++	svn mkdir -m "mkdir bar" "${svnrepo}2/bar" &&
++	git config --unset svn-remote.svn.fetch \
+ 		"^bar:refs/remotes/git-svn$" &&
+ 	test_must_fail git svn init "${svnrepo}2/bar"
+         '
+ 
+-test_expect_success \
+-  'init allows us to connect to another directory in the same repo' '
+-        git svn init --minimize-url -i bar "$svnrepo/bar" &&
+-        git config --get svn-remote.svn.fetch \
+-                              "^bar:refs/remotes/bar$" &&
+-        git config --get svn-remote.svn.fetch \
+-			      "^:refs/remotes/git-svn$"
+-        '
++test_expect_success 'init allows us to connect to another directory in the same repo' '
++	git svn init --minimize-url -i bar "$svnrepo/bar" &&
++	git config --get svn-remote.svn.fetch \
++		"^bar:refs/remotes/bar$" &&
++	git config --get svn-remote.svn.fetch \
++		"^:refs/remotes/git-svn$"
++'
+ 
+ test_expect_success 'dcommit $rev does not clobber current branch' '
+ 	git svn fetch -i bar &&
+-- 
+2.39.3 (Apple Git-145)
+

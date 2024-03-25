@@ -1,0 +1,33 @@
+From 7de0c306f7b758d3fb537c18c2751f6250cea7a0 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 29 Jul 2022 15:13:58 -0400
+Subject: [PATCH 0005/2871] t/lib-submodule-update.sh: allow local submodules
+
+To prepare for changing the default value of `protocol.file.allow` to
+"user", update the `prolog()` function in lib-submodule-update to allow
+submodules to be cloned over the file protocol.
+
+This is used by a handful of submodule-related test scripts, which
+themselves will have to tweak the value of `protocol.file.allow` in
+certain locations. Those will be done in subsequent commits.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/lib-submodule-update.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/lib-submodule-update.sh b/t/lib-submodule-update.sh
+index 4b714e9308..cc5b58bdde 100644
+--- a/t/lib-submodule-update.sh
++++ b/t/lib-submodule-update.sh
+@@ -196,6 +196,7 @@ test_git_directory_exists () {
+ # the submodule repo if it doesn't exist and configures the most problematic
+ # settings for diff.ignoreSubmodules.
+ prolog () {
++	test_config_global protocol.file.allow always &&
+ 	(test -d submodule_update_repo || create_lib_submodule_repo) &&
+ 	test_config_global diff.ignoreSubmodules all &&
+ 	test_config diff.ignoreSubmodules all
+-- 
+2.39.3 (Apple Git-145)
+

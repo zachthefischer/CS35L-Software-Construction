@@ -1,0 +1,40 @@
+From e3a567ff4210614899424d2000015bab9b25af86 Mon Sep 17 00:00:00 2001
+From: "D. Ben Knoble" <ben.knoble+github@gmail.com>
+Date: Fri, 14 Jul 2023 13:30:10 +0000
+Subject: [PATCH 1805/2871] t4002: fix "diff can read from stdin" syntax
+
+I noticed this test was producing output like
+
+```
+t4002-diff-basic.sh: test_expect_successdiff can read from stdin: not found
+```
+
+which is rather odd. Investigation shows an error of shell syntax:
+foo'abc' is the same as fooabc to the shell. Perhaps obviously, this is
+not a valid command for the test.
+
+I am surprised this doesn't count as an error in the test, but that
+accounts for it going unnoticed.
+
+Signed-off-by: D. Ben Knoble <ben.knoble+github@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4002-diff-basic.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t4002-diff-basic.sh b/t/t4002-diff-basic.sh
+index d524d4057d..7afc883ec3 100755
+--- a/t/t4002-diff-basic.sh
++++ b/t/t4002-diff-basic.sh
+@@ -403,7 +403,7 @@ test_expect_success 'diff-tree -r B A == diff-tree -r -R A B' '
+ 	git diff-tree -r -R $tree_A $tree_B >.test-b &&
+ 	cmp -s .test-a .test-b'
+ 
+-test_expect_success'diff can read from stdin' '
++test_expect_success 'diff can read from stdin' '
+ 	test_must_fail git diff --no-index -- MN - < NN |
+ 		grep -v "^index" | sed "s#/-#/NN#" >.test-a &&
+ 	test_must_fail git diff --no-index -- MN NN |
+-- 
+2.39.3 (Apple Git-145)
+

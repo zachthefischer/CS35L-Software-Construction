@@ -1,0 +1,96 @@
+From c6d26a9dda59043f95ee5bf632d6aa80fa50aad7 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 18 May 2023 20:05:43 -0400
+Subject: [PATCH 1482/2871] format-patch: free elements of rev.ref_message_ids
+ list
+
+When we are showing multiple patches with format-patch, we have to
+repeatedly overwrite the rev.message_id field. We take care to avoid
+leaking the old value by either freeing it, or adding it to
+ref_message_ids, a string list of ids to reference in subsequent
+messages.
+
+But unfortunately we do leak the value via that string list. We try
+to clear the string list, courtesy of 89f45cf4eb (format-patch: don't
+leak "extra_headers" or "ref_message_ids", 2022-04-13). But since it was
+initialized as "nodup", the string list doesn't realize it owns the
+strings, and it leaks them.
+
+We have two options here:
+
+  1. Continue to init with "nodup", but then tweak the value of
+     ref_message_ids.strdup_strings just before clearing.
+
+  2. Init with "dup", but use "append_nodup" when transferring ownership
+     of strings to the list. Clearing just works.
+
+I picked the second here, as I think it calls attention to the tricky
+part (transferring ownership via the nodup call).
+
+There's one other related fix we have to do, though. We also insert the
+result of clean_message_id() into the list. This _sometimes_ allocates
+and sometimes does not, depending on whether we have to remove cruft
+from the end of the string. Let's teach it to consistently return an
+allocated string, so that the caller knows it must be freed.
+
+There's no new test here, as the leak can already be seen in t4014.44 (as
+well as others in that script). We can't mark all of t4014 as leak-free,
+though, as there are other unrelated leaks that it triggers.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index ab74760386..fee5834c0f 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1401,7 +1401,7 @@ static void make_cover_letter(struct rev_info *rev, int use_separate_file,
+ 	}
+ }
+ 
+-static const char *clean_message_id(const char *msg_id)
++static char *clean_message_id(const char *msg_id)
+ {
+ 	char ch;
+ 	const char *a, *z, *m;
+@@ -1419,7 +1419,7 @@ static const char *clean_message_id(const char *msg_id)
+ 	if (!z)
+ 		die(_("insane in-reply-to: %s"), msg_id);
+ 	if (++z == m)
+-		return a;
++		return xstrdup(a);
+ 	return xmemdupz(a, z - a);
+ }
+ 
+@@ -2305,11 +2305,11 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 
+ 	if (in_reply_to || thread || cover_letter) {
+ 		rev.ref_message_ids = xmalloc(sizeof(*rev.ref_message_ids));
+-		string_list_init_nodup(rev.ref_message_ids);
++		string_list_init_dup(rev.ref_message_ids);
+ 	}
+ 	if (in_reply_to) {
+-		const char *msgid = clean_message_id(in_reply_to);
+-		string_list_append(rev.ref_message_ids, msgid);
++		char *msgid = clean_message_id(in_reply_to);
++		string_list_append_nodup(rev.ref_message_ids, msgid);
+ 	}
+ 	rev.numbered_files = just_numbers;
+ 	rev.patch_suffix = fmt_patch_suffix;
+@@ -2365,8 +2365,8 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 				    && (!cover_letter || rev.nr > 1))
+ 					free(rev.message_id);
+ 				else
+-					string_list_append(rev.ref_message_ids,
+-							   rev.message_id);
++					string_list_append_nodup(rev.ref_message_ids,
++								 rev.message_id);
+ 			}
+ 			gen_message_id(&rev, oid_to_hex(&commit->object.oid));
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

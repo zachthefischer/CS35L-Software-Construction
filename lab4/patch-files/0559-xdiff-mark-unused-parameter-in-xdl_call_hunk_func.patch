@@ -1,0 +1,32 @@
+From 8157ed4046dd58c38c8197b0f1d800c37ca54d61 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 13 Dec 2022 06:13:24 -0500
+Subject: [PATCH 0559/2871] xdiff: mark unused parameter in
+ xdl_call_hunk_func()
+
+This function is used interchangeably with xdl_emit via a function
+pointer, so we can't just drop the unused parameter. Mark it to silence
+-Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ xdiff/xdiffi.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/xdiff/xdiffi.c b/xdiff/xdiffi.c
+index 32652ded2d..344c2dfc3e 100644
+--- a/xdiff/xdiffi.c
++++ b/xdiff/xdiffi.c
+@@ -973,7 +973,7 @@ void xdl_free_script(xdchange_t *xscr) {
+ 	}
+ }
+ 
+-static int xdl_call_hunk_func(xdfenv_t *xe, xdchange_t *xscr, xdemitcb_t *ecb,
++static int xdl_call_hunk_func(xdfenv_t *xe UNUSED, xdchange_t *xscr, xdemitcb_t *ecb,
+ 			      xdemitconf_t const *xecfg)
+ {
+ 	xdchange_t *xch, *xche;
+-- 
+2.39.3 (Apple Git-145)
+

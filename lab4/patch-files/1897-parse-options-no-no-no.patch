@@ -1,0 +1,114 @@
+From 2a409a1d1250c8a9fcac7beaa58ae80881dda2dc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:44:45 +0200
+Subject: [PATCH 1897/2871] parse-options: no --[no-]no-...
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Avoid showing an optional "no-" for options that already start with a
+"no-" in the short help, as that double negation is confusing.  Document
+the opposite variant on its own line with a generated help text instead,
+unless it's defined and documented explicitly already.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c             | 25 ++++++++++++++++++++++++-
+ t/t0040-parse-options.sh    |  3 ++-
+ t/t1502/optionspec-neg.help |  3 ++-
+ 3 files changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index 4b76fc81e9..4a8d380ceb 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1042,11 +1042,22 @@ static void usage_padding(FILE *outfile, size_t pos)
+ 	fprintf(outfile, "%*s", pad + USAGE_GAP, "");
+ }
+ 
++static const struct option *find_option_by_long_name(const struct option *opts,
++						     const char *long_name)
++{
++	for (; opts->type != OPTION_END; opts++) {
++		if (opts->long_name && !strcmp(opts->long_name, long_name))
++			return opts;
++	}
++	return NULL;
++}
++
+ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t *ctx,
+ 							 const char * const *usagestr,
+ 							 const struct option *opts,
+ 							 int full, int err)
+ {
++	const struct option *all_opts = opts;
+ 	FILE *outfile = err ? stderr : stdout;
+ 	int need_newline;
+ 
+@@ -1128,6 +1139,7 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 	for (; opts->type != OPTION_END; opts++) {
+ 		size_t pos;
+ 		const char *cp, *np;
++		const char *positive_name = NULL;
+ 
+ 		if (opts->type == OPTION_SUBCOMMAND)
+ 			continue;
+@@ -1157,7 +1169,8 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 			pos += fprintf(outfile, ", ");
+ 		if (opts->long_name) {
+ 			const char *long_name = opts->long_name;
+-			if (opts->flags & PARSE_OPT_NONEG)
++			if ((opts->flags & PARSE_OPT_NONEG) ||
++			    skip_prefix(long_name, "no-", &positive_name))
+ 				pos += fprintf(outfile, "--%s", long_name);
+ 			else
+ 				pos += fprintf(outfile, "--[no-]%s", long_name);
+@@ -1185,6 +1198,16 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 				np++;
+ 			pos = 0;
+ 		}
++
++		if (positive_name) {
++			if (find_option_by_long_name(all_opts, positive_name))
++				continue;
++			pos = usage_indent(outfile);
++			pos += fprintf(outfile, "--%s", positive_name);
++			usage_padding(outfile, pos);
++			fprintf_ln(outfile, _("opposite of --no-%s"),
++				   positive_name);
++		}
+ 	}
+ 	fputc('\n', outfile);
+ 
+diff --git a/t/t0040-parse-options.sh b/t/t0040-parse-options.sh
+index 1dfc431d52..a0ad6192d6 100755
+--- a/t/t0040-parse-options.sh
++++ b/t/t0040-parse-options.sh
+@@ -14,7 +14,8 @@ usage: test-tool parse-options <options>
+     A helper function for the parse-options API.
+ 
+     --[no-]yes            get a boolean
+-    -D, --[no-]no-doubt   begins with 'no-'
++    -D, --no-doubt        begins with 'no-'
++    --doubt               opposite of --no-doubt
+     -B, --no-fear         be brave
+     -b, --[no-]boolean    increment by one
+     -4, --[no-]or4        bitwise-or boolean with ...0100
+diff --git a/t/t1502/optionspec-neg.help b/t/t1502/optionspec-neg.help
+index 60ff3cdd00..7a29f8cb03 100644
+--- a/t/t1502/optionspec-neg.help
++++ b/t/t1502/optionspec-neg.help
+@@ -4,7 +4,8 @@ usage: some-command [options] <args>...
+     some-command does foo and bar!
+ 
+     --[no-]foo            can be negated
+-    --[no-]no-bar         can be positivated
++    --no-bar              can be positivated
++    --bar                 opposite of --no-bar
+     --positive-only       cannot be negated
+     --no-negative         cannot be positivated
+ 
+-- 
+2.39.3 (Apple Git-145)
+

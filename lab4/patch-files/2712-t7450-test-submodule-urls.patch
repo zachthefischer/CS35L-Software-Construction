@@ -1,0 +1,147 @@
+From 7e2fc39d8c02048e9dddcba1b1b6786a8088a1a8 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Thu, 18 Jan 2024 01:55:17 +0000
+Subject: [PATCH 2712/2871] t7450: test submodule urls
+
+Add tests to 't7450-bad-git-dotfiles.sh' to check the validity of different
+submodule URLs. To verify this directly (without setting up test
+repositories & submodules), add a 'check-url' subcommand to 'test-tool
+submodule' that calls 'check_submodule_url' in the same way that
+'check-name' calls 'check_submodule_name'.
+
+Add two tests to separately address cases where the URL check correctly
+filters out invalid URLs and cases where the check misses invalid URLs. Mark
+the latter ("url check misses invalid cases") with 'test_expect_failure' to
+indicate that this is currently broken, which will be fixed in the next step.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-submodule.c   | 35 +++++++++++++++++++++++++++++++----
+ t/t7450-bad-git-dotfiles.sh | 35 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 66 insertions(+), 4 deletions(-)
+
+diff --git a/t/helper/test-submodule.c b/t/helper/test-submodule.c
+index b266820739..b7b2fb6e44 100644
+--- a/t/helper/test-submodule.c
++++ b/t/helper/test-submodule.c
+@@ -14,6 +14,13 @@ static const char *submodule_check_name_usage[] = {
+ 	NULL
+ };
+ 
++#define TEST_TOOL_CHECK_URL_USAGE \
++	"test-tool submodule check-url"
++static const char *submodule_check_url_usage[] = {
++	TEST_TOOL_CHECK_URL_USAGE,
++	NULL
++};
++
+ #define TEST_TOOL_IS_ACTIVE_USAGE \
+ 	"test-tool submodule is-active <name>"
+ static const char *submodule_is_active_usage[] = {
+@@ -30,17 +37,23 @@ static const char *submodule_resolve_relative_url_usage[] = {
+ 
+ static const char *submodule_usage[] = {
+ 	TEST_TOOL_CHECK_NAME_USAGE,
++	TEST_TOOL_CHECK_URL_USAGE,
+ 	TEST_TOOL_IS_ACTIVE_USAGE,
+ 	TEST_TOOL_RESOLVE_RELATIVE_URL_USAGE,
+ 	NULL
+ };
+ 
+-/* Filter stdin to print only valid names. */
+-static int check_name(void)
++typedef int (*check_fn_t)(const char *);
++
++/*
++ * Apply 'check_fn' to each line of stdin, printing values that pass the check
++ * to stdout.
++ */
++static int check_submodule(check_fn_t check_fn)
+ {
+ 	struct strbuf buf = STRBUF_INIT;
+ 	while (strbuf_getline(&buf, stdin) != EOF) {
+-		if (!check_submodule_name(buf.buf))
++		if (!check_fn(buf.buf))
+ 			printf("%s\n", buf.buf);
+ 	}
+ 	strbuf_release(&buf);
+@@ -57,7 +70,20 @@ static int cmd__submodule_check_name(int argc, const char **argv)
+ 	if (argc)
+ 		usage_with_options(submodule_check_name_usage, options);
+ 
+-	return check_name();
++	return check_submodule(check_submodule_name);
++}
++
++static int cmd__submodule_check_url(int argc, const char **argv)
++{
++	struct option options[] = {
++		OPT_END()
++	};
++	argc = parse_options(argc, argv, "test-tools", options,
++			     submodule_check_url_usage, 0);
++	if (argc)
++		usage_with_options(submodule_check_url_usage, options);
++
++	return check_submodule(check_submodule_url);
+ }
+ 
+ static int cmd__submodule_is_active(int argc, const char **argv)
+@@ -183,6 +209,7 @@ static int cmd__submodule_config_writeable(int argc, const char **argv UNUSED)
+ 
+ static struct test_cmd cmds[] = {
+ 	{ "check-name", cmd__submodule_check_name },
++	{ "check-url", cmd__submodule_check_url },
+ 	{ "is-active", cmd__submodule_is_active },
+ 	{ "resolve-relative-url", cmd__submodule_resolve_relative_url},
+ 	{ "config-list", cmd__submodule_config_list },
+diff --git a/t/t7450-bad-git-dotfiles.sh b/t/t7450-bad-git-dotfiles.sh
+index 35a31acd4d..c73b1c92ec 100755
+--- a/t/t7450-bad-git-dotfiles.sh
++++ b/t/t7450-bad-git-dotfiles.sh
+@@ -45,6 +45,41 @@ test_expect_success 'check names' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'check urls' '
++	cat >expect <<-\EOF &&
++	./bar/baz/foo.git
++	https://example.com/foo.git
++	http://example.com:80/deeper/foo.git
++	EOF
++
++	test-tool submodule check-url >actual <<-\EOF &&
++	./bar/baz/foo.git
++	https://example.com/foo.git
++	http://example.com:80/deeper/foo.git
++	-a./foo
++	../../..//test/foo.git
++	../../../../../:localhost:8080/foo.git
++	..\../.\../:example.com/foo.git
++	./%0ahost=example.com/foo.git
++	https://one.example.com/evil?%0ahost=two.example.com
++	https:///example.com/foo.git
++	https::example.com/foo.git
++	http:::example.com/foo.git
++	EOF
++
++	test_cmp expect actual
++'
++
++# NEEDSWORK: the URL checked here is not valid (and will not work as a remote if
++# a user attempts to clone it), but the fsck check passes.
++test_expect_failure 'url check misses invalid cases' '
++	test-tool submodule check-url >actual <<-\EOF &&
++	http://example.com:test/foo.git
++	EOF
++
++	test_must_be_empty actual
++'
++
+ test_expect_success 'create innocent subrepo' '
+ 	git init innocent &&
+ 	git -C innocent commit --allow-empty -m foo
+-- 
+2.39.3 (Apple Git-145)
+

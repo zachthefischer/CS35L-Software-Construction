@@ -1,0 +1,29 @@
+From 401a4e257e6be731f7dd230b399800a1d79415d0 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:13 +0000
+Subject: [PATCH 2227/2871] documentation: fix verb vs. noun
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/imap.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/config/imap.txt b/Documentation/config/imap.txt
+index fa0dccc3d8..3d28f72643 100644
+--- a/Documentation/config/imap.txt
++++ b/Documentation/config/imap.txt
+@@ -4,7 +4,7 @@ imap.folder::
+ 	"[Gmail]/Drafts". Required.
+ 
+ imap.tunnel::
+-	Command used to setup a tunnel to the IMAP server through which
++	Command used to set up a tunnel to the IMAP server through which
+ 	commands will be piped instead of using a direct network connection
+ 	to the server. Required when imap.host is not set.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

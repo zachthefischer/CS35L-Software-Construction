@@ -1,0 +1,60 @@
+From caee1d669c937a6b9d871901acbf9a5643a3fd9f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sun, 11 Jun 2023 20:50:27 +0200
+Subject: [PATCH 1585/2871] branch: fix a leak in check_tracking_branch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Let's fix a leak we have in check_tracking_branch() since the function
+was introduced in 41c21f22d0 (branch.c: Validate tracking branches with
+refspecs instead of refs/remotes/*, 2013-04-21).
+
+The leak can be reviewed with:
+
+   $ git remote add local .
+   $ git update-ref refs/remotes/local/foo HEAD
+   $ git branch --track bar local/foo
+
+   Direct leak of 24 byte(s) in 1 object(s) allocated from:
+       ... in xrealloc wrapper.c
+       ... in strbuf_grow strbuf.c
+       ... in strbuf_add strbuf.c
+       ... in match_name_with_pattern remote.c
+       ... in query_refspecs remote.c
+       ... in remote_find_tracking remote.c
+       ... in check_tracking_branch branch.c
+       ... in for_each_remote remote.c
+       ... in validate_remote_tracking_branch branch.c
+       ... in dwim_branch_start branch.c
+       ... in create_branch branch.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/branch.c b/branch.c
+index cc869d2beb..46fb34554f 100644
+--- a/branch.c
++++ b/branch.c
+@@ -480,9 +480,12 @@ static int check_tracking_branch(struct remote *remote, void *cb_data)
+ {
+ 	char *tracking_branch = cb_data;
+ 	struct refspec_item query;
++	int res;
+ 	memset(&query, 0, sizeof(struct refspec_item));
+ 	query.dst = tracking_branch;
+-	return !remote_find_tracking(remote, &query);
++	res = !remote_find_tracking(remote, &query);
++	free(query.src);
++	return res;
+ }
+ 
+ static int validate_remote_tracking_branch(char *ref)
+-- 
+2.39.3 (Apple Git-145)
+

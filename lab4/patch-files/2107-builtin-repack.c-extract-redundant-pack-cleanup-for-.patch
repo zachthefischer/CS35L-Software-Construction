@@ -1,0 +1,89 @@
+From 639c4a3992337e15c0faa2fa6d73462cc76ca7b9 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 13 Sep 2023 15:17:49 -0400
+Subject: [PATCH 2107/2871] builtin/repack.c: extract redundant pack cleanup
+ for --geometric
+
+To reduce the complexity of the already quite-long `cmd_repack()`
+implementation, extract out the parts responsible for deleting redundant
+packs from a geometric repack out into its own sub-routine.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 52 +++++++++++++++++++++++++++---------------------
+ 1 file changed, 29 insertions(+), 23 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 708556836e..d3e6326bb9 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -540,6 +540,32 @@ static struct packed_git *get_preferred_pack(struct pack_geometry *geometry)
+ 	return NULL;
+ }
+ 
++static void geometry_remove_redundant_packs(struct pack_geometry *geometry,
++					    struct string_list *names,
++					    struct existing_packs *existing)
++{
++	struct strbuf buf = STRBUF_INIT;
++	uint32_t i;
++
++	for (i = 0; i < geometry->split; i++) {
++		struct packed_git *p = geometry->pack[i];
++		if (string_list_has_string(names, hash_to_hex(p->hash)))
++			continue;
++
++		strbuf_reset(&buf);
++		strbuf_addstr(&buf, pack_basename(p));
++		strbuf_strip_suffix(&buf, ".pack");
++
++		if ((p->pack_keep) ||
++		    (string_list_has_string(&existing->kept_packs, buf.buf)))
++			continue;
++
++		remove_redundant_pack(packdir, buf.buf);
++	}
++
++	strbuf_release(&buf);
++}
++
+ static void free_pack_geometry(struct pack_geometry *geometry)
+ {
+ 	if (!geometry)
+@@ -1201,29 +1227,9 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 			remove_redundant_pack(packdir, item->string);
+ 		}
+ 
+-		if (geometry.split_factor) {
+-			struct strbuf buf = STRBUF_INIT;
+-
+-			uint32_t i;
+-			for (i = 0; i < geometry.split; i++) {
+-				struct packed_git *p = geometry.pack[i];
+-				if (string_list_has_string(&names,
+-							   hash_to_hex(p->hash)))
+-					continue;
+-
+-				strbuf_reset(&buf);
+-				strbuf_addstr(&buf, pack_basename(p));
+-				strbuf_strip_suffix(&buf, ".pack");
+-
+-				if ((p->pack_keep) ||
+-				    (string_list_has_string(&existing.kept_packs,
+-							    buf.buf)))
+-					continue;
+-
+-				remove_redundant_pack(packdir, buf.buf);
+-			}
+-			strbuf_release(&buf);
+-		}
++		if (geometry.split_factor)
++			geometry_remove_redundant_packs(&geometry, &names,
++							&existing);
+ 		if (show_progress)
+ 			opts |= PRUNE_PACKED_VERBOSE;
+ 		prune_packed_objects(opts);
+-- 
+2.39.3 (Apple Git-145)
+

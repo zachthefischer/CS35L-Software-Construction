@@ -1,0 +1,244 @@
+From dd77d587954bd798d0ea6b26f0815ed2d78d47b9 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:34:03 +0000
+Subject: [PATCH 1650/2871] git-compat-util.h: remove unneccessary include of
+ wildmatch.h
+
+The include of wildmatch.h in git-compat-util.h was added in cebcab189aa
+(Makefile: add USE_WILDMATCH to use wildmatch as fnmatch, 2013-01-01) as
+a way to be able to compile-time force any calls to fnmatch() to instead
+invoke wildmatch().  The defines and inline function were removed in
+70a8fc999d9 (stop using fnmatch (either native or compat), 2014-02-15),
+and this include in git-compat-util.h has been unnecessary ever since.
+
+Remove the include from git-compat-util.h, but add it to the .c files
+that had omitted the direct #include they needed.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ apply.c                   | 1 +
+ builtin/describe.c        | 1 +
+ builtin/ls-remote.c       | 1 +
+ builtin/name-rev.c        | 1 +
+ builtin/reflog.c          | 1 +
+ builtin/replace.c         | 1 +
+ builtin/show-branch.c     | 1 +
+ config.c                  | 1 +
+ diffcore-order.c          | 1 +
+ fmt-merge-msg.c           | 1 +
+ git-compat-util.h         | 2 --
+ log-tree.c                | 1 +
+ pathspec.c                | 1 +
+ refs.c                    | 1 +
+ revision.c                | 1 +
+ t/helper/test-wildmatch.c | 1 +
+ trace2/tr2_cfg.c          | 1 +
+ 17 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/apply.c b/apply.c
+index be58dc08d2..801f2bcc99 100644
+--- a/apply.c
++++ b/apply.c
+@@ -35,6 +35,7 @@
+ #include "entry.h"
+ #include "setup.h"
+ #include "symlinks.h"
++#include "wildmatch.h"
+ #include "ws.h"
+ #include "wrapper.h"
+ 
+diff --git a/builtin/describe.c b/builtin/describe.c
+index 508e8df00e..eb19ab0bbb 100644
+--- a/builtin/describe.c
++++ b/builtin/describe.c
+@@ -22,6 +22,7 @@
+ #include "object-store.h"
+ #include "list-objects.h"
+ #include "commit-slab.h"
++#include "wildmatch.h"
+ 
+ #define MAX_TAGS	(FLAG_BITS - 1)
+ 
+diff --git a/builtin/ls-remote.c b/builtin/ls-remote.c
+index a0aadc9b8f..fc76575430 100644
+--- a/builtin/ls-remote.c
++++ b/builtin/ls-remote.c
+@@ -7,6 +7,7 @@
+ #include "remote.h"
+ #include "refs.h"
+ #include "parse-options.h"
++#include "wildmatch.h"
+ 
+ static const char * const ls_remote_usage[] = {
+ 	N_("git ls-remote [--heads] [--tags] [--refs] [--upload-pack=<exec>]\n"
+diff --git a/builtin/name-rev.c b/builtin/name-rev.c
+index 4d15a23fc4..c3b722b36f 100644
+--- a/builtin/name-rev.c
++++ b/builtin/name-rev.c
+@@ -15,6 +15,7 @@
+ #include "hash-lookup.h"
+ #include "commit-slab.h"
+ #include "commit-graph.h"
++#include "wildmatch.h"
+ 
+ /*
+  * One day.  See the 'name a rev shortly after epoch' test in t6120 when
+diff --git a/builtin/reflog.c b/builtin/reflog.c
+index fc21774880..79b4ff04aa 100644
+--- a/builtin/reflog.c
++++ b/builtin/reflog.c
+@@ -4,6 +4,7 @@
+ #include "repository.h"
+ #include "revision.h"
+ #include "reachable.h"
++#include "wildmatch.h"
+ #include "worktree.h"
+ #include "reflog.h"
+ #include "parse-options.h"
+diff --git a/builtin/replace.c b/builtin/replace.c
+index 6b266a66d3..a2f57a56b3 100644
+--- a/builtin/replace.c
++++ b/builtin/replace.c
+@@ -24,6 +24,7 @@
+ #include "replace-object.h"
+ #include "repository.h"
+ #include "tag.h"
++#include "wildmatch.h"
+ 
+ static const char * const git_replace_usage[] = {
+ 	N_("git replace [-f] <object> <replacement>"),
+diff --git a/builtin/show-branch.c b/builtin/show-branch.c
+index cd215f89af..a203f13cb0 100644
+--- a/builtin/show-branch.c
++++ b/builtin/show-branch.c
+@@ -14,6 +14,7 @@
+ #include "dir.h"
+ #include "commit-slab.h"
+ #include "date.h"
++#include "wildmatch.h"
+ 
+ static const char* show_branch_usage[] = {
+     N_("git show-branch [-a | --all] [-r | --remotes] [--topo-order | --date-order]\n"
+diff --git a/config.c b/config.c
+index 8afa266054..27ae207280 100644
+--- a/config.c
++++ b/config.c
+@@ -36,6 +36,7 @@
+ #include "setup.h"
+ #include "strvec.h"
+ #include "trace2.h"
++#include "wildmatch.h"
+ #include "worktree.h"
+ #include "ws.h"
+ #include "wrapper.h"
+diff --git a/diffcore-order.c b/diffcore-order.c
+index 57ccab2846..e7d20ebd2d 100644
+--- a/diffcore-order.c
++++ b/diffcore-order.c
+@@ -5,6 +5,7 @@
+ #include "gettext.h"
+ #include "diff.h"
+ #include "diffcore.h"
++#include "wildmatch.h"
+ 
+ static char **order;
+ static int order_cnt;
+diff --git a/fmt-merge-msg.c b/fmt-merge-msg.c
+index 5af0d4715b..f096b1ef54 100644
+--- a/fmt-merge-msg.c
++++ b/fmt-merge-msg.c
+@@ -15,6 +15,7 @@
+ #include "fmt-merge-msg.h"
+ #include "commit-reach.h"
+ #include "gpg-interface.h"
++#include "wildmatch.h"
+ 
+ static int use_branch_desc;
+ static int suppress_dest_pattern_seen;
+diff --git a/git-compat-util.h b/git-compat-util.h
+index 5b2b99c17c..1889da7986 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -625,8 +625,6 @@ static inline int git_has_dir_sep(const char *path)
+ 
+ #include "compat/bswap.h"
+ 
+-#include "wildmatch.h"
+-
+ struct strbuf;
+ 
+ /* General helper functions */
+diff --git a/log-tree.c b/log-tree.c
+index 07d0b47b16..60b61597c4 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -26,6 +26,7 @@
+ #include "range-diff.h"
+ #include "strmap.h"
+ #include "tree.h"
++#include "wildmatch.h"
+ #include "write-or-die.h"
+ 
+ static struct decoration name_decoration = { "object names" };
+diff --git a/pathspec.c b/pathspec.c
+index 8932b05a26..3a3a5724c4 100644
+--- a/pathspec.c
++++ b/pathspec.c
+@@ -12,6 +12,7 @@
+ #include "strvec.h"
+ #include "symlinks.h"
+ #include "quote.h"
++#include "wildmatch.h"
+ 
+ /*
+  * Finds which of the given pathspecs match items in the index.
+diff --git a/refs.c b/refs.c
+index 6d657e3bb4..8b192e4cb4 100644
+--- a/refs.c
++++ b/refs.c
+@@ -29,6 +29,7 @@
+ #include "sigchain.h"
+ #include "date.h"
+ #include "commit.h"
++#include "wildmatch.h"
+ #include "wrapper.h"
+ 
+ /*
+diff --git a/revision.c b/revision.c
+index 66a1fece0d..d4b4b34fd8 100644
+--- a/revision.c
++++ b/revision.c
+@@ -46,6 +46,7 @@
+ #include "list-objects-filter-options.h"
+ #include "resolve-undo.h"
+ #include "parse-options.h"
++#include "wildmatch.h"
+ 
+ volatile show_early_output_fn_t show_early_output;
+ 
+diff --git a/t/helper/test-wildmatch.c b/t/helper/test-wildmatch.c
+index a95bb4da9b..b4ff5f986a 100644
+--- a/t/helper/test-wildmatch.c
++++ b/t/helper/test-wildmatch.c
+@@ -1,4 +1,5 @@
+ #include "test-tool.h"
++#include "wildmatch.h"
+ 
+ int cmd__wildmatch(int argc, const char **argv)
+ {
+diff --git a/trace2/tr2_cfg.c b/trace2/tr2_cfg.c
+index 78cfc15d52..db817a80c5 100644
+--- a/trace2/tr2_cfg.c
++++ b/trace2/tr2_cfg.c
+@@ -4,6 +4,7 @@
+ #include "trace2.h"
+ #include "trace2/tr2_cfg.h"
+ #include "trace2/tr2_sysenv.h"
++#include "wildmatch.h"
+ 
+ static struct strbuf **tr2_cfg_patterns;
+ static int tr2_cfg_count_patterns;
+-- 
+2.39.3 (Apple Git-145)
+

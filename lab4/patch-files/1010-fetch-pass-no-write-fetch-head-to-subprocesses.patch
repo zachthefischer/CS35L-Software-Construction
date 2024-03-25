@@ -1,0 +1,75 @@
+From 15184ae9da1474908060a5c9b8c6ca88891e415e Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Wed, 8 Mar 2023 22:22:05 +0000
+Subject: [PATCH 1010/2871] fetch: pass --no-write-fetch-head to subprocesses
+
+It seems a user would expect this option would work regardless
+of whether it's fetching from a single remote, many remotes,
+or recursing into submodules.
+
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c             |  2 ++
+ t/t5514-fetch-multiple.sh   |  7 +++++++
+ t/t5526-fetch-submodules.sh | 13 +++++++++++++
+ 3 files changed, 22 insertions(+)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index a09606b472..78513f1708 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -1880,6 +1880,8 @@ static void add_options_to_argv(struct strvec *argv)
+ 		strvec_push(argv, "--ipv4");
+ 	else if (family == TRANSPORT_FAMILY_IPV6)
+ 		strvec_push(argv, "--ipv6");
++	if (!write_fetch_head)
++		strvec_push(argv, "--no-write-fetch-head");
+ }
+ 
+ /* Fetch multiple remotes in parallel */
+diff --git a/t/t5514-fetch-multiple.sh b/t/t5514-fetch-multiple.sh
+index 54f422ced3..98f034aa77 100755
+--- a/t/t5514-fetch-multiple.sh
++++ b/t/t5514-fetch-multiple.sh
+@@ -58,6 +58,13 @@ test_expect_success 'git fetch --all' '
+ 	 test_cmp expect output)
+ '
+ 
++test_expect_success 'git fetch --all --no-write-fetch-head' '
++	(cd test &&
++	rm -f .git/FETCH_HEAD &&
++	git fetch --all --no-write-fetch-head &&
++	test_path_is_missing .git/FETCH_HEAD)
++'
++
+ test_expect_success 'git fetch --all should continue if a remote has errors' '
+ 	(git clone one test2 &&
+ 	 cd test2 &&
+diff --git a/t/t5526-fetch-submodules.sh b/t/t5526-fetch-submodules.sh
+index b9546ef8e5..dcdbe26a08 100755
+--- a/t/t5526-fetch-submodules.sh
++++ b/t/t5526-fetch-submodules.sh
+@@ -167,6 +167,19 @@ test_expect_success "fetch --recurse-submodules recurses into submodules" '
+ 	verify_fetch_result actual.err
+ '
+ 
++test_expect_success "fetch --recurse-submodules honors --no-write-fetch-head" '
++	(
++		cd downstream &&
++		git submodule foreach --recursive \
++		sh -c "cd \"\$(git rev-parse --git-dir)\" && rm -f FETCH_HEAD" &&
++
++		git fetch --recurse-submodules --no-write-fetch-head &&
++
++		git submodule foreach --recursive \
++		sh -c "cd \"\$(git rev-parse --git-dir)\" && ! test -f FETCH_HEAD"
++	)
++'
++
+ test_expect_success "submodule.recurse option triggers recursive fetch" '
+ 	add_submodule_commits &&
+ 	(
+-- 
+2.39.3 (Apple Git-145)
+

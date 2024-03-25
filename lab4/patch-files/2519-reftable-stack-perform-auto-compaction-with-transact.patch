@@ -1,0 +1,130 @@
+From 5c086453ff32a2ca07ac455594d59a9943b5d113 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 11 Dec 2023 10:07:46 +0100
+Subject: [PATCH 2519/2871] reftable/stack: perform auto-compaction with
+ transactional interface
+
+Whenever updating references or reflog entries in the reftable stack, we
+need to add a new table to the stack, thus growing the stack's length by
+one. The stack can grow to become quite long rather quickly, leading to
+performance issues when trying to read records. But besides performance
+issues, this can also lead to exhaustion of file descriptors very
+rapidly as every single table requires a separate descriptor when
+opening the stack.
+
+While git-pack-refs(1) fixes this issue for us by merging the tables, it
+runs too irregularly to keep the length of the stack within reasonable
+limits. This is why the reftable stack has an auto-compaction mechanism:
+`reftable_stack_add()` will call `reftable_stack_auto_compact()` after
+its added the new table, which will auto-compact the stack as required.
+
+But while this logic works alright for `reftable_stack_add()`, we do not
+do the same in `reftable_addition_commit()`, which is the transactional
+equivalent to the former function that allows us to write multiple
+updates to the stack atomically. Consequentially, we will easily run
+into file descriptor exhaustion in code paths that use many separate
+transactions like e.g. non-atomic fetches.
+
+Fix this issue by calling `reftable_stack_auto_compact()`.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c      |  6 +++++
+ reftable/stack_test.c | 56 +++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 62 insertions(+)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index f0cadad490..f5d18a842a 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -584,6 +584,12 @@ int reftable_addition_commit(struct reftable_addition *add)
+ 	add->new_tables_len = 0;
+ 
+ 	err = reftable_stack_reload(add->stack);
++	if (err)
++		goto done;
++
++	if (!add->stack->disable_auto_compact)
++		err = reftable_stack_auto_compact(add->stack);
++
+ done:
+ 	reftable_addition_close(add);
+ 	return err;
+diff --git a/reftable/stack_test.c b/reftable/stack_test.c
+index 52b4dc3b14..14a3fc11ee 100644
+--- a/reftable/stack_test.c
++++ b/reftable/stack_test.c
+@@ -289,6 +289,61 @@ static void test_reftable_stack_transaction_api(void)
+ 	clear_dir(dir);
+ }
+ 
++static void test_reftable_stack_transaction_api_performs_auto_compaction(void)
++{
++	char *dir = get_tmp_dir(__LINE__);
++	struct reftable_write_options cfg = {0};
++	struct reftable_addition *add = NULL;
++	struct reftable_stack *st = NULL;
++	int i, n = 20, err;
++
++	err = reftable_new_stack(&st, dir, cfg);
++	EXPECT_ERR(err);
++
++	for (i = 0; i <= n; i++) {
++		struct reftable_ref_record ref = {
++			.update_index = reftable_stack_next_update_index(st),
++			.value_type = REFTABLE_REF_SYMREF,
++			.value.symref = "master",
++		};
++		char name[100];
++
++		snprintf(name, sizeof(name), "branch%04d", i);
++		ref.refname = name;
++
++		/*
++		 * Disable auto-compaction for all but the last runs. Like this
++		 * we can ensure that we indeed honor this setting and have
++		 * better control over when exactly auto compaction runs.
++		 */
++		st->disable_auto_compact = i != n;
++
++		err = reftable_stack_new_addition(&add, st);
++		EXPECT_ERR(err);
++
++		err = reftable_addition_add(add, &write_test_ref, &ref);
++		EXPECT_ERR(err);
++
++		err = reftable_addition_commit(add);
++		EXPECT_ERR(err);
++
++		reftable_addition_destroy(add);
++
++		/*
++		 * The stack length should grow continuously for all runs where
++		 * auto compaction is disabled. When enabled, we should merge
++		 * all tables in the stack.
++		 */
++		if (i != n)
++			EXPECT(st->merged->stack_len == i + 1);
++		else
++			EXPECT(st->merged->stack_len == 1);
++	}
++
++	reftable_stack_destroy(st);
++	clear_dir(dir);
++}
++
+ static void test_reftable_stack_validate_refname(void)
+ {
+ 	struct reftable_write_options cfg = { 0 };
+@@ -1016,6 +1071,7 @@ int stack_test_main(int argc, const char *argv[])
+ 	RUN_TEST(test_reftable_stack_log_normalize);
+ 	RUN_TEST(test_reftable_stack_tombstone);
+ 	RUN_TEST(test_reftable_stack_transaction_api);
++	RUN_TEST(test_reftable_stack_transaction_api_performs_auto_compaction);
+ 	RUN_TEST(test_reftable_stack_update_index_check);
+ 	RUN_TEST(test_reftable_stack_uptodate);
+ 	RUN_TEST(test_reftable_stack_validate_refname);
+-- 
+2.39.3 (Apple Git-145)
+

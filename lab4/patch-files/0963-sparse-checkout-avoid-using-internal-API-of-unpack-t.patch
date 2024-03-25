@@ -1,0 +1,51 @@
+From 33b1b4c7681703c44babdbd229cc96a3ad540569 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Mon, 27 Feb 2023 15:28:15 +0000
+Subject: [PATCH 0963/2871] sparse-checkout: avoid using internal API of
+ unpack-trees, take 2
+
+Commit 2f6b1eb794 ("cache API: add a "INDEX_STATE_INIT" macro/function,
+add release_index()", 2023-01-12) mistakenly added some initialization
+of a member of unpack_trees_options that was intended to be
+internal-only.  This initialization should be done within
+update_sparsity() instead.
+
+Note that while o->result is mostly meant for unpack_trees() and
+update_sparsity() mostly operates without o->result,
+check_ok_to_remove() does consult it so we need to ensure it is properly
+initialized.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/sparse-checkout.c | 1 -
+ unpack-trees.c            | 1 +
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/sparse-checkout.c b/builtin/sparse-checkout.c
+index 4b7390ce36..8d5ae6f2a6 100644
+--- a/builtin/sparse-checkout.c
++++ b/builtin/sparse-checkout.c
+@@ -217,7 +217,6 @@ static int update_working_directory(struct pattern_list *pl)
+ 	o.head_idx = -1;
+ 	o.src_index = r->index;
+ 	o.dst_index = r->index;
+-	index_state_init(&o.result, r);
+ 	o.skip_sparse_checkout = 0;
+ 
+ 	setup_work_tree();
+diff --git a/unpack-trees.c b/unpack-trees.c
+index 6e4ca6fe80..c8dacd76c5 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -2101,6 +2101,7 @@ enum update_sparsity_result update_sparsity(struct unpack_trees_options *o,
+ 
+ 	old_show_all_errors = o->show_all_errors;
+ 	o->show_all_errors = 1;
++	index_state_init(&o->result, o->src_index->repo);
+ 
+ 	/* Sanity checks */
+ 	if (!o->update || o->index_only || o->skip_sparse_checkout)
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,150 @@
+From 2150b6fb473fe965edc5bbdbcf3b264bdfe544db Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:22 +0000
+Subject: [PATCH 2236/2871] documentation: fix capitalization
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/checkout.txt        |  2 +-
+ Documentation/config/user.txt            |  2 +-
+ Documentation/git-diff-tree.txt          |  4 ++--
+ Documentation/git-hook.txt               |  2 +-
+ Documentation/git-mergetool--lib.txt     | 10 +++++-----
+ Documentation/git-stripspace.txt         |  2 +-
+ Documentation/git-update-server-info.txt |  2 +-
+ Documentation/technical/reftable.txt     |  2 +-
+ 8 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/config/checkout.txt b/Documentation/config/checkout.txt
+index a54faab238..a323022993 100644
+--- a/Documentation/config/checkout.txt
++++ b/Documentation/config/checkout.txt
+@@ -30,7 +30,7 @@ checkout.workers::
+ 	all commands that perform checkout. E.g. checkout, clone, reset,
+ 	sparse-checkout, etc.
+ +
+-Note: parallel checkout usually delivers better performance for repositories
++Note: Parallel checkout usually delivers better performance for repositories
+ located on SSDs or over NFS. For repositories on spinning disks and/or machines
+ with a small number of cores, the default sequential checkout often performs
+ better. The size and compression level of a repository might also influence how
+diff --git a/Documentation/config/user.txt b/Documentation/config/user.txt
+index 2bbc8e929f..c1347fa7bc 100644
+--- a/Documentation/config/user.txt
++++ b/Documentation/config/user.txt
+@@ -40,7 +40,7 @@ user.signingKey::
+ 	your private ssh key or the public key when ssh-agent is used.
+ 	Alternatively it can contain a public key prefixed with `key::`
+ 	directly (e.g.: "key::ssh-rsa XXXXXX identifier"). The private key
+-	needs to be available via ssh-agent. If not set git will call
++	needs to be available via ssh-agent. If not set Git will call
+ 	gpg.ssh.defaultKeyCommand (e.g.: "ssh-add -L") and try to use the
+ 	first key available. For backward compatibility, a raw key which
+ 	begins with "ssh-", such as "ssh-rsa XXXXXX identifier", is treated
+diff --git a/Documentation/git-diff-tree.txt b/Documentation/git-diff-tree.txt
+index c2772a566a..22380d5c82 100644
+--- a/Documentation/git-diff-tree.txt
++++ b/Documentation/git-diff-tree.txt
+@@ -34,10 +34,10 @@ include::diff-options.txt[]
+ 	matching one of the provided pathspecs.
+ 
+ -r::
+-        recurse into sub-trees
++	Recurse into sub-trees
+ 
+ -t::
+-	show tree entry itself as well as subtrees.  Implies -r.
++	Show tree entry itself as well as subtrees.  Implies -r.
+ 
+ --root::
+ 	When `--root` is specified the initial commit will be shown as a big
+diff --git a/Documentation/git-hook.txt b/Documentation/git-hook.txt
+index 25237330b5..f6cc72d2ca 100644
+--- a/Documentation/git-hook.txt
++++ b/Documentation/git-hook.txt
+@@ -32,7 +32,7 @@ OPTIONS
+ -------
+ 
+ --to-stdin::
+-	For "run"; Specify a file which will be streamed into the
++	For "run"; specify a file which will be streamed into the
+ 	hook's stdin. The hook will receive the entire file from
+ 	beginning to EOF.
+ 
+diff --git a/Documentation/git-mergetool--lib.txt b/Documentation/git-mergetool--lib.txt
+index 3e8f59ac0e..0726b560d4 100644
+--- a/Documentation/git-mergetool--lib.txt
++++ b/Documentation/git-mergetool--lib.txt
+@@ -28,22 +28,22 @@ to define the operation mode for the functions listed below.
+ FUNCTIONS
+ ---------
+ get_merge_tool::
+-	returns a merge tool. the return code is 1 if we returned a guessed
++	Returns a merge tool. The return code is 1 if we returned a guessed
+ 	merge tool, else 0. '$GIT_MERGETOOL_GUI' may be set to 'true' to
+ 	search for the appropriate guitool.
+ 
+ get_merge_tool_cmd::
+-	returns the custom command for a merge tool.
++	Returns the custom command for a merge tool.
+ 
+ get_merge_tool_path::
+-	returns the custom path for a merge tool.
++	Returns the custom path for a merge tool.
+ 
+ initialize_merge_tool::
+-	bring merge tool specific functions into scope so they can be used or
++	Brings merge tool specific functions into scope so they can be used or
+ 	overridden.
+ 
+ run_merge_tool::
+-	launches a merge tool given the tool name and a true/false
++	Launches a merge tool given the tool name and a true/false
+ 	flag to indicate whether a merge base is present.
+ 	'$MERGED', '$LOCAL', '$REMOTE', and '$BASE' must be defined
+ 	for use by the merge tool.
+diff --git a/Documentation/git-stripspace.txt b/Documentation/git-stripspace.txt
+index 6b92cc7de7..a293327581 100644
+--- a/Documentation/git-stripspace.txt
++++ b/Documentation/git-stripspace.txt
+@@ -29,7 +29,7 @@ With no arguments, this will:
+ In the case where the input consists entirely of whitespace characters, no
+ output will be produced.
+ 
+-*NOTE*: This is intended for cleaning metadata, prefer the `--whitespace=fix`
++*NOTE*: This is intended for cleaning metadata. Prefer the `--whitespace=fix`
+ mode of linkgit:git-apply[1] for correcting whitespace of patches or files in
+ the repository.
+ 
+diff --git a/Documentation/git-update-server-info.txt b/Documentation/git-update-server-info.txt
+index ff32986d4c..6bc9b50d89 100644
+--- a/Documentation/git-update-server-info.txt
++++ b/Documentation/git-update-server-info.txt
+@@ -23,7 +23,7 @@ OPTIONS
+ -------
+ -f::
+ --force::
+-	update the info files from scratch.
++	Update the info files from scratch.
+ 
+ OUTPUT
+ ------
+diff --git a/Documentation/technical/reftable.txt b/Documentation/technical/reftable.txt
+index 6def498efd..82d919b261 100644
+--- a/Documentation/technical/reftable.txt
++++ b/Documentation/technical/reftable.txt
+@@ -175,7 +175,7 @@ log_index*
+ footer
+ ....
+ 
+-in a log-only file the first log block immediately follows the file
++In a log-only file the first log block immediately follows the file
+ header, without padding to block alignment.
+ 
+ Block size
+-- 
+2.39.3 (Apple Git-145)
+

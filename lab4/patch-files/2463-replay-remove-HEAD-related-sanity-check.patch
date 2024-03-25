@@ -1,0 +1,70 @@
+From fda7dea7c95a7958d36ead75116c1ffbf1791cc0 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:38 +0100
+Subject: [PATCH 2463/2871] replay: remove HEAD related sanity check
+
+We want replay to be a command that can be used on the server side on
+any branch, not just the current one, so we are going to stop updating
+HEAD in a future commit.
+
+A "sanity check" that makes sure we are replaying the current branch
+doesn't make sense anymore. Let's remove it.
+
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/replay.c         | 8 +-------
+ t/t3650-replay-basics.sh | 2 --
+ 2 files changed, 1 insertion(+), 9 deletions(-)
+
+diff --git a/builtin/replay.c b/builtin/replay.c
+index ca3867dc57..bdec2f2b97 100644
+--- a/builtin/replay.c
++++ b/builtin/replay.c
+@@ -123,7 +123,6 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	struct commit *onto;
+ 	const char *onto_name = NULL;
+ 	struct commit *last_commit = NULL, *last_picked_commit = NULL;
+-	struct object_id head;
+ 	struct lock_file lock = LOCK_INIT;
+ 	struct strvec rev_walk_args = STRVEC_INIT;
+ 	struct rev_info revs;
+@@ -162,11 +161,6 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	onto = peel_committish(onto_name);
+ 	strbuf_addf(&branch_name, "refs/heads/%s", argv[2]);
+ 
+-	/* Sanity check */
+-	if (repo_get_oid(the_repository, "HEAD", &head))
+-		die(_("Cannot read HEAD"));
+-	assert(oideq(&onto->object.oid, &head));
+-
+ 	repo_hold_locked_index(the_repository, &lock, LOCK_DIE_ON_ERROR);
+ 	if (repo_read_index(the_repository) < 0)
+ 		BUG("Could not read index");
+@@ -275,7 +269,7 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 			    oid_to_hex(&last_picked_commit->object.oid));
+ 		if (update_ref(reflog_msg.buf, "HEAD",
+ 			       &last_commit->object.oid,
+-			       &head,
++			       &onto->object.oid,
+ 			       REF_NO_DEREF, UPDATE_REFS_MSG_ON_ERR)) {
+ 			error(_("could not update %s"), argv[2]);
+ 			die("Failed to update %s", argv[2]);
+diff --git a/t/t3650-replay-basics.sh b/t/t3650-replay-basics.sh
+index 36c1b5082a..b5b9f9ade2 100755
+--- a/t/t3650-replay-basics.sh
++++ b/t/t3650-replay-basics.sh
+@@ -48,8 +48,6 @@ test_expect_success 'setup' '
+ '
+ 
+ test_expect_success 'using replay to rebase two branches, one on top of other' '
+-	git switch main &&
+-
+ 	git replay --onto main topic1 topic2 >result &&
+ 
+ 	git log --format=%s $(cut -f 3 -d " " result) >actual &&
+-- 
+2.39.3 (Apple Git-145)
+

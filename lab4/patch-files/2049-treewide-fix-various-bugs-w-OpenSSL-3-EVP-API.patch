@@ -1,0 +1,118 @@
+From e0b8c84240037a592c5bd5f18fc382a98a323bea Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Fri, 1 Sep 2023 02:09:28 +0000
+Subject: [PATCH 2049/2871] treewide: fix various bugs w/ OpenSSL 3+ EVP API
+
+The OpenSSL 3+ EVP API for SHA-* cannot support our prior use cases
+supported by other SHA-* implementations.  It has the following
+differences:
+
+1. ->init_fn is required before all use
+2. struct assignments don't work and requires ->clone_fn
+3. can't support ->update_fn after ->final_*fn
+
+While fixing cases 1 and 2 is merely the matter of calling ->init_fn and
+->clone_fn as appropriate, fixing case 3 requires calling ->final_*fn on
+a temporary context that's cloned from the primary context.
+
+Reported-by: Bagas Sanjaya <bagasdotme@gmail.com>
+Link: https://lore.kernel.org/ZPCL11k38PXTkFga@debian.me/
+Helped-by: brian m. carlson <sandals@crustytoothpaste.net>
+Fixes: 3e440ea0aba0 ("sha256: avoid functions deprecated in OpenSSL 3+")
+Fixes: bda9c12073e7 ("avoid SHA-1 functions deprecated in OpenSSL 3+")
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fast-import.c    | 1 +
+ builtin/index-pack.c     | 5 ++++-
+ builtin/unpack-objects.c | 5 ++++-
+ bulk-checkin.c           | 1 +
+ csum-file.c              | 2 +-
+ 5 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/fast-import.c b/builtin/fast-import.c
+index bbd9b2b3e7..09751422eb 100644
+--- a/builtin/fast-import.c
++++ b/builtin/fast-import.c
+@@ -1103,6 +1103,7 @@ static void stream_blob(uintmax_t len, struct object_id *oidout, uintmax_t mark)
+ 		|| (pack_size + PACK_SIZE_THRESHOLD + len) < pack_size)
+ 		cycle_packfile();
+ 
++	the_hash_algo->init_fn(&checkpoint.ctx);
+ 	hashfile_checkpoint(pack_file, &checkpoint);
+ 	offset = checkpoint.offset;
+ 
+diff --git a/builtin/index-pack.c b/builtin/index-pack.c
+index bb67e16655..81194c9f27 100644
+--- a/builtin/index-pack.c
++++ b/builtin/index-pack.c
+@@ -1166,6 +1166,7 @@ static void parse_pack_objects(unsigned char *hash)
+ 	struct ofs_delta_entry *ofs_delta = ofs_deltas;
+ 	struct object_id ref_delta_oid;
+ 	struct stat st;
++	git_hash_ctx tmp_ctx;
+ 
+ 	if (verbose)
+ 		progress = start_progress(
+@@ -1202,7 +1203,9 @@ static void parse_pack_objects(unsigned char *hash)
+ 
+ 	/* Check pack integrity */
+ 	flush();
+-	the_hash_algo->final_fn(hash, &input_ctx);
++	the_hash_algo->init_fn(&tmp_ctx);
++	the_hash_algo->clone_fn(&tmp_ctx, &input_ctx);
++	the_hash_algo->final_fn(hash, &tmp_ctx);
+ 	if (!hasheq(fill(the_hash_algo->rawsz), hash))
+ 		die(_("pack is corrupted (SHA1 mismatch)"));
+ 	use(the_hash_algo->rawsz);
+diff --git a/builtin/unpack-objects.c b/builtin/unpack-objects.c
+index 2c52c3a741..b16d38af13 100644
+--- a/builtin/unpack-objects.c
++++ b/builtin/unpack-objects.c
+@@ -608,6 +608,7 @@ int cmd_unpack_objects(int argc, const char **argv, const char *prefix UNUSED)
+ {
+ 	int i;
+ 	struct object_id oid;
++	git_hash_ctx tmp_ctx;
+ 
+ 	read_replace_refs = 0;
+ 
+@@ -668,7 +669,9 @@ int cmd_unpack_objects(int argc, const char **argv, const char *prefix UNUSED)
+ 	the_hash_algo->init_fn(&ctx);
+ 	unpack_all();
+ 	the_hash_algo->update_fn(&ctx, buffer, offset);
+-	the_hash_algo->final_oid_fn(&oid, &ctx);
++	the_hash_algo->init_fn(&tmp_ctx);
++	the_hash_algo->clone_fn(&tmp_ctx, &ctx);
++	the_hash_algo->final_oid_fn(&oid, &tmp_ctx);
+ 	if (strict) {
+ 		write_rest();
+ 		if (fsck_finish(&fsck_options))
+diff --git a/bulk-checkin.c b/bulk-checkin.c
+index d843279715..d03a40f2f9 100644
+--- a/bulk-checkin.c
++++ b/bulk-checkin.c
+@@ -270,6 +270,7 @@ static int deflate_to_pack(struct bulk_checkin_packfile *state,
+ 					  type, size);
+ 	the_hash_algo->init_fn(&ctx);
+ 	the_hash_algo->update_fn(&ctx, obuf, header_len);
++	the_hash_algo->init_fn(&checkpoint.ctx);
+ 
+ 	/* Note: idx is non-NULL when we are writing */
+ 	if ((flags & HASH_WRITE_OBJECT) != 0)
+diff --git a/csum-file.c b/csum-file.c
+index daf9b06dff..87961252c2 100644
+--- a/csum-file.c
++++ b/csum-file.c
+@@ -208,7 +208,7 @@ int hashfile_truncate(struct hashfile *f, struct hashfile_checkpoint *checkpoint
+ 	    lseek(f->fd, offset, SEEK_SET) != offset)
+ 		return -1;
+ 	f->total = offset;
+-	f->ctx = checkpoint->ctx;
++	the_hash_algo->clone_fn(&f->ctx, &checkpoint->ctx);
+ 	f->offset = 0; /* hashflush() was called in checkpoint */
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

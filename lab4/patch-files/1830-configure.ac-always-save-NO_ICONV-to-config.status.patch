@@ -1,0 +1,41 @@
+From fb8f7269c2fc69ada6238bc766168adbfd15a369 Mon Sep 17 00:00:00 2001
+From: Andreas Herrmann <aherrmann@suse.de>
+Date: Wed, 19 Jul 2023 16:29:58 +0200
+Subject: [PATCH 1830/2871] configure.ac: always save NO_ICONV to config.status
+
+In case 'configure --with-iconv=no' is used, NO_ICONV is not saved to
+config.status and thus git is built with iconv support.
+
+Always save NO_ICONV to config.status to honor what user selected
+during configure step.
+
+Signed-off-by: Andreas Herrmann <aherrmann@suse.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ configure.ac | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index e85e215f14..276593cd9d 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -644,7 +644,6 @@ LIBS="$old_LIBS"
+ GIT_UNSTASH_FLAGS($ICONVDIR)
+ 
+ GIT_CONF_SUBST([NEEDS_LIBICONV])
+-GIT_CONF_SUBST([NO_ICONV])
+ 
+ if test -n "$NO_ICONV"; then
+     NEEDS_LIBICONV=
+@@ -652,6 +651,8 @@ fi
+ 
+ fi
+ 
++GIT_CONF_SUBST([NO_ICONV])
++
+ #
+ # Define NO_DEFLATE_BOUND if deflateBound is missing from zlib.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,140 @@
+From 976b97e3fd95d5daa38ed453349f5a92157a1db2 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 21 Aug 2023 16:14:14 -0400
+Subject: [PATCH 1971/2871] diff: spell DIFF_INDEX_CACHED out when calling
+ run_diff_index()
+
+Many callers of run_diff_index() passed literal "1" for the option
+flag word, which should better be spelled out as DIFF_INDEX_CACHED
+for readablity.  Everybody else passes "0" that can stay as-is.
+
+The other bit in the option flag word is DIFF_INDEX_MERGE_BASE, but
+curiously there is only one caller that can pass it, which is "git
+diff-index --merge-base" itself---no internal callers uses the
+feature.
+
+A bit tricky call to the function is in builtin/submodule--helper.c
+where the .cached member in a private struct is set/reset as a plain
+Boolean flag, which happens to be "1" and happens to match the value
+of DIFF_INDEX_CACHED.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ add-interactive.c           | 2 +-
+ builtin/am.c                | 4 ++--
+ builtin/stash.c             | 2 +-
+ builtin/submodule--helper.c | 2 +-
+ diff-lib.c                  | 2 +-
+ wt-status.c                 | 6 +++---
+ 6 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/add-interactive.c b/add-interactive.c
+index add9a1ad43..7fd00c5e25 100644
+--- a/add-interactive.c
++++ b/add-interactive.c
+@@ -569,7 +569,7 @@ static int get_modified_files(struct repository *r,
+ 			copy_pathspec(&rev.prune_data, ps);
+ 
+ 		if (s.mode == FROM_INDEX)
+-			run_diff_index(&rev, 1);
++			run_diff_index(&rev, DIFF_INDEX_CACHED);
+ 		else {
+ 			rev.diffopt.flags.ignore_dirty_submodules = 1;
+ 			run_diff_files(&rev, 0);
+diff --git a/builtin/am.c b/builtin/am.c
+index 8bde034fae..202040b62e 100644
+--- a/builtin/am.c
++++ b/builtin/am.c
+@@ -1430,7 +1430,7 @@ static void write_index_patch(const struct am_state *state)
+ 	rev_info.diffopt.close_file = 1;
+ 	add_pending_object(&rev_info, &tree->object, "");
+ 	diff_setup_done(&rev_info.diffopt);
+-	run_diff_index(&rev_info, 1);
++	run_diff_index(&rev_info, DIFF_INDEX_CACHED);
+ 	release_revisions(&rev_info);
+ }
+ 
+@@ -1593,7 +1593,7 @@ static int fall_back_threeway(const struct am_state *state, const char *index_pa
+ 		rev_info.diffopt.filter |= diff_filter_bit('M');
+ 		add_pending_oid(&rev_info, "HEAD", &our_tree, 0);
+ 		diff_setup_done(&rev_info.diffopt);
+-		run_diff_index(&rev_info, 1);
++		run_diff_index(&rev_info, DIFF_INDEX_CACHED);
+ 		release_revisions(&rev_info);
+ 	}
+ 
+diff --git a/builtin/stash.c b/builtin/stash.c
+index fe64cde9ce..fe5052f12f 100644
+--- a/builtin/stash.c
++++ b/builtin/stash.c
+@@ -1111,7 +1111,7 @@ static int check_changes_tracked_files(const struct pathspec *ps)
+ 	add_head_to_pending(&rev);
+ 	diff_setup_done(&rev.diffopt);
+ 
+-	result = run_diff_index(&rev, 1);
++	result = run_diff_index(&rev, DIFF_INDEX_CACHED);
+ 	if (diff_result_code(&rev.diffopt, result)) {
+ 		ret = 1;
+ 		goto done;
+diff --git a/builtin/submodule--helper.c b/builtin/submodule--helper.c
+index f6871efd95..125ea80d21 100644
+--- a/builtin/submodule--helper.c
++++ b/builtin/submodule--helper.c
+@@ -1141,7 +1141,7 @@ static int compute_summary_module_list(struct object_id *head_oid,
+ 	}
+ 
+ 	if (diff_cmd == DIFF_INDEX)
+-		run_diff_index(&rev, info->cached);
++		run_diff_index(&rev, info->cached ? DIFF_INDEX_CACHED : 0);
+ 	else
+ 		run_diff_files(&rev, 0);
+ 	prepare_submodule_summary(info, &list);
+diff --git a/diff-lib.c b/diff-lib.c
+index 6b0c6a7180..cfa3489111 100644
+--- a/diff-lib.c
++++ b/diff-lib.c
+@@ -682,7 +682,7 @@ int index_differs_from(struct repository *r,
+ 			rev.diffopt.flags.ignore_submodules = flags->ignore_submodules;
+ 	}
+ 	rev.diffopt.ita_invisible_in_index = ita_invisible_in_index;
+-	run_diff_index(&rev, 1);
++	run_diff_index(&rev, DIFF_INDEX_CACHED);
+ 	has_changes = rev.diffopt.flags.has_changes;
+ 	release_revisions(&rev);
+ 	return (has_changes != 0);
+diff --git a/wt-status.c b/wt-status.c
+index 5b1378965c..bf8687b357 100644
+--- a/wt-status.c
++++ b/wt-status.c
+@@ -675,7 +675,7 @@ static void wt_status_collect_changes_index(struct wt_status *s)
+ 	rev.diffopt.flags.recursive = 1;
+ 
+ 	copy_pathspec(&rev.prune_data, &s->pathspec);
+-	run_diff_index(&rev, 1);
++	run_diff_index(&rev, DIFF_INDEX_CACHED);
+ 	release_revisions(&rev);
+ }
+ 
+@@ -1156,7 +1156,7 @@ static void wt_longstatus_print_verbose(struct wt_status *s)
+ 		rev.diffopt.a_prefix = "c/";
+ 		rev.diffopt.b_prefix = "i/";
+ 	} /* else use prefix as per user config */
+-	run_diff_index(&rev, 1);
++	run_diff_index(&rev, DIFF_INDEX_CACHED);
+ 	if (s->verbose > 1 &&
+ 	    wt_status_check_worktree_changes(s, &dirty_submodules)) {
+ 		status_printf_ln(s, c,
+@@ -2614,7 +2614,7 @@ int has_uncommitted_changes(struct repository *r,
+ 	}
+ 
+ 	diff_setup_done(&rev_info.diffopt);
+-	result = run_diff_index(&rev_info, 1);
++	result = run_diff_index(&rev_info, DIFF_INDEX_CACHED);
+ 	result = diff_result_code(&rev_info.diffopt, result);
+ 	release_revisions(&rev_info);
+ 	return result;
+-- 
+2.39.3 (Apple Git-145)
+

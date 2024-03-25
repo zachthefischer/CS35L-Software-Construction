@@ -1,0 +1,50 @@
+From 18bc8eb7b51f9249fd2d57aa09f2aa959dae14a2 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Aug 2021 18:47:42 -0400
+Subject: [PATCH 1023/2871] range-diff: drop useless "offset" variable from
+ read_patches()
+
+The "offset" variable was was introduced in 44b67cb62b (range-diff:
+split lines manually, 2019-07-11), but it has never done anything
+useful. We use it to count up the number of bytes we've consumed, but we
+never look at the result. It was probably copied accidentally from an
+almost-identical loop in apply.c:find_header() (and the point of that
+commit was to make use of the parse_git_diff_header() function which
+underlies both).
+
+Because the variable was set but not used, most compilers didn't seem to
+notice, but the upcoming clang-14 does complain about it, via its
+-Wunused-but-set-variable warning.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Derrick Stolee <dstolee@microsoft.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ range-diff.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/range-diff.c b/range-diff.c
+index b9950f10c8..559a9291f9 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -48,7 +48,7 @@ static int read_patches(const char *range, struct string_list *list,
+ 	struct patch_util *util = NULL;
+ 	int in_header = 1;
+ 	char *line, *current_filename = NULL;
+-	int offset, len;
++	int len;
+ 	size_t size;
+ 
+ 	strvec_pushl(&cp.args, "log", "--no-color", "-p", "--no-merges",
+@@ -83,7 +83,7 @@ static int read_patches(const char *range, struct string_list *list,
+ 
+ 	line = contents.buf;
+ 	size = contents.len;
+-	for (offset = 0; size > 0; offset += len, size -= len, line += len) {
++	for (; size > 0; size -= len, line += len) {
+ 		const char *p;
+ 
+ 		len = find_end_of_line(line, size);
+-- 
+2.39.3 (Apple Git-145)
+

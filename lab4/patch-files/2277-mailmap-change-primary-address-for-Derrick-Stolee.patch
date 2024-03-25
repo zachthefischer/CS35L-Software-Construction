@@ -1,0 +1,33 @@
+From 6e5457d8c7332c279e1482c442922f954af5f8f2 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <stolee@gmail.com>
+Date: Thu, 12 Oct 2023 17:30:33 +0000
+Subject: [PATCH 2277/2871] mailmap: change primary address for Derrick Stolee
+
+The previous primary address is no longer valid.
+
+Signed-off-by: Derrick Stolee <stolee@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .mailmap | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/.mailmap b/.mailmap
+index dc31d70b8c..82129be449 100644
+--- a/.mailmap
++++ b/.mailmap
+@@ -59,9 +59,9 @@ David Reiss <dreiss@facebook.com> <dreiss@dreiss-vmware.(none)>
+ David S. Miller <davem@davemloft.net>
+ David Turner <novalis@novalis.org> <dturner@twopensource.com>
+ David Turner <novalis@novalis.org> <dturner@twosigma.com>
+-Derrick Stolee <derrickstolee@github.com> <stolee@gmail.com>
+-Derrick Stolee <derrickstolee@github.com> Derrick Stolee via GitGitGadget <gitgitgadget@gmail.com>
+-Derrick Stolee <derrickstolee@github.com> <dstolee@microsoft.com>
++Derrick Stolee <stolee@gmail.com> <derrickstolee@github.com>
++Derrick Stolee <stolee@gmail.com> Derrick Stolee via GitGitGadget <gitgitgadget@gmail.com>
++Derrick Stolee <stolee@gmail.com> <dstolee@microsoft.com>
+ Deskin Miller <deskinm@umich.edu>
+ Đoàn Trần Công Danh <congdanhqx@gmail.com> Doan Tran Cong Danh
+ Dirk Süsserott <newsletter@dirk.my1.cc>
+-- 
+2.39.3 (Apple Git-145)
+

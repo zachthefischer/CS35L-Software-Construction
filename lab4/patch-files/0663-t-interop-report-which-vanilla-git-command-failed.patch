@@ -1,0 +1,38 @@
+From fca2d86c97838920a42e192c5a1738874e492613 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 12 Jan 2023 11:39:36 -0500
+Subject: [PATCH 0663/2871] t/interop: report which vanilla git command failed
+
+The interop test library sets up wrappers "git.a" and "git.b" to
+represent the two versions to be tested. It also wraps vanilla "git" to
+report an error, with the goal of catching tests which accidentally fail
+to use one of the version-specific wrappers (which could invalidate the
+tests in a very subtle way).
+
+But when it catches an invocation of vanilla git, it doesn't give any
+details, which makes it very hard to debug exactly which invocation is
+responsible (especially if it's buried in a function invocation, etc).
+Let's report the arguments passed to git, which helps narrow it down.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/interop/interop-lib.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/interop/interop-lib.sh b/t/interop/interop-lib.sh
+index 3e0a2911d4..62f4481b6e 100644
+--- a/t/interop/interop-lib.sh
++++ b/t/interop/interop-lib.sh
+@@ -68,7 +68,7 @@ generate_wrappers () {
+ 	wrap_git .bin/git.a "$DIR_A" &&
+ 	wrap_git .bin/git.b "$DIR_B" &&
+ 	write_script .bin/git <<-\EOF &&
+-	echo >&2 fatal: test tried to run generic git
++	echo >&2 fatal: test tried to run generic git: $*
+ 	exit 1
+ 	EOF
+ 	PATH=$(pwd)/.bin:$PATH
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,65 @@
+From 945c72250afcf50a0f5394151b76d5da28fa6f94 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 16 Jul 2023 10:52:33 +0200
+Subject: [PATCH 1813/2871] strbuf: use skip_prefix() in strbuf_addftime()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use the now common skip_prefix() cascade instead of a case statement to
+parse the strftime(3) format in strbuf_addftime().  skip_prefix() parses
+the "fmt" pointer and advances it appropriately, making additional
+pointer arithmetic unnecessary.  The resulting code is more compact and
+consistent with most other strbuf_expand_step() loops.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ strbuf.c | 24 ++++++------------------
+ 1 file changed, 6 insertions(+), 18 deletions(-)
+
+diff --git a/strbuf.c b/strbuf.c
+index bfa1438543..ccb9b4dc94 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -996,31 +996,19 @@ void strbuf_addftime(struct strbuf *sb, const char *fmt, const struct tm *tm,
+ 	 * of seconds.
+ 	 */
+ 	while (strbuf_expand_step(&munged_fmt, &fmt)) {
+-		switch (*fmt) {
+-		case '%':
++		if (skip_prefix(fmt, "%", &fmt))
+ 			strbuf_addstr(&munged_fmt, "%%");
+-			fmt++;
+-			break;
+-		case 's':
++		else if (skip_prefix(fmt, "s", &fmt))
+ 			strbuf_addf(&munged_fmt, "%"PRItime,
+ 				    (timestamp_t)tm_to_time_t(tm) -
+ 				    3600 * (tz_offset / 100) -
+ 				    60 * (tz_offset % 100));
+-			fmt++;
+-			break;
+-		case 'z':
++		else if (skip_prefix(fmt, "z", &fmt))
+ 			strbuf_addf(&munged_fmt, "%+05d", tz_offset);
+-			fmt++;
+-			break;
+-		case 'Z':
+-			if (suppress_tz_name) {
+-				fmt++;
+-				break;
+-			}
+-			/* FALLTHROUGH */
+-		default:
++		else if (suppress_tz_name && skip_prefix(fmt, "Z", &fmt))
++			; /* nothing */
++		else
+ 			strbuf_addch(&munged_fmt, '%');
+-		}
+ 	}
+ 	fmt = munged_fmt.buf;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,26 @@
+From 9d2cdd8ae85694a6920aa2a2242f95a226a02898 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 29 Jan 2024 12:28:38 -0800
+Subject: [PATCH 2775/2871] merge-ort.c: comment style fix
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index 6491070d96..6fd9d06420 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -2644,7 +2644,7 @@ static void apply_directory_rename_modifications(struct merge_options *opt,
+ 			oidcpy(&ci->stages[i].oid, null_oid());
+ 		}
+ 
+-		// Now we want to focus on new_ci, so reassign ci to it
++		/* Now we want to focus on new_ci, so reassign ci to it. */
+ 		ci = new_ci;
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

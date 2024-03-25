@@ -1,0 +1,40 @@
+From 110feb893a16c009ffc8771b4204b2dc5c54c8c6 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 29 Nov 2023 08:25:01 +0100
+Subject: [PATCH 2477/2871] t3310: stop checking for reference existence via
+ `test -f`
+
+One of the tests in t3310 exercises whether the special references
+`NOTES_MERGE_PARTIAL` and `NOTES_MERGE_REF` exist as expected when the
+notes subsystem runs into a merge conflict. This is done by checking
+on-disk data structures directly though instead of asking the reference
+backend.
+
+Refactor the test to use git-rev-parse(1) instead.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3310-notes-merge-manual-resolve.sh | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/t/t3310-notes-merge-manual-resolve.sh b/t/t3310-notes-merge-manual-resolve.sh
+index 60d6ed2dc8..597df5ebc0 100755
+--- a/t/t3310-notes-merge-manual-resolve.sh
++++ b/t/t3310-notes-merge-manual-resolve.sh
+@@ -561,9 +561,9 @@ y and z notes on 4th commit
+ EOF
+ 	# Fail to finalize merge
+ 	test_must_fail git notes merge --commit >output 2>&1 &&
+-	# .git/NOTES_MERGE_* must remain
+-	test -f .git/NOTES_MERGE_PARTIAL &&
+-	test -f .git/NOTES_MERGE_REF &&
++	# NOTES_MERGE_* refs and .git/NOTES_MERGE_* state files must remain
++	git rev-parse --verify NOTES_MERGE_PARTIAL &&
++	git rev-parse --verify NOTES_MERGE_REF &&
+ 	test -f .git/NOTES_MERGE_WORKTREE/$commit_sha1 &&
+ 	test -f .git/NOTES_MERGE_WORKTREE/$commit_sha2 &&
+ 	test -f .git/NOTES_MERGE_WORKTREE/$commit_sha3 &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,52 @@
+From 825babe5d5c720cb196f4f12c8eeb15fe00e95a1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 29 Nov 2022 13:23:53 +0100
+Subject: [PATCH 0463/2871] pack-objects: fix handling of multiple --filter
+ options
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 5cb28270a1 (pack-objects: lazily set up "struct rev_info", don't
+leak, 2022-03-28) --filter options given to git pack-objects overrule
+earlier ones, letting only the leftmost win and leaking the memory
+allocated for earlier ones.  Fix that by only initializing the rev_info
+struct once.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-objects.c                 | 3 ++-
+ t/t5317-pack-objects-filter-objects.sh | 2 +-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 573d0b20b7..c702c09dd4 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -4158,7 +4158,8 @@ static struct list_objects_filter_options *po_filter_revs_init(void *value)
+ {
+ 	struct po_filter_data *data = value;
+ 
+-	repo_init_revisions(the_repository, &data->revs, NULL);
++	if (!data->have_revs)
++		repo_init_revisions(the_repository, &data->revs, NULL);
+ 	data->have_revs = 1;
+ 
+ 	return &data->revs.filter;
+diff --git a/t/t5317-pack-objects-filter-objects.sh b/t/t5317-pack-objects-filter-objects.sh
+index 25faebaada..5b707d911b 100755
+--- a/t/t5317-pack-objects-filter-objects.sh
++++ b/t/t5317-pack-objects-filter-objects.sh
+@@ -265,7 +265,7 @@ test_expect_success 'verify normal and blob:limit packfiles have same commits/tr
+ 	test_cmp expected observed
+ '
+ 
+-test_expect_failure 'verify small limit and big limit results in small limit' '
++test_expect_success 'verify small limit and big limit results in small limit' '
+ 	git -C r2 ls-files -s large.1000 >ls_files_result &&
+ 	test_parse_ls_files_stage_oids <ls_files_result |
+ 	sort >expected &&
+-- 
+2.39.3 (Apple Git-145)
+

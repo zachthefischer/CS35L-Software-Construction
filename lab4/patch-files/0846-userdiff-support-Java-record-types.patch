@@ -1,0 +1,98 @@
+From 575e6fcfcc961a64a222e0241cdc117d24f9ec87 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Wed, 8 Feb 2023 00:42:58 +0100
+Subject: [PATCH 0846/2871] userdiff: support Java record types
+
+A new kind of class was added in Java 16 -- records.[1]  The syntax of
+records is similar to regular classes with one important distinction:
+the name of the record class is followed by a mandatory list of
+components.  The list is enclosed in parentheses, it may be empty, and
+it may immediately follow the name of the class or type parameters, if
+any, with or without separating whitespace.  For example:
+
+    public record Example(int i, String s) {
+    }
+
+    public record WithTypeParameters<A, B>(A a, B b, String s) {
+    }
+
+    record SpaceBeforeComponents (String comp1, int comp2) {
+    }
+
+Support records in the builtin userdiff pattern for Java.  Add "record"
+to the alternatives of keywords for kinds of class.
+
+Allowing matching various possibilities for the type parameters and/or
+list of the components of a record has already been covered by the
+preceding patch.
+
+[1] detailed description is available in "JEP 395: Records"
+    https://openjdk.org/jeps/395
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Reviewed-by: Johannes Sixt <j6t@kdbg.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4018/java-record                         | 6 ++++++
+ t/t4018/java-record-space-before-components | 6 ++++++
+ t/t4018/java-record-type-parameters         | 6 ++++++
+ userdiff.c                                  | 4 ++--
+ 4 files changed, 20 insertions(+), 2 deletions(-)
+ create mode 100644 t/t4018/java-record
+ create mode 100644 t/t4018/java-record-space-before-components
+ create mode 100644 t/t4018/java-record-type-parameters
+
+diff --git a/t/t4018/java-record b/t/t4018/java-record
+new file mode 100644
+index 0000000000..97aa819dd8
+--- /dev/null
++++ b/t/t4018/java-record
+@@ -0,0 +1,6 @@
++public record RIGHT(int comp1, double comp2, String comp3) {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    static int ChangeMe;
++}
+diff --git a/t/t4018/java-record-space-before-components b/t/t4018/java-record-space-before-components
+new file mode 100644
+index 0000000000..9827f22583
+--- /dev/null
++++ b/t/t4018/java-record-space-before-components
+@@ -0,0 +1,6 @@
++public record RIGHT (String components, String after, String space) {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    static int ChangeMe;
++}
+diff --git a/t/t4018/java-record-type-parameters b/t/t4018/java-record-type-parameters
+new file mode 100644
+index 0000000000..f62a035cc8
+--- /dev/null
++++ b/t/t4018/java-record-type-parameters
+@@ -0,0 +1,6 @@
++public record RIGHT<A, N extends Number>(A comp1, N comp2, int comp3) {
++    static int ONE;
++    static int TWO;
++    static int THREE;
++    static int ChangeMe;
++}
+diff --git a/userdiff.c b/userdiff.c
+index bc5f3ed4c3..37ac98e177 100644
+--- a/userdiff.c
++++ b/userdiff.c
+@@ -170,8 +170,8 @@ PATTERNS("html",
+ 	 "[^<>= \t]+"),
+ PATTERNS("java",
+ 	 "!^[ \t]*(catch|do|for|if|instanceof|new|return|switch|throw|while)\n"
+-	 /* Class, enum, and interface declarations */
+-	 "^[ \t]*(([a-z]+[ \t]+)*(class|enum|interface)[ \t]+.*)$\n"
++	 /* Class, enum, interface, and record declarations */
++	 "^[ \t]*(([a-z]+[ \t]+)*(class|enum|interface|record)[ \t]+.*)$\n"
+ 	 /* Method definitions; note that constructor signatures are not */
+ 	 /* matched because they are indistinguishable from method calls. */
+ 	 "^[ \t]*(([A-Za-z_<>&][][?&<>.,A-Za-z_0-9]*[ \t]+)+[A-Za-z_][A-Za-z_0-9]*[ \t]*\\([^;]*)$",
+-- 
+2.39.3 (Apple Git-145)
+

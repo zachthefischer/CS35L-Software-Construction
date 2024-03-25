@@ -1,0 +1,112 @@
+From 6cbae640006c3a9e1bb22654a8def7f4bef775b3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Thu, 28 Dec 2023 20:19:06 +0100
+Subject: [PATCH 2623/2871] mem-pool: fix big allocations
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Memory pool allocations that require a new block and would fill at
+least half of it are handled specially.  Before 158dfeff3d (mem-pool:
+add life cycle management functions, 2018-07-02) they used to be
+allocated outside of the pool.  This patch made mem_pool_alloc() create
+a bespoke block instead, to allow releasing it when the pool gets
+discarded.
+
+Unfortunately mem_pool_alloc() returns a pointer to the start of such a
+bespoke block, i.e. to the struct mp_block at its top.  When the caller
+writes to it, the management information gets corrupted.  This affects
+mem_pool_discard() and -- if there are no other blocks in the pool --
+also mem_pool_alloc().
+
+Return the payload pointer of bespoke blocks, just like for smaller
+allocations, to protect the management struct.
+
+Also update next_free to mark the block as full.  This is only strictly
+necessary for the first allocated block, because subsequent ones are
+inserted after the current block and never considered for further
+allocations, but it's easier to just do it in all cases.
+
+Add a basic unit test to demonstrate the issue by using
+mem_pool_calloc() with a tiny block size, which forces the creation of a
+bespoke block.
+
+Helped-by: Phillip Wood <phillip.wood123@gmail.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile                  |  1 +
+ mem-pool.c                |  6 +++---
+ t/unit-tests/t-mem-pool.c | 31 +++++++++++++++++++++++++++++++
+ 3 files changed, 35 insertions(+), 3 deletions(-)
+ create mode 100644 t/unit-tests/t-mem-pool.c
+
+diff --git a/Makefile b/Makefile
+index 88ba7a3c51..15990ff312 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1340,6 +1340,7 @@ THIRD_PARTY_SOURCES += sha1collisiondetection/%
+ THIRD_PARTY_SOURCES += sha1dc/%
+ 
+ UNIT_TEST_PROGRAMS += t-basic
++UNIT_TEST_PROGRAMS += t-mem-pool
+ UNIT_TEST_PROGRAMS += t-strbuf
+ UNIT_TEST_PROGS = $(patsubst %,$(UNIT_TEST_BIN)/%$X,$(UNIT_TEST_PROGRAMS))
+ UNIT_TEST_OBJS = $(patsubst %,$(UNIT_TEST_DIR)/%.o,$(UNIT_TEST_PROGRAMS))
+diff --git a/mem-pool.c b/mem-pool.c
+index c34846d176..e8d976c3ee 100644
+--- a/mem-pool.c
++++ b/mem-pool.c
+@@ -99,9 +99,9 @@ void *mem_pool_alloc(struct mem_pool *pool, size_t len)
+ 
+ 	if (!p) {
+ 		if (len >= (pool->block_alloc / 2))
+-			return mem_pool_alloc_block(pool, len, pool->mp_block);
+-
+-		p = mem_pool_alloc_block(pool, pool->block_alloc, NULL);
++			p = mem_pool_alloc_block(pool, len, pool->mp_block);
++		else
++			p = mem_pool_alloc_block(pool, pool->block_alloc, NULL);
+ 	}
+ 
+ 	r = p->next_free;
+diff --git a/t/unit-tests/t-mem-pool.c b/t/unit-tests/t-mem-pool.c
+new file mode 100644
+index 0000000000..a0d57df761
+--- /dev/null
++++ b/t/unit-tests/t-mem-pool.c
+@@ -0,0 +1,31 @@
++#include "test-lib.h"
++#include "mem-pool.h"
++
++static void setup_static(void (*f)(struct mem_pool *), size_t block_alloc)
++{
++	struct mem_pool pool = { .block_alloc = block_alloc };
++	f(&pool);
++	mem_pool_discard(&pool, 0);
++}
++
++static void t_calloc_100(struct mem_pool *pool)
++{
++	size_t size = 100;
++	char *buffer = mem_pool_calloc(pool, 1, size);
++	for (size_t i = 0; i < size; i++)
++		check_int(buffer[i], ==, 0);
++	if (!check(pool->mp_block != NULL))
++		return;
++	check(pool->mp_block->next_free != NULL);
++	check(pool->mp_block->end != NULL);
++}
++
++int cmd_main(int argc, const char **argv)
++{
++	TEST(setup_static(t_calloc_100, 1024 * 1024),
++	     "mem_pool_calloc returns 100 zeroed bytes with big block");
++	TEST(setup_static(t_calloc_100, 1),
++	     "mem_pool_calloc returns 100 zeroed bytes with tiny block");
++
++	return test_done();
++}
+-- 
+2.39.3 (Apple Git-145)
+

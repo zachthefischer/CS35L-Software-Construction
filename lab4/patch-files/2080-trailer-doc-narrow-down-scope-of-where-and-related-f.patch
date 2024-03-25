@@ -1,0 +1,57 @@
+From f659c56a8c43ce3d6e44c926ef2eb3883a4809e0 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 7 Sep 2023 22:20:00 +0000
+Subject: [PATCH 2080/2871] trailer doc: narrow down scope of --where and
+ related flags
+
+The wording "all configuration variables" is misleading (the same could
+be said to the descriptions of the "--[no-]if-exists" and the
+"--[no-]if-missing" options).  Specifying --where=value overrides only
+the trailer.where variable and applicable trailer.<token>.where
+variables, and --no-where stops the overriding of these variables.
+Ditto for the other two with their relevant configuration variables.
+
+Reported-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 91a4dbc9a7..72f5bdb652 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -112,7 +112,8 @@ OPTIONS
+ --where <placement>::
+ --no-where::
+ 	Specify where all new trailers will be added.  A setting
+-	provided with '--where' overrides all configuration variables
++	provided with '--where' overrides the `trailer.where` and any
++	applicable `trailer.<token>.where` configuration variables
+ 	and applies to all '--trailer' options until the next occurrence of
+ 	'--where' or '--no-where'. Upon encountering '--no-where', clear the
+ 	effect of any previous use of '--where', such that the relevant configuration
+@@ -123,7 +124,8 @@ OPTIONS
+ --no-if-exists::
+ 	Specify what action will be performed when there is already at
+ 	least one trailer with the same <token> in the input.  A setting
+-	provided with '--if-exists' overrides all configuration variables
++	provided with '--if-exists' overrides the `trailer.ifExists` and any
++	applicable `trailer.<token>.ifExists` configuration variables
+ 	and applies to all '--trailer' options until the next occurrence of
+ 	'--if-exists' or '--no-if-exists'. Upon encountering '--no-if-exists, clear the
+ 	effect of any previous use of '--if-exists, such that the relevant configuration
+@@ -134,7 +136,8 @@ OPTIONS
+ --no-if-missing::
+ 	Specify what action will be performed when there is no other
+ 	trailer with the same <token> in the input.  A setting
+-	provided with '--if-missing' overrides all configuration variables
++	provided with '--if-missing' overrides the `trailer.ifMissing` and any
++	applicable `trailer.<token>.ifMissing` configuration variables
+ 	and applies to all '--trailer' options until the next occurrence of
+ 	'--if-missing' or '--no-if-missing'. Upon encountering '--no-if-missing,
+ 	clear the effect of any previous use of '--if-missing, such that the relevant
+-- 
+2.39.3 (Apple Git-145)
+

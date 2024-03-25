@@ -1,0 +1,80 @@
+From eb319d6771f5829dc26499af93050350083adc7d Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 7 Jul 2023 20:31:36 -0400
+Subject: [PATCH 1744/2871] commit-graph.c: extract `verify_one_commit_graph()`
+
+When the `verify_commit_graph()` function was extended to support
+commit-graph chains via 3da4b609bb1 (commit-graph: verify chains with
+--shallow mode, 2019-06-18), it did so by recursively calling itself on
+each layer of the commit-graph chain.
+
+In practice this poses no issues, since commit-graph chains do not loop,
+and there are few enough of them that adding additional frames to the
+stack is not a problem.
+
+A future commit will consolidate the progress output from `git
+commit-graph verify` when verifying chained commit-graphs to print a
+single line instead of one progress meter per commit-graph layer.
+Prepare for this by extracting a routine to verify a single layer of a
+commit-graph.
+
+Note that `verify_commit_graph()` is still recursive after this patch,
+but this will change in the subsequent patch.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 24 ++++++++++++++++--------
+ 1 file changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 843bdb458d..e846920935 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2543,18 +2543,14 @@ static int commit_graph_checksum_valid(struct commit_graph *g)
+ 	return hashfile_checksum_valid(g->data, g->data_len);
+ }
+ 
+-int verify_commit_graph(struct repository *r, struct commit_graph *g, int flags)
++static int verify_one_commit_graph(struct repository *r,
++				   struct commit_graph *g,
++				   int flags)
+ {
+ 	uint32_t i, cur_fanout_pos = 0;
+ 	struct object_id prev_oid, cur_oid;
+ 	int generation_zero = 0;
+ 	struct progress *progress = NULL;
+-	int local_error = 0;
+-
+-	if (!g) {
+-		graph_report("no commit-graph file loaded");
+-		return 1;
+-	}
+ 
+ 	verify_commit_graph_error = verify_commit_graph_lite(g);
+ 	if (verify_commit_graph_error)
+@@ -2700,7 +2696,19 @@ int verify_commit_graph(struct repository *r, struct commit_graph *g, int flags)
+ 	}
+ 	stop_progress(&progress);
+ 
+-	local_error = verify_commit_graph_error;
++	return verify_commit_graph_error;
++}
++
++int verify_commit_graph(struct repository *r, struct commit_graph *g, int flags)
++{
++	int local_error = 0;
++
++	if (!g) {
++		graph_report("no commit-graph file loaded");
++		return 1;
++	}
++
++	local_error = verify_one_commit_graph(r, g, flags);
+ 
+ 	if (!(flags & COMMIT_GRAPH_VERIFY_SHALLOW) && g->base_graph)
+ 		local_error |= verify_commit_graph(r, g->base_graph, flags);
+-- 
+2.39.3 (Apple Git-145)
+

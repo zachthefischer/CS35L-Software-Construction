@@ -1,0 +1,47 @@
+From f4b98e17cf290883894606623e90d42747bce25e Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sat, 18 Mar 2023 16:46:42 +0100
+Subject: [PATCH 1047/2871] t1010: don't create unused files
+
+Builtin "git mktree" writes the the object name of the tree object built
+to the standard output.  Tests 'mktree refuses to read ls-tree -r output
+(1)' and 'mktree refuses to read ls-tree -r output (2)' in
+"t1010-mktree.sh" redirect output of "git mktree" to a file, but don't
+use its contents in assertions.
+
+Don't redirect output of "git mktree" to file "actual" in tests that
+assert that an invocation of "git mktree" must fail.
+
+Output of "git mktree" is empty when it refuses to build a tree object.
+So, alternatively, the test could assert that the output is empty.
+However, there isn't a good reason for the user to expect the command to
+be silent in such cases, so we shouldn't enforce it.  The user shouldn't
+use the output of a failing command anyway.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1010-mktree.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t1010-mktree.sh b/t/t1010-mktree.sh
+index 3c08194526..22875ba598 100755
+--- a/t/t1010-mktree.sh
++++ b/t/t1010-mktree.sh
+@@ -60,11 +60,11 @@ test_expect_success 'allow missing object with --missing' '
+ '
+ 
+ test_expect_success 'mktree refuses to read ls-tree -r output (1)' '
+-	test_must_fail git mktree <all >actual
++	test_must_fail git mktree <all
+ '
+ 
+ test_expect_success 'mktree refuses to read ls-tree -r output (2)' '
+-	test_must_fail git mktree <all.withsub >actual
++	test_must_fail git mktree <all.withsub
+ '
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,34 @@
+From 68fcebfb1a463af2dc580b9618f2cfe27fbce6ab Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Fri, 15 Dec 2023 15:43:33 -0500
+Subject: [PATCH 2569/2871] git-add.txt: add missing short option -A to
+ synopsis
+
+With one exception, the synopsis for `git add` consistently lists the
+short counterpart alongside the long-form of each option (for instance,
+"[--edit | -e]"). The exception is that -A is not mentioned alongside
+--all. Fix this inconsistency
+
+Reported-by: Benjamin Lehmann <ben.lehmann@gmail.com>
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-add.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-add.txt b/Documentation/git-add.txt
+index ed44c1cb31..3d2e670716 100644
+--- a/Documentation/git-add.txt
++++ b/Documentation/git-add.txt
+@@ -9,7 +9,7 @@ SYNOPSIS
+ --------
+ [verse]
+ 'git add' [--verbose | -v] [--dry-run | -n] [--force | -f] [--interactive | -i] [--patch | -p]
+-	  [--edit | -e] [--[no-]all | --[no-]ignore-removal | [--update | -u]] [--sparse]
++	  [--edit | -e] [--[no-]all | -A | --[no-]ignore-removal | [--update | -u]] [--sparse]
+ 	  [--intent-to-add | -N] [--refresh] [--ignore-errors] [--ignore-missing] [--renormalize]
+ 	  [--chmod=(+|-)x] [--pathspec-from-file=<file> [--pathspec-file-nul]]
+ 	  [--] [<pathspec>...]
+-- 
+2.39.3 (Apple Git-145)
+

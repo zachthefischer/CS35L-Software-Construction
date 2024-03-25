@@ -1,0 +1,32 @@
+From b46d806ea5649599df6ed2deb83dfa69330985cf Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Sun, 13 Aug 2023 12:46:49 +0200
+Subject: [PATCH 1937/2871] t9001: fix indentation in test_no_confirm()
+
+The continuations of the compound command were indented as if they were
+continuations of the embedded pipe, which was misleading.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9001-send-email.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 323952a572..8b05a602b2 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -61,8 +61,8 @@ test_no_confirm () {
+ 		--smtp-server="$(pwd)/fake.sendmail" \
+ 		$@ \
+ 		$patches >stdout &&
+-		! grep "Send this email" stdout &&
+-		>no_confirm_okay
++	! grep "Send this email" stdout &&
++	>no_confirm_okay
+ }
+ 
+ # Exit immediately to prevent hang if a no-confirm test fails
+-- 
+2.39.3 (Apple Git-145)
+

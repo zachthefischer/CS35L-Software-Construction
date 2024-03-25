@@ -1,0 +1,103 @@
+From 70661d288b696578f18b56cea1beaa51497da88d Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Mon, 23 Jan 2023 10:01:14 +0100
+Subject: [PATCH 0730/2871] Documentation: render dash correctly
+
+Three hyphens are rendered verbatim in documentation, so "--" has to be
+used to produce a dash.  Fix asciidoc output for dashes.  This is
+similar to previous commits f0b922473e (Documentation: render special
+characters correctly, 2021-07-29) and de82095a95 (doc
+hash-function-transition: fix asciidoc output, 2021-02-05).
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-apply.txt                          | 2 +-
+ Documentation/git-read-tree.txt                      | 2 +-
+ Documentation/git.txt                                | 2 +-
+ Documentation/gitformat-signature.txt                | 2 +-
+ Documentation/technical/hash-function-transition.txt | 2 +-
+ Documentation/technical/rerere.txt                   | 2 +-
+ 6 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/git-apply.txt b/Documentation/git-apply.txt
+index 1d478cbe9b..5e16e6db7e 100644
+--- a/Documentation/git-apply.txt
++++ b/Documentation/git-apply.txt
+@@ -208,7 +208,7 @@ behavior:
+ * `warn` outputs warnings for a few such errors, but applies the
+   patch as-is (default).
+ * `fix` outputs warnings for a few such errors, and applies the
+-  patch after fixing them (`strip` is a synonym --- the tool
++  patch after fixing them (`strip` is a synonym -- the tool
+   used to consider only trailing whitespace characters as errors, and the
+   fix involved 'stripping' them, but modern Gits do more).
+ * `error` outputs warnings for a few such errors, and refuses
+diff --git a/Documentation/git-read-tree.txt b/Documentation/git-read-tree.txt
+index 7567955bad..b09707474d 100644
+--- a/Documentation/git-read-tree.txt
++++ b/Documentation/git-read-tree.txt
+@@ -219,7 +219,7 @@ see which of the "local changes" that you made were carried forward by running
+ `git diff-index --cached $M`.  Note that this does not
+ necessarily match what `git diff-index --cached $H` would have
+ produced before such a two tree merge.  This is because of cases
+-18 and 19 --- if you already had the changes in $M (e.g. maybe
++18 and 19 -- if you already had the changes in $M (e.g. maybe
+ you picked it up via e-mail in a patch form), `git diff-index
+ --cached $H` would have told you about the change before this
+ merge, but it would not show in `git diff-index --cached $M`
+diff --git a/Documentation/git.txt b/Documentation/git.txt
+index 1d33e083ab..df359fbf47 100644
+--- a/Documentation/git.txt
++++ b/Documentation/git.txt
+@@ -619,7 +619,7 @@ The file parameters can point at the user's working file
+ (e.g. `new-file` in "git-diff-files"), `/dev/null` (e.g. `old-file`
+ when a new file is added), or a temporary file (e.g. `old-file` in the
+ index).  `GIT_EXTERNAL_DIFF` should not worry about unlinking the
+-temporary file --- it is removed when `GIT_EXTERNAL_DIFF` exits.
++temporary file -- it is removed when `GIT_EXTERNAL_DIFF` exits.
+ +
+ For a path that is unmerged, `GIT_EXTERNAL_DIFF` is called with 1
+ parameter, <path>.
+diff --git a/Documentation/gitformat-signature.txt b/Documentation/gitformat-signature.txt
+index a249869faf..d8e3eb1bac 100644
+--- a/Documentation/gitformat-signature.txt
++++ b/Documentation/gitformat-signature.txt
+@@ -37,7 +37,7 @@ line.
+ This is even true for an originally empty line.  In the following
+ examples, the end of line that ends with a whitespace letter is
+ highlighted with a `$` sign; if you are trying to recreate these
+-example by hand, do not cut and paste them---they are there
++example by hand, do not cut and paste them--they are there
+ primarily to highlight extra whitespace at the end of some lines.
+ 
+ The signed payload and the way the signature is embedded depends
+diff --git a/Documentation/technical/hash-function-transition.txt b/Documentation/technical/hash-function-transition.txt
+index e2ac36dd21..ed57481089 100644
+--- a/Documentation/technical/hash-function-transition.txt
++++ b/Documentation/technical/hash-function-transition.txt
+@@ -562,7 +562,7 @@ hash re-encode during clone and to encourage peers to modernize.
+ The design described here allows fetches by SHA-1 clients of a
+ personal SHA-256 repository because it's not much more difficult than
+ allowing pushes from that repository. This support needs to be guarded
+-by a configuration option --- servers like git.kernel.org that serve a
++by a configuration option -- servers like git.kernel.org that serve a
+ large number of clients would not be expected to bear that cost.
+ 
+ Meaning of signatures
+diff --git a/Documentation/technical/rerere.txt b/Documentation/technical/rerere.txt
+index 35d4541433..be58f1bee3 100644
+--- a/Documentation/technical/rerere.txt
++++ b/Documentation/technical/rerere.txt
+@@ -99,7 +99,7 @@ conflict to leave line D means that the user declares:
+     compatible with what AB and AC wanted to do.
+ 
+ So the conflict we would see when merging AB into ACAB should be
+-resolved the same way---it is the resolution that is in line with that
++resolved the same way--it is the resolution that is in line with that
+ declaration.
+ 
+ Imagine that similarly previously a branch XYXZ was forked from XY,
+-- 
+2.39.3 (Apple Git-145)
+

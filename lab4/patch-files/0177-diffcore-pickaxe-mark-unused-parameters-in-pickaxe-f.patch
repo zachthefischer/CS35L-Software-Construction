@@ -1,0 +1,43 @@
+From 0ada4b9bfeb42409f4bea1beef006fbd854aa108 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:09:07 -0400
+Subject: [PATCH 0177/2871] diffcore-pickaxe: mark unused parameters in pickaxe
+ functions
+
+We have a virtual pickaxe_fn for handling -G versus -S pickaxe options.
+They need to take the same set of parameters, but of course they care
+about different ones (e.g., a regex -G will never use a kwset).
+
+Mark the unused ones to appease -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diffcore-pickaxe.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/diffcore-pickaxe.c b/diffcore-pickaxe.c
+index c88e50c632..03fcbcb40b 100644
+--- a/diffcore-pickaxe.c
++++ b/diffcore-pickaxe.c
+@@ -38,7 +38,7 @@ static int diffgrep_consume(void *priv, char *line, unsigned long len)
+ 
+ static int diff_grep(mmfile_t *one, mmfile_t *two,
+ 		     struct diff_options *o,
+-		     regex_t *regexp, kwset_t kws)
++		     regex_t *regexp, kwset_t kws UNUSED)
+ {
+ 	struct diffgrep_cb ecbdata;
+ 	xpparam_t xpp;
+@@ -114,7 +114,7 @@ static unsigned int contains(mmfile_t *mf, regex_t *regexp, kwset_t kws,
+ }
+ 
+ static int has_changes(mmfile_t *one, mmfile_t *two,
+-		       struct diff_options *o,
++		       struct diff_options *o UNUSED,
+ 		       regex_t *regexp, kwset_t kws)
+ {
+ 	unsigned int c1 = one ? contains(one, regexp, kws, 0) : 0;
+-- 
+2.39.3 (Apple Git-145)
+

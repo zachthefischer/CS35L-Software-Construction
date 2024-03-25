@@ -1,0 +1,36 @@
+From 20025fdfc756821ee51cc4955108cbfb519e1d68 Mon Sep 17 00:00:00 2001
+From: Todd Zullinger <tmz@pobox.com>
+Date: Wed, 24 May 2023 23:10:24 -0400
+Subject: [PATCH 1533/2871] t/lib-gpg: fix ssh-keygen -Y check-novalidate with
+ openssh-9.0
+
+OpenSSH-9.0 requires a namespace option with `-Y check-novalidate`.
+This was added in openssh-portable commit a0b5816f8 (upstream:
+ssh-keygen -Y check-novalidate requires namespace or SEGV, 2022-03-18).
+
+The -n option was documented as a required option since check-novalidate
+was added in openssh-portable 8aa2aa3cd (upstream: Allow testing
+signature syntax and validity without verifying, 2019-09-16).
+
+Signed-off-by: Todd Zullinger <tmz@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-gpg.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/lib-gpg.sh b/t/lib-gpg.sh
+index 114785586a..28652ed91f 100644
+--- a/t/lib-gpg.sh
++++ b/t/lib-gpg.sh
+@@ -136,7 +136,7 @@ test_lazy_prereq GPGSSH '
+ 
+ test_lazy_prereq GPGSSH_VERIFYTIME '
+ 	# Check if ssh-keygen has a verify-time option by passing an invalid date to it
+-	ssh-keygen -Overify-time=INVALID -Y check-novalidate -s doesnotmatter 2>&1 | grep -q -F "Invalid \"verify-time\"" &&
++	ssh-keygen -Overify-time=INVALID -Y check-novalidate -n "git" -s doesnotmatter 2>&1 | grep -q -F "Invalid \"verify-time\"" &&
+ 
+ 	# Set up keys with key lifetimes
+ 	ssh-keygen -t ed25519 -N "" -C "timeboxed valid key" -f "${GPGSSH_KEY_TIMEBOXEDVALID}" >/dev/null &&
+-- 
+2.39.3 (Apple Git-145)
+

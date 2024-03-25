@@ -1,0 +1,49 @@
+From 11422f23e3ed0efc60288e92a77c42c8fa6c1483 Mon Sep 17 00:00:00 2001
+From: Sergey Organov <sorganov@gmail.com>
+Date: Wed, 6 Sep 2023 10:15:07 +0300
+Subject: [PATCH 2066/2871] doc/diff-options: fix link to generating patch
+ section
+
+When formatted as man-page, the section title is rendered
+"GENERATING PATCH TEXT WITH -P" whereas reference still reads
+"Generating patch text with -p", that is inconsistent and makes
+searching harder than it needs to be.
+
+Fix this by getting rid of custom reference text.
+
+Also, documentation for every command that describes `-p` option by
+including the "diff-options.txt" file does include the
+"diff-generate-patch.txt" file as well (as it should), so the internal
+link is in fact useful for any of them.
+
+Fix this by getting rid of conditionals around the reference.
+
+Fixes: ebdc46c242 (docs: link generating patch sections)
+Signed-off-by: Sergey Organov <sorganov@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/diff-options.txt | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/Documentation/diff-options.txt b/Documentation/diff-options.txt
+index 08ab86189a..8897b8f698 100644
+--- a/Documentation/diff-options.txt
++++ b/Documentation/diff-options.txt
+@@ -22,13 +22,7 @@ ifndef::git-format-patch[]
+ -p::
+ -u::
+ --patch::
+-	Generate patch (see section titled
+-ifdef::git-log[]
+-<<generate_patch_text_with_p, "Generating patch text with -p">>).
+-endif::git-log[]
+-ifndef::git-log[]
+-"Generating patch text with -p").
+-endif::git-log[]
++	Generate patch (see <<generate_patch_text_with_p>>).
+ ifdef::git-diff[]
+ 	This is the default.
+ endif::git-diff[]
+-- 
+2.39.3 (Apple Git-145)
+

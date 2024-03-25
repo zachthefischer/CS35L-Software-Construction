@@ -1,0 +1,90 @@
+From c016726c2deb84bcc6a7418efad92ef0562a8af3 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 8 Aug 2023 14:15:31 -0400
+Subject: [PATCH 1907/2871] send-email: avoid creating more than one
+ Term::ReadLine object
+
+Every time git-send-email calls its ask() function to prompt the user,
+we call term(), which instantiates a new Term::ReadLine object. But in
+v1.46 of Term::ReadLine::Gnu (which provides the Term::ReadLine
+interface on some platforms), its constructor refuses to create a second
+instance[1]. So on systems with that version of the module, most
+git-send-email instances will fail (as we usually prompt for both "to"
+and "in-reply-to" unless the user provided them on the command line).
+
+We can fix this by keeping a single instance variable and returning it
+for each call to term(). In perl 5.10 and up, we could do that with a
+"state" variable. But since we only require 5.008, we'll do it the
+old-fashioned way, with a lexical "my" in its own scope.
+
+Note that the tests in t9001 detect this problem as-is, since the
+failure mode is for the program to die. But let's also beef up the
+"Prompting works" test to check that it correctly handles multiple
+inputs (if we had chosen to keep our FakeTerm hack in the previous
+commit, then the failure mode would be incorrectly ignoring prompts
+after the first).
+
+[1] For discussion of why multiple instances are forbidden, see:
+    https://github.com/hirooih/perl-trg/issues/16
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl   | 18 +++++++++++++-----
+ t/t9001-send-email.sh |  5 +++--
+ 2 files changed, 16 insertions(+), 7 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 4cb6ee9327..897cea6564 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -959,11 +959,19 @@ sub get_patch_subject {
+ 	do_edit(@files);
+ }
+ 
+-sub term {
+-	require Term::ReadLine;
+-	return $ENV{"GIT_SEND_EMAIL_NOTTY"}
+-			? Term::ReadLine->new('git-send-email', \*STDIN, \*STDOUT)
+-			: Term::ReadLine->new('git-send-email');
++{
++	# Only instantiate one $term per program run, since some
++	# Term::ReadLine providers refuse to create a second instance.
++	my $term;
++	sub term {
++		require Term::ReadLine;
++		if (!defined $term) {
++			$term = $ENV{"GIT_SEND_EMAIL_NOTTY"}
++				? Term::ReadLine->new('git-send-email', \*STDIN, \*STDOUT)
++				: Term::ReadLine->new('git-send-email');
++		}
++		return $term;
++	}
+ }
+ 
+ sub ask {
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 22fc908024..b5be8251ee 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -337,13 +337,14 @@ test_expect_success $PREREQ 'Show all headers' '
+ test_expect_success $PREREQ 'Prompting works' '
+ 	clean_fake_sendmail &&
+ 	(echo "to@example.com" &&
+-	 echo ""
++	 echo "my-message-id@example.com"
+ 	) | GIT_SEND_EMAIL_NOTTY=1 git send-email \
+ 		--smtp-server="$(pwd)/fake.sendmail" \
+ 		$patches \
+ 		2>errors &&
+ 		grep "^From: A U Thor <author@example.com>\$" msgtxt1 &&
+-		grep "^To: to@example.com\$" msgtxt1
++		grep "^To: to@example.com\$" msgtxt1 &&
++		grep "^In-Reply-To: <my-message-id@example.com>" msgtxt1
+ '
+ 
+ test_expect_success $PREREQ,AUTOIDENT 'implicit ident is allowed' '
+-- 
+2.39.3 (Apple Git-145)
+

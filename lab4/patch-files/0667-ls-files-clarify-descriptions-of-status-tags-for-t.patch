@@ -1,0 +1,83 @@
+From 4173b806c75dbcf4406c7a5ad6158dcbfa2beb2f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 13 Jan 2023 04:41:53 +0000
+Subject: [PATCH 0667/2871] ls-files: clarify descriptions of status tags for
+ -t
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Much like the file selection options we tweaked in the last commit, the
+status tags printed with -t had descriptions that were easy to
+misunderstand, and for many of the same reasons.  Clarify them.
+
+Also, while at it, remove the "semi-deprecated" comment for "git
+ls-files -t".  The -t option was marked as semi-deprecated in 5bc0e247c4
+("Document ls-files -t as semi-obsolete.", 2010-07-28) because:
+
+    "git ls-files -t" is [...] badly documented, hence we point the
+    users to superior alternatives.
+    The feature is marked as "semi-obsolete" but not "scheduled for removal"
+    since it's a plumbing command, scripts might use it, and Git testsuite
+    already uses it to test the state of the index.
+
+Marking it as obsolete because it was easily misunderstood, which I
+think was primarily due to documentation problems, is one strategy, but
+I think fixing the documentation is a better option.  Especially since
+in the intervening time, "git ls-files -t" has become heavily used by
+sparse-checkout users where the same confusion just doesn't apply.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-ls-files.txt | 28 +++++++++++++++-------------
+ 1 file changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/git-ls-files.txt b/Documentation/git-ls-files.txt
+index f89ab1bfc9..3886d58d17 100644
+--- a/Documentation/git-ls-files.txt
++++ b/Documentation/git-ls-files.txt
+@@ -137,25 +137,27 @@ OPTIONS
+ 	with `-s` or `-u` options does not make any sense.
+ 
+ -t::
+-	This feature is semi-deprecated. For scripting purpose,
+-	linkgit:git-status[1] `--porcelain` and
++	Show status tags together with filenames.  Note that for
++	scripting purposes, linkgit:git-status[1] `--porcelain` and
+ 	linkgit:git-diff-files[1] `--name-status` are almost always
+ 	superior alternatives, and users should look at
+ 	linkgit:git-status[1] `--short` or linkgit:git-diff[1]
+ 	`--name-status` for more user-friendly alternatives.
+ +
+ --
+-This option identifies the file status with the following tags (followed by
+-a space) at the start of each line:
+-
+-	H::	cached
+-	S::	skip-worktree
+-	M::	unmerged
+-	R::	removed/deleted
+-	C::	modified/changed
+-	K::	to be killed
+-	?::	other
+-	U::     resolve-undo
++This option provides a reason for showing each filename, in the form
++of a status tag (which is followed by a space and then the filename).
++The status tags are all single characters from the following list:
++
++	H::	tracked file that is not either unmerged or skip-worktree
++	S::	tracked file that is skip-worktree
++	M::	tracked file that is unmerged
++	R::	tracked file with unstaged removal/deletion
++	C::	tracked file with unstaged modification/change
++	K::	untracked paths which are part of file/directory conflicts
++		which prevent checking out tracked files
++	?::	untracked file
++	U::     file with resolve-undo information
+ --
+ 
+ -v::
+-- 
+2.39.3 (Apple Git-145)
+

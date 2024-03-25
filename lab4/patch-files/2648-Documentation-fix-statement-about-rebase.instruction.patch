@@ -1,0 +1,47 @@
+From 9cd30af991f8fe60f87fa92836e02cb3bf88864b Mon Sep 17 00:00:00 2001
+From: Maarten van der Schrieck <maarten@thingsconnected.nl>
+Date: Wed, 3 Jan 2024 18:14:23 +0000
+Subject: [PATCH 2648/2871] Documentation: fix statement about
+ rebase.instructionFormat
+
+Since commit 62db5247 (rebase -i: generate the script via
+rebase--helper, 2017-07-14), the short hash is given in
+rebase-todo. Specifying rebase.instructionFormat does not alter this
+behavior, contrary to what the documentation implies.
+
+Signed-off-by: Maarten van der Schrieck <maarten@thingsconnected.nl>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/rebase.txt | 2 +-
+ Documentation/git-rebase.txt    | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/config/rebase.txt b/Documentation/config/rebase.txt
+index f19bd0e040..2f48bef4bf 100644
+--- a/Documentation/config/rebase.txt
++++ b/Documentation/config/rebase.txt
+@@ -38,7 +38,7 @@ rebase.missingCommitsCheck::
+ rebase.instructionFormat::
+ 	A format string, as specified in linkgit:git-log[1], to be used for the
+ 	todo list during an interactive rebase.  The format will
+-	automatically have the long commit hash prepended to the format.
++	automatically have the commit hash prepended to the format.
+ 
+ rebase.abbreviateCommands::
+ 	If set to true, `git rebase` will use abbreviated command names in the
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 9a295bcee4..01b2ab57f5 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -523,7 +523,7 @@ See also INCOMPATIBLE OPTIONS below.
+ +
+ The commit list format can be changed by setting the configuration option
+ rebase.instructionFormat.  A customized instruction format will automatically
+-have the long commit hash prepended to the format.
++have the commit hash prepended to the format.
+ +
+ See also INCOMPATIBLE OPTIONS below.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

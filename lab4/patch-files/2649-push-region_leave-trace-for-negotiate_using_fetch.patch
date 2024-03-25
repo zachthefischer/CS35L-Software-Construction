@@ -1,0 +1,31 @@
+From ee9895b0ff0475c4883234a9004f02b19065cd12 Mon Sep 17 00:00:00 2001
+From: Sam Delmerico <delmerico@google.com>
+Date: Wed, 3 Jan 2024 14:40:54 -0800
+Subject: [PATCH 2649/2871] push: region_leave trace for negotiate_using_fetch
+
+There were two region_enter events for negotiate_using_fetch instead of
+one enter and one leave. This commit replaces the second region_enter
+event with a region_leave.
+
+Signed-off-by: Sam Delmerico <delmerico@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ fetch-pack.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fetch-pack.c b/fetch-pack.c
+index 998fc2fa1e..1458883df7 100644
+--- a/fetch-pack.c
++++ b/fetch-pack.c
+@@ -2207,7 +2207,7 @@ void negotiate_using_fetch(const struct oid_array *negotiation_tips,
+ 					   the_repository, "%d",
+ 					   negotiation_round);
+ 	}
+-	trace2_region_enter("fetch-pack", "negotiate_using_fetch", the_repository);
++	trace2_region_leave("fetch-pack", "negotiate_using_fetch", the_repository);
+ 	trace2_data_intmax("negotiate_using_fetch", the_repository,
+ 			   "total_rounds", negotiation_round);
+ 	clear_common_flag(acked_commits);
+-- 
+2.39.3 (Apple Git-145)
+

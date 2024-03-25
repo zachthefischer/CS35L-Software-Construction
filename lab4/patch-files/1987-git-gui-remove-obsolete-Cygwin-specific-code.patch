@@ -1,0 +1,280 @@
+From 7145c654fffecd1f3d4a2b8bf05755ce262903e8 Mon Sep 17 00:00:00 2001
+From: Mark Levedahl <mlevedahl@gmail.com>
+Date: Mon, 26 Jun 2023 12:53:03 -0400
+Subject: [PATCH 1987/2871] git-gui - remove obsolete Cygwin specific code
+
+In the current git release, git-gui runs on Cygwin without enabling any
+of git-gui's Cygwin specific code.  This happens as the Cygwin specific
+code in git-gui was (mostly) written in 2007-2008 to work with Cygwin's
+then supplied Tcl/Tk which was an incompletely ported variant of the
+8.4.1 Windows Tcl/Tk code.  In March, 2012, that 8.4.1 package was
+replaced with a full port based upon the upstream unix/X11 code,
+since maintained up to date. The two Tcl/Tk packages are completely
+incompatible, and have different signatures.
+
+When Cygwin's Tcl/Tk signature changed in 2012, git-gui no longer
+detected Cygwin, so did not enable Cygwin specific code, and the POSIX
+environment provided by Cygwin since 2012 supported git-gui as a generic
+unix. Thus, no-one apparently noticed the existence of incompatible
+Cygwin specific code.
+
+However, since commit c5766eae6f in the git-gui source tree
+(https://github.com/prati0100/git-gui, master at a5005ded), and not yet
+pulled into the git repository, the is_Cygwin function does detect
+Cygwin using the unix/X11 Tcl/Tk.  The Cygwin specific code is enabled,
+causing use of Windows rather than unix pathnames, and enabling
+incorrect warnings about environment variables that were relevant only
+to the old Tcl/Tk.  The end result is that (upstream) git-gui is now
+incompatible with Cygwin.
+
+So, delete Cygwin specific code (code protected by "if is_Cygwin") that
+is not needed in any form to work with the unix/X11 Tcl/Tk.
+
+Cygwin specific code required to enable file browsing and shortcut
+creation is not addressed in this patch, does not currently work, and
+invocation of those items may leave git-gui in a confused state.
+
+Signed-off-by: Mark Levedahl <mlevedahl@gmail.com>
+Acked-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Pratyush Yadav <me@yadavpratyush.com>
+---
+ git-gui.sh                | 114 ++------------------------------------
+ lib/choose_repository.tcl |  27 +--------
+ 2 files changed, 7 insertions(+), 134 deletions(-)
+
+diff --git a/git-gui.sh b/git-gui.sh
+index cb92bba1c4..3f7c31e4c4 100755
+--- a/git-gui.sh
++++ b/git-gui.sh
+@@ -84,14 +84,7 @@ proc _which {what args} {
+ 	global env _search_exe _search_path
+ 
+ 	if {$_search_path eq {}} {
+-		if {[is_Cygwin] && [regexp {^(/|\.:)} $env(PATH)]} {
+-			set _search_path [split [exec cygpath \
+-				--windows \
+-				--path \
+-				--absolute \
+-				$env(PATH)] {;}]
+-			set _search_exe .exe
+-		} elseif {[is_Windows]} {
++		if {[is_Windows]} {
+ 			set gitguidir [file dirname [info script]]
+ 			regsub -all ";" $gitguidir "\\;" gitguidir
+ 			set env(PATH) "$gitguidir;$env(PATH)"
+@@ -342,14 +335,7 @@ proc gitexec {args} {
+ 		if {[catch {set _gitexec [git --exec-path]} err]} {
+ 			error "Git not installed?\n\n$err"
+ 		}
+-		if {[is_Cygwin]} {
+-			set _gitexec [exec cygpath \
+-				--windows \
+-				--absolute \
+-				$_gitexec]
+-		} else {
+-			set _gitexec [file normalize $_gitexec]
+-		}
++		set _gitexec [file normalize $_gitexec]
+ 	}
+ 	if {$args eq {}} {
+ 		return $_gitexec
+@@ -364,14 +350,7 @@ proc githtmldir {args} {
+ 			# Git not installed or option not yet supported
+ 			return {}
+ 		}
+-		if {[is_Cygwin]} {
+-			set _githtmldir [exec cygpath \
+-				--windows \
+-				--absolute \
+-				$_githtmldir]
+-		} else {
+-			set _githtmldir [file normalize $_githtmldir]
+-		}
++		set _githtmldir [file normalize $_githtmldir]
+ 	}
+ 	if {$args eq {}} {
+ 		return $_githtmldir
+@@ -1318,9 +1297,6 @@ if {$_gitdir eq "."} {
+ 	set _gitdir [pwd]
+ }
+ 
+-if {![file isdirectory $_gitdir] && [is_Cygwin]} {
+-	catch {set _gitdir [exec cygpath --windows $_gitdir]}
+-}
+ if {![file isdirectory $_gitdir]} {
+ 	catch {wm withdraw .}
+ 	error_popup [strcat [mc "Git directory not found:"] "\n\n$_gitdir"]
+@@ -1332,11 +1308,7 @@ apply_config
+ 
+ # v1.7.0 introduced --show-toplevel to return the canonical work-tree
+ if {[package vcompare $_git_version 1.7.0] >= 0} {
+-	if { [is_Cygwin] } {
+-		catch {set _gitworktree [exec cygpath --windows [git rev-parse --show-toplevel]]}
+-	} else {
+-		set _gitworktree [git rev-parse --show-toplevel]
+-	}
++	set _gitworktree [git rev-parse --show-toplevel]
+ } else {
+ 	# try to set work tree from environment, core.worktree or use
+ 	# cdup to obtain a relative path to the top of the worktree. If
+@@ -1561,24 +1533,8 @@ proc rescan {after {honor_trustmtime 1}} {
+ 	}
+ }
+ 
+-if {[is_Cygwin]} {
+-	set is_git_info_exclude {}
+-	proc have_info_exclude {} {
+-		global is_git_info_exclude
+-
+-		if {$is_git_info_exclude eq {}} {
+-			if {[catch {exec test -f [gitdir info exclude]}]} {
+-				set is_git_info_exclude 0
+-			} else {
+-				set is_git_info_exclude 1
+-			}
+-		}
+-		return $is_git_info_exclude
+-	}
+-} else {
+-	proc have_info_exclude {} {
+-		return [file readable [gitdir info exclude]]
+-	}
++proc have_info_exclude {} {
++	return [file readable [gitdir info exclude]]
+ }
+ 
+ proc rescan_stage2 {fd after} {
+@@ -3112,10 +3068,6 @@ if {[is_MacOSX]} {
+ set doc_path [githtmldir]
+ if {$doc_path ne {}} {
+ 	set doc_path [file join $doc_path index.html]
+-
+-	if {[is_Cygwin]} {
+-		set doc_path [exec cygpath --mixed $doc_path]
+-	}
+ }
+ 
+ if {[file isfile $doc_path]} {
+@@ -4087,60 +4039,6 @@ set file_lists($ui_workdir) [list]
+ wm title . "[appname] ([reponame]) [file normalize $_gitworktree]"
+ focus -force $ui_comm
+ 
+-# -- Warn the user about environmental problems.  Cygwin's Tcl
+-#    does *not* pass its env array onto any processes it spawns.
+-#    This means that git processes get none of our environment.
+-#
+-if {[is_Cygwin]} {
+-	set ignored_env 0
+-	set suggest_user {}
+-	set msg [mc "Possible environment issues exist.
+-
+-The following environment variables are probably
+-going to be ignored by any Git subprocess run
+-by %s:
+-
+-" [appname]]
+-	foreach name [array names env] {
+-		switch -regexp -- $name {
+-		{^GIT_INDEX_FILE$} -
+-		{^GIT_OBJECT_DIRECTORY$} -
+-		{^GIT_ALTERNATE_OBJECT_DIRECTORIES$} -
+-		{^GIT_DIFF_OPTS$} -
+-		{^GIT_EXTERNAL_DIFF$} -
+-		{^GIT_PAGER$} -
+-		{^GIT_TRACE$} -
+-		{^GIT_CONFIG$} -
+-		{^GIT_(AUTHOR|COMMITTER)_DATE$} {
+-			append msg " - $name\n"
+-			incr ignored_env
+-		}
+-		{^GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)$} {
+-			append msg " - $name\n"
+-			incr ignored_env
+-			set suggest_user $name
+-		}
+-		}
+-	}
+-	if {$ignored_env > 0} {
+-		append msg [mc "
+-This is due to a known issue with the
+-Tcl binary distributed by Cygwin."]
+-
+-		if {$suggest_user ne {}} {
+-			append msg [mc "
+-
+-A good replacement for %s
+-is placing values for the user.name and
+-user.email settings into your personal
+-~/.gitconfig file.
+-" $suggest_user]
+-		}
+-		warn_popup $msg
+-	}
+-	unset ignored_env msg suggest_user name
+-}
+-
+ # -- Only initialize complex UI if we are going to stay running.
+ #
+ if {[is_enabled transport]} {
+diff --git a/lib/choose_repository.tcl b/lib/choose_repository.tcl
+index af1fee7c75..d23abedcb3 100644
+--- a/lib/choose_repository.tcl
++++ b/lib/choose_repository.tcl
+@@ -174,9 +174,6 @@ constructor pick {} {
+ 			-foreground blue \
+ 			-underline 1
+ 		set home $::env(HOME)
+-		if {[is_Cygwin]} {
+-			set home [exec cygpath --windows --absolute $home]
+-		}
+ 		set home "[file normalize $home]/"
+ 		set hlen [string length $home]
+ 		foreach p $sorted_recent {
+@@ -374,18 +371,6 @@ proc _objdir {path} {
+ 		return $objdir
+ 	}
+ 
+-	if {[is_Cygwin]} {
+-		set objdir [file join $path .git objects.lnk]
+-		if {[file isfile $objdir]} {
+-			return [win32_read_lnk $objdir]
+-		}
+-
+-		set objdir [file join $path objects.lnk]
+-		if {[file isfile $objdir]} {
+-			return [win32_read_lnk $objdir]
+-		}
+-	}
+-
+ 	return {}
+ }
+ 
+@@ -623,12 +608,6 @@ method _do_clone2 {} {
+ 	}
+ 
+ 	set giturl $origin_url
+-	if {[is_Cygwin] && [file isdirectory $giturl]} {
+-		set giturl [exec cygpath --unix --absolute $giturl]
+-		if {$clone_type eq {shared}} {
+-			set objdir [exec cygpath --unix --absolute $objdir]
+-		}
+-	}
+ 
+ 	if {[file exists $local_path]} {
+ 		error_popup [mc "Location %s already exists." $local_path]
+@@ -668,11 +647,7 @@ method _do_clone2 {} {
+ 				fconfigure $f_cp -translation binary -encoding binary
+ 				cd $objdir
+ 				while {[gets $f_in line] >= 0} {
+-					if {[is_Cygwin]} {
+-						puts $f_cp [exec cygpath --unix --absolute $line]
+-					} else {
+-						puts $f_cp [file normalize $line]
+-					}
++					puts $f_cp [file normalize $line]
+ 				}
+ 				close $f_in
+ 				close $f_cp
+-- 
+2.39.3 (Apple Git-145)
+

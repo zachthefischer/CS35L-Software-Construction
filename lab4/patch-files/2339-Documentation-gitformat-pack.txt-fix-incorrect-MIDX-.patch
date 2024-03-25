@@ -1,0 +1,67 @@
+From 1bd809938a470ff92bc8963d59381c74a62839cc Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 31 Oct 2023 15:24:11 -0400
+Subject: [PATCH 2339/2871] Documentation/gitformat-pack.txt: fix incorrect
+ MIDX documentation
+
+Back in 32f3c541e3 (multi-pack-index: write pack names in chunk,
+2018-07-12) the MIDX's "Packfile Names" (or "PNAM", for short) chunk was
+described as containing an array of string entries. e0d1bcf825 notes
+that this is the only chunk in the MIDX format's specification that is
+not guaranteed to be 4-byte aligned, and so should be placed last.
+
+This isn't quite accurate: the entries within the PNAM chunk are not
+guaranteed to be 4-byte aligned since they are arbitrary strings, but
+the chunk itself is 4-byte aligned since the ending is padded with NUL
+bytes.
+
+That padding has always been there since 32f3c541e3 via
+midx.c::write_midx_pack_names(), which ended with:
+
+    i = MIDX_CHUNK_ALIGNMENT - (written % MIDX_CHUNK_ALIGNMENT)
+    if (i < MIDX_CHUNK_ALIGNMENT) {
+      unsigned char padding[MIDX_CHUNK_ALIGNMENT];
+      memset(padding, 0, sizeof(padding))
+      hashwrite(f, padding, i);
+      written += i;
+    }
+
+In fact, 32f3c541e3's log message itself describes the chunk in its
+first paragraph with:
+
+    Since filenames are not well structured, add padding to keep good
+    alignment in later chunks.
+
+So these have always been externally aligned. Correct the corresponding
+part of our documentation to reflect that.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitformat-pack.txt | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/gitformat-pack.txt b/Documentation/gitformat-pack.txt
+index 4b7e6da1e7..c520a65e55 100644
+--- a/Documentation/gitformat-pack.txt
++++ b/Documentation/gitformat-pack.txt
+@@ -390,10 +390,11 @@ CHUNK LOOKUP:
+ CHUNK DATA:
+ 
+ 	Packfile Names (ID: {'P', 'N', 'A', 'M'})
+-	    Stores the packfile names as concatenated, NUL-terminated strings.
+-	    Packfiles must be listed in lexicographic order for fast lookups by
+-	    name. This is the only chunk not guaranteed to be a multiple of four
+-	    bytes in length, so should be the last chunk for alignment reasons.
++	    Store the names of packfiles as a sequence of NUL-terminated
++	    strings. There is no extra padding between the filenames,
++	    and they are listed in lexicographic order. The chunk itself
++	    is padded at the end with between 0 and 3 NUL bytes to make the
++	    chunk size a multiple of 4 bytes.
+ 
+ 	OID Fanout (ID: {'O', 'I', 'D', 'F'})
+ 	    The ith entry, F[i], stores the number of OIDs with first
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,218 @@
+From 9f9c40cf34c29d4ad700d9869435d159056fa6fb Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 13 Oct 2023 17:39:30 +0000
+Subject: [PATCH 2280/2871] attr: add attr.tree for setting the treeish to read
+ attributes from
+
+44451a2 (attr: teach "--attr-source=<tree>" global option to "git",
+2023-05-06) provided the ability to pass in a treeish as the attr
+source. In the context of serving Git repositories as bare repos like we
+do at GitLab however, it would be easier to point --attr-source to HEAD
+for all commands by setting it once.
+
+Add a new config attr.tree that allows this.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config.txt      |  2 ++
+ Documentation/config/attr.txt |  7 ++++
+ attr.c                        |  7 ++++
+ attr.h                        |  2 ++
+ config.c                      | 16 +++++++++
+ t/t0003-attributes.sh         | 61 +++++++++++++++++++++++++++++++++++
+ 6 files changed, 95 insertions(+)
+ create mode 100644 Documentation/config/attr.txt
+
+diff --git a/Documentation/config.txt b/Documentation/config.txt
+index 229b63a454..b1891c2b5a 100644
+--- a/Documentation/config.txt
++++ b/Documentation/config.txt
+@@ -371,6 +371,8 @@ other popular tools, and describe them in your documentation.
+ 
+ include::config/advice.txt[]
+ 
++include::config/attr.txt[]
++
+ include::config/core.txt[]
+ 
+ include::config/add.txt[]
+diff --git a/Documentation/config/attr.txt b/Documentation/config/attr.txt
+new file mode 100644
+index 0000000000..1a482d6af2
+--- /dev/null
++++ b/Documentation/config/attr.txt
+@@ -0,0 +1,7 @@
++attr.tree::
++	A reference to a tree in the repository from which to read attributes,
++	instead of the `.gitattributes` file in the working tree. In a bare
++	repository, this defaults to `HEAD:.gitattributes`. If the value does
++	not resolve to a valid tree object, an empty tree is used instead.
++	When the `GIT_ATTR_SOURCE` environment variable or `--attr-source`
++	command line option are used, this configuration variable has no effect.
+diff --git a/attr.c b/attr.c
+index efc061527f..a4b818ca5a 100644
+--- a/attr.c
++++ b/attr.c
+@@ -24,6 +24,8 @@
+ #include "tree-walk.h"
+ #include "object-name.h"
+ 
++const char *git_attr_tree;
++
+ const char git_attr__true[] = "(builtin)true";
+ const char git_attr__false[] = "\0(builtin)false";
+ static const char git_attr__unknown[] = "(builtin)unknown";
+@@ -1185,6 +1187,11 @@ static void compute_default_attr_source(struct object_id *attr_source)
+ 	if (!default_attr_source_tree_object_name)
+ 		default_attr_source_tree_object_name = getenv(GIT_ATTR_SOURCE_ENVIRONMENT);
+ 
++	if (!default_attr_source_tree_object_name && git_attr_tree) {
++		default_attr_source_tree_object_name = git_attr_tree;
++		ignore_bad_attr_tree = 1;
++	}
++
+ 	if (!default_attr_source_tree_object_name &&
+ 	    startup_info->have_repository &&
+ 	    is_bare_repository()) {
+diff --git a/attr.h b/attr.h
+index 2b745df405..127998ae01 100644
+--- a/attr.h
++++ b/attr.h
+@@ -236,4 +236,6 @@ const char *git_attr_global_file(void);
+ /* Return whether the system gitattributes file is enabled and should be used. */
+ int git_attr_system_is_enabled(void);
+ 
++extern const char *git_attr_tree;
++
+ #endif /* ATTR_H */
+diff --git a/config.c b/config.c
+index 3846a37be9..fb6a2db1d9 100644
+--- a/config.c
++++ b/config.c
+@@ -18,6 +18,7 @@
+ #include "repository.h"
+ #include "lockfile.h"
+ #include "mailmap.h"
++#include "attr.h"
+ #include "exec-cmd.h"
+ #include "strbuf.h"
+ #include "quote.h"
+@@ -1904,6 +1905,18 @@ static int git_default_mailmap_config(const char *var, const char *value)
+ 	return 0;
+ }
+ 
++static int git_default_attr_config(const char *var, const char *value)
++{
++	if (!strcmp(var, "attr.tree"))
++		return git_config_string(&git_attr_tree, var, value);
++
++	/*
++	 * Add other attribute related config variables here and to
++	 * Documentation/config/attr.txt.
++	 */
++	return 0;
++}
++
+ int git_default_config(const char *var, const char *value,
+ 		       const struct config_context *ctx, void *cb)
+ {
+@@ -1927,6 +1940,9 @@ int git_default_config(const char *var, const char *value,
+ 	if (starts_with(var, "mailmap."))
+ 		return git_default_mailmap_config(var, value);
+ 
++	if (starts_with(var, "attr."))
++		return git_default_attr_config(var, value);
++
+ 	if (starts_with(var, "advice.") || starts_with(var, "color.advice"))
+ 		return git_default_advice_config(var, value);
+ 
+diff --git a/t/t0003-attributes.sh b/t/t0003-attributes.sh
+index 5665cdc079..ecf43ab545 100755
+--- a/t/t0003-attributes.sh
++++ b/t/t0003-attributes.sh
+@@ -40,6 +40,10 @@ attr_check_source () {
+ 	test_cmp expect actual &&
+ 	test_must_be_empty err
+ 
++	git $git_opts -c "attr.tree=$source" check-attr test -- "$path" >actual 2>err &&
++	test_cmp expect actual &&
++	test_must_be_empty err
++
+ 	GIT_ATTR_SOURCE="$source" git $git_opts check-attr test -- "$path" >actual 2>err &&
+ 	test_cmp expect actual &&
+ 	test_must_be_empty err
+@@ -342,6 +346,43 @@ test_expect_success 'bare repository: check that .gitattribute is ignored' '
+ 	)
+ '
+ 
++bad_attr_source_err="fatal: bad --attr-source or GIT_ATTR_SOURCE"
++
++test_expect_success '--attr-source is bad' '
++	test_when_finished rm -rf empty &&
++	git init empty &&
++	(
++		cd empty &&
++		echo "$bad_attr_source_err" >expect_err &&
++		test_must_fail git --attr-source=HEAD check-attr test -- f/path 2>err &&
++		test_cmp expect_err err
++	)
++'
++
++test_expect_success 'attr.tree when HEAD is unborn' '
++	test_when_finished rm -rf empty &&
++	git init empty &&
++	(
++		cd empty &&
++		echo "f/path: test: unspecified" >expect &&
++		git -c attr.tree=HEAD check-attr test -- f/path >actual 2>err &&
++		test_must_be_empty err &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success 'bad attr source defaults to reading .gitattributes file' '
++	test_when_finished rm -rf empty &&
++	git init empty &&
++	(
++		cd empty &&
++		echo "f/path test=val" >.gitattributes &&
++		echo "f/path: test: val" >expect &&
++		git -c attr.tree=HEAD check-attr test -- f/path >actual 2>err &&
++		test_must_be_empty err &&
++		test_cmp expect actual
++	)
++'
+ 
+ test_expect_success 'bare repo defaults to reading .gitattributes from HEAD' '
+ 	test_when_finished rm -rf test bare_with_gitattribute &&
+@@ -353,6 +394,26 @@ test_expect_success 'bare repo defaults to reading .gitattributes from HEAD' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'precedence of --attr-source, GIT_ATTR_SOURCE, then attr.tree' '
++	test_when_finished rm -rf empty &&
++	git init empty &&
++	(
++		cd empty &&
++		git checkout -b attr-source &&
++		test_commit "val1" .gitattributes "f/path test=val1" &&
++		git checkout -b attr-tree &&
++		test_commit "val2" .gitattributes "f/path test=val2" &&
++		git checkout attr-source &&
++		echo "f/path: test: val1" >expect &&
++		GIT_ATTR_SOURCE=attr-source git -c attr.tree=attr-tree --attr-source=attr-source \
++		check-attr test -- f/path >actual &&
++		test_cmp expect actual &&
++		GIT_ATTR_SOURCE=attr-source git -c attr.tree=attr-tree \
++		check-attr test -- f/path >actual &&
++		test_cmp expect actual
++	)
++'
++
+ test_expect_success 'bare repository: with --source' '
+ 	(
+ 		cd bare.git &&
+-- 
+2.39.3 (Apple Git-145)
+

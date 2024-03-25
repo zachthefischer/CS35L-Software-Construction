@@ -1,0 +1,30 @@
+From 541607d9348307ac4bc4245a913672eacc4f6e61 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 16:47:00 -0400
+Subject: [PATCH 0043/2871] t3206: prepare for changing protocol.file.allow
+
+Explicitly cloning over the "file://" protocol in t3206 in preparation
+for merging a security release which will change the default value of
+this configuration to be "user".
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t3206-range-diff.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t3206-range-diff.sh b/t/t3206-range-diff.sh
+index d12e4e4cc6..03d4df2359 100755
+--- a/t/t3206-range-diff.sh
++++ b/t/t3206-range-diff.sh
+@@ -782,7 +782,7 @@ test_expect_success 'submodule changes are shown irrespective of diff.submodule'
+ 	sub_oid3=$(git -C sub-repo rev-parse HEAD) &&
+ 
+ 	git checkout -b main-sub topic &&
+-	git submodule add ./sub-repo sub &&
++	git -c protocol.file.allow=always submodule add ./sub-repo sub &&
+ 	git -C sub checkout --detach sub-first &&
+ 	git commit -m "add sub" sub &&
+ 	sup_oid1=$(git rev-parse --short HEAD) &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,80 @@
+From f546151228ea99cb9e68ec321ace7d2ee7c20af5 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 21 Dec 2023 04:47:22 -0500
+Subject: [PATCH 2594/2871] t1006: add tests for %(objectsize:disk)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Back when we added this placeholder in a4ac106178 (cat-file: add
+%(objectsize:disk) format atom, 2013-07-10), there were no tests,
+claiming "[...]the exact numbers returned are volatile and subject to
+zlib and packing decisions".
+
+But we can use a little shell hackery to get the expected numbers
+ourselves. To a certain degree this is just re-implementing what Git is
+doing under the hood, but it is still worth doing. It makes sure we
+exercise the %(objectsize:disk) code at all, and having the two
+implementations agree gives us more confidence.
+
+Note that our shell code assumes that no object appears twice (either in
+two packs, or as both loose and packed), as then the results really are
+undefined. That's OK for our purposes, and the test will notice if that
+assumption is violated (the shell version would produce duplicate lines
+that Git's output does not have).
+
+Helped-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1006-cat-file.sh | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/t/t1006-cat-file.sh b/t/t1006-cat-file.sh
+index d73a0be1b9..0c2eafae65 100755
+--- a/t/t1006-cat-file.sh
++++ b/t/t1006-cat-file.sh
+@@ -1100,6 +1100,40 @@ test_expect_success 'cat-file --batch="batman" with --batch-all-objects will wor
+ 	cmp expect actual
+ '
+ 
++test_expect_success 'cat-file %(objectsize:disk) with --batch-all-objects' '
++	# our state has both loose and packed objects,
++	# so find both for our expected output
++	{
++		find .git/objects/?? -type f |
++		awk -F/ "{ print \$0, \$3\$4 }" |
++		while read path oid
++		do
++			size=$(test_file_size "$path") &&
++			echo "$oid $size" ||
++			return 1
++		done &&
++		rawsz=$(test_oid rawsz) &&
++		find .git/objects/pack -name "*.idx" |
++		while read idx
++		do
++			git show-index <"$idx" >idx.raw &&
++			sort -n <idx.raw >idx.sorted &&
++			packsz=$(test_file_size "${idx%.idx}.pack") &&
++			end=$((packsz - rawsz)) &&
++			awk -v end="$end" "
++			  NR > 1 { print oid, \$1 - start }
++			  { start = \$1; oid = \$2 }
++			  END { print oid, end - start }
++			" idx.sorted ||
++			return 1
++		done
++	} >expect.raw &&
++	sort <expect.raw >expect &&
++	git cat-file --batch-all-objects \
++		--batch-check="%(objectname) %(objectsize:disk)" >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'set up replacement object' '
+ 	orig=$(git rev-parse HEAD) &&
+ 	git cat-file commit $orig >orig &&
+-- 
+2.39.3 (Apple Git-145)
+

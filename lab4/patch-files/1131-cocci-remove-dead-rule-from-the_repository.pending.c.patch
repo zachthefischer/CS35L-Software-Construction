@@ -1,0 +1,44 @@
+From 49c2d93ecf08b47698f9437372965b6f9d3af9fc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 28 Mar 2023 15:58:42 +0200
+Subject: [PATCH 1131/2871] cocci: remove dead rule from
+ "the_repository.pending.cocci"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The "parse_commit_gently" macro went away in [1], so we don't need to
+carry this for its migration.
+
+1. ea3f7e598c8 (revision: use repository from rev_info when parsing
+   commits, 2020-06-23)
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/coccinelle/the_repository.pending.cocci | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/contrib/coccinelle/the_repository.pending.cocci b/contrib/coccinelle/the_repository.pending.cocci
+index 747d382ff5..23b97536da 100644
+--- a/contrib/coccinelle/the_repository.pending.cocci
++++ b/contrib/coccinelle/the_repository.pending.cocci
+@@ -34,14 +34,6 @@ expression G;
+ + repo_parse_commit_internal(the_repository,
+   E, F, G)
+ 
+-@@
+-expression E;
+-expression F;
+-@@
+-- parse_commit_gently(
+-+ repo_parse_commit_gently(the_repository,
+-  E, F)
+-
+ @@
+ expression E;
+ @@
+-- 
+2.39.3 (Apple Git-145)
+

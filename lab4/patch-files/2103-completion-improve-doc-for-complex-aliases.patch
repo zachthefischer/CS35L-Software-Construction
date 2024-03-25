@@ -1,0 +1,36 @@
+From 4333267995662ccc9f4db3b628eebb78599e0025 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Tue, 12 Sep 2023 17:02:15 +0000
+Subject: [PATCH 2103/2871] completion: improve doc for complex aliases
+
+The completion code can be told to use a particular completion for
+aliases that shell out by using ': git <cmd> ;' as the first command of
+the alias. This only works if <cmd> and the semicolon are separated by a
+space, since if the space is missing __git_aliased_command returns (for
+example) 'checkout;' instead of just 'checkout', and then
+__git_complete_command fails to find a completion for 'checkout;'.
+
+The examples have that space but it's not clear if it's just for
+style or if it's mandatory. Explicitly mention it.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 133ec92bfa..19139ac121 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -28,6 +28,7 @@
+ # completion style.  For example '!f() { : git commit ; ... }; f' will
+ # tell the completion to use commit completion.  This also works with aliases
+ # of form "!sh -c '...'".  For example, "!sh -c ': git commit ; ... '".
++# Be sure to add a space between the command name and the ';'.
+ #
+ # If you have a command that is not part of git, but you would still
+ # like completion, you can use __git_complete:
+-- 
+2.39.3 (Apple Git-145)
+

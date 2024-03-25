@@ -1,0 +1,40 @@
+From ffcccc62b02ff41d5b436ea7cbd852bb2bd83bf8 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:39 +0000
+Subject: [PATCH 1677/2871] completion: complete --no-relative
+
+Add --no-relative to __git_diff_common_options in the completion script,
+and move --relative from __git_diff_difftool_options to
+__git_diff_common_options since it applies to more than just diff and
+difftool.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 13d6730f33..f4e773cb99 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1741,6 +1741,7 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--color-moved-ws= --no-color-moved-ws
+ 			--full-index --binary --abbrev --diff-filter=
+ 			--find-copies --find-object --find-renames
++			--no-relative --relative
+ 			--find-copies-harder --ignore-cr-at-eol
+ 			--text --ignore-space-at-eol --ignore-space-change
+ 			--ignore-all-space --ignore-blank-lines --exit-code
+@@ -1762,7 +1763,7 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 
+ # Options for diff/difftool
+ __git_diff_difftool_options="--cached --staged --pickaxe-all --pickaxe-regex
+-			--base --ours --theirs --no-index --relative --merge-base
++			--base --ours --theirs --no-index --merge-base
+ 			--ita-invisible-in-index --ita-visible-in-index
+ 			$__git_diff_common_options"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

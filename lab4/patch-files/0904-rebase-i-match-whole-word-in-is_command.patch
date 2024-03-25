@@ -1,0 +1,124 @@
+From 7aed2c0565bb1a7b4524f93e35a29770286ea630 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Thu, 23 Feb 2023 20:55:00 +0000
+Subject: [PATCH 0904/2871] rebase -i: match whole word in is_command()
+
+When matching an unabbreviated command is_command() only does a prefix
+match which means it parses "pickled" as TODO_PICK. parse_insn_line()
+does error out because is_command() only advances as far as the end of
+"pick" so it looks like the command name is not followed by a space but
+the error message is "missing arguments for pick" rather than telling
+the user that the "pickled" is not a valid command.
+
+Fix this by ensuring the match is follow by whitespace or the end of the
+string as we already do for abbreviated commands. The (*bol = p) at the
+end of the condition is a bit cute for my taste but I decided to leave
+it be for now. Rather than add new tests the existing tests for bad
+commands are adapted to use a bad command name that triggers the prefix
+matching bug.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c                   | 12 ++++++------
+ t/lib-rebase.sh               |  2 +-
+ t/t3404-rebase-interactive.sh | 12 +++++++-----
+ 3 files changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index f51d403b7d..416412ca33 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -2469,12 +2469,11 @@ static int is_command(enum todo_command command, const char **bol)
+ {
+ 	const char *str = todo_command_info[command].str;
+ 	const char nick = todo_command_info[command].c;
+-	const char *p = *bol + 1;
++	const char *p = *bol;
+ 
+-	return skip_prefix(*bol, str, bol) ||
+-		((nick && **bol == nick) &&
+-		 (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r' || !*p) &&
+-		 (*bol = p));
++	return (skip_prefix(p, str, &p) || (nick && *p++ == nick)) &&
++		(*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r' || !*p) &&
++		(*bol = p);
+ }
+ 
+ static int parse_insn_line(struct repository *r, struct todo_item *item,
+@@ -2503,7 +2502,8 @@ static int parse_insn_line(struct repository *r, struct todo_item *item,
+ 			break;
+ 		}
+ 	if (i >= TODO_COMMENT)
+-		return -1;
++		return error(_("invalid command '%.*s'"),
++			     (int)strcspn(bol, " \t\r\n"), bol);
+ 
+ 	/* Eat up extra spaces/ tabs before object name */
+ 	padding = strspn(bol, " \t");
+diff --git a/t/lib-rebase.sh b/t/lib-rebase.sh
+index b57541356b..1d2f0429ae 100644
+--- a/t/lib-rebase.sh
++++ b/t/lib-rebase.sh
+@@ -60,7 +60,7 @@ set_fake_editor () {
+ 		">")
+ 			echo >> "$1";;
+ 		bad)
+-			action="badcmd";;
++			action="pickled";;
+ 		fakesha)
+ 			test \& != "$action" || action=pick
+ 			echo "$action XXXXXXX False commit" >> "$1"
+diff --git a/t/t3404-rebase-interactive.sh b/t/t3404-rebase-interactive.sh
+index 462cefd25d..3862a4301a 100755
+--- a/t/t3404-rebase-interactive.sh
++++ b/t/t3404-rebase-interactive.sh
+@@ -1449,14 +1449,15 @@ test_expect_success 'rebase --edit-todo respects rebase.missingCommitsCheck = ig
+ 
+ test_expect_success 'rebase --edit-todo respects rebase.missingCommitsCheck = warn' '
+ 	cat >expect <<-EOF &&
+-	error: invalid line 1: badcmd $(git rev-list --pretty=oneline --abbrev-commit -1 primary~4)
++	error: invalid command '\''pickled'\''
++	error: invalid line 1: pickled $(git rev-list --pretty=oneline --abbrev-commit -1 primary~4)
+ 	Warning: some commits may have been dropped accidentally.
+ 	Dropped commits (newer to older):
+ 	 - $(git rev-list --pretty=oneline --abbrev-commit -1 primary)
+ 	 - $(git rev-list --pretty=oneline --abbrev-commit -1 primary~4)
+ 	To avoid this message, use "drop" to explicitly remove a commit.
+ 	EOF
+-	head -n4 expect >expect.2 &&
++	head -n5 expect >expect.2 &&
+ 	tail -n1 expect >>expect.2 &&
+ 	tail -n4 expect.2 >expect.3 &&
+ 	test_config rebase.missingCommitsCheck warn &&
+@@ -1467,7 +1468,7 @@ test_expect_success 'rebase --edit-todo respects rebase.missingCommitsCheck = wa
+ 			git rebase -i --root &&
+ 		cp .git/rebase-merge/git-rebase-todo.backup orig &&
+ 		FAKE_LINES="2 3 4" git rebase --edit-todo 2>actual.2 &&
+-		head -n6 actual.2 >actual &&
++		head -n7 actual.2 >actual &&
+ 		test_cmp expect actual &&
+ 		cp orig .git/rebase-merge/git-rebase-todo &&
+ 		FAKE_LINES="1 2 3 4" git rebase --edit-todo 2>actual.2 &&
+@@ -1483,7 +1484,8 @@ test_expect_success 'rebase --edit-todo respects rebase.missingCommitsCheck = wa
+ 
+ test_expect_success 'rebase --edit-todo respects rebase.missingCommitsCheck = error' '
+ 	cat >expect <<-EOF &&
+-	error: invalid line 1: badcmd $(git rev-list --pretty=oneline --abbrev-commit -1 primary~4)
++	error: invalid command '\''pickled'\''
++	error: invalid line 1: pickled $(git rev-list --pretty=oneline --abbrev-commit -1 primary~4)
+ 	Warning: some commits may have been dropped accidentally.
+ 	Dropped commits (newer to older):
+ 	 - $(git rev-list --pretty=oneline --abbrev-commit -1 primary)
+@@ -1583,7 +1585,7 @@ test_expect_success 'static check of bad command' '
+ 		set_fake_editor &&
+ 		test_must_fail env FAKE_LINES="1 2 3 bad 4 5" \
+ 		git rebase -i --root 2>actual &&
+-		test_i18ngrep "badcmd $(git rev-list --oneline -1 primary~1)" \
++		test_i18ngrep "pickled $(git rev-list --oneline -1 primary~1)" \
+ 				actual &&
+ 		test_i18ngrep "You can fix this with .git rebase --edit-todo.." \
+ 				actual &&
+-- 
+2.39.3 (Apple Git-145)
+

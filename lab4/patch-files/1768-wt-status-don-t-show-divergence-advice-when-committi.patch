@@ -1,0 +1,146 @@
+From b6f3da51322345a19c259b9359065aa54cda74ff Mon Sep 17 00:00:00 2001
+From: Alex Henrie <alexhenrie24@gmail.com>
+Date: Wed, 12 Jul 2023 22:41:13 -0600
+Subject: [PATCH 1768/2871] wt-status: don't show divergence advice when
+ committing
+
+When the user is in the middle of making a commit, they are not yet at
+the point where they are ready to think about integrating their local
+branch with the corresponding remote branch or force-pushing over the
+remote branch. Don't include advice on how to deal with divergent
+branches in the commit template, to avoid giving the impression that the
+divergence needs to be dealt with immediately. Similar advice will be
+printed when it is most relevant, that is, if the user does try to push
+without first reconciling the two branches.
+
+Signed-off-by: Alex Henrie <alexhenrie24@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/checkout.c |  2 +-
+ remote.c           |  6 ++++--
+ remote.h           |  3 ++-
+ t/t7508-status.sh  | 10 ++++------
+ wt-status.c        |  3 ++-
+ 5 files changed, 13 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index fd6ee8c272..c278c2169d 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -916,7 +916,7 @@ static void report_tracking(struct branch_info *new_branch_info)
+ 	struct strbuf sb = STRBUF_INIT;
+ 	struct branch *branch = branch_get(new_branch_info->name);
+ 
+-	if (!format_tracking_info(branch, &sb, AHEAD_BEHIND_FULL))
++	if (!format_tracking_info(branch, &sb, AHEAD_BEHIND_FULL, 1))
+ 		return;
+ 	fputs(sb.buf, stdout);
+ 	strbuf_release(&sb);
+diff --git a/remote.c b/remote.c
+index a81f2e2f17..d79aae0d76 100644
+--- a/remote.c
++++ b/remote.c
+@@ -2258,7 +2258,8 @@ int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
+  * Return true when there is anything to report, otherwise false.
+  */
+ int format_tracking_info(struct branch *branch, struct strbuf *sb,
+-			 enum ahead_behind_flags abf)
++			 enum ahead_behind_flags abf,
++			 int show_divergence_advice)
+ {
+ 	int ours, theirs, sti;
+ 	const char *full_base;
+@@ -2321,7 +2322,8 @@ int format_tracking_info(struct branch *branch, struct strbuf *sb,
+ 			       "respectively.\n",
+ 			   ours + theirs),
+ 			base, ours, theirs);
+-		if (advice_enabled(ADVICE_STATUS_HINTS))
++		if (show_divergence_advice &&
++		    advice_enabled(ADVICE_STATUS_HINTS))
+ 			strbuf_addstr(sb,
+ 				_("  (use \"git pull\" to merge the remote branch into yours)\n"));
+ 	}
+diff --git a/remote.h b/remote.h
+index 929c7c676d..cdc8b1db42 100644
+--- a/remote.h
++++ b/remote.h
+@@ -380,7 +380,8 @@ int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
+ 		       const char **upstream_name, int for_push,
+ 		       enum ahead_behind_flags abf);
+ int format_tracking_info(struct branch *branch, struct strbuf *sb,
+-			 enum ahead_behind_flags abf);
++			 enum ahead_behind_flags abf,
++			 int show_divergence_advice);
+ 
+ struct ref *get_local_heads(void);
+ /*
+diff --git a/t/t7508-status.sh b/t/t7508-status.sh
+index 36567708f5..845af287d7 100755
+--- a/t/t7508-status.sh
++++ b/t/t7508-status.sh
+@@ -847,7 +847,6 @@ test_expect_success 'dry-run of partial commit excluding new file in index' '
+ On branch main
+ Your branch and '\''upstream'\'' have diverged,
+ and have 1 and 2 different commits each, respectively.
+-  (use "git pull" to merge the remote branch into yours)
+ 
+ Changes to be committed:
+   (use "git restore --staged <file>..." to unstage)
+@@ -1013,7 +1012,7 @@ test_expect_success 'status -s submodule summary' '
+ '
+ 
+ test_expect_success 'status submodule summary (clean submodule): commit' '
+-	cat >expect <<EOF &&
++	cat >expect-status <<EOF &&
+ On branch main
+ Your branch and '\''upstream'\'' have diverged,
+ and have 2 and 2 different commits each, respectively.
+@@ -1033,12 +1032,13 @@ Untracked files:
+ 
+ no changes added to commit (use "git add" and/or "git commit -a")
+ EOF
++	sed "/git pull/d" expect-status > expect-commit &&
+ 	git commit -m "commit submodule" &&
+ 	git config status.submodulesummary 10 &&
+ 	test_must_fail git commit --dry-run >output &&
+-	test_cmp expect output &&
++	test_cmp expect-commit output &&
+ 	git status >output &&
+-	test_cmp expect output
++	test_cmp expect-status output
+ '
+ 
+ cat >expect <<EOF
+@@ -1065,7 +1065,6 @@ test_expect_success 'commit --dry-run submodule summary (--amend)' '
+ On branch main
+ Your branch and '\''upstream'\'' have diverged,
+ and have 2 and 2 different commits each, respectively.
+-  (use "git pull" to merge the remote branch into yours)
+ 
+ Changes to be committed:
+   (use "git restore --source=HEAD^1 --staged <file>..." to unstage)
+@@ -1558,7 +1557,6 @@ test_expect_success 'git commit --dry-run will show a staged but ignored submodu
+ On branch main
+ Your branch and '\''upstream'\'' have diverged,
+ and have 2 and 2 different commits each, respectively.
+-  (use "git pull" to merge the remote branch into yours)
+ 
+ Changes to be committed:
+   (use "git restore --staged <file>..." to unstage)
+diff --git a/wt-status.c b/wt-status.c
+index bcd0ef8044..e3e3732ea2 100644
+--- a/wt-status.c
++++ b/wt-status.c
+@@ -1186,7 +1186,8 @@ static void wt_longstatus_print_tracking(struct wt_status *s)
+ 
+ 	t_begin = getnanotime();
+ 
+-	if (!format_tracking_info(branch, &sb, s->ahead_behind_flags))
++	if (!format_tracking_info(branch, &sb, s->ahead_behind_flags,
++				  !s->commit_template))
+ 		return;
+ 
+ 	if (advice_enabled(ADVICE_STATUS_AHEAD_BEHIND_WARNING) &&
+-- 
+2.39.3 (Apple Git-145)
+

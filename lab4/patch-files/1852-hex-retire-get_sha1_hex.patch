@@ -1,0 +1,123 @@
+From 08e5fb1296238c9c4468ae2cfbd7a49045159c60 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 24 Jul 2023 16:11:03 -0700
+Subject: [PATCH 1852/2871] hex: retire get_sha1_hex()
+
+The naming convention around get_sha1_hex() and its friends is
+awkward these days, after "struct object_id" was introduced.
+
+There are three public functions around this area:
+
+ * get_sha1_hex()       - use the implied the_hash_algo, fill uchar *
+ * get_oid_hex()        - use the implied the_hash_algo, fill oid *
+ * get_oid_hex_algop()  - use the passed algop, fill oid *
+
+Between the latter two, the "_algop" suffix signals whether the
+the_hash_algo is used as the implied algorithm or the caller should
+pass an algorithm explicitly.  That is very much understandable and
+is a good convention.
+
+Between the former two, however, the "SHA1" vs "OID" in the names
+differentiate in what type of variable the result is stored.
+
+We could argue that it makes sense to use "SHA1" to mean "flat byte
+buffer" to honor the historical practice in the days before "struct
+object_id" was invented, but the natural fourth friend of the above
+group would take an algop and fill a flat byte buffer, and it would
+be strange to name it get_sha1_hex_algop().  Do we use the passed in
+algo, or are we limited to SHA-1 ;-)?
+
+In fact, such a function exists, albeit as a private helper function
+used by the implementation of these functions, and is named a lot
+more sensibly: get_hash_hex_algop().
+
+Correct the misnomer of get_sha1_hex() and use "hash", instead of
+"sha1", as "flat byte buffer that stores binary (as opposed to
+hexadecimal) representation of the hash".
+
+The four (2x2) friends now become:
+
+ * get_hash_hex()       - use the implied the_hash_algo, fill uchar *
+ * get_oid_hex()        - use the implied the_hash_algo, fill oid *
+ * get_hash_hex_algop() - use the passed algop, fill uchar *
+ * get_oid_hex_algop()  - use the passed algop, fill oid *
+
+As there are only two remaining calls to get_sha1_hex() in the
+codebase right now, the blast radious of this change is fairly
+small.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ hex.c      |  2 +-
+ hex.h      | 10 ++++++----
+ packfile.c |  2 +-
+ rerere.c   |  2 +-
+ 4 files changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/hex.c b/hex.c
+index 7bb440e794..01f17fe5c9 100644
+--- a/hex.c
++++ b/hex.c
+@@ -63,7 +63,7 @@ static int get_hash_hex_algop(const char *hex, unsigned char *hash,
+ 	return 0;
+ }
+ 
+-int get_sha1_hex(const char *hex, unsigned char *sha1)
++int get_hash_hex(const char *hex, unsigned char *sha1)
+ {
+ 	return get_hash_hex_algop(hex, sha1, the_hash_algo);
+ }
+diff --git a/hex.h b/hex.h
+index 7df4b3c460..87abf66602 100644
+--- a/hex.h
++++ b/hex.h
+@@ -20,14 +20,16 @@ static inline int hex2chr(const char *s)
+ }
+ 
+ /*
+- * Try to read a SHA1 in hexadecimal format from the 40 characters
+- * starting at hex.  Write the 20-byte result to sha1 in binary form.
++ * Try to read a hash (specified by the_hash_algo) in hexadecimal
++ * format from the 40 (or whatever length the hash algorithm uses)
++ * characters starting at hex.  Write the 20-byte (or the length of
++ * the hash) result to hash in binary form.
+  * Return 0 on success.  Reading stops if a NUL is encountered in the
+  * input, so it is safe to pass this function an arbitrary
+  * null-terminated string.
+  */
+-int get_sha1_hex(const char *hex, unsigned char *sha1);
+-int get_oid_hex(const char *hex, struct object_id *sha1);
++int get_hash_hex(const char *hex, unsigned char *hash);
++int get_oid_hex(const char *hex, struct object_id *oid);
+ 
+ /* Like get_oid_hex, but for an arbitrary hash algorithm. */
+ int get_oid_hex_algop(const char *hex, struct object_id *oid, const struct git_hash_algo *algop);
+diff --git a/packfile.c b/packfile.c
+index fd083c86e0..aa7a7ad8c3 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -753,7 +753,7 @@ struct packed_git *add_packed_git(const char *path, size_t path_len, int local)
+ 	p->pack_local = local;
+ 	p->mtime = st.st_mtime;
+ 	if (path_len < the_hash_algo->hexsz ||
+-	    get_sha1_hex(path + path_len - the_hash_algo->hexsz, p->hash))
++	    get_hash_hex(path + path_len - the_hash_algo->hexsz, p->hash))
+ 		hashclr(p->hash);
+ 	return p;
+ }
+diff --git a/rerere.c b/rerere.c
+index e968d413d6..228af65a5b 100644
+--- a/rerere.c
++++ b/rerere.c
+@@ -204,7 +204,7 @@ static void read_rr(struct repository *r, struct string_list *rr)
+ 		const unsigned hexsz = the_hash_algo->hexsz;
+ 
+ 		/* There has to be the hash, tab, path and then NUL */
+-		if (buf.len < hexsz + 2 || get_sha1_hex(buf.buf, hash))
++		if (buf.len < hexsz + 2 || get_hash_hex(buf.buf, hash))
+ 			die(_("corrupt MERGE_RR"));
+ 
+ 		if (buf.buf[hexsz] != '.') {
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,51 @@
+From 387c122131a9f8e4a67122d53955133d099b64a7 Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
+Date: Tue, 3 Oct 2023 20:50:43 +0200
+Subject: [PATCH 2195/2871] submodule--helper: return error from set-url when
+ modifying failed
+
+set-branch will return an error when setting the config fails so I don't
+see why set-url shouldn't. Also skip the sync in this case.
+
+Signed-off-by: Jan Alexander Steffens (heftig) <heftig@archlinux.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/submodule--helper.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/submodule--helper.c b/builtin/submodule--helper.c
+index 0c1509ad6e..cce46450ab 100644
+--- a/builtin/submodule--helper.c
++++ b/builtin/submodule--helper.c
+@@ -2889,7 +2889,7 @@ static int absorb_git_dirs(int argc, const char **argv, const char *prefix)
+ 
+ static int module_set_url(int argc, const char **argv, const char *prefix)
+ {
+-	int quiet = 0;
++	int quiet = 0, ret;
+ 	const char *newurl;
+ 	const char *path;
+ 	char *config_name;
+@@ -2915,13 +2915,15 @@ static int module_set_url(int argc, const char **argv, const char *prefix)
+ 		    path);
+ 
+ 	config_name = xstrfmt("submodule.%s.url", sub->name);
+-	config_set_in_gitmodules_file_gently(config_name, newurl);
++	ret = config_set_in_gitmodules_file_gently(config_name, newurl);
+ 
+-	repo_read_gitmodules (the_repository, 0);
+-	sync_submodule(sub->path, prefix, NULL, quiet ? OPT_QUIET : 0);
++	if (!ret) {
++		repo_read_gitmodules(the_repository, 0);
++		sync_submodule(sub->path, prefix, NULL, quiet ? OPT_QUIET : 0);
++	}
+ 
+ 	free(config_name);
+-	return 0;
++	return !!ret;
+ }
+ 
+ static int module_set_branch(int argc, const char **argv, const char *prefix)
+-- 
+2.39.3 (Apple Git-145)
+

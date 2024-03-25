@@ -1,0 +1,149 @@
+From 79156913774ef7c5f72264067e0764a1447a1bb3 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 28 Mar 2023 16:55:17 -0400
+Subject: [PATCH 1170/2871] builtins: annotate always-empty prefix parameters
+
+It's usually a bad idea for a builtin's cmd_foo() to ignore the "prefix"
+argument it gets, as it needs to prepend that string when accessing any
+paths given by the user.
+
+But if a builtin does not ask for the git wrapper to run repository
+setup (via the RUN_SETUP or RUN_SETUP_GENTLY flags), then we know the
+prefix will always be NULL (it is adjusting for the chdir() done during
+repo setup, but there cannot be one if we did not set up the repo). In
+those cases it's OK to ignore "prefix", but it's worth annotating for a
+few reasons:
+
+  1. It serves as documentation to somebody reading the code about what
+     we expect.
+
+  2. If the flags in git.c ever change, the run-time assertion may help
+     detect the problem (though only if the command is run from a
+     subdirectory of the repository).
+
+  3. It notes to the compiler that we are OK ignoring "prefix". In
+     particular, this silences -Wunused-parameter. It _could_ also help
+     the compiler generate better code (because it will know the prefix
+     is NULL), but in practice this is quite unlikely to matter.
+
+Note that I've only added this annotation to commands which triggered
+-Wunused-parameter. It would be correct to add it to any builtin which
+doesn't ask for RUN_SETUP, but most of the rest of them do the sensible
+thing with "prefix" by passing it to parse_options(). So they're much
+more likely to just work if they ever switched to RUN_SETUP, and aren't
+worth annotating.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin.h                   | 10 ++++++++++
+ builtin/check-ref-format.c  |  2 ++
+ builtin/get-tar-commit-id.c |  2 ++
+ builtin/mailsplit.c         |  2 ++
+ builtin/remote-ext.c        |  2 ++
+ builtin/remote-fd.c         |  2 ++
+ builtin/upload-archive.c    |  2 ++
+ 7 files changed, 22 insertions(+)
+
+diff --git a/builtin.h b/builtin.h
+index 46cc789789..cb0db67681 100644
+--- a/builtin.h
++++ b/builtin.h
+@@ -107,6 +107,16 @@ void setup_auto_pager(const char *cmd, int def);
+ 
+ int is_builtin(const char *s);
+ 
++/*
++ * Builtins which do not use RUN_SETUP should never see
++ * a prefix that is not empty; use this to protect downstream
++ * code which is not prepared to call prefix_filename(), etc.
++ */
++#define BUG_ON_NON_EMPTY_PREFIX(prefix) do { \
++	if ((prefix)) \
++		BUG("unexpected prefix in builtin: %s", (prefix)); \
++} while (0)
++
+ int cmd_add(int argc, const char **argv, const char *prefix);
+ int cmd_am(int argc, const char **argv, const char *prefix);
+ int cmd_annotate(int argc, const char **argv, const char *prefix);
+diff --git a/builtin/check-ref-format.c b/builtin/check-ref-format.c
+index fd0e5f8683..462eefe102 100644
+--- a/builtin/check-ref-format.c
++++ b/builtin/check-ref-format.c
+@@ -60,6 +60,8 @@ int cmd_check_ref_format(int argc, const char **argv, const char *prefix)
+ 	char *to_free = NULL;
+ 	int ret = 1;
+ 
++	BUG_ON_NON_EMPTY_PREFIX(prefix);
++
+ 	if (argc == 2 && !strcmp(argv[1], "-h"))
+ 		usage(builtin_check_ref_format_usage);
+ 
+diff --git a/builtin/get-tar-commit-id.c b/builtin/get-tar-commit-id.c
+index 491af9202d..8f8f2ac3e6 100644
+--- a/builtin/get-tar-commit-id.c
++++ b/builtin/get-tar-commit-id.c
+@@ -24,6 +24,8 @@ int cmd_get_tar_commit_id(int argc, const char **argv, const char *prefix)
+ 	long len;
+ 	char *end;
+ 
++	BUG_ON_NON_EMPTY_PREFIX(prefix);
++
+ 	if (argc != 1)
+ 		usage(builtin_get_tar_commit_id_usage);
+ 
+diff --git a/builtin/mailsplit.c b/builtin/mailsplit.c
+index 73509f651b..91e93f0c77 100644
+--- a/builtin/mailsplit.c
++++ b/builtin/mailsplit.c
+@@ -277,6 +277,8 @@ int cmd_mailsplit(int argc, const char **argv, const char *prefix)
+ 	const char **argp;
+ 	static const char *stdin_only[] = { "-", NULL };
+ 
++	BUG_ON_NON_EMPTY_PREFIX(prefix);
++
+ 	for (argp = argv+1; *argp; argp++) {
+ 		const char *arg = *argp;
+ 
+diff --git a/builtin/remote-ext.c b/builtin/remote-ext.c
+index ee338bf440..282782eccd 100644
+--- a/builtin/remote-ext.c
++++ b/builtin/remote-ext.c
+@@ -197,6 +197,8 @@ static int command_loop(const char *child)
+ 
+ int cmd_remote_ext(int argc, const char **argv, const char *prefix)
+ {
++	BUG_ON_NON_EMPTY_PREFIX(prefix);
++
+ 	if (argc != 3)
+ 		usage(usage_msg);
+ 
+diff --git a/builtin/remote-fd.c b/builtin/remote-fd.c
+index b2a3980b1d..9020fab9c5 100644
+--- a/builtin/remote-fd.c
++++ b/builtin/remote-fd.c
+@@ -59,6 +59,8 @@ int cmd_remote_fd(int argc, const char **argv, const char *prefix)
+ 	int output_fd = -1;
+ 	char *end;
+ 
++	BUG_ON_NON_EMPTY_PREFIX(prefix);
++
+ 	if (argc != 3)
+ 		usage(usage_msg);
+ 
+diff --git a/builtin/upload-archive.c b/builtin/upload-archive.c
+index 945ee2b412..7f9320ac6d 100644
+--- a/builtin/upload-archive.c
++++ b/builtin/upload-archive.c
+@@ -79,6 +79,8 @@ int cmd_upload_archive(int argc, const char **argv, const char *prefix)
+ {
+ 	struct child_process writer = CHILD_PROCESS_INIT;
+ 
++	BUG_ON_NON_EMPTY_PREFIX(prefix);
++
+ 	if (argc == 2 && !strcmp(argv[1], "-h"))
+ 		usage(upload_archive_usage);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

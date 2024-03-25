@@ -1,0 +1,30 @@
+From 4542582e59ec7e16c83178a8226c28ec533422ad Mon Sep 17 00:00:00 2001
+From: "Chris. Webster" <chris@webstech.net>
+Date: Tue, 20 Dec 2022 00:35:47 +0000
+Subject: [PATCH 0587/2871] ci (check-whitespace): move to actions/checkout@v3
+
+Get rid of deprecation warnings in the CI runs.  Also gets the latest
+security patches.
+
+Signed-off-by: Chris. Webster <chris@webstech.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/check-whitespace.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/check-whitespace.yml b/.github/workflows/check-whitespace.yml
+index 552894f736..da557fd591 100644
+--- a/.github/workflows/check-whitespace.yml
++++ b/.github/workflows/check-whitespace.yml
+@@ -13,7 +13,7 @@ jobs:
+   check-whitespace:
+     runs-on: ubuntu-latest
+     steps:
+-    - uses: actions/checkout@v2
++    - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+ 
+-- 
+2.39.3 (Apple Git-145)
+

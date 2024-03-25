@@ -1,0 +1,39 @@
+From 76e50f7fbccb9db4659f1e7fea55fc4d51144d7c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 22 Mar 2023 13:37:17 -0400
+Subject: [PATCH 1097/2871] fast-export: drop const when storing anonymized
+ values
+
+We store anonymized values as pointers to "const char *", since they are
+conceptually const to callers who use them. But they are actually
+allocated strings whose memory is owned by the struct.
+
+The ownership mismatch hasn't been a big deal since we never free() them
+(they are held until the program ends), but let's switch them to "char *"
+in preparation for changing that.
+
+Since most code only accesses them via anonymize_str(), it can continue
+to narrow them to "const char *" in its return value.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fast-export.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/fast-export.c b/builtin/fast-export.c
+index 78493c6d2b..f422819c82 100644
+--- a/builtin/fast-export.c
++++ b/builtin/fast-export.c
+@@ -110,7 +110,7 @@ static struct decoration idnums;
+ static uint32_t last_idnum;
+ struct anonymized_entry {
+ 	struct hashmap_entry hash;
+-	const char *anon;
++	char *anon;
+ 	const char orig[FLEX_ARRAY];
+ };
+ 
+-- 
+2.39.3 (Apple Git-145)
+

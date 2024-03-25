@@ -1,0 +1,31 @@
+From 38a15f4755f257ca89535b73e0f267ea4df7d17f Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Fri, 22 Sep 2023 14:14:42 +0000
+Subject: [PATCH 2144/2871] Documentation/git-status: add missing line breaks
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-status.txt | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/Documentation/git-status.txt b/Documentation/git-status.txt
+index a051b1e8f3..b27d127b5e 100644
+--- a/Documentation/git-status.txt
++++ b/Documentation/git-status.txt
+@@ -245,10 +245,12 @@ U           U    unmerged, both modified
+ ....
+ 
+ Submodules have more state and instead report
++
+ 		M    the submodule has a different HEAD than
+ 		     recorded in the index
+ 		m    the submodule has modified content
+ 		?    the submodule has untracked files
++
+ since modified content or untracked files in a submodule cannot be added
+ via `git add` in the superproject to prepare a commit.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

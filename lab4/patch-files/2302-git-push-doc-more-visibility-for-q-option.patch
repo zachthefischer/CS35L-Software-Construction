@@ -1,0 +1,32 @@
+From f6d83e21159ce8e9f7c57516e509c2ad251d82c0 Mon Sep 17 00:00:00 2001
+From: Michal Suchanek <msuchanek@suse.de>
+Date: Fri, 20 Oct 2023 20:45:21 +0200
+Subject: [PATCH 2302/2871] git-push doc: more visibility for -q option
+
+The "-v" option is shown in the SYNOPSIS section near the top, but
+"-q" is not shown anywhere there.
+
+List "-q" alongside "-v".
+
+Signed-off-by: Michal Suchanek <msuchanek@suse.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-push.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-push.txt b/Documentation/git-push.txt
+index 297927d866..b5d76604cb 100644
+--- a/Documentation/git-push.txt
++++ b/Documentation/git-push.txt
+@@ -10,7 +10,7 @@ SYNOPSIS
+ --------
+ [verse]
+ 'git push' [--all | --branches | --mirror | --tags] [--follow-tags] [--atomic] [-n | --dry-run] [--receive-pack=<git-receive-pack>]
+-	   [--repo=<repository>] [-f | --force] [-d | --delete] [--prune] [-v | --verbose]
++	   [--repo=<repository>] [-f | --force] [-d | --delete] [--prune] [-q | --quiet] [-v | --verbose]
+ 	   [-u | --set-upstream] [-o <string> | --push-option=<string>]
+ 	   [--[no-]signed|--signed=(true|false|if-asked)]
+ 	   [--force-with-lease[=<refname>[:<expect>]] [--force-if-includes]]
+-- 
+2.39.3 (Apple Git-145)
+

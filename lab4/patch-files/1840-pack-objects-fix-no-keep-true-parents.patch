@@ -1,0 +1,85 @@
+From 3a5f30874120880ddaa53d0db4c3b4ec0a07297a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 21 Jul 2023 14:41:56 +0200
+Subject: [PATCH 1840/2871] pack-objects: fix --no-keep-true-parents
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 99fb6e04cb (pack-objects: convert to use parse_options(),
+2012-02-01) git pack-objects has accepted --no-keep-true-parents, but
+this option does the same as --keep-true-parents.  That's because it's
+defined using OPT_SET_INT with a value of 0, which sets 0 when negated
+as well.
+
+Turn --no-keep-true-parents into the opposite of --keep-true-parents by
+using OPT_BOOL and storing the option's status directly in a variable
+named "grafts_keep_true_parents" instead of in negative form in
+"grafts_replace_parents".
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-objects.c | 4 ++--
+ commit.c               | 2 +-
+ environment.c          | 2 +-
+ environment.h          | 2 +-
+ 4 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 9cfc8801f9..193bb0b0df 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -4256,8 +4256,8 @@ int cmd_pack_objects(int argc, const char **argv, const char *prefix)
+ 				N_("ignore this pack")),
+ 		OPT_INTEGER(0, "compression", &pack_compression_level,
+ 			    N_("pack compression level")),
+-		OPT_SET_INT(0, "keep-true-parents", &grafts_replace_parents,
+-			    N_("do not hide commits by grafts"), 0),
++		OPT_BOOL(0, "keep-true-parents", &grafts_keep_true_parents,
++			 N_("do not hide commits by grafts")),
+ 		OPT_BOOL(0, "use-bitmap-index", &use_bitmap_index,
+ 			 N_("use a bitmap index if available to speed up counting objects")),
+ 		OPT_SET_INT(0, "write-bitmap-index", &write_bitmap_index,
+diff --git a/commit.c b/commit.c
+index 0fb9316931..2fbbf24576 100644
+--- a/commit.c
++++ b/commit.c
+@@ -516,7 +516,7 @@ int parse_commit_buffer(struct repository *r, struct commit *item, const void *b
+ 		 * The clone is shallow if nr_parent < 0, and we must
+ 		 * not traverse its real parents even when we unhide them.
+ 		 */
+-		if (graft && (graft->nr_parent < 0 || grafts_replace_parents))
++		if (graft && (graft->nr_parent < 0 || !grafts_keep_true_parents))
+ 			continue;
+ 		new_parent = lookup_commit(r, &parent);
+ 		if (!new_parent)
+diff --git a/environment.c b/environment.c
+index 28d18eaca8..fb113df8d0 100644
+--- a/environment.c
++++ b/environment.c
+@@ -75,7 +75,7 @@ enum push_default_type push_default = PUSH_DEFAULT_UNSPECIFIED;
+ #endif
+ enum object_creation_mode object_creation_mode = OBJECT_CREATION_MODE;
+ char *notes_ref_name;
+-int grafts_replace_parents = 1;
++int grafts_keep_true_parents;
+ int core_apply_sparse_checkout;
+ int core_sparse_checkout_cone;
+ int sparse_expect_files_outside_of_patterns;
+diff --git a/environment.h b/environment.h
+index 30cb7e0fa3..96bc95bbeb 100644
+--- a/environment.h
++++ b/environment.h
+@@ -194,7 +194,7 @@ extern enum object_creation_mode object_creation_mode;
+ 
+ extern char *notes_ref_name;
+ 
+-extern int grafts_replace_parents;
++extern int grafts_keep_true_parents;
+ 
+ extern int repository_format_precious_objects;
+ extern int repository_format_worktree_config;
+-- 
+2.39.3 (Apple Git-145)
+

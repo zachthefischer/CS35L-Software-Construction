@@ -1,0 +1,77 @@
+From 7fb89047cc3957bf829233786c00edd5d87f0225 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sun, 22 Jan 2023 02:38:10 +0100
+Subject: [PATCH 0729/2871] bisect: fix "reset" when branch is checked out
+ elsewhere
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 1d0fa89 (checkout: add --ignore-other-wortrees, 2015-01-03) we
+have a safety valve in checkout/switch to prevent the same branch from
+being checked out simultaneously in multiple worktrees.
+
+If a branch is bisected in a worktree while also being checked out in
+another worktree; when the bisection is finished, checking out the
+branch back in the current worktree may fail.
+
+Let's teach bisect to use the "--ignore-other-worktrees" flag.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bisect.c            |  3 ++-
+ t/t6030-bisect-porcelain.sh | 23 +++++++++++++++++++++++
+ 2 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index 7301740267..e405fff9e9 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -244,7 +244,8 @@ static int bisect_reset(const char *commit)
+ 		struct child_process cmd = CHILD_PROCESS_INIT;
+ 
+ 		cmd.git_cmd = 1;
+-		strvec_pushl(&cmd.args, "checkout", branch.buf, "--", NULL);
++		strvec_pushl(&cmd.args, "checkout", "--ignore-other-worktrees",
++				branch.buf, "--", NULL);
+ 		if (run_command(&cmd)) {
+ 			error(_("could not check out original"
+ 				" HEAD '%s'. Try 'git bisect"
+diff --git a/t/t6030-bisect-porcelain.sh b/t/t6030-bisect-porcelain.sh
+index 3ba4fdf615..fb01bd6abc 100755
+--- a/t/t6030-bisect-porcelain.sh
++++ b/t/t6030-bisect-porcelain.sh
+@@ -122,6 +122,29 @@ test_expect_success 'bisect start without -- takes unknown arg as pathspec' '
+ 	grep bar ".git/BISECT_NAMES"
+ '
+ 
++test_expect_success 'bisect reset: back in a branch checked out also elsewhere' '
++	echo "shared" > branch.expect &&
++	test_bisect_reset() {
++		git -C $1 bisect start &&
++		git -C $1 bisect good $HASH1 &&
++		git -C $1 bisect bad $HASH3 &&
++		git -C $1 bisect reset &&
++		git -C $1 branch --show-current > branch.output &&
++		cmp branch.expect branch.output
++	} &&
++	test_when_finished "
++		git worktree remove wt1 &&
++		git worktree remove wt2 &&
++		git branch -d shared
++	" &&
++	git worktree add wt1 -b shared &&
++	git worktree add wt2 -f shared &&
++	# we test in both worktrees to ensure that works
++	# as expected with "first" and "next" worktrees
++	test_bisect_reset wt1 &&
++	test_bisect_reset wt2
++'
++
+ test_expect_success 'bisect reset: back in the main branch' '
+ 	git bisect reset &&
+ 	echo "* main" > branch.expect &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,40 @@
+From 6b79a2183c85749996f561d0f27bd0dc799aaae9 Mon Sep 17 00:00:00 2001
+From: Jacob Stopak <jacob@initialcommit.io>
+Date: Mon, 16 Oct 2023 21:15:03 -0700
+Subject: [PATCH 2310/2871] Include gettext.h in MyFirstContribution tutorial
+
+The tutorial in Documentation/MyFirstContribution.txt has steps to print
+some text using the "_" function. However, this leads to compiler errors
+when running "make" since "gettext.h" is not #included.
+
+Update docs with a note to #include "gettext.h" in "builtin/psuh.c".
+
+Signed-off-by: Jacob Stopak <jacob@initialcommit.io>
+Reviewed-by: Emily Shaffer <nasamuffin@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/MyFirstContribution.txt | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/MyFirstContribution.txt b/Documentation/MyFirstContribution.txt
+index 62d11a5cd7..7cfed60c2e 100644
+--- a/Documentation/MyFirstContribution.txt
++++ b/Documentation/MyFirstContribution.txt
+@@ -160,10 +160,11 @@ in order to keep the declarations alphabetically sorted:
+ int cmd_psuh(int argc, const char **argv, const char *prefix);
+ ----
+ 
+-Be sure to `#include "builtin.h"` in your `psuh.c`.
++Be sure to `#include "builtin.h"` in your `psuh.c`. You'll also need to
++`#include "gettext.h"` to use functions related to printing output text.
+ 
+-Go ahead and add some throwaway printf to that function. This is a decent
+-starting point as we can now add build rules and register the command.
++Go ahead and add some throwaway printf to the `cmd_psuh` function. This is a
++decent starting point as we can now add build rules and register the command.
+ 
+ NOTE: Your throwaway text, as well as much of the text you will be adding over
+ the course of this tutorial, is user-facing. That means it needs to be
+-- 
+2.39.3 (Apple Git-145)
+

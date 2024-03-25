@@ -1,0 +1,87 @@
+From 83bb8e5a0689e236f06a24ffede0b4c823b4a0b2 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 19 Jul 2023 04:37:39 -0700
+Subject: [PATCH 1827/2871] show-branch: --no-sparse should give dense output
+
+"git show-branch --no-sparse" behaved exactly the same way as "git
+show-branch --sparse", which did not make any sense.  This was
+because it used a variable "dense" initialized to 1 by default to
+give "non sparse" behaviour, and OPT_SET_INT() to set the varilable
+to 0 in response to the "--sparse" option.  Unfortunately,
+OPT_SET_INT() sets 0 to the given variable when the option is
+negated.
+
+Flip the polarity of the variable "dense" by renaming it to "sparse"
+and initializing it to 0, and have OPT_SET_INT() set the variable to
+1 when "--sparse" is given.  This way, "--no-sparse" would set 0 to
+the variable and would give us the "dense" behaviour.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/show-branch.c  |  8 ++++----
+ t/t3202-show-branch.sh | 16 ++++++++++++++++
+ 2 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/show-branch.c b/builtin/show-branch.c
+index 7ef4a642c1..67f3ef0639 100644
+--- a/builtin/show-branch.c
++++ b/builtin/show-branch.c
+@@ -645,7 +645,7 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
+ 	int with_current_branch = 0;
+ 	int head_at = -1;
+ 	int topics = 0;
+-	int dense = 1;
++	int sparse = 0;
+ 	const char *reflog_base = NULL;
+ 	struct option builtin_show_branch_options[] = {
+ 		OPT_BOOL('a', "all", &all_heads,
+@@ -672,8 +672,8 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
+ 			    REV_SORT_IN_GRAPH_ORDER),
+ 		OPT_BOOL(0, "topics", &topics,
+ 			 N_("show only commits not on the first branch")),
+-		OPT_SET_INT(0, "sparse", &dense,
+-			    N_("show merges reachable from only one tip"), 0),
++		OPT_SET_INT(0, "sparse", &sparse,
++			    N_("show merges reachable from only one tip"), 1),
+ 		OPT_SET_INT(0, "date-order", &sort_order,
+ 			    N_("topologically sort, maintaining date order "
+ 			       "where possible"),
+@@ -936,7 +936,7 @@ int cmd_show_branch(int ac, const char **av, const char *prefix)
+ 			    !is_merge_point &&
+ 			    (this_flag & (1u << REV_SHIFT)))
+ 				continue;
+-			if (dense && is_merge &&
++			if (!sparse && is_merge &&
+ 			    omit_in_dense(commit, rev, num_rev))
+ 				continue;
+ 			for (i = 0; i < num_rev; i++) {
+diff --git a/t/t3202-show-branch.sh b/t/t3202-show-branch.sh
+index be20ebe1d5..ca7c44f0f7 100755
+--- a/t/t3202-show-branch.sh
++++ b/t/t3202-show-branch.sh
+@@ -119,6 +119,22 @@ test_expect_success 'show branch --remotes' '
+ 	test_must_be_empty actual.out
+ '
+ 
++test_expect_success 'show-branch --sparse' '
++	test_when_finished "git checkout branch10 && git branch -D branchA" &&
++	git checkout -b branchA branch10 &&
++	git merge -s ours -m "merge 1 and 10 to make A" branch1 &&
++	git commit --allow-empty -m "another" &&
++
++	git show-branch --sparse >out &&
++	grep "merge 1 and 10 to make A" out &&
++
++	git show-branch >out &&
++	! grep "merge 1 and 10 to make A" out &&
++
++	git show-branch --no-sparse >out &&
++	! grep "merge 1 and 10 to make A" out
++'
++
+ test_expect_success 'setup show branch --list' '
+ 	sed "s/^> //" >expect <<-\EOF
+ 	>   [branch1] branch1
+-- 
+2.39.3 (Apple Git-145)
+

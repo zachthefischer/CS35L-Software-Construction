@@ -1,0 +1,199 @@
+From 7891e465856e539c4a102dadec6dca9ac51c38df Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 18 Apr 2023 21:29:57 -0400
+Subject: [PATCH 1309/2871] gpg-interface: set trust level of missing key to
+ "undefined"
+
+In check_signature(), we initialize the trust_level field to "-1", with
+the idea that if gpg does not return a trust level at all (if there is
+no signature, or if the signature is made by an unknown key), we'll
+use that value. But this has two problems:
+
+  1. Since the field is an enum, it's up to the compiler to decide what
+     underlying storage to use, and it only has to fit the values we've
+     declared. So we may not be able to store "-1" at all. And indeed,
+     on my system (linux with gcc), the resulting enum is an unsigned
+     32-bit value, and -1 becomes 4294967295.
+
+     The difference may seem academic (and you even get "-1" if you pass
+     it to printf("%d")), but it means that code like this:
+
+       status |= sigc->trust_level < configured_min_trust_level;
+
+     does not necessarily behave as expected. This turns out not to be a
+     bug in practice, though, because we keep the "-1" only when gpg did
+     not report a signature from a known key, in which case the line
+     above:
+
+       status |= sigc->result != 'G';
+
+     would always set status to non-zero anyway. So only a 'G' signature
+     with no parsed trust level would cause a problem, which doesn't
+     seem likely to trigger (outside of unexpected gpg behavior).
+
+  2. When using the "%GT" format placeholder, we pass the value to
+     gpg_trust_level_to_str(), which complains that the value is out of
+     range with a BUG(). This behavior was introduced by 803978da49
+     (gpg-interface: add function for converting trust level to string,
+     2022-07-11). Before that, we just did a switch() on the enum, and
+     anything that wasn't matched would end up as the empty string.
+
+     Curiously, solving this by naively doing:
+
+       if (level < 0)
+               return "";
+
+     in that function isn't sufficient. Because of (1) above, the
+     compiler can (and does in my case) actually remove that conditional
+     as dead code!
+
+We can solve both by representing this state as an enum value. We could
+do this by adding a new "unknown" value. But this really seems to match
+the existing "undefined" level well. GPG describes this as "Not enough
+information for calculation".
+
+We have tests in t7510 that trigger this case (verifying a signature
+from a key that we don't have, and then checking various %G
+placeholders), but they didn't notice the BUG() because we didn't look
+at %GT for that case! Let's make sure we check all %G placeholders for
+each case in the formatting tests.
+
+The interesting ones here are "show unknown signature with custom
+format" and "show lack of signature with custom format", both of which
+would BUG() before, and now turn %GT into "undefined". Prior to
+803978da49 they would have turned it into the empty string, but I think
+saying "undefined" consistently is a reasonable outcome, and probably
+makes life easier for anyone parsing the output (and any such parser had
+to be ready to see "undefined" already).
+
+The other modified tests produce the same output before and after this
+patch, but now we're consistently checking both %G? and %GT in all of
+them.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Reported-by: Rolf Eike Beer <eb@emlix.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gpg-interface.c          |  2 +-
+ t/t7510-signed-commit.sh | 21 ++++++++++++++-------
+ 2 files changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/gpg-interface.c b/gpg-interface.c
+index 5cd66d3a78..b8ad682174 100644
+--- a/gpg-interface.c
++++ b/gpg-interface.c
+@@ -633,7 +633,7 @@ int check_signature(struct signature_check *sigc,
+ 	int status;
+ 
+ 	sigc->result = 'N';
+-	sigc->trust_level = -1;
++	sigc->trust_level = TRUST_UNDEFINED;
+ 
+ 	fmt = get_format_by_sig(signature);
+ 	if (!fmt)
+diff --git a/t/t7510-signed-commit.sh b/t/t7510-signed-commit.sh
+index 48f86cb367..ccbc416402 100755
+--- a/t/t7510-signed-commit.sh
++++ b/t/t7510-signed-commit.sh
+@@ -221,84 +221,91 @@ test_expect_success GPG 'amending already signed commit' '
+ test_expect_success GPG 'show good signature with custom format' '
+ 	cat >expect <<-\EOF &&
+ 	G
++	ultimate
+ 	13B6F51ECDDE430D
+ 	C O Mitter <committer@example.com>
+ 	73D758744BE721698EC54E8713B6F51ECDDE430D
+ 	73D758744BE721698EC54E8713B6F51ECDDE430D
+ 	EOF
+-	git log -1 --format="%G?%n%GK%n%GS%n%GF%n%GP" sixth-signed >actual &&
++	git log -1 --format="%G?%n%GT%n%GK%n%GS%n%GF%n%GP" sixth-signed >actual &&
+ 	test_cmp expect actual
+ '
+ 
+ test_expect_success GPG 'show bad signature with custom format' '
+ 	cat >expect <<-\EOF &&
+ 	B
++	undefined
+ 	13B6F51ECDDE430D
+ 	C O Mitter <committer@example.com>
+ 
+ 
+ 	EOF
+-	git log -1 --format="%G?%n%GK%n%GS%n%GF%n%GP" $(cat forged1.commit) >actual &&
++	git log -1 --format="%G?%n%GT%n%GK%n%GS%n%GF%n%GP" $(cat forged1.commit) >actual &&
+ 	test_cmp expect actual
+ '
+ 
+ test_expect_success GPG 'show untrusted signature with custom format' '
+ 	cat >expect <<-\EOF &&
+ 	U
++	undefined
+ 	65A0EEA02E30CAD7
+ 	Eris Discordia <discord@example.net>
+ 	F8364A59E07FFE9F4D63005A65A0EEA02E30CAD7
+ 	D4BE22311AD3131E5EDA29A461092E85B7227189
+ 	EOF
+-	git log -1 --format="%G?%n%GK%n%GS%n%GF%n%GP" eighth-signed-alt >actual &&
++	git log -1 --format="%G?%n%GT%n%GK%n%GS%n%GF%n%GP" eighth-signed-alt >actual &&
+ 	test_cmp expect actual
+ '
+ 
+ test_expect_success GPG 'show untrusted signature with undefined trust level' '
+ 	cat >expect <<-\EOF &&
++	U
+ 	undefined
+ 	65A0EEA02E30CAD7
+ 	Eris Discordia <discord@example.net>
+ 	F8364A59E07FFE9F4D63005A65A0EEA02E30CAD7
+ 	D4BE22311AD3131E5EDA29A461092E85B7227189
+ 	EOF
+-	git log -1 --format="%GT%n%GK%n%GS%n%GF%n%GP" eighth-signed-alt >actual &&
++	git log -1 --format="%G?%n%GT%n%GK%n%GS%n%GF%n%GP" eighth-signed-alt >actual &&
+ 	test_cmp expect actual
+ '
+ 
+ test_expect_success GPG 'show untrusted signature with ultimate trust level' '
+ 	cat >expect <<-\EOF &&
++	G
+ 	ultimate
+ 	13B6F51ECDDE430D
+ 	C O Mitter <committer@example.com>
+ 	73D758744BE721698EC54E8713B6F51ECDDE430D
+ 	73D758744BE721698EC54E8713B6F51ECDDE430D
+ 	EOF
+-	git log -1 --format="%GT%n%GK%n%GS%n%GF%n%GP" sixth-signed >actual &&
++	git log -1 --format="%G?%n%GT%n%GK%n%GS%n%GF%n%GP" sixth-signed >actual &&
+ 	test_cmp expect actual
+ '
+ 
+ test_expect_success GPG 'show unknown signature with custom format' '
+ 	cat >expect <<-\EOF &&
+ 	E
++	undefined
+ 	65A0EEA02E30CAD7
+ 
+ 
+ 
+ 	EOF
+-	GNUPGHOME="$GNUPGHOME_NOT_USED" git log -1 --format="%G?%n%GK%n%GS%n%GF%n%GP" eighth-signed-alt >actual &&
++	GNUPGHOME="$GNUPGHOME_NOT_USED" git log -1 --format="%G?%n%GT%n%GK%n%GS%n%GF%n%GP" eighth-signed-alt >actual &&
+ 	test_cmp expect actual
+ '
+ 
+ test_expect_success GPG 'show lack of signature with custom format' '
+ 	cat >expect <<-\EOF &&
+ 	N
++	undefined
+ 
+ 
+ 
+ 
+ 	EOF
+-	git log -1 --format="%G?%n%GK%n%GS%n%GF%n%GP" seventh-unsigned >actual &&
++	git log -1 --format="%G?%n%GT%n%GK%n%GS%n%GF%n%GP" seventh-unsigned >actual &&
+ 	test_cmp expect actual
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

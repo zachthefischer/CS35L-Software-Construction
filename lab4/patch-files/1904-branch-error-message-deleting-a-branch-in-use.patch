@@ -1,0 +1,61 @@
+From 92edf618709eaee1c3b42481cb478ed00eae1c2b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 7 Aug 2023 22:42:36 +0200
+Subject: [PATCH 1904/2871] branch: error message deleting a branch in use
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Let's update the error message we show when the user tries to delete a
+branch which is being used in another worktree, following the guideline
+reasoned in 4970bedef2 (branch: update the message to refuse touching a
+branch in-use, 2023-07-21).
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c  |  2 +-
+ t/t3200-branch.sh | 14 +++++++++++++-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index e8ff3ecc07..a399256675 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -262,7 +262,7 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
+ 			const char *path;
+ 			if ((path = branch_checked_out(name))) {
+ 				error(_("Cannot delete branch '%s' "
+-					"checked out at '%s'"),
++					"used by worktree at '%s'"),
+ 				      bname.buf, path);
+ 				ret = 1;
+ 				continue;
+diff --git a/t/t3200-branch.sh b/t/t3200-branch.sh
+index daf1666df7..080e4f24a6 100755
+--- a/t/t3200-branch.sh
++++ b/t/t3200-branch.sh
+@@ -942,7 +942,19 @@ test_expect_success 'test deleting branch without config' '
+ test_expect_success 'deleting currently checked out branch fails' '
+ 	git worktree add -b my7 my7 &&
+ 	test_must_fail git -C my7 branch -d my7 &&
+-	test_must_fail git branch -d my7 &&
++	test_must_fail git branch -d my7 2>actual &&
++	grep "^error: Cannot delete branch .my7. used by worktree at " actual &&
++	rm -r my7 &&
++	git worktree prune
++'
++
++test_expect_success 'deleting in-use branch fails' '
++	git worktree add my7 &&
++	test_commit -C my7 bt7 &&
++	git -C my7 bisect start HEAD HEAD~2 &&
++	test_must_fail git -C my7 branch -d my7 &&
++	test_must_fail git branch -d my7 2>actual &&
++	grep "^error: Cannot delete branch .my7. used by worktree at " actual &&
+ 	rm -r my7 &&
+ 	git worktree prune
+ '
+-- 
+2.39.3 (Apple Git-145)
+

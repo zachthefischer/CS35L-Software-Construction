@@ -1,0 +1,32 @@
+From 51c31a6408c1eae3ad6c2f78ec136c1b415cad72 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:38:08 -0400
+Subject: [PATCH 1800/2871] commit-graph.c: prevent overflow in
+ `load_tree_for_commit()`
+
+In a similar spirit as previous commits, ensure that we don't overflow
+when computing an offset into the commit_data chunk when the (relative)
+graph position exceeds 2^32-1/GRAPH_DATA_WIDTH.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 5e32063d3d..08d773567f 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -980,7 +980,7 @@ static struct tree *load_tree_for_commit(struct repository *r,
+ 		g = g->base_graph;
+ 
+ 	commit_data = g->chunk_commit_data +
+-			GRAPH_DATA_WIDTH * (graph_pos - g->num_commits_in_base);
++			st_mult(GRAPH_DATA_WIDTH, graph_pos - g->num_commits_in_base);
+ 
+ 	oidread(&oid, commit_data);
+ 	set_commit_tree(c, lookup_tree(r, &oid));
+-- 
+2.39.3 (Apple Git-145)
+

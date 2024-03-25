@@ -1,0 +1,33 @@
+From 2c17de8b37c52850261e173ba98306fadd5d5aa1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Mon, 13 Feb 2023 22:10:45 +0100
+Subject: [PATCH 0862/2871] test-ctype: test islower and isupper
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Test the character classifiers added by 43ccdf56ec (ctype: implement
+islower/isupper macro, 2012-02-10).
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-ctype.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/t/helper/test-ctype.c b/t/helper/test-ctype.c
+index caf586649f..8ac76e93e4 100644
+--- a/t/helper/test-ctype.c
++++ b/t/helper/test-ctype.c
+@@ -53,6 +53,8 @@ int cmd__ctype(int argc, const char **argv)
+ 	TEST_CLASS(is_regex_special, "$()*+.?[\\^{|");
+ 	TEST_CLASS(is_pathspec_magic, "!\"#%&',-/:;<=>@_`~");
+ 	TEST_CLASS(isascii, ASCII);
++	TEST_CLASS(islower, LOWER);
++	TEST_CLASS(isupper, UPPER);
+ 
+ 	return rc;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

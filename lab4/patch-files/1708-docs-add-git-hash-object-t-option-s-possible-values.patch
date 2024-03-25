@@ -1,0 +1,47 @@
+From d4f28279ada8c8dce6cb13a0c4a13b8d06000af8 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Thu, 29 Jun 2023 02:07:53 +0000
+Subject: [PATCH 1708/2871] docs: add git hash-object -t option's possible
+ values
+
+The summary under the NAME section for git hash-object can mislead
+readers to conclude that the command can only be used to create blobs,
+whereas the description makes it clear that it can be used to create
+objects, not just blobs. Let's clarify the one-line summary.
+
+Further, the description for the option -t does not list out other types
+that can be used when creating objects. Let's make this explicit by
+listing out the different object types.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-hash-object.txt | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-hash-object.txt b/Documentation/git-hash-object.txt
+index 472b5bb995..8577f7a7d4 100644
+--- a/Documentation/git-hash-object.txt
++++ b/Documentation/git-hash-object.txt
+@@ -3,7 +3,7 @@ git-hash-object(1)
+ 
+ NAME
+ ----
+-git-hash-object - Compute object ID and optionally creates a blob from a file
++git-hash-object - Compute object ID and optionally create an object from a file
+ 
+ 
+ SYNOPSIS
+@@ -25,7 +25,8 @@ OPTIONS
+ -------
+ 
+ -t <type>::
+-	Specify the type (default: "blob").
++	Specify the type of object to be created (default: "blob"). Possible
++	values are `commit`, `tree`, `blob`, and `tag`.
+ 
+ -w::
+ 	Actually write the object into the object database.
+-- 
+2.39.3 (Apple Git-145)
+

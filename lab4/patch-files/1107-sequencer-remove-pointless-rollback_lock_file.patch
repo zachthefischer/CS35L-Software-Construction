@@ -1,0 +1,28 @@
+From 2da2cc9b28fb6c4ac1eb3c7487c4fd817ba20dba Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Thu, 23 Mar 2023 17:22:35 +0100
+Subject: [PATCH 1107/2871] sequencer: remove pointless rollback_lock_file()
+
+The file is gone even if commit_lock_file() fails.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index c9655edffa..1d5ff86ead 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -2530,7 +2530,6 @@ static int safe_append(const char *filename, const char *fmt, ...)
+ 	}
+ 	if (commit_lock_file(&lock) < 0) {
+ 		strbuf_release(&buf);
+-		rollback_lock_file(&lock);
+ 		return error(_("failed to finalize '%s'"), filename);
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

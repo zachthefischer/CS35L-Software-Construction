@@ -1,0 +1,51 @@
+From 0b293df9642bc8731e45e636ef8f1c0c5749d4b2 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Oct 2022 14:55:33 -0400
+Subject: [PATCH 0228/2871] shortlog: make trailer insertion a noop when
+ appropriate
+
+When there are no trailers to insert, it is natural that
+insert_records_from_trailers() should return without having done any
+work.
+
+But instead we guard this call unnecessarily by first checking whether
+`log->groups` has the `SHORTLOG_GROUP_TRAILER` bit set.
+
+Prepare to match a similar pattern in the future where a function which
+inserts records of a certain type does no work when no specifiers
+matching that type are given.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/shortlog.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/shortlog.c b/builtin/shortlog.c
+index 53c379a51d..18f0800c82 100644
+--- a/builtin/shortlog.c
++++ b/builtin/shortlog.c
+@@ -170,6 +170,9 @@ static void insert_records_from_trailers(struct shortlog *log,
+ 	const char *commit_buffer, *body;
+ 	struct strbuf ident = STRBUF_INIT;
+ 
++	if (!log->trailers.nr)
++		return;
++
+ 	/*
+ 	 * Using format_commit_message("%B") would be simpler here, but
+ 	 * this saves us copying the message.
+@@ -240,9 +243,7 @@ void shortlog_add_commit(struct shortlog *log, struct commit *commit)
+ 		    strset_add(&dups, ident.buf))
+ 			insert_one_record(log, ident.buf, oneline_str);
+ 	}
+-	if (log->groups & SHORTLOG_GROUP_TRAILER) {
+-		insert_records_from_trailers(log, &dups, commit, &ctx, oneline_str);
+-	}
++	insert_records_from_trailers(log, &dups, commit, &ctx, oneline_str);
+ 
+ 	strset_clear(&dups);
+ 	strbuf_release(&ident);
+-- 
+2.39.3 (Apple Git-145)
+

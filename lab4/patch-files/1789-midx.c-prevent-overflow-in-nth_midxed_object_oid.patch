@@ -1,0 +1,38 @@
+From c2b24ede229dbc6686e37c8cae1e169fc356049e Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:38 -0400
+Subject: [PATCH 1789/2871] midx.c: prevent overflow in
+ `nth_midxed_object_oid()`
+
+In a similar spirit as previous commits, avoid overflow when looking up
+an object's OID in a MIDX when its position is greater than
+`2^32-1/m->hash_len`.
+
+As usual, it is perfectly OK for a MIDX to have as many as 2^32-1
+objects (since we use 32-bit fields to count the number of objects at
+each fanout layer). But if we have more than `2^32-1/m->hash_len` number
+of objects, we will incorrectly perform the computation using 32-bit
+integers, overflowing the result.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/midx.c b/midx.c
+index 0da2faac67..c774cd69c7 100644
+--- a/midx.c
++++ b/midx.c
+@@ -254,7 +254,7 @@ struct object_id *nth_midxed_object_oid(struct object_id *oid,
+ 	if (n >= m->num_objects)
+ 		return NULL;
+ 
+-	oidread(oid, m->chunk_oid_lookup + m->hash_len * n);
++	oidread(oid, m->chunk_oid_lookup + st_mult(m->hash_len, n));
+ 	return oid;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

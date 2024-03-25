@@ -1,0 +1,237 @@
+From 9830926c7db626e374b887eeecb96515e2956638 Mon Sep 17 00:00:00 2001
+From: Karthik Nayak <karthik.188@gmail.com>
+Date: Fri, 27 Oct 2023 09:59:29 +0200
+Subject: [PATCH 2324/2871] rev-list: add commit object support in `--missing`
+ option
+
+The `--missing` object option in rev-list currently works only with
+missing blobs/trees. For missing commits the revision walker fails with
+a fatal error.
+
+Let's extend the functionality of `--missing` option to also support
+commit objects. This is done by adding a `missing_objects` field to
+`rev_info`. This field is an `oidset` to which we'll add the missing
+commits as we encounter them. The revision walker will now continue the
+traversal and call `show_commit()` even for missing commits. In rev-list
+we can then check if the commit is a missing commit and call the
+existing code for parsing `--missing` objects.
+
+A scenario where this option would be used is to find the boundary
+objects between different object directories. Consider a repository with
+a main object directory (GIT_OBJECT_DIRECTORY) and one or more alternate
+object directories (GIT_ALTERNATE_OBJECT_DIRECTORIES). In such a
+repository, using the `--missing=print` option while disabling the
+alternate object directory allows us to find the boundary objects
+between the main and alternate object directory.
+
+Helped-by: Patrick Steinhardt <ps@pks.im>
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Karthik Nayak <karthik.188@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rev-list.c          |  6 +++
+ list-objects.c              |  3 ++
+ revision.c                  | 16 +++++++-
+ revision.h                  |  4 ++
+ t/t6022-rev-list-missing.sh | 74 +++++++++++++++++++++++++++++++++++++
+ 5 files changed, 101 insertions(+), 2 deletions(-)
+ create mode 100755 t/t6022-rev-list-missing.sh
+
+diff --git a/builtin/rev-list.c b/builtin/rev-list.c
+index 98542e8b3c..181353dcf5 100644
+--- a/builtin/rev-list.c
++++ b/builtin/rev-list.c
+@@ -149,6 +149,12 @@ static void show_commit(struct commit *commit, void *data)
+ 
+ 	display_progress(progress, ++progress_counter);
+ 
++	if (revs->do_not_die_on_missing_objects &&
++	    oidset_contains(&revs->missing_commits, &commit->object.oid)) {
++		finish_object__ma(&commit->object);
++		return;
++	}
++
+ 	if (show_disk_usage)
+ 		total_disk_usage += get_object_disk_usage(&commit->object);
+ 
+diff --git a/list-objects.c b/list-objects.c
+index 47296dff2f..f4e1104b56 100644
+--- a/list-objects.c
++++ b/list-objects.c
+@@ -389,6 +389,9 @@ static void do_traverse(struct traversal_context *ctx)
+ 		 */
+ 		if (!ctx->revs->tree_objects)
+ 			; /* do not bother loading tree */
++		else if (ctx->revs->do_not_die_on_missing_objects &&
++			 oidset_contains(&ctx->revs->missing_commits, &commit->object.oid))
++			;
+ 		else if (repo_get_commit_tree(the_repository, commit)) {
+ 			struct tree *tree = repo_get_commit_tree(the_repository,
+ 								 commit);
+diff --git a/revision.c b/revision.c
+index 219dc76716..00d5c29bfc 100644
+--- a/revision.c
++++ b/revision.c
+@@ -6,6 +6,7 @@
+ #include "object-name.h"
+ #include "object-file.h"
+ #include "object-store-ll.h"
++#include "oidset.h"
+ #include "tag.h"
+ #include "blob.h"
+ #include "tree.h"
+@@ -1112,6 +1113,9 @@ static int process_parents(struct rev_info *revs, struct commit *commit,
+ 
+ 	if (commit->object.flags & ADDED)
+ 		return 0;
++	if (revs->do_not_die_on_missing_objects &&
++	    oidset_contains(&revs->missing_commits, &commit->object.oid))
++		return 0;
+ 	commit->object.flags |= ADDED;
+ 
+ 	if (revs->include_check &&
+@@ -1168,7 +1172,8 @@ static int process_parents(struct rev_info *revs, struct commit *commit,
+ 	for (parent = commit->parents; parent; parent = parent->next) {
+ 		struct commit *p = parent->item;
+ 		int gently = revs->ignore_missing_links ||
+-			     revs->exclude_promisor_objects;
++			     revs->exclude_promisor_objects ||
++			     revs->do_not_die_on_missing_objects;
+ 		if (repo_parse_commit_gently(revs->repo, p, gently) < 0) {
+ 			if (revs->exclude_promisor_objects &&
+ 			    is_promisor_object(&p->object.oid)) {
+@@ -1176,7 +1181,11 @@ static int process_parents(struct rev_info *revs, struct commit *commit,
+ 					break;
+ 				continue;
+ 			}
+-			return -1;
++
++			if (revs->do_not_die_on_missing_objects)
++				oidset_insert(&revs->missing_commits, &p->object.oid);
++			else
++				return -1; /* corrupt repository */
+ 		}
+ 		if (revs->sources) {
+ 			char **slot = revision_sources_at(revs->sources, p);
+@@ -3109,6 +3118,7 @@ void release_revisions(struct rev_info *revs)
+ 	clear_decoration(&revs->merge_simplification, free);
+ 	clear_decoration(&revs->treesame, free);
+ 	line_log_free(revs);
++	oidset_clear(&revs->missing_commits);
+ }
+ 
+ static void add_child(struct rev_info *revs, struct commit *parent, struct commit *child)
+@@ -3800,6 +3810,8 @@ int prepare_revision_walk(struct rev_info *revs)
+ 				       FOR_EACH_OBJECT_PROMISOR_ONLY);
+ 	}
+ 
++	oidset_init(&revs->missing_commits, 0);
++
+ 	if (!revs->reflog_info)
+ 		prepare_to_use_bloom_filter(revs);
+ 	if (!revs->unsorted_input)
+diff --git a/revision.h b/revision.h
+index c73c92ef40..94c43138bc 100644
+--- a/revision.h
++++ b/revision.h
+@@ -4,6 +4,7 @@
+ #include "commit.h"
+ #include "grep.h"
+ #include "notes.h"
++#include "oidset.h"
+ #include "pretty.h"
+ #include "diff.h"
+ #include "commit-slab-decl.h"
+@@ -373,6 +374,9 @@ struct rev_info {
+ 
+ 	/* Location where temporary objects for remerge-diff are written. */
+ 	struct tmp_objdir *remerge_objdir;
++
++	/* Missing commits to be tracked without failing traversal. */
++	struct oidset missing_commits;
+ };
+ 
+ /**
+diff --git a/t/t6022-rev-list-missing.sh b/t/t6022-rev-list-missing.sh
+new file mode 100755
+index 0000000000..40265a4f66
+--- /dev/null
++++ b/t/t6022-rev-list-missing.sh
+@@ -0,0 +1,74 @@
++#!/bin/sh
++
++test_description='handling of missing objects in rev-list'
++
++TEST_PASSES_SANITIZE_LEAK=true
++. ./test-lib.sh
++
++# We setup the repository with two commits, this way HEAD is always
++# available and we can hide commit 1.
++test_expect_success 'create repository and alternate directory' '
++	test_commit 1 &&
++	test_commit 2 &&
++	test_commit 3
++'
++
++for obj in "HEAD~1" "HEAD~1^{tree}" "HEAD:1.t"
++do
++	test_expect_success "rev-list --missing=error fails with missing object $obj" '
++		oid="$(git rev-parse $obj)" &&
++		path=".git/objects/$(test_oid_to_path $oid)" &&
++
++		mv "$path" "$path.hidden" &&
++		test_when_finished "mv $path.hidden $path" &&
++
++		test_must_fail git rev-list --missing=error --objects \
++			--no-object-names HEAD
++	'
++done
++
++for obj in "HEAD~1" "HEAD~1^{tree}" "HEAD:1.t"
++do
++	for action in "allow-any" "print"
++	do
++		test_expect_success "rev-list --missing=$action with missing $obj" '
++			oid="$(git rev-parse $obj)" &&
++			path=".git/objects/$(test_oid_to_path $oid)" &&
++
++			# Before the object is made missing, we use rev-list to
++			# get the expected oids.
++			git rev-list --objects --no-object-names \
++				HEAD ^$obj >expect.raw &&
++
++			# Blobs are shared by all commits, so evethough a commit/tree
++			# might be skipped, its blob must be accounted for.
++			if [ $obj != "HEAD:1.t" ]; then
++				echo $(git rev-parse HEAD:1.t) >>expect.raw &&
++				echo $(git rev-parse HEAD:2.t) >>expect.raw
++			fi &&
++
++			mv "$path" "$path.hidden" &&
++			test_when_finished "mv $path.hidden $path" &&
++
++			git rev-list --missing=$action --objects --no-object-names \
++				HEAD >actual.raw &&
++
++			# When the action is to print, we should also add the missing
++			# oid to the expect list.
++			case $action in
++			allow-any)
++				;;
++			print)
++				grep ?$oid actual.raw &&
++				echo ?$oid >>expect.raw
++				;;
++			esac &&
++
++			sort actual.raw >actual &&
++			sort expect.raw >expect &&
++			test_cmp expect actual
++		'
++	done
++done
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

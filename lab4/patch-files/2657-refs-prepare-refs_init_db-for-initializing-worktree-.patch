@@ -1,0 +1,133 @@
+From 2e573d61ffe3d1e7ea94673757fb69477c1499bc Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 8 Jan 2024 11:05:26 +0100
+Subject: [PATCH 2657/2871] refs: prepare `refs_init_db()` for initializing
+ worktree refs
+
+The purpose of `refs_init_db()` is to initialize the on-disk files of a
+new ref database. The function is quite inflexible right now though, as
+callers can neither specify the `struct ref_store` nor can they pass any
+flags.
+
+Refactor the interface to accept both of these. This will be required so
+that we can start initializing per-worktree ref databases via the ref
+backend instead of open-coding the initialization in "worktree.c".
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs.c                | 6 ++----
+ refs.h                | 2 +-
+ refs/debug.c          | 4 ++--
+ refs/files-backend.c  | 4 +++-
+ refs/packed-backend.c | 1 +
+ refs/refs-internal.h  | 4 +++-
+ setup.c               | 2 +-
+ 7 files changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/refs.c b/refs.c
+index fdbf5f4cb1..254272ba6f 100644
+--- a/refs.c
++++ b/refs.c
+@@ -1944,11 +1944,9 @@ const char *refs_resolve_ref_unsafe(struct ref_store *refs,
+ }
+ 
+ /* backend functions */
+-int refs_init_db(struct strbuf *err)
++int refs_init_db(struct ref_store *refs, int flags, struct strbuf *err)
+ {
+-	struct ref_store *refs = get_main_ref_store(the_repository);
+-
+-	return refs->be->init_db(refs, err);
++	return refs->be->init_db(refs, flags, err);
+ }
+ 
+ const char *resolve_ref_unsafe(const char *refname, int resolve_flags,
+diff --git a/refs.h b/refs.h
+index 916b874ae3..114caa272a 100644
+--- a/refs.h
++++ b/refs.h
+@@ -126,7 +126,7 @@ int should_autocreate_reflog(const char *refname);
+ 
+ int is_branch(const char *refname);
+ 
+-int refs_init_db(struct strbuf *err);
++int refs_init_db(struct ref_store *refs, int flags, struct strbuf *err);
+ 
+ /*
+  * Return the peeled value of the oid currently being iterated via
+diff --git a/refs/debug.c b/refs/debug.c
+index b9775f2c37..634681ca44 100644
+--- a/refs/debug.c
++++ b/refs/debug.c
+@@ -33,10 +33,10 @@ struct ref_store *maybe_debug_wrap_ref_store(const char *gitdir, struct ref_stor
+ 	return (struct ref_store *)res;
+ }
+ 
+-static int debug_init_db(struct ref_store *refs, struct strbuf *err)
++static int debug_init_db(struct ref_store *refs, int flags, struct strbuf *err)
+ {
+ 	struct debug_ref_store *drefs = (struct debug_ref_store *)refs;
+-	int res = drefs->refs->be->init_db(drefs->refs, err);
++	int res = drefs->refs->be->init_db(drefs->refs, flags, err);
+ 	trace_printf_key(&trace_refs, "init_db: %d\n", res);
+ 	return res;
+ }
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index 43fd0ac760..153efe6662 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -3220,7 +3220,9 @@ static int files_reflog_expire(struct ref_store *ref_store,
+ 	return -1;
+ }
+ 
+-static int files_init_db(struct ref_store *ref_store, struct strbuf *err UNUSED)
++static int files_init_db(struct ref_store *ref_store,
++			 int flags UNUSED,
++			 struct strbuf *err UNUSED)
+ {
+ 	struct files_ref_store *refs =
+ 		files_downcast(ref_store, REF_STORE_WRITE, "init_db");
+diff --git a/refs/packed-backend.c b/refs/packed-backend.c
+index 8d1090e284..217f052d34 100644
+--- a/refs/packed-backend.c
++++ b/refs/packed-backend.c
+@@ -1246,6 +1246,7 @@ static const char PACKED_REFS_HEADER[] =
+ 	"# pack-refs with: peeled fully-peeled sorted \n";
+ 
+ static int packed_init_db(struct ref_store *ref_store UNUSED,
++			  int flags UNUSED,
+ 			  struct strbuf *err UNUSED)
+ {
+ 	/* Nothing to do. */
+diff --git a/refs/refs-internal.h b/refs/refs-internal.h
+index 8e9f04cc67..82219829b0 100644
+--- a/refs/refs-internal.h
++++ b/refs/refs-internal.h
+@@ -529,7 +529,9 @@ typedef struct ref_store *ref_store_init_fn(struct repository *repo,
+ 					    const char *gitdir,
+ 					    unsigned int flags);
+ 
+-typedef int ref_init_db_fn(struct ref_store *refs, struct strbuf *err);
++typedef int ref_init_db_fn(struct ref_store *refs,
++			   int flags,
++			   struct strbuf *err);
+ 
+ typedef int ref_transaction_prepare_fn(struct ref_store *refs,
+ 				       struct ref_transaction *transaction,
+diff --git a/setup.c b/setup.c
+index 1ab1a66bcb..6c8f656f7c 100644
+--- a/setup.c
++++ b/setup.c
+@@ -1943,7 +1943,7 @@ void create_reference_database(unsigned int ref_storage_format,
+ 	adjust_shared_perm(git_path("refs"));
+ 
+ 	repo_set_ref_storage_format(the_repository, ref_storage_format);
+-	if (refs_init_db(&err))
++	if (refs_init_db(get_main_ref_store(the_repository), 0, &err))
+ 		die("failed to set up refs db: %s", err.buf);
+ 
+ 	/*
+-- 
+2.39.3 (Apple Git-145)
+

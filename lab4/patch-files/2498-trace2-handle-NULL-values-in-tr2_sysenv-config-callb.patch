@@ -1,0 +1,38 @@
+From 24942ef31636f5e1f8076454200be76db8740848 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:11:24 -0500
+Subject: [PATCH 2498/2871] trace2: handle NULL values in tr2_sysenv config
+ callback
+
+If you have config with an implicit bool like:
+
+  [trace2]
+  envvars
+
+we'll segfault, as we unconditionally try to xstrdup() the value. We
+should instead detect and complain, as a boolean value has no meaning
+here. The same is true for every variable in tr2_sysenv_settings (and
+this patch covers them all, as we check them in a loop).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trace2/tr2_sysenv.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/trace2/tr2_sysenv.c b/trace2/tr2_sysenv.c
+index d3ecac2772..048cdd5438 100644
+--- a/trace2/tr2_sysenv.c
++++ b/trace2/tr2_sysenv.c
+@@ -68,6 +68,8 @@ static int tr2_sysenv_cb(const char *key, const char *value,
+ 
+ 	for (k = 0; k < ARRAY_SIZE(tr2_sysenv_settings); k++) {
+ 		if (!strcmp(key, tr2_sysenv_settings[k].git_config_name)) {
++			if (!value)
++				return config_error_nonbool(key);
+ 			free(tr2_sysenv_settings[k].value);
+ 			tr2_sysenv_settings[k].value = xstrdup(value);
+ 			return 0;
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,62 @@
+From 2740ed1c76df769aa1c6e75020ace72e2cc2e47f Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:38:03 -0400
+Subject: [PATCH 1798/2871] commit-graph.c: prevent overflow in
+ `fill_commit_graph_info()`
+
+In a similar spirit as previous commits, ensure that we don't overflow
+in a few spots within `fill_commit_graph_info()`:
+
+  - First, when computing an offset into the commit data chunk, which
+    can occur when the `lex_index` of the item we're looking up exceeds
+    2^32-1/GRAPH_DATA_WIDTH.
+
+  - A similar issue when computing the generation date offset for
+    commits with `lex_index` greater than 2^32-1/4. Note that in
+    practice this will never overflow, since the left-hand operand is
+    from calling `sizeof(...)` and is thus already a `size_t`. But wrap
+    that in an `st_mult()` to make it clear that we intend to perform
+    this computation using 64-bit operands.
+
+  - Finally, a nearly identical issue as above when computing an offset
+    into the `generation_data_overflow` chunk.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 517c816a94..69110e4dbb 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -790,7 +790,7 @@ static void fill_commit_graph_info(struct commit *item, struct commit_graph *g,
+ 		die(_("invalid commit position. commit-graph is likely corrupt"));
+ 
+ 	lex_index = pos - g->num_commits_in_base;
+-	commit_data = g->chunk_commit_data + GRAPH_DATA_WIDTH * lex_index;
++	commit_data = g->chunk_commit_data + st_mult(GRAPH_DATA_WIDTH, lex_index);
+ 
+ 	graph_data = commit_graph_data_at(item);
+ 	graph_data->graph_pos = pos;
+@@ -800,14 +800,14 @@ static void fill_commit_graph_info(struct commit *item, struct commit_graph *g,
+ 	item->date = (timestamp_t)((date_high << 32) | date_low);
+ 
+ 	if (g->read_generation_data) {
+-		offset = (timestamp_t)get_be32(g->chunk_generation_data + sizeof(uint32_t) * lex_index);
++		offset = (timestamp_t)get_be32(g->chunk_generation_data + st_mult(sizeof(uint32_t), lex_index));
+ 
+ 		if (offset & CORRECTED_COMMIT_DATE_OFFSET_OVERFLOW) {
+ 			if (!g->chunk_generation_data_overflow)
+ 				die(_("commit-graph requires overflow generation data but has none"));
+ 
+ 			offset_pos = offset ^ CORRECTED_COMMIT_DATE_OFFSET_OVERFLOW;
+-			graph_data->generation = item->date + get_be64(g->chunk_generation_data_overflow + 8 * offset_pos);
++			graph_data->generation = item->date + get_be64(g->chunk_generation_data_overflow + st_mult(8, offset_pos));
+ 		} else
+ 			graph_data->generation = item->date + offset;
+ 	} else
+-- 
+2.39.3 (Apple Git-145)
+

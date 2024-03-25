@@ -1,0 +1,47 @@
+From d2cdf2c285b091f44e0bdc154ee39c0071f8934e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 12 Jan 2023 13:55:24 +0100
+Subject: [PATCH 0660/2871] sparse-index.c: expand_to_path() can assume
+ non-NULL "istate"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This function added in [1] was subsequently used in [2]. All of the
+calls to it are in name-hash.c, and come after calls to
+lazy_init_name_hash(istate). The first thing that function does is:
+
+	if (istate->name_hash_initialized)
+		return;
+
+So we can already assume that we have a non-NULL "istate" here, or
+we'd be segfaulting. Let's not confuse matters by making it appear
+that's not the case.
+
+1. 71f82d032f3 (sparse-index: expand_to_path(), 2021-04-12)
+2. 4589bca829a (name-hash: use expand_to_path(), 2021-04-12)
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sparse-index.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sparse-index.c b/sparse-index.c
+index 8c269dab80..65a08d33c7 100644
+--- a/sparse-index.c
++++ b/sparse-index.c
+@@ -547,7 +547,7 @@ void expand_to_path(struct index_state *istate,
+ 	if (in_expand_to_path)
+ 		return;
+ 
+-	if (!istate || !istate->sparse_index)
++	if (!istate->sparse_index)
+ 		return;
+ 
+ 	if (!istate->repo)
+-- 
+2.39.3 (Apple Git-145)
+

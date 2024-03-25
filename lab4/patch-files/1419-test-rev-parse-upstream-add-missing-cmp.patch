@@ -1,0 +1,32 @@
+From 159f4b9c3b9ccc0beb3a118ae752d61e9fffb681 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Mon, 8 May 2023 18:02:46 -0600
+Subject: [PATCH 1419/2871] test: rev-parse-upstream: add missing cmp
+
+It seems pretty clear 5236fce6b4 (t1507: stop losing return codes of git
+commands, 2019-12-20) missed a test_cmp.
+
+Cc: Denton Liu <liu.denton@gmail.com>
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1507-rev-parse-upstream.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/t/t1507-rev-parse-upstream.sh b/t/t1507-rev-parse-upstream.sh
+index 4458820168..443145c684 100755
+--- a/t/t1507-rev-parse-upstream.sh
++++ b/t/t1507-rev-parse-upstream.sh
+@@ -97,7 +97,8 @@ test_expect_success 'my-side@{u} resolves to correct commit' '
+ 	commit_subject my-side >actual &&
+ 	test_cmp expect actual &&
+ 	echo 5 >expect &&
+-	commit_subject my-side@{u} >actual
++	commit_subject my-side@{u} >actual &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'not-tracking@{u} fails' '
+-- 
+2.39.3 (Apple Git-145)
+

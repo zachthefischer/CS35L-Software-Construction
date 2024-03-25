@@ -1,0 +1,174 @@
+From aa962fef27f8f2a7128a9f16a84e749e14120336 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 14 Apr 2023 17:24:16 -0400
+Subject: [PATCH 1265/2871] v0 protocol: fix infinite loop when parsing
+ multi-valued capabilities
+
+If Git's client-side parsing of an upload-pack response (so git-fetch or
+ls-remote) sees multiple instances of a single capability, it can enter
+an infinite loop due to a bug in advancing the "offset" parameter in the
+parser.
+
+This bug can't happen between a client and server of the same Git
+version. The client bug is in parse_feature_value() when the caller
+passes in an offset parameter. And that only happens when the v0
+protocol is parsing "symref" and "object-format" capabilities, via
+next_server_feature_value(). But Git has never produced multiple
+object-format capabilities, and it stopped producing multiple symref
+values in d007dbf7d6 (Revert "upload-pack: send non-HEAD symbolic refs",
+2013-11-18).
+
+However, upload-pack did produce multiple symref entries for a while,
+and they are valid. Plus other implementations, such as Dulwich will
+still do so. So we should handle them. And even if we do not expect it,
+it is obviously a bug for the parser to enter an infinite loop.
+
+The bug itself is pretty simple. Commit 2c6a403d96 (connect: add
+function to parse multiple v1 capability values, 2020-05-25) added the
+"offset" parameter, which is used as both an in- and out-parameter. When
+parsing the first "symref" capability, *offset will be 0 on input, and
+after parsing the capability, we set *offset to an index just past the
+value by taking a pointer difference "(value + end) - feature_list".
+
+But on the second call, now *offset is set to that larger index, which
+lets us skip past the first "symref" capability. However, we do so by
+incrementing feature_list. That means our pointer difference is now too
+small; it is counting from where we resumed parsing, not from the start
+of the original feature_list pointer. And because we incremented
+feature_list only inside our function, and not the caller, that
+increment is lost next time the function is called.
+
+One solution would be to account for those skipped bytes by incrementing
+*offset, rather than assigning to it. But wait, there's more!
+
+We also increment feature_list if we have a near-miss. Say we are
+looking for "symref" and find "almost-symref". In that case we'll point
+feature_list to the "y" in "almost-symref" and restart our search. But
+that again means our offset won't be correct, as it won't account for
+the bytes between the start of the string and that "y".
+
+So instead, let's just record the beginning of the feature_list string
+in a separate pointer that we never touch. That offset we take in and
+return is meant to be using that point as a base, and now we'll do so
+consistently.
+
+Since the bug can't be reproduced using the current version of
+git-upload-pack, we'll instead hard-code an input which triggers the
+problem. Before this patch it loops forever re-parsing the second symref
+entry. Now we check both that it finishes, and that it parses both
+entries correctly (a case we could not test at all before).
+
+We don't need to worry about testing v2 here; it communicates the
+capabilities in a completely different way, and doesn't use this code at
+all. There are tests earlier in t5512 that are meant to cover this (they
+don't, but we'll address that in a future patch).
+
+Reported-by: Jonas Haag <jonas@lophus.org>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ connect.c            |  5 +++--
+ t/t5512-ls-remote.sh | 52 ++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 55 insertions(+), 2 deletions(-)
+
+diff --git a/connect.c b/connect.c
+index c0c8a38178..0dc739c4e5 100644
+--- a/connect.c
++++ b/connect.c
+@@ -597,6 +597,7 @@ struct ref **get_remote_refs(int fd_out, struct packet_reader *reader,
+ 
+ const char *parse_feature_value(const char *feature_list, const char *feature, int *lenp, int *offset)
+ {
++	const char *orig_start = feature_list;
+ 	int len;
+ 
+ 	if (!feature_list)
+@@ -616,7 +617,7 @@ const char *parse_feature_value(const char *feature_list, const char *feature, i
+ 				if (lenp)
+ 					*lenp = 0;
+ 				if (offset)
+-					*offset = found + len - feature_list;
++					*offset = found + len - orig_start;
+ 				return value;
+ 			}
+ 			/* feature with a value (e.g., "agent=git/1.2.3") */
+@@ -628,7 +629,7 @@ const char *parse_feature_value(const char *feature_list, const char *feature, i
+ 				if (lenp)
+ 					*lenp = end;
+ 				if (offset)
+-					*offset = value + end - feature_list;
++					*offset = value + end - orig_start;
+ 				return value;
+ 			}
+ 			/*
+diff --git a/t/t5512-ls-remote.sh b/t/t5512-ls-remote.sh
+index 20d063fb9a..cab67282df 100755
+--- a/t/t5512-ls-remote.sh
++++ b/t/t5512-ls-remote.sh
+@@ -15,6 +15,19 @@ generate_references () {
+ 	done
+ }
+ 
++test_expect_success 'set up fake upload-pack' '
++	# This can be used to simulate an upload-pack that just shows the
++	# contents of the "input" file (prepared with the test-tool pkt-line
++	# helper), and does not do any negotiation (since ls-remote does not
++	# need it).
++	write_script cat-input <<-\EOF
++	# send our initial advertisement/response
++	cat input
++	# soak up the flush packet from the client
++	cat
++	EOF
++'
++
+ test_expect_success 'dies when no remote found' '
+ 	test_must_fail git ls-remote
+ '
+@@ -360,4 +373,43 @@ test_expect_success 'ls-remote prefixes work with all protocol versions' '
+ 	test_cmp expect actual.v2
+ '
+ 
++test_expect_success 'v0 clients can handle multiple symrefs' '
++	# Modern versions of Git will not return multiple symref capabilities
++	# for v0, so we have to hard-code the response. Note that we will
++	# always use both v0 and object-format=sha1 here, as the hard-coded
++	# response reflects a server that only supports those.
++	oid=1234567890123456789012345678901234567890 &&
++	symrefs="symref=refs/remotes/origin/HEAD:refs/remotes/origin/main" &&
++	symrefs="$symrefs symref=HEAD:refs/heads/main" &&
++
++	# Likewise we want to make sure our parser is not fooled by the string
++	# "symref" appearing as part of an earlier cap. But there is no way to
++	# do that via upload-pack, as arbitrary strings can appear only in a
++	# "symref" value itself (where we skip past the values as a whole)
++	# and "agent" (which always appears after "symref", so putting our
++	# parser in a confused state is less interesting).
++	caps="some other caps including a-fake-symref-cap" &&
++
++	test-tool pkt-line pack >input.q <<-EOF &&
++	$oid HEADQ$caps $symrefs
++	$oid refs/heads/main
++	$oid refs/remotes/origin/HEAD
++	$oid refs/remotes/origin/main
++	0000
++	EOF
++	q_to_nul <input.q >input &&
++
++	cat >expect <<-EOF &&
++	ref: refs/heads/main	HEAD
++	$oid	HEAD
++	$oid	refs/heads/main
++	ref: refs/remotes/origin/main	refs/remotes/origin/HEAD
++	$oid	refs/remotes/origin/HEAD
++	$oid	refs/remotes/origin/main
++	EOF
++
++	git ls-remote --symref --upload-pack=./cat-input . >actual &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

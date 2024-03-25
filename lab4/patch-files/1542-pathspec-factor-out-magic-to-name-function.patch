@@ -1,0 +1,83 @@
+From 8e32caaa783a3a6b1d94834ee6e2d21ac36ff39f Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 1 Jun 2023 13:38:14 -0400
+Subject: [PATCH 1542/2871] pathspec: factor out magic-to-name function
+
+When we have unsupported magic in a pathspec (because a command or code
+path does not support particular items), we list the unsupported ones in
+an error message.
+
+Let's factor out the code here that converts the bits back into their
+human-readable names, so that it can be used from other callers, which
+may want to provide more flexible error messages.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pathspec.c | 19 ++++++++++++-------
+ pathspec.h |  8 ++++++++
+ 2 files changed, 20 insertions(+), 7 deletions(-)
+
+diff --git a/pathspec.c b/pathspec.c
+index ab70fcbe61..f6fbb643ff 100644
+--- a/pathspec.c
++++ b/pathspec.c
+@@ -525,24 +525,29 @@ static int pathspec_item_cmp(const void *a_, const void *b_)
+ 	return strcmp(a->match, b->match);
+ }
+ 
+-static void NORETURN unsupported_magic(const char *pattern,
+-				       unsigned magic)
++void pathspec_magic_names(unsigned magic, struct strbuf *out)
+ {
+-	struct strbuf sb = STRBUF_INIT;
+ 	int i;
+ 	for (i = 0; i < ARRAY_SIZE(pathspec_magic); i++) {
+ 		const struct pathspec_magic *m = pathspec_magic + i;
+ 		if (!(magic & m->bit))
+ 			continue;
+-		if (sb.len)
+-			strbuf_addstr(&sb, ", ");
++		if (out->len)
++			strbuf_addstr(out, ", ");
+ 
+ 		if (m->mnemonic)
+-			strbuf_addf(&sb, _("'%s' (mnemonic: '%c')"),
++			strbuf_addf(out, _("'%s' (mnemonic: '%c')"),
+ 				    m->name, m->mnemonic);
+ 		else
+-			strbuf_addf(&sb, "'%s'", m->name);
++			strbuf_addf(out, "'%s'", m->name);
+ 	}
++}
++
++static void NORETURN unsupported_magic(const char *pattern,
++				       unsigned magic)
++{
++	struct strbuf sb = STRBUF_INIT;
++	pathspec_magic_names(magic, &sb);
+ 	/*
+ 	 * We may want to substitute "this command" with a command
+ 	 * name. E.g. when "git add -p" or "git add -i" dies when running
+diff --git a/pathspec.h b/pathspec.h
+index 41f6adfbb4..688aedc553 100644
+--- a/pathspec.h
++++ b/pathspec.h
+@@ -130,6 +130,14 @@ void parse_pathspec_file(struct pathspec *pathspec,
+ void copy_pathspec(struct pathspec *dst, const struct pathspec *src);
+ void clear_pathspec(struct pathspec *);
+ 
++/*
++ * Add a human-readable string to "out" representing the PATHSPEC_* flags set
++ * in "magic". The result is suitable for error messages, but not for
++ * parsing as pathspec magic itself (you get 'icase' with quotes, not
++ * :(icase)).
++ */
++void pathspec_magic_names(unsigned magic, struct strbuf *out);
++
+ static inline int ps_strncmp(const struct pathspec_item *item,
+ 			     const char *s1, const char *s2, size_t n)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

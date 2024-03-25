@@ -1,0 +1,54 @@
+From be315e9a3fe070af60821f01c2bc508457d2c1b2 Mon Sep 17 00:00:00 2001
+From: Christian Couder <christian.couder@gmail.com>
+Date: Mon, 2 Oct 2023 18:54:59 +0200
+Subject: [PATCH 2176/2871] repack: refactor finding pack prefix
+
+Create a new find_pack_prefix() to refactor code that handles finding
+the pack prefix from the packtmp and packdir global variables, as we are
+going to need this feature again in following commit.
+
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index d0ab55c0d9..9ef0044384 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -893,6 +893,17 @@ static int write_cruft_pack(const struct pack_objects_args *args,
+ 	return finish_pack_objects_cmd(&cmd, names, local);
+ }
+ 
++static const char *find_pack_prefix(const char *packdir, const char *packtmp)
++{
++	const char *pack_prefix;
++	if (!skip_prefix(packtmp, packdir, &pack_prefix))
++		die(_("pack prefix %s does not begin with objdir %s"),
++		    packtmp, packdir);
++	if (*pack_prefix == '/')
++		pack_prefix++;
++	return pack_prefix;
++}
++
+ int cmd_repack(int argc, const char **argv, const char *prefix)
+ {
+ 	struct child_process cmd = CHILD_PROCESS_INIT;
+@@ -1139,12 +1150,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 		printf_ln(_("Nothing new to pack."));
+ 
+ 	if (pack_everything & PACK_CRUFT) {
+-		const char *pack_prefix;
+-		if (!skip_prefix(packtmp, packdir, &pack_prefix))
+-			die(_("pack prefix %s does not begin with objdir %s"),
+-			    packtmp, packdir);
+-		if (*pack_prefix == '/')
+-			pack_prefix++;
++		const char *pack_prefix = find_pack_prefix(packdir, packtmp);
+ 
+ 		if (!cruft_po_args.window)
+ 			cruft_po_args.window = po_args.window;
+-- 
+2.39.3 (Apple Git-145)
+

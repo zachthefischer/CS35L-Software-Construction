@@ -1,0 +1,33 @@
+From 0a868031edee0f7a38b42e13c8017d6cbbb4af1b Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:48 +0000
+Subject: [PATCH 1686/2871] diff.c: mention completion above add_diff_options
+
+Add a comment on top of add_diff_options, where common diff options are
+listed, mentioning __git_diff_common_options in the completion script,
+in the hope that contributors update it when they add new diff flags.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/diff.c b/diff.c
+index 3c88c37908..64c93c0f0e 100644
+--- a/diff.c
++++ b/diff.c
+@@ -5491,6 +5491,10 @@ static int diff_opt_rotate_to(const struct option *opt, const char *arg, int uns
+ 	return 0;
+ }
+ 
++/*
++ * Consider adding new flags to __git_diff_common_options
++ * in contrib/completion/git-completion.bash
++ */
+ struct option *add_diff_options(const struct option *opts,
+ 				struct diff_options *options)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,99 @@
+From ca556f47076932a07590c62aad772cfc89491614 Mon Sep 17 00:00:00 2001
+From: Karthik Nayak <karthik.188@gmail.com>
+Date: Thu, 26 Oct 2023 12:11:07 +0200
+Subject: [PATCH 2322/2871] revision: rename bit to
+ `do_not_die_on_missing_objects`
+
+The bit `do_not_die_on_missing_tree` is used in revision.h to ensure the
+revision walker does not die when encountering a missing tree. This is
+currently exclusively set within `builtin/rev-list.c` to ensure the
+`--missing` option works with missing trees.
+
+In the upcoming commits, we will extend `--missing` to also support
+missing commits. So let's rename the bit to
+`do_not_die_on_missing_objects`, which is object type agnostic and can
+be used for both trees/commits.
+
+Signed-off-by: Karthik Nayak <karthik.188@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/reflog.c   |  2 +-
+ builtin/rev-list.c |  2 +-
+ list-objects.c     |  2 +-
+ revision.h         | 17 +++++++++--------
+ 4 files changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/reflog.c b/builtin/reflog.c
+index df63a5892e..9e369a5977 100644
+--- a/builtin/reflog.c
++++ b/builtin/reflog.c
+@@ -298,7 +298,7 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix)
+ 		struct rev_info revs;
+ 
+ 		repo_init_revisions(the_repository, &revs, prefix);
+-		revs.do_not_die_on_missing_tree = 1;
++		revs.do_not_die_on_missing_objects = 1;
+ 		revs.ignore_missing = 1;
+ 		revs.ignore_missing_links = 1;
+ 		if (verbose)
+diff --git a/builtin/rev-list.c b/builtin/rev-list.c
+index ff715d6918..ea77489c38 100644
+--- a/builtin/rev-list.c
++++ b/builtin/rev-list.c
+@@ -561,7 +561,7 @@ int cmd_rev_list(int argc, const char **argv, const char *prefix)
+ 	}
+ 
+ 	if (arg_missing_action)
+-		revs.do_not_die_on_missing_tree = 1;
++		revs.do_not_die_on_missing_objects = 1;
+ 
+ 	argc = setup_revisions(argc, argv, &revs, &s_r_opt);
+ 
+diff --git a/list-objects.c b/list-objects.c
+index c25c72b32c..47296dff2f 100644
+--- a/list-objects.c
++++ b/list-objects.c
+@@ -177,7 +177,7 @@ static void process_tree(struct traversal_context *ctx,
+ 		    is_promisor_object(&obj->oid))
+ 			return;
+ 
+-		if (!revs->do_not_die_on_missing_tree)
++		if (!revs->do_not_die_on_missing_objects)
+ 			die("bad tree object %s", oid_to_hex(&obj->oid));
+ 	}
+ 
+diff --git a/revision.h b/revision.h
+index 50091bbd13..c73c92ef40 100644
+--- a/revision.h
++++ b/revision.h
+@@ -212,18 +212,19 @@ struct rev_info {
+ 
+ 			/*
+ 			 * Blobs are shown without regard for their existence.
+-			 * But not so for trees: unless exclude_promisor_objects
++			 * But not so for trees/commits: unless exclude_promisor_objects
+ 			 * is set and the tree in question is a promisor object;
+ 			 * OR ignore_missing_links is set, the revision walker
+-			 * dies with a "bad tree object HASH" message when
+-			 * encountering a missing tree. For callers that can
+-			 * handle missing trees and want them to be filterable
++			 * dies with a "bad <type> object HASH" message when
++			 * encountering a missing object. For callers that can
++			 * handle missing trees/commits and want them to be filterable
+ 			 * and showable, set this to true. The revision walker
+-			 * will filter and show such a missing tree as usual,
+-			 * but will not attempt to recurse into this tree
+-			 * object.
++			 * will filter and show such a missing object as usual,
++			 * but will not attempt to recurse into this tree/commit
++			 * object. The revision walker will also set the MISSING
++			 * flag for such objects.
+ 			 */
+-			do_not_die_on_missing_tree:1,
++			do_not_die_on_missing_objects:1,
+ 
+ 			/* for internal use only */
+ 			exclude_promisor_objects:1;
+-- 
+2.39.3 (Apple Git-145)
+

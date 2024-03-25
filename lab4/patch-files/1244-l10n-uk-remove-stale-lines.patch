@@ -1,0 +1,52 @@
+From 44c0024bdcf82babadaeabc34923ed911ce6f0d7 Mon Sep 17 00:00:00 2001
+From: Arkadii Yakovets <ark@cho.red>
+Date: Tue, 11 Apr 2023 19:58:37 -0700
+Subject: [PATCH 1244/2871] l10n: uk: remove stale lines
+
+Signed-off-by: Arkadii Yakovets <ark@cho.red>
+---
+ po/uk.po | 31 -------------------------------
+ 1 file changed, 31 deletions(-)
+
+diff --git a/po/uk.po b/po/uk.po
+index 8168ec6161..9948ff8ec7 100644
+--- a/po/uk.po
++++ b/po/uk.po
+@@ -20812,34 +20812,3 @@ msgstr ""
+ #, perl-format
+ msgid "Do you really want to send %s? [y|N]: "
+ msgstr ""
+-
+-#, fuzzy
+-#~ msgid "use patterns in <file> instead of the current ones."
+-#~ msgstr "шукати в індексі замість робочого дерева"
+-
+-#, c-format
+-#~ msgid "unknown option \"%s\""
+-#~ msgstr "невідома опція \"%s\""
+-
+-#~ msgid "could not lock HEAD"
+-#~ msgstr "неможливо зафіксувати HEAD"
+-
+-#, perl-format
+-#~ msgid "failed to open hunk edit file for writing: %s"
+-#~ msgstr "не вдалося відкрити файл редагування шматка для запису: %s"
+-
+-#, perl-format
+-#~ msgid "failed to open hunk edit file for reading: %s"
+-#~ msgstr "не вдалося відкрити файл редагування шматка для читання: %s"
+-
+-#, perl-format
+-#~ msgid "ignoring unmerged: %s\n"
+-#~ msgstr "ігноруються незлиті записи: %s\n"
+-
+-#, perl-format
+-#~ msgid "Invalid number: '%s'\n"
+-#~ msgstr "Неприпустиме число \"%s\"\n"
+-
+-#, perl-format
+-#~ msgid "invalid argument %s, expecting --"
+-#~ msgstr "неприпустимий аргумент %s, очікується --"
+-- 
+2.39.3 (Apple Git-145)
+

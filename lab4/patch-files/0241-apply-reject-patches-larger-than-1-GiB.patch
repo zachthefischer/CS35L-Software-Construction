@@ -1,0 +1,104 @@
+From f1c0e3946e0bdec16d6440fb7e52edbe78cf12b3 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 25 Oct 2022 14:24:31 -0400
+Subject: [PATCH 0241/2871] apply: reject patches larger than ~1 GiB
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The apply code is not prepared to handle extremely large files. It uses
+"int" in some places, and "unsigned long" in others.
+
+This combination leads to unfortunate problems when switching between
+the two types. Using "int" prevents us from handling large files, since
+large offsets will wrap around and spill into small negative values,
+which can result in wrong behavior (like accessing the patch buffer with
+a negative offset).
+
+Converting from "unsigned long" to "int" also has truncation problems
+even on LLP64 platforms where "long" is the same size as "int", since
+the former is unsigned but the latter is not.
+
+To avoid potential overflow and truncation issues in `git apply`, apply
+similar treatment as in dcd1742e56 (xdiff: reject files larger than
+~1GB, 2015-09-24), where the xdiff code was taught to reject large
+files for similar reasons.
+
+The maximum size was chosen somewhat arbitrarily, but picking a value
+just shy of a gigabyte allows us to double it without overflowing 2^31-1
+(after which point our value would wrap around to a negative number).
+To give ourselves a bit of extra margin, the maximum patch size is a MiB
+smaller than a full GiB, which gives us some slop in case we allocate
+"(records + 1) * sizeof(int)" or similar.
+
+Luckily, the security implications of these conversion issues are
+relatively uninteresting, because a victim needs to be convinced to
+apply a malicious patch.
+
+Reported-by: 정재우 <thebound7@gmail.com>
+Suggested-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ apply.c                    | 12 +++++++++++-
+ t/t4141-apply-too-large.sh | 23 +++++++++++++++++++++++
+ 2 files changed, 34 insertions(+), 1 deletion(-)
+ create mode 100755 t/t4141-apply-too-large.sh
+
+diff --git a/apply.c b/apply.c
+index 2b7cd930ef..850604c191 100644
+--- a/apply.c
++++ b/apply.c
+@@ -386,9 +386,19 @@ static void say_patch_name(FILE *output, const char *fmt, struct patch *patch)
+ 
+ #define SLOP (16)
+ 
++/*
++ * apply.c isn't equipped to handle arbitrarily large patches, because
++ * it intermingles `unsigned long` with `int` for the type used to store
++ * buffer lengths.
++ *
++ * Only process patches that are just shy of 1 GiB large in order to
++ * avoid any truncation or overflow issues.
++ */
++#define MAX_APPLY_SIZE (1024UL * 1024 * 1023)
++
+ static int read_patch_file(struct strbuf *sb, int fd)
+ {
+-	if (strbuf_read(sb, fd, 0) < 0)
++	if (strbuf_read(sb, fd, 0) < 0 || sb->len >= MAX_APPLY_SIZE)
+ 		return error_errno("git apply: failed to read");
+ 
+ 	/*
+diff --git a/t/t4141-apply-too-large.sh b/t/t4141-apply-too-large.sh
+new file mode 100755
+index 0000000000..58742d4fc5
+--- /dev/null
++++ b/t/t4141-apply-too-large.sh
+@@ -0,0 +1,23 @@
++#!/bin/sh
++
++test_description='git apply with too-large patch'
++
++TEST_PASSES_SANITIZE_LEAK=true
++. ./test-lib.sh
++
++test_expect_success EXPENSIVE 'git apply rejects patches that are too large' '
++	sz=$((1024 * 1024 * 1023)) &&
++	{
++		cat <<-\EOF &&
++		diff --git a/file b/file
++		new file mode 100644
++		--- /dev/null
++		+++ b/file
++		@@ -0,0 +1 @@
++		EOF
++		test-tool genzeros
++	} | test_copy_bytes $sz | test_must_fail git apply 2>err &&
++	grep "git apply: failed to read" err
++'
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

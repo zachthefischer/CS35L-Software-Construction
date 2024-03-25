@@ -1,0 +1,96 @@
+From 1a65b41b38a669f3d6e54edec38e6b8506ef6ee1 Mon Sep 17 00:00:00 2001
+From: Shuqi Liang <cheskaqiqi@gmail.com>
+Date: Mon, 3 Apr 2023 20:35:39 -0400
+Subject: [PATCH 1196/2871] write-tree: integrate with sparse index
+
+Update 'git write-tree' to allow using the sparse-index in memory
+without expanding to a full one.
+
+The recursive algorithm for update_one() was already updated in 2de37c5
+(cache-tree: integrate with sparse directory entries, 2021-03-03) to
+handle sparse directory entries in the index. Hence we can just set the
+requires-full-index to false for "write-tree".
+
+The `p2000` tests demonstrate a ~96% execution time reduction for 'git
+write-tree' using a sparse index:
+
+Test                                           before  after
+-----------------------------------------------------------------
+2000.78: git write-tree (full-v3)              0.34    0.33 -2.9%
+2000.79: git write-tree (full-v4)              0.32    0.30 -6.3%
+2000.80: git write-tree (sparse-v3)            0.47    0.02 -95.8%
+2000.81: git write-tree (sparse-v4)            0.45    0.02 -95.6%
+
+Signed-off-by: Shuqi Liang <cheskaqiqi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/write-tree.c                     |  3 +++
+ t/perf/p2000-sparse-operations.sh        |  1 +
+ t/t1092-sparse-checkout-compatibility.sh | 28 ++++++++++++++++++++++++
+ 3 files changed, 32 insertions(+)
+
+diff --git a/builtin/write-tree.c b/builtin/write-tree.c
+index 45d61707e7..a767830096 100644
+--- a/builtin/write-tree.c
++++ b/builtin/write-tree.c
+@@ -38,6 +38,9 @@ int cmd_write_tree(int argc, const char **argv, const char *cmd_prefix)
+ 	argc = parse_options(argc, argv, cmd_prefix, write_tree_options,
+ 			     write_tree_usage, 0);
+ 
++	prepare_repo_settings(the_repository);
++	the_repository->settings.command_requires_full_index = 0;
++
+ 	ret = write_cache_as_tree(&oid, flags, tree_prefix);
+ 	switch (ret) {
+ 	case 0:
+diff --git a/t/perf/p2000-sparse-operations.sh b/t/perf/p2000-sparse-operations.sh
+index 3242cfe91a..5fe6bf3ddd 100755
+--- a/t/perf/p2000-sparse-operations.sh
++++ b/t/perf/p2000-sparse-operations.sh
+@@ -125,5 +125,6 @@ test_perf_on_all git checkout-index -f --all
+ test_perf_on_all git update-index --add --remove $SPARSE_CONE/a
+ test_perf_on_all "git rm -f $SPARSE_CONE/a && git checkout HEAD -- $SPARSE_CONE/a"
+ test_perf_on_all git grep --cached --sparse bogus -- "f2/f1/f1/*"
++test_perf_on_all git write-tree
+ 
+ test_done
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index 801919009e..9bbc0d646b 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -2055,4 +2055,32 @@ test_expect_success 'grep sparse directory within submodules' '
+ 	test_cmp actual expect
+ '
+ 
++test_expect_success 'write-tree on all' '
++	init_repos &&
++
++	write_script edit-contents <<-\EOF &&
++	echo text >>"$1"
++	EOF
++
++	run_on_all ../edit-contents deep/a &&
++	run_on_all git update-index deep/a &&
++	test_all_match git write-tree &&
++
++	run_on_all mkdir -p folder1 &&
++	run_on_all cp a folder1/a &&
++	run_on_all ../edit-contents folder1/a &&
++	run_on_all git update-index folder1/a &&
++	test_all_match git write-tree
++'
++
++test_expect_success 'sparse-index is not expanded: write-tree' '
++	init_repos &&
++
++	ensure_not_expanded write-tree &&
++
++	echo "test1" >>sparse-index/a &&
++	git -C sparse-index update-index a &&
++	ensure_not_expanded write-tree
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

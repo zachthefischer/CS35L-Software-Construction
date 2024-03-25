@@ -1,0 +1,114 @@
+From d3d9c51973bf3187d8767969a0aa33abe79d6240 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 21 Oct 2022 20:21:45 -0400
+Subject: [PATCH 0204/2871] repack: convert "names" util bitfield to array
+
+We keep a string_list "names" containing the hashes of packs generated
+on our behalf by pack-objects. The util field of each item is treated as
+a bitfield that tells us which extensions (.pack, .idx, .rev, etc) are
+present for each name.
+
+Let's switch this to allocating a real array. That will give us room in
+a future patch to store more data than just a single bit per extension.
+And it makes the code a little easier to read, as we avoid casting back
+and forth between uintptr_t and a void pointer.
+
+Since the only thing we're storing is an array, we could just allocate
+it directly. But instead I've put it into a named struct here. That
+further increases readability around the casts, and in particular helps
+differentiate us from other string_lists in the same file which use
+their util field differently. E.g., the existing_*_packs lists still do
+bit-twiddling, but their bits have different meaning than the ones in
+"names". This makes it hard to grep around the code to see how the util
+fields are used; now you can look for "generated_pack_data".
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 22 ++++++++++++++--------
+ 1 file changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index a5bacc7797..8e71230bf7 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -247,11 +247,15 @@ static struct {
+ 	{".idx"},
+ };
+ 
+-static unsigned populate_pack_exts(char *name)
++struct generated_pack_data {
++	char exts[ARRAY_SIZE(exts)];
++};
++
++static struct generated_pack_data *populate_pack_exts(const char *name)
+ {
+ 	struct stat statbuf;
+ 	struct strbuf path = STRBUF_INIT;
+-	unsigned ret = 0;
++	struct generated_pack_data *data = xcalloc(1, sizeof(*data));
+ 	int i;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(exts); i++) {
+@@ -261,11 +265,11 @@ static unsigned populate_pack_exts(char *name)
+ 		if (stat(path.buf, &statbuf))
+ 			continue;
+ 
+-		ret |= (1 << i);
++		data->exts[i] = 1;
+ 	}
+ 
+ 	strbuf_release(&path);
+-	return ret;
++	return data;
+ }
+ 
+ static void repack_promisor_objects(const struct pack_objects_args *args,
+@@ -320,7 +324,7 @@ static void repack_promisor_objects(const struct pack_objects_args *args,
+ 					  line.buf);
+ 		write_promisor_file(promisor_name, NULL, 0);
+ 
+-		item->util = (void *)(uintptr_t)populate_pack_exts(item->string);
++		item->util = populate_pack_exts(item->string);
+ 
+ 		free(promisor_name);
+ 	}
+@@ -994,7 +998,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 	string_list_sort(&names);
+ 
+ 	for_each_string_list_item(item, &names) {
+-		item->util = (void *)(uintptr_t)populate_pack_exts(item->string);
++		item->util = populate_pack_exts(item->string);
+ 	}
+ 
+ 	close_object_store(the_repository->objects);
+@@ -1003,6 +1007,8 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 	 * Ok we have prepared all new packfiles.
+ 	 */
+ 	for_each_string_list_item(item, &names) {
++		struct generated_pack_data *data = item->util;
++
+ 		for (ext = 0; ext < ARRAY_SIZE(exts); ext++) {
+ 			char *fname, *fname_old;
+ 
+@@ -1011,7 +1017,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 			fname_old = mkpathdup("%s-%s%s",
+ 					packtmp, item->string, exts[ext].name);
+ 
+-			if (((uintptr_t)item->util) & ((uintptr_t)1 << ext)) {
++			if (data->exts[ext]) {
+ 				struct stat statbuffer;
+ 				if (!stat(fname_old, &statbuffer)) {
+ 					statbuffer.st_mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
+@@ -1115,7 +1121,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 		write_midx_file(get_object_directory(), NULL, NULL, flags);
+ 	}
+ 
+-	string_list_clear(&names, 0);
++	string_list_clear(&names, 1);
+ 	string_list_clear(&existing_nonkept_packs, 0);
+ 	string_list_clear(&existing_kept_packs, 0);
+ 	clear_pack_geometry(geometry);
+-- 
+2.39.3 (Apple Git-145)
+

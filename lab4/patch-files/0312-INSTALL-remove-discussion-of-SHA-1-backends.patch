@@ -1,0 +1,45 @@
+From 0ced11d32fea5caec3f014b4e60dd197b9c8aa0f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Mon, 7 Nov 2022 22:23:04 +0100
+Subject: [PATCH 0312/2871] INSTALL: remove discussion of SHA-1 backends
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The claim that OpenSSL is the default SHA-1 backend hasn't been true
+since e6b07da2780 (Makefile: make DC_SHA1 the default, 2017-03-17),
+but more importantly tweaking the SHA-1 backend isn't something that's
+common enough to warrant discussing in the INSTALL document, so let's
+remove this paragraph.
+
+This discussion was originally added in c538d2d34ab (Add some
+installation notes in INSTALL, 2005-06-17) when tweaking the default
+backend was more common. The current wording was added in
+5beb577db8c (INSTALL: Describe dependency knobs from Makefile,
+2009-09-10).
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ INSTALL | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/INSTALL b/INSTALL
+index 89b15d71df..3344788397 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -133,10 +133,6 @@ Issues of note:
+ 	  you are using libcurl older than 7.34.0.  Otherwise you can use
+ 	  NO_OPENSSL without losing git-imap-send.
+ 
+-	  By default, git uses OpenSSL for SHA1 but it will use its own
+-	  library (inspired by Mozilla's) with either NO_OPENSSL or
+-	  BLK_SHA1.
+-
+ 	- "libcurl" library is used for fetching and pushing
+ 	  repositories over http:// or https://, as well as by
+ 	  git-imap-send if the curl version is >= 7.34.0. If you do
+-- 
+2.39.3 (Apple Git-145)
+

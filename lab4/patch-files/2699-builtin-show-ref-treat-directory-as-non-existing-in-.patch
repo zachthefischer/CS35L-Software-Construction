@@ -1,0 +1,61 @@
+From 0aabeaa562fa269834f10cbda6e966b553dcec71 Mon Sep 17 00:00:00 2001
+From: Toon Claes <toon@iotcl.com>
+Date: Wed, 10 Jan 2024 15:15:59 +0100
+Subject: [PATCH 2699/2871] builtin/show-ref: treat directory as non-existing
+ in --exists
+
+9080a7f178 (builtin/show-ref: add new mode to check for reference
+existence, 2023-10-31) added the option --exists to git-show-ref(1).
+
+When you use this option against a ref that doesn't exist, but it is
+a parent directory of an existing ref, you get the following error:
+
+    $ git show-ref --exists refs/heads
+    error: failed to look up reference: Is a directory
+
+when the ref-files backend is in use.  To be more clear to user,
+hide the error about having found a directory.  What matters to the
+user is that the named ref does not exist.  Instead, print the same
+error as when the ref was not found:
+
+    error: reference does not exist
+
+Signed-off-by: Toon Claes <toon@iotcl.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/show-ref.c  | 2 +-
+ t/t1403-show-ref.sh | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/show-ref.c b/builtin/show-ref.c
+index 7aac525a87..6025ce223d 100644
+--- a/builtin/show-ref.c
++++ b/builtin/show-ref.c
+@@ -239,7 +239,7 @@ static int cmd_show_ref__exists(const char **refs)
+ 	if (refs_read_raw_ref(get_main_ref_store(the_repository), ref,
+ 			      &unused_oid, &unused_referent, &unused_type,
+ 			      &failure_errno)) {
+-		if (failure_errno == ENOENT) {
++		if (failure_errno == ENOENT || failure_errno == EISDIR) {
+ 			error(_("reference does not exist"));
+ 			ret = 2;
+ 		} else {
+diff --git a/t/t1403-show-ref.sh b/t/t1403-show-ref.sh
+index b50ae6fcf1..a8055f7fe1 100755
+--- a/t/t1403-show-ref.sh
++++ b/t/t1403-show-ref.sh
+@@ -260,9 +260,9 @@ test_expect_success '--exists with non-commit object' '
+ 
+ test_expect_success '--exists with directory fails with generic error' '
+ 	cat >expect <<-EOF &&
+-	error: failed to look up reference: Is a directory
++	error: reference does not exist
+ 	EOF
+-	test_expect_code 1 git show-ref --exists refs/heads 2>err &&
++	test_expect_code 2 git show-ref --exists refs/heads 2>err &&
+ 	test_cmp expect err
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

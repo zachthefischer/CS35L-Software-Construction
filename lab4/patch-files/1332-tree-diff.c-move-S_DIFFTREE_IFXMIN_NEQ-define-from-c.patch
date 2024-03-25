@@ -1,0 +1,69 @@
+From 23a517e4156714c3f8c8a4e36beccfee1d76ff1f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:19 +0000
+Subject: [PATCH 1332/2871] tree-diff.c: move S_DIFFTREE_IFXMIN_NEQ define from
+ cache.h
+
+S_DIFFTREE_IFXMIN_NEQ is *only* used in tree-diff.c, so there is no
+point exposing it in cache.h.  Move it to tree-diff.c.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h     | 15 ---------------
+ tree-diff.c | 13 +++++++++++++
+ 2 files changed, 13 insertions(+), 15 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index ad741e70bc..7a46f300d9 100644
+--- a/cache.h
++++ b/cache.h
+@@ -10,21 +10,6 @@
+ #include "object.h"
+ #include "statinfo.h"
+ 
+-/*
+- * Some mode bits are also used internally for computations.
+- *
+- * They *must* not overlap with any valid modes, and they *must* not be emitted
+- * to outside world - i.e. appear on disk or network. In other words, it's just
+- * temporary fields, which we internally use, but they have to stay in-house.
+- *
+- * ( such approach is valid, as standard S_IF* fits into 16 bits, and in Git
+- *   codebase mode is `unsigned int` which is assumed to be at least 32 bits )
+- */
+-
+-/* used internally in tree-diff */
+-#define S_DIFFTREE_IFXMIN_NEQ	0x80000000
+-
+-
+ /*
+  * Basic data structures for the directory cache
+  */
+diff --git a/tree-diff.c b/tree-diff.c
+index 69031d7cba..a76e6dae61 100644
+--- a/tree-diff.c
++++ b/tree-diff.c
+@@ -6,6 +6,19 @@
+ #include "diffcore.h"
+ #include "tree.h"
+ 
++/*
++ * Some mode bits are also used internally for computations.
++ *
++ * They *must* not overlap with any valid modes, and they *must* not be emitted
++ * to outside world - i.e. appear on disk or network. In other words, it's just
++ * temporary fields, which we internally use, but they have to stay in-house.
++ *
++ * ( such approach is valid, as standard S_IF* fits into 16 bits, and in Git
++ *   codebase mode is `unsigned int` which is assumed to be at least 32 bits )
++ */
++
++#define S_DIFFTREE_IFXMIN_NEQ	0x80000000
++
+ /*
+  * internal mode marker, saying a tree entry != entry of tp[imin]
+  * (see ll_diff_tree_paths for what it means there)
+-- 
+2.39.3 (Apple Git-145)
+

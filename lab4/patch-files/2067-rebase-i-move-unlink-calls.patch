@@ -1,0 +1,46 @@
+From 36ac861a305720c54f759da814647d5987beb10b Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 6 Sep 2023 15:22:45 +0000
+Subject: [PATCH 2067/2871] rebase -i: move unlink() calls
+
+At the start of each iteration the loop that picks commits removes the
+state files from the previous pick. However some of these files are only
+written if there are conflicts in which case we exit the loop before the
+end of the loop body. Therefore they only need to be removed when the
+rebase continues, not at the start of each iteration.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index d2c7698c48..5073ec5902 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -4639,6 +4639,10 @@ static int pick_commits(struct repository *r,
+ 	if (read_and_refresh_cache(r, opts))
+ 		return -1;
+ 
++	unlink(rebase_path_message());
++	unlink(rebase_path_stopped_sha());
++	unlink(rebase_path_amend());
++
+ 	while (todo_list->current < todo_list->nr) {
+ 		struct todo_item *item = todo_list->items + todo_list->current;
+ 		const char *arg = todo_item_get_arg(todo_list, item);
+@@ -4662,10 +4666,7 @@ static int pick_commits(struct repository *r,
+ 						todo_list->total_nr,
+ 						opts->verbose ? "\n" : "\r");
+ 			}
+-			unlink(rebase_path_message());
+ 			unlink(rebase_path_author_script());
+-			unlink(rebase_path_stopped_sha());
+-			unlink(rebase_path_amend());
+ 			unlink(git_path_merge_head(r));
+ 			unlink(git_path_auto_merge(r));
+ 			delete_ref(NULL, "REBASE_HEAD", NULL, REF_NO_DEREF);
+-- 
+2.39.3 (Apple Git-145)
+

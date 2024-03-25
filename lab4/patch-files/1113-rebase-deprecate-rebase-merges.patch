@@ -1,0 +1,50 @@
+From 33561f517036dd0bcddf319a56fd3488759396e5 Mon Sep 17 00:00:00 2001
+From: Alex Henrie <alexhenrie24@gmail.com>
+Date: Sat, 25 Mar 2023 21:06:35 -0600
+Subject: [PATCH 1113/2871] rebase: deprecate --rebase-merges=""
+
+The unusual syntax --rebase-merges="" (that is, --rebase-merges with an
+empty string argument) has been an undocumented synonym of
+--rebase-merges without an argument. Deprecate that syntax to avoid
+confusion when a rebase.rebaseMerges config option is introduced, where
+rebase.rebaseMerges="" will be equivalent to --no-rebase-merges.
+
+It is not likely that anyone is actually using this syntax, but just in
+case, deprecate the empty string argument instead of dropping support
+for it immediately.
+
+Signed-off-by: Alex Henrie <alexhenrie24@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index dd31d5ab91..4b3f29a449 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1141,7 +1141,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 		{OPTION_STRING, 'r', "rebase-merges", &rebase_merges,
+ 			N_("mode"),
+ 			N_("try to rebase merges instead of skipping them"),
+-			PARSE_OPT_OPTARG, NULL, (intptr_t)""},
++			PARSE_OPT_OPTARG, NULL, (intptr_t)"no-rebase-cousins"},
+ 		OPT_BOOL(0, "fork-point", &options.fork_point,
+ 			 N_("use 'merge-base --fork-point' to refine upstream")),
+ 		OPT_STRING('s', "strategy", &options.strategy,
+@@ -1439,7 +1439,11 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 
+ 	if (rebase_merges) {
+ 		if (!*rebase_merges)
+-			; /* default mode; do nothing */
++			warning(_("--rebase-merges with an empty string "
++				  "argument is deprecated and will stop "
++				  "working in a future version of Git. Use "
++				  "--rebase-merges without an argument "
++				  "instead, which does the same thing."));
+ 		else if (!strcmp("rebase-cousins", rebase_merges))
+ 			options.rebase_cousins = 1;
+ 		else if (strcmp("no-rebase-cousins", rebase_merges))
+-- 
+2.39.3 (Apple Git-145)
+

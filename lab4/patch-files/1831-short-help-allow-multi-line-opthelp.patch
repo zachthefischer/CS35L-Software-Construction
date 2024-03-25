@@ -1,0 +1,82 @@
+From 448abbba63471153df6ba520a5621595557ce3c8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 18 Jul 2023 15:54:04 -0700
+Subject: [PATCH 1831/2871] short help: allow multi-line opthelp
+
+When "-h" triggers the short-help in a command that implements its
+option parsing using the parse-options API, the option help text is
+shown with a single fprintf() as a long line.  When the text is
+multi-line, the second and subsequent lines are not left padded,
+that breaks the alignment across options.
+
+Borrowing the idea from the advice API where its hint strings are
+shown with (localized) "hint:" prefix, let's internally split the
+(localized) help text into lines, and showing the first line, pad
+the remaining lines to align.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c               | 12 +++++++++++-
+ t/helper/test-parse-options.c |  2 ++
+ t/t0040-parse-options.sh      |  2 ++
+ 3 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index f8a155ee13..817416db99 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1109,6 +1109,7 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 	for (; opts->type != OPTION_END; opts++) {
+ 		size_t pos;
+ 		int pad;
++		const char *cp, *np;
+ 
+ 		if (opts->type == OPTION_SUBCOMMAND)
+ 			continue;
+@@ -1157,7 +1158,16 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 				   (const char *)opts->value);
+ 			continue;
+ 		}
+-		fprintf(outfile, "%*s%s\n", pad + USAGE_GAP, "", _(opts->help));
++
++		for (cp = _(opts->help); *cp; cp = np) {
++			np = strchrnul(cp, '\n');
++			fprintf(outfile,
++				"%*s%.*s\n", pad + USAGE_GAP, "",
++				(int)(np - cp), cp);
++			if (*np)
++				np++;
++			pad = USAGE_OPTS_WIDTH;
++		}
+ 	}
+ 	fputc('\n', outfile);
+ 
+diff --git a/t/helper/test-parse-options.c b/t/helper/test-parse-options.c
+index 00fa281a9c..a4f6e24b0c 100644
+--- a/t/helper/test-parse-options.c
++++ b/t/helper/test-parse-options.c
+@@ -133,6 +133,8 @@ int cmd__parse_options(int argc, const char **argv)
+ 		OPT_STRING(0, "st", &string, "st", "get another string (pervert ordering)"),
+ 		OPT_STRING('o', NULL, &string, "str", "get another string"),
+ 		OPT_NOOP_NOARG(0, "obsolete"),
++		OPT_SET_INT_F(0, "longhelp", &integer, "help text of this entry\n"
++			      "spans multiple lines", 0, PARSE_OPT_NONEG),
+ 		OPT_STRING_LIST(0, "list", &list, "str", "add str to list"),
+ 		OPT_GROUP("Magic arguments"),
+ 		OPT_NUMBER_CALLBACK(&integer, "set integer to NUM",
+diff --git a/t/t0040-parse-options.sh b/t/t0040-parse-options.sh
+index 7d7ecfd571..83e5d4eeb6 100755
+--- a/t/t0040-parse-options.sh
++++ b/t/t0040-parse-options.sh
+@@ -35,6 +35,8 @@ String options
+     --string2 <str>       get another string
+     --st <st>             get another string (pervert ordering)
+     -o <str>              get another string
++    --longhelp            help text of this entry
++                          spans multiple lines
+     --list <str>          add str to list
+ 
+ Magic arguments
+-- 
+2.39.3 (Apple Git-145)
+

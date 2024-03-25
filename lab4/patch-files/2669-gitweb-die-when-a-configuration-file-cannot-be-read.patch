@@ -1,0 +1,43 @@
+From ac62a3649fcfd7f2caa80ffdfb8c3135764291ef Mon Sep 17 00:00:00 2001
+From: Marcelo Roberto Jimenez <marcelo.jimenez@gmail.com>
+Date: Wed, 10 Jan 2024 19:57:09 -0300
+Subject: [PATCH 2669/2871] gitweb: die when a configuration file cannot be
+ read
+
+Fix a possibility of a permission to access error go unnoticed.
+
+Perl uses two different variables to manage errors from a "do
+$filename" construct. One is $@, which is set in this case when do
+is unable to compile the file. The other is $!, which is set in case
+do cannot read the file.  The current code only checks "$@", which
+means a configuration file passed to GitWeb that is not readable by
+the server process does not cause it to "die".
+
+Make sure we also check and act on "$!" to fix this.
+
+Signed-off-by: Marcelo Roberto Jimenez <marcelo.jimenez@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gitweb/gitweb.perl | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/gitweb/gitweb.perl b/gitweb/gitweb.perl
+index e66eb3d9ba..5d0122020f 100755
+--- a/gitweb/gitweb.perl
++++ b/gitweb/gitweb.perl
+@@ -728,9 +728,11 @@ sub filter_and_validate_refs {
+ sub read_config_file {
+ 	my $filename = shift;
+ 	return unless defined $filename;
+-	# die if there are errors parsing config file
+ 	if (-e $filename) {
+ 		do $filename;
++		# die if there is a problem accessing the file
++		die $! if $!;
++		# die if there are errors parsing config file
+ 		die $@ if $@;
+ 		return 1;
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,71 @@
+From f74c90dcf7ed8ef7994ab583de089dba2a2b1a22 Mon Sep 17 00:00:00 2001
+From: "brian m. carlson" <bk2204@github.com>
+Date: Tue, 27 Jun 2023 16:18:58 +0000
+Subject: [PATCH 1691/2871] var: format variable structure with C99
+ initializers
+
+Right now, we have only two items in our variable struct.  However, in
+the future, we're going to add two more items.  To help keep our diffs
+nice and tidy and make this structure easier to read, switch to use
+C99-style initializers for our data.
+
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/var.c | 40 ++++++++++++++++++++++++++++++++--------
+ 1 file changed, 32 insertions(+), 8 deletions(-)
+
+diff --git a/builtin/var.c b/builtin/var.c
+index bd340c5717..379564a399 100644
+--- a/builtin/var.c
++++ b/builtin/var.c
+@@ -46,14 +46,38 @@ struct git_var {
+ 	const char *(*read)(int);
+ };
+ static struct git_var git_vars[] = {
+-	{ "GIT_COMMITTER_IDENT", git_committer_info },
+-	{ "GIT_AUTHOR_IDENT",   git_author_info },
+-	{ "GIT_EDITOR", editor },
+-	{ "GIT_SEQUENCE_EDITOR", sequence_editor },
+-	{ "GIT_PAGER", pager },
+-	{ "GIT_DEFAULT_BRANCH", default_branch },
+-	{ "GIT_SHELL_PATH", shell_path },
+-	{ "", NULL },
++	{
++		.name = "GIT_COMMITTER_IDENT",
++		.read = git_committer_info,
++	},
++	{
++		.name = "GIT_AUTHOR_IDENT",
++		.read = git_author_info,
++	},
++	{
++		.name = "GIT_EDITOR",
++		.read = editor,
++	},
++	{
++		.name = "GIT_SEQUENCE_EDITOR",
++		.read = sequence_editor,
++	},
++	{
++		.name = "GIT_PAGER",
++		.read = pager,
++	},
++	{
++		.name = "GIT_DEFAULT_BRANCH",
++		.read = default_branch,
++	},
++	{
++		.name = "GIT_SHELL_PATH",
++		.read = shell_path,
++	},
++	{
++		.name = "",
++		.read = NULL,
++	},
+ };
+ 
+ static void list_vars(void)
+-- 
+2.39.3 (Apple Git-145)
+

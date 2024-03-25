@@ -1,0 +1,34 @@
+From 00df20a7ab4a4de355f69157acfd2502ab58a3aa Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 18 Sep 2023 18:29:40 -0400
+Subject: [PATCH 2130/2871] fsmonitor: prefer repo_git_path() to git_pathdup()
+
+The fsmonitor_ipc__get_path() function ignores its repository argument.
+It should use it when constructing repo paths (though in practice, it is
+unlikely anything but the_repository is ever passed, so this is cleanup
+and future proofing, not a bug fix).
+
+Note that despite the lack of "dup" in the name, repo_git_path() behaves
+like git_pathdup() and returns an allocated string.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/fsmonitor/fsm-ipc-win32.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/compat/fsmonitor/fsm-ipc-win32.c b/compat/fsmonitor/fsm-ipc-win32.c
+index 8928fa93ce..41984ea48e 100644
+--- a/compat/fsmonitor/fsm-ipc-win32.c
++++ b/compat/fsmonitor/fsm-ipc-win32.c
+@@ -6,6 +6,6 @@
+ const char *fsmonitor_ipc__get_path(struct repository *r) {
+ 	static char *ret;
+ 	if (!ret)
+-		ret = git_pathdup("fsmonitor--daemon.ipc");
++		ret = repo_git_path(r, "fsmonitor--daemon.ipc");
+ 	return ret;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,63 @@
+From f68c26873d57db064831e9be97555f301dd6fe41 Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Mon, 1 May 2023 22:02:40 +0200
+Subject: [PATCH 1384/2871] =?UTF-8?q?doc:=20interpret-trailers:=20don?=
+ =?UTF-8?q?=E2=80=99t=20use=20deprecated=20config?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`command` has been deprecated since commit c364b7ef51 (trailer: add new
+.cmd config option, 2021-05-03).
+
+Use the commit message of c364b7ef51 as a guide to replace the use of
+`$ARG` and to use a script instead of an inline command.[1] Also,
+explicitly trigger the command by passing in `--trailer=see`, since
+this config is not automatically used.[2]
+
+[1]: “Instead of "$ARG", users can refer to the value as positional
+   argument, $1, in their scripts.”
+[2]: “At the same time, in order to allow `git interpret-trailers` to
+   better simulate the behavior of `git command -s`,
+   'trailer.<token>.cmd' will not automatically execute.”
+
+Acked-by: ZheNing Hu <adlternative@gmail.com>
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 4ff8be7f2e..acecc037ec 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -325,7 +325,7 @@ $ git interpret-trailers --trailer 'Cc: Alice <alice@example.com>' --trailer 'Re
+ $ git config trailer.sign.key "Signed-off-by: "
+ $ git config trailer.sign.ifmissing add
+ $ git config trailer.sign.ifexists doNothing
+-$ git config trailer.sign.command 'echo "$(git config user.name) <$(git config user.email)>"'
++$ git config trailer.sign.cmd 'echo "$(git config user.name) <$(git config user.email)>"'
+ $ git interpret-trailers </dev/null
+ 
+ Signed-off-by: Bob <bob@example.com>
+@@ -405,11 +405,14 @@ subject
+ message
+ 
+ see: HEAD~2
++$ cat ~/bin/glog-ref
++#!/bin/sh
++git log -1 --oneline --format="%h (%s)" --abbrev-commit --abbrev=14
+ $ git config trailer.see.key "See-also: "
+ $ git config trailer.see.ifExists "replace"
+ $ git config trailer.see.ifMissing "doNothing"
+-$ git config trailer.see.command "git log -1 --oneline --format=\"%h (%s)\" --abbrev-commit --abbrev=14 \$ARG"
+-$ git interpret-trailers <msg.txt
++$ git config trailer.see.cmd "glog-ref"
++$ git interpret-trailers --trailer=see <msg.txt
+ subject
+ 
+ message
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,173 @@
+From ba3d1c73daa02152acf4729d45ca7fe4d71d5747 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:22 +0000
+Subject: [PATCH 0908/2871] treewide: remove unnecessary cache.h includes
+
+We had several header files include cache.h unnecessarily.  Remove
+those.  These have all been verified via both ensuring that
+    gcc -E $HEADER | grep '"cache.h"'
+found no hits and that
+    cat >temp.c <<EOF &&
+    #include "git-compat-util.h"
+    #include "$HEADER"
+    int main() {}
+    EOF
+    gcc -c temp.c
+successfully compiles without warnings.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ checkout.h           | 2 +-
+ entry.h              | 4 +++-
+ khash.h              | 1 -
+ oidmap.h             | 1 -
+ pretty.h             | 2 +-
+ reflog-walk.h        | 2 --
+ refs/refs-internal.h | 1 -
+ remote.h             | 1 -
+ sequencer.h          | 2 +-
+ xdiff-interface.h    | 2 +-
+ 10 files changed, 7 insertions(+), 11 deletions(-)
+
+diff --git a/checkout.h b/checkout.h
+index 1152133bd7..1917f3b323 100644
+--- a/checkout.h
++++ b/checkout.h
+@@ -1,7 +1,7 @@
+ #ifndef CHECKOUT_H
+ #define CHECKOUT_H
+ 
+-#include "cache.h"
++#include "hash.h"
+ 
+ /*
+  * Check if the branch name uniquely matches a branch name on a remote
+diff --git a/entry.h b/entry.h
+index 2d4fbb88c8..7329f918a9 100644
+--- a/entry.h
++++ b/entry.h
+@@ -1,9 +1,11 @@
+ #ifndef ENTRY_H
+ #define ENTRY_H
+ 
+-#include "cache.h"
+ #include "convert.h"
+ 
++struct cache_entry;
++struct index_state;
++
+ struct checkout {
+ 	struct index_state *istate;
+ 	const char *base_dir;
+diff --git a/khash.h b/khash.h
+index cb79bf8856..85362718c5 100644
+--- a/khash.h
++++ b/khash.h
+@@ -26,7 +26,6 @@
+ #ifndef __AC_KHASH_H
+ #define __AC_KHASH_H
+ 
+-#include "cache.h"
+ #include "hashmap.h"
+ 
+ #define AC_VERSION_KHASH_H "0.2.8"
+diff --git a/oidmap.h b/oidmap.h
+index c66a83ab1d..c1642927fa 100644
+--- a/oidmap.h
++++ b/oidmap.h
+@@ -1,7 +1,6 @@
+ #ifndef OIDMAP_H
+ #define OIDMAP_H
+ 
+-#include "cache.h"
+ #include "hashmap.h"
+ 
+ /*
+diff --git a/pretty.h b/pretty.h
+index f34e24c53a..9508c22f03 100644
+--- a/pretty.h
++++ b/pretty.h
+@@ -1,11 +1,11 @@
+ #ifndef PRETTY_H
+ #define PRETTY_H
+ 
+-#include "cache.h"
+ #include "date.h"
+ #include "string-list.h"
+ 
+ struct commit;
++struct repository;
+ struct strbuf;
+ struct process_trailer_options;
+ 
+diff --git a/reflog-walk.h b/reflog-walk.h
+index 8076f10d9f..4d93a26957 100644
+--- a/reflog-walk.h
++++ b/reflog-walk.h
+@@ -1,8 +1,6 @@
+ #ifndef REFLOG_WALK_H
+ #define REFLOG_WALK_H
+ 
+-#include "cache.h"
+-
+ struct commit;
+ struct reflog_walk_info;
+ struct date_mode;
+diff --git a/refs/refs-internal.h b/refs/refs-internal.h
+index 69f93b0e2a..a85d113123 100644
+--- a/refs/refs-internal.h
++++ b/refs/refs-internal.h
+@@ -1,7 +1,6 @@
+ #ifndef REFS_REFS_INTERNAL_H
+ #define REFS_REFS_INTERNAL_H
+ 
+-#include "cache.h"
+ #include "refs.h"
+ #include "iterator.h"
+ 
+diff --git a/remote.h b/remote.h
+index 1ebbe42792..5b38ee20b8 100644
+--- a/remote.h
++++ b/remote.h
+@@ -1,7 +1,6 @@
+ #ifndef REMOTE_H
+ #define REMOTE_H
+ 
+-#include "cache.h"
+ #include "parse-options.h"
+ #include "hashmap.h"
+ #include "refspec.h"
+diff --git a/sequencer.h b/sequencer.h
+index 3bcdfa1b58..33dbaf5b66 100644
+--- a/sequencer.h
++++ b/sequencer.h
+@@ -1,11 +1,11 @@
+ #ifndef SEQUENCER_H
+ #define SEQUENCER_H
+ 
+-#include "cache.h"
+ #include "strbuf.h"
+ #include "wt-status.h"
+ 
+ struct commit;
++struct index_state;
+ struct repository;
+ 
+ const char *git_path_commit_editmsg(void);
+diff --git a/xdiff-interface.h b/xdiff-interface.h
+index 4301a7eef2..3750794afe 100644
+--- a/xdiff-interface.h
++++ b/xdiff-interface.h
+@@ -1,7 +1,7 @@
+ #ifndef XDIFF_INTERFACE_H
+ #define XDIFF_INTERFACE_H
+ 
+-#include "cache.h"
++#include "hash.h"
+ #include "xdiff/xdiff.h"
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

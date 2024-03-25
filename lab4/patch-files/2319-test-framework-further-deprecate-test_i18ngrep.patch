@@ -1,0 +1,70 @@
+From 2e87fca189e613912b085c5140312b1f4b3f2977 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 31 Oct 2023 14:23:29 +0900
+Subject: [PATCH 2319/2871] test framework: further deprecate test_i18ngrep
+
+As an attempt to come up with a useful mechanism to ensure that
+certain messages are left untranslated [*], we earlier wrote
+GIT_TEST_GETTEXT_POISON off as a failed experiment.
+
+But the output from the test helper was easier to use while
+debugging failed tests, compared to the same test writtein with the
+plain-vanilla "grep".  Especially when a test that expects a certain
+string to appear in the output (e.g. "this test must fail with this
+message") fails, "grep message output" would just silently fail and
+in a &&-chained sequence of commands, it is hard to tell which step
+failed.  test_i18ngrep explicitly said "we wanted to see a line that
+match this pattern but did not see a hit in this file".
+
+What we have as test_i18ngrep in our tree still retains this verbose
+output (even though we got rid of the "poison" support).  Let's
+rename it to test_grep (because it is no longer about i18n at all)
+and then make test_i18ngrep a thin wrapper around it.  Existing
+callers of test_i18ngrep can be mechanically rewritten to instead
+use test_grep over time, but it does not have to be done in this
+commit.
+
+[Footnote]
+
+ * The idea was that human-facing messages are often translated, but
+   there are messages that should never be translated.  We use
+   "grep" only for the latter kind of messages, and then run tests
+   in "poison" mode that spew garbage for translatable messages.  If
+   such a test run fails, it means these messages tested with "grep"
+   were marked for translation by mistake.  test_i18ngrep was to be
+   used for other messages that are to be translated, and was to
+   always "succeed" when runing under the "poison" mode.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib-functions.sh | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 2f8868caa1..c50bc18861 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1208,14 +1208,16 @@ test_cmp_bin () {
+ 	cmp "$@"
+ }
+ 
+-# Wrapper for grep which used to be used for
+-# GIT_TEST_GETTEXT_POISON=false. Only here as a shim for other
+-# in-flight changes. Should not be used and will be removed soon.
++# Deprecated - do not use this in new code
+ test_i18ngrep () {
++	test_grep "$@"
++}
++
++test_grep () {
+ 	eval "last_arg=\${$#}"
+ 
+ 	test -f "$last_arg" ||
+-	BUG "test_i18ngrep requires a file to read as the last parameter"
++	BUG "test_grep requires a file to read as the last parameter"
+ 
+ 	if test $# -lt 2 ||
+ 	   { test "x!" = "x$1" && test $# -lt 3 ; }
+-- 
+2.39.3 (Apple Git-145)
+

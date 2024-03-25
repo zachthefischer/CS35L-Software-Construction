@@ -1,0 +1,87 @@
+From aa561208d9d41d757ede1fb40d3ae2c164a21f97 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 7 Feb 2023 00:07:53 +0100
+Subject: [PATCH 0827/2871] push: refactor refspec_append_mapped() for
+ subsequent leak-fix
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The set_refspecs() caller of refspec_append_mapped() (added in [1])
+left open the question[2] of whether the "remote" we lazily fetch
+might be NULL in the "[...]uniquely name our ref?" case, as
+remote_get() can return NULL.
+
+If we got past the "[...]uniquely name our ref?" case we'd have
+already segfaulted if we tried to dereference it as
+"remote->push.nr". In these cases the config mechanism & previous
+remote validation will have bailed out earlier.
+
+Let's refactor this code to clarify that, we'll now BUG() out if we
+can't get a "remote", and will no longer retrieve it for these common
+cases where we don't need it.
+
+1. ca02465b413 (push: use remote.$name.push as a refmap, 2013-12-03)
+2. https://lore.kernel.org/git/c0c07b89-7eaf-21cd-748e-e14ea57f09fd@web.de/
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/push.c | 29 +++++++++++++++++------------
+ 1 file changed, 17 insertions(+), 12 deletions(-)
+
+diff --git a/builtin/push.c b/builtin/push.c
+index 60ac8017e5..97b35eca3a 100644
+--- a/builtin/push.c
++++ b/builtin/push.c
+@@ -63,16 +63,9 @@ static struct refspec rs = REFSPEC_INIT_PUSH;
+ static struct string_list push_options_config = STRING_LIST_INIT_DUP;
+ 
+ static void refspec_append_mapped(struct refspec *refspec, const char *ref,
+-				  struct remote *remote, struct ref *local_refs)
++				  struct remote *remote, struct ref *matched)
+ {
+ 	const char *branch_name;
+-	struct ref *matched = NULL;
+-
+-	/* Does "ref" uniquely name our ref? */
+-	if (count_refspec_match(ref, local_refs, &matched) != 1) {
+-		refspec_append(refspec, ref);
+-		return;
+-	}
+ 
+ 	if (remote->push.nr) {
+ 		struct refspec_item query;
+@@ -120,12 +113,24 @@ static void set_refspecs(const char **refs, int nr, const char *repo)
+ 				die(_("--delete only accepts plain target ref names"));
+ 			refspec_appendf(&rs, ":%s", ref);
+ 		} else if (!strchr(ref, ':')) {
+-			if (!remote) {
+-				/* lazily grab remote and local_refs */
+-				remote = remote_get(repo);
++			struct ref *matched = NULL;
++
++			/* lazily grab local_refs */
++			if (!local_refs)
+ 				local_refs = get_local_heads();
++
++			/* Does "ref" uniquely name our ref? */
++			if (count_refspec_match(ref, local_refs, &matched) != 1) {
++				refspec_append(&rs, ref);
++			} else {
++				/* lazily grab remote */
++				if (!remote)
++					remote = remote_get(repo);
++				if (!remote)
++					BUG("must get a remote for repo '%s'", repo);
++
++				refspec_append_mapped(&rs, ref, remote, matched);
+ 			}
+-			refspec_append_mapped(&rs, ref, remote, local_refs);
+ 		} else
+ 			refspec_append(&rs, ref);
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

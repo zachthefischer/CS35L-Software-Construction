@@ -1,0 +1,40 @@
+From ee0e7fc927c309e3ed1d46f7ba970b79d3a38514 Mon Sep 17 00:00:00 2001
+From: srz_zumix <zumix.cpp@gmail.com>
+Date: Tue, 8 Nov 2022 05:25:19 +0000
+Subject: [PATCH 0337/2871] fsmonitor--daemon: on macOS support symlink
+
+Resolves a problem where symbolic links were not showing up in diff when
+created or modified.
+
+kFSEventStreamEventFlagItemIsSymlink is also treated as a file update.
+This is because kFSEventStreamEventFlagItemIsFile is not included in
+FSEvents when creating or deleting symbolic links. For example:
+
+$ ln -snf t test
+  fsevent: '/path/to/dir/test', flags=0x40100 ItemCreated|ItemIsSymlink|
+$ ln -snf ci test
+  fsevent: '/path/to/dir/test', flags=0x40200 ItemIsSymlink|ItemRemoved|
+  fsevent: '/path/to/dir/test', flags=0x40100 ItemCreated|ItemIsSymlink|
+
+Signed-off-by: srz_zumix <zumix.cpp@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ compat/fsmonitor/fsm-listen-darwin.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/compat/fsmonitor/fsm-listen-darwin.c b/compat/fsmonitor/fsm-listen-darwin.c
+index daeee4e465..cc9af1e3cb 100644
+--- a/compat/fsmonitor/fsm-listen-darwin.c
++++ b/compat/fsmonitor/fsm-listen-darwin.c
+@@ -336,7 +336,7 @@ static void fsevent_callback(ConstFSEventStreamRef streamRef,
+ 			 * know how much to invalidate/refresh.
+ 			 */
+ 
+-			if (event_flags[k] & kFSEventStreamEventFlagItemIsFile) {
++			if (event_flags[k] & (kFSEventStreamEventFlagItemIsFile | kFSEventStreamEventFlagItemIsSymlink)) {
+ 				const char *rel = path_k +
+ 					state->path_worktree_watch.len + 1;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

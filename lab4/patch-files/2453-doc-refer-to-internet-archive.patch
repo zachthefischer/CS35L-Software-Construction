@@ -1,0 +1,73 @@
+From 62b4f7b9c6a767cfa9eb3efa96e65305f98386be Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Fri, 24 Nov 2023 03:35:15 +0000
+Subject: [PATCH 2453/2871] doc: refer to internet archive
+
+These pages are no longer reachable from their original locations,
+which makes things difficult for readers. Instead, switch to linking to
+the Internet Archive for the content.
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gitweb/gitweb.perl       | 2 +-
+ sha1dc/sha1.c            | 2 +-
+ t/lib-gpg.sh             | 2 +-
+ t/t9816-git-p4-locked.sh | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/gitweb/gitweb.perl b/gitweb/gitweb.perl
+index b6659410ef..6f139b8fc3 100755
+--- a/gitweb/gitweb.perl
++++ b/gitweb/gitweb.perl
+@@ -8193,7 +8193,7 @@ sub git_feed {
+ 	my $have_blame = gitweb_check_feature('blame');
+ 
+ 	# Atom: http://www.atomenabled.org/developers/syndication/
+-	# RSS:  http://www.notestips.com/80256B3A007F2692/1/NAMO5P9UPQ
++	# RSS:  https://web.archive.org/web/20030729001534/http://www.notestips.com/80256B3A007F2692/1/NAMO5P9UPQ
+ 	if ($format ne 'rss' && $format ne 'atom') {
+ 		die_error(400, "Unknown web feed format");
+ 	}
+diff --git a/sha1dc/sha1.c b/sha1dc/sha1.c
+index dede2cbddf..f993ef9c69 100644
+--- a/sha1dc/sha1.c
++++ b/sha1dc/sha1.c
+@@ -88,7 +88,7 @@
+ /*
+  * Should define Big Endian for a whitelist of known processors. See
+  * https://sourceforge.net/p/predef/wiki/Endianness/ and
+- * http://www.oracle.com/technetwork/server-storage/solaris/portingtosolaris-138514.html
++ * https://web.archive.org/web/20140421151132/http://www.perforce.com/perforce/doc.current/manuals/p4sag/chapter.superuser.html
+  */
+ #define SHA1DC_BIGENDIAN
+ 
+diff --git a/t/lib-gpg.sh b/t/lib-gpg.sh
+index 83b83c9abb..add11e88fc 100644
+--- a/t/lib-gpg.sh
++++ b/t/lib-gpg.sh
+@@ -13,7 +13,7 @@ test_lazy_prereq GPG '
+ 	gpg_version=$(gpg --version 2>&1)
+ 	test $? != 127 || exit 1
+ 
+-	# As said here: http://www.gnupg.org/documentation/faqs.html#q6.19
++	# As said here: https://web.archive.org/web/20130212022238/https://www.gnupg.org/faq/gnupg-faq.html#why-does-gnupg-1.0.6-bail-out-on-keyrings-used-with-1.0.7
+ 	# the gpg version 1.0.6 did not parse trust packets correctly, so for
+ 	# that version, creation of signed tags using the generated key fails.
+ 	case "$gpg_version" in
+diff --git a/t/t9816-git-p4-locked.sh b/t/t9816-git-p4-locked.sh
+index 932841003c..5e904ac80d 100755
+--- a/t/t9816-git-p4-locked.sh
++++ b/t/t9816-git-p4-locked.sh
+@@ -9,7 +9,7 @@ test_expect_success 'start p4d' '
+ '
+ 
+ # See
+-# http://www.perforce.com/perforce/doc.current/manuals/p4sag/03_superuser.html#1088563
++# https://web.archive.org/web/20150602090517/http://www.perforce.com/perforce/doc.current/manuals/p4sag/chapter.superuser.html#superuser.basic.typemap_locking
+ # for suggestions on how to configure "sitewide pessimistic locking"
+ # where only one person can have a file open for edit at a time.
+ test_expect_success 'init depot' '
+-- 
+2.39.3 (Apple Git-145)
+

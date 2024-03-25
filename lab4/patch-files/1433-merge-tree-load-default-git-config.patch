@@ -1,0 +1,87 @@
+From b6551feadfda76379a28f424ea46998e2b995d07 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 10 May 2023 19:07:34 +0000
+Subject: [PATCH 1433/2871] merge-tree: load default git config
+
+The 'git merge-tree' command handles creating root trees for merges
+without using the worktree. This is a critical operation in many Git
+hosts, as they typically store bare repositories.
+
+This builtin does not load the default Git config, which can have
+several important ramifications.
+
+In particular, one config that is loaded by default is
+core.useReplaceRefs. This is typically disabled in Git hosts due to
+the ability to spoof commits in strange ways.
+
+Since this config is not loaded specifically during merge-tree, users
+were previously able to use refs/replace/ references to make pull
+requests that looked valid but introduced malicious content. The
+resulting merge commit would have the correct commit history, but the
+malicious content would exist in the root tree of the merge.
+
+The fix is simple: load the default Git config in cmd_merge_tree().
+This may also fix other behaviors that are effected by reading default
+config. The only possible downside is a little extra computation time
+spent reading config. The config parsing is placed after basic argument
+parsing so it does not slow down usage errors.
+
+Helped-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/merge-tree.c  |  3 +++
+ t/t4300-merge-tree.sh | 18 ++++++++++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/builtin/merge-tree.c b/builtin/merge-tree.c
+index 828dc81c42..d401e74698 100644
+--- a/builtin/merge-tree.c
++++ b/builtin/merge-tree.c
+@@ -13,6 +13,7 @@
+ #include "exec-cmd.h"
+ #include "merge-blobs.h"
+ #include "quote.h"
++#include "config.h"
+ 
+ static int line_termination = '\n';
+ 
+@@ -620,6 +621,8 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 	if (argc != expected_remaining_argc)
+ 		usage_with_options(merge_tree_usage, mt_options);
+ 
++	git_config(git_default_config, NULL);
++
+ 	/* Do the relevant type of merge */
+ 	if (o.mode == MODE_REAL)
+ 		return real_merge(&o, merge_base, argv[0], argv[1], prefix);
+diff --git a/t/t4300-merge-tree.sh b/t/t4300-merge-tree.sh
+index c52c8a21fa..57c4f26e46 100755
+--- a/t/t4300-merge-tree.sh
++++ b/t/t4300-merge-tree.sh
+@@ -334,4 +334,22 @@ test_expect_success 'turn tree to file' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'merge-tree respects core.useReplaceRefs=false' '
++	test_commit merge-to &&
++	test_commit valid base &&
++	git reset --hard HEAD^ &&
++	test_commit malicious base &&
++
++	test_when_finished "git replace -d $(git rev-parse valid^0)" &&
++	git replace valid^0 malicious^0 &&
++
++	tree=$(git -c core.useReplaceRefs=true merge-tree --write-tree merge-to valid) &&
++	merged=$(git cat-file -p $tree:base) &&
++	test malicious = $merged &&
++
++	tree=$(git -c core.useReplaceRefs=false merge-tree --write-tree merge-to valid) &&
++	merged=$(git cat-file -p $tree:base) &&
++	test valid = $merged
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

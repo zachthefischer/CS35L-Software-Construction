@@ -1,0 +1,124 @@
+From 4b4e75dd4f1dac0c25bded7466b0cc20c9649efb Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:38:10 -0500
+Subject: [PATCH 0925/2871] serve: use repository pointer to get config
+
+A few of the v2 "serve" callbacks ignore their repository parameter and
+read config using the_repository (either directly or implicitly by
+calling wrapper functions). This isn't a bug since the server code only
+handles a single main repository anyway (and indeed, if you look at the
+callers, these repository parameters will always be the_repository). But
+in the long run we want to get rid of the_repository, so let's take a
+tiny step in that direction.
+
+As a bonus, this silences some -Wunused-parameter warnings.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c  | 2 +-
+ ls-refs.c     | 8 ++++----
+ serve.c       | 2 +-
+ upload-pack.c | 8 ++++----
+ 4 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 8a3c39ce57..177c181040 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -884,7 +884,7 @@ int bundle_uri_command(struct repository *r,
+ 	 * Read all "bundle.*" config lines to the client as key=value
+ 	 * packet lines.
+ 	 */
+-	git_config(config_to_packet_line, &writer);
++	repo_config(r, config_to_packet_line, &writer);
+ 
+ 	packet_writer_flush(&writer);
+ 
+diff --git a/ls-refs.c b/ls-refs.c
+index 4863813655..bd9ab2c348 100644
+--- a/ls-refs.c
++++ b/ls-refs.c
+@@ -12,11 +12,11 @@ static enum {
+ 	UNBORN_IGNORE = 0,
+ 	UNBORN_ALLOW,
+ 	UNBORN_ADVERTISE /* implies ALLOW */
+-} unborn_config(void)
++} unborn_config(struct repository *r)
+ {
+ 	const char *str = NULL;
+ 
+-	if (repo_config_get_string_tmp(the_repository, "lsrefs.unborn", &str)) {
++	if (repo_config_get_string_tmp(r, "lsrefs.unborn", &str)) {
+ 		/*
+ 		 * If there is no such config, advertise and allow it by
+ 		 * default.
+@@ -168,7 +168,7 @@ int ls_refs(struct repository *r, struct packet_reader *request)
+ 				strvec_push(&data.prefixes, out);
+ 		}
+ 		else if (!strcmp("unborn", arg))
+-			data.unborn = !!unborn_config();
++			data.unborn = !!unborn_config(r);
+ 		else
+ 			die(_("unexpected line: '%s'"), arg);
+ 	}
+@@ -199,7 +199,7 @@ int ls_refs(struct repository *r, struct packet_reader *request)
+ 
+ int ls_refs_advertise(struct repository *r, struct strbuf *value)
+ {
+-	if (value && unborn_config() == UNBORN_ADVERTISE)
++	if (value && unborn_config(r) == UNBORN_ADVERTISE)
+ 		strbuf_addstr(value, "unborn");
+ 
+ 	return 1;
+diff --git a/serve.c b/serve.c
+index cbf4a143cf..2ccc03c16b 100644
+--- a/serve.c
++++ b/serve.c
+@@ -48,7 +48,7 @@ static void object_format_receive(struct repository *r,
+ static int session_id_advertise(struct repository *r, struct strbuf *value)
+ {
+ 	if (advertise_sid == -1 &&
+-	    git_config_get_bool("transfer.advertisesid", &advertise_sid))
++	    repo_config_get_bool(r, "transfer.advertisesid", &advertise_sid))
+ 		advertise_sid = 0;
+ 	if (!advertise_sid)
+ 		return 0;
+diff --git a/upload-pack.c b/upload-pack.c
+index 551f22ffa5..bcb702a5ba 100644
+--- a/upload-pack.c
++++ b/upload-pack.c
+@@ -1775,26 +1775,26 @@ int upload_pack_advertise(struct repository *r,
+ 
+ 		strbuf_addstr(value, "shallow wait-for-done");
+ 
+-		if (!repo_config_get_bool(the_repository,
++		if (!repo_config_get_bool(r,
+ 					 "uploadpack.allowfilter",
+ 					 &allow_filter_value) &&
+ 		    allow_filter_value)
+ 			strbuf_addstr(value, " filter");
+ 
+-		if (!repo_config_get_bool(the_repository,
++		if (!repo_config_get_bool(r,
+ 					 "uploadpack.allowrefinwant",
+ 					 &allow_ref_in_want) &&
+ 		    allow_ref_in_want)
+ 			strbuf_addstr(value, " ref-in-want");
+ 
+ 		if (git_env_bool("GIT_TEST_SIDEBAND_ALL", 0) ||
+-		    (!repo_config_get_bool(the_repository,
++		    (!repo_config_get_bool(r,
+ 					   "uploadpack.allowsidebandall",
+ 					   &allow_sideband_all_value) &&
+ 		     allow_sideband_all_value))
+ 			strbuf_addstr(value, " sideband-all");
+ 
+-		if (!repo_config_get_string(the_repository,
++		if (!repo_config_get_string(r,
+ 					    "uploadpack.blobpackfileuri",
+ 					    &str) &&
+ 		    str) {
+-- 
+2.39.3 (Apple Git-145)
+

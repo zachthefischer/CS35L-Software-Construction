@@ -1,0 +1,54 @@
+From 3843ef89312593a1e4d70bcdb29fd6ffa87134d6 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 28 Aug 2023 18:49:10 -0400
+Subject: [PATCH 2005/2871] Documentation/gitformat-pack.txt: remove
+ multi-cruft packs alternative
+
+This text, originally from 3d89a8c118 (Documentation/technical: add
+cruft-packs.txt, 2022-05-20) lists multiple cruft packs as a potential
+alternative to the design of cruft packs.
+
+We have always supported multiple cruft packs (i.e. we use the most
+recent mtime for a given object among all cruft packs which contain it,
+etc.), but haven't encouraged its use.
+
+We still aren't encouraging users to go out and generate multiple cruft
+packs, but let's take a step in that direction by dropping language that
+suggests we aren't capable of working with multiple cruft packs.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitformat-pack.txt | 10 +---------
+ 1 file changed, 1 insertion(+), 9 deletions(-)
+
+diff --git a/Documentation/gitformat-pack.txt b/Documentation/gitformat-pack.txt
+index 0c1be2dbe8..49bb09d7df 100644
+--- a/Documentation/gitformat-pack.txt
++++ b/Documentation/gitformat-pack.txt
+@@ -618,21 +618,13 @@ understand cruft packs.
+ 
+ Notable alternatives to this design include:
+ 
+-  - The location of the per-object mtime data, and
+-  - Storing unreachable objects in multiple cruft packs.
++  - The location of the per-object mtime data.
+ 
+ On the location of mtime data, a new auxiliary file tied to the pack was chosen
+ to avoid complicating the `.idx` format. If the `.idx` format were ever to gain
+ support for optional chunks of data, it may make sense to consolidate the
+ `.mtimes` format into the `.idx` itself.
+ 
+-Storing unreachable objects among multiple cruft packs (e.g., creating a new
+-cruft pack during each repacking operation including only unreachable objects
+-which aren't already stored in an earlier cruft pack) is significantly more
+-complicated to construct, and so aren't pursued here. The obvious drawback to
+-the current implementation is that the entire cruft pack must be re-written from
+-scratch.
+-
+ GIT
+ ---
+ Part of the linkgit:git[1] suite
+-- 
+2.39.3 (Apple Git-145)
+

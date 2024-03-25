@@ -1,0 +1,127 @@
+From 820a3400851a018883a7396867aa679c3acb5568 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Date: Sun, 11 Feb 2024 12:11:28 +0000
+Subject: [PATCH 2842/2871] ci: bump remaining outdated Actions versions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+After activating automatic Dependabot updates in the
+git-for-windows/git repository, Dependabot noticed a couple
+of yet-unaddressed updates.  They avoid "Node.js 16 Actions"
+deprecation messages by bumping the following Actions'
+versions:
+
+- actions/upload-artifact from 3 to 4
+- actions/download-artifact from 3 to 4
+- actions/cache from 3 to 4
+
+Helped-by: Matthias Aßhauer <mha1993@live.de>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/coverity.yml |  4 ++--
+ .github/workflows/main.yml     | 16 ++++++++--------
+ 2 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/.github/workflows/coverity.yml b/.github/workflows/coverity.yml
+index a81a7566d1..53cf12fe04 100644
+--- a/.github/workflows/coverity.yml
++++ b/.github/workflows/coverity.yml
+@@ -98,7 +98,7 @@ jobs:
+       # A cache miss will add ~30s to create, but a cache hit will save minutes.
+       - name: restore the Coverity Build Tool
+         id: cache
+-        uses: actions/cache/restore@v3
++        uses: actions/cache/restore@v4
+         with:
+           path: ${{ runner.temp }}/cov-analysis
+           key: cov-build-${{ env.COVERITY_LANGUAGE }}-${{ env.COVERITY_PLATFORM }}-${{ steps.lookup.outputs.hash }}
+@@ -141,7 +141,7 @@ jobs:
+           esac
+       - name: cache the Coverity Build Tool
+         if: steps.cache.outputs.cache-hit != 'true'
+-        uses: actions/cache/save@v3
++        uses: actions/cache/save@v4
+         with:
+           path: ${{ runner.temp }}/cov-analysis
+           key: cov-build-${{ env.COVERITY_LANGUAGE }}-${{ env.COVERITY_PLATFORM }}-${{ steps.lookup.outputs.hash }}
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index bb857bdaf0..ec25f6f99d 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -123,7 +123,7 @@ jobs:
+     - name: zip up tracked files
+       run: git archive -o artifacts/tracked.tar.gz HEAD
+     - name: upload tracked files and build artifacts
+-      uses: actions/upload-artifact@v3
++      uses: actions/upload-artifact@v4
+       with:
+         name: windows-artifacts
+         path: artifacts
+@@ -140,7 +140,7 @@ jobs:
+       cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
+     steps:
+     - name: download tracked files and build artifacts
+-      uses: actions/download-artifact@v3
++      uses: actions/download-artifact@v4
+       with:
+         name: windows-artifacts
+         path: ${{github.workspace}}
+@@ -157,7 +157,7 @@ jobs:
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+-      uses: actions/upload-artifact@v3
++      uses: actions/upload-artifact@v4
+       with:
+         name: failed-tests-windows
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+@@ -212,7 +212,7 @@ jobs:
+     - name: zip up tracked files
+       run: git archive -o artifacts/tracked.tar.gz HEAD
+     - name: upload tracked files and build artifacts
+-      uses: actions/upload-artifact@v3
++      uses: actions/upload-artifact@v4
+       with:
+         name: vs-artifacts
+         path: artifacts
+@@ -230,7 +230,7 @@ jobs:
+     steps:
+     - uses: git-for-windows/setup-git-for-windows-sdk@v1
+     - name: download tracked files and build artifacts
+-      uses: actions/download-artifact@v3
++      uses: actions/download-artifact@v4
+       with:
+         name: vs-artifacts
+         path: ${{github.workspace}}
+@@ -248,7 +248,7 @@ jobs:
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+-      uses: actions/upload-artifact@v3
++      uses: actions/upload-artifact@v4
+       with:
+         name: failed-tests-windows
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+@@ -305,7 +305,7 @@ jobs:
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+-      uses: actions/upload-artifact@v3
++      uses: actions/upload-artifact@v4
+       with:
+         name: failed-tests-${{matrix.vector.jobname}}
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+@@ -353,7 +353,7 @@ jobs:
+       run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != '' && matrix.vector.jobname != 'linux32'
+-      uses: actions/upload-artifact@v3
++      uses: actions/upload-artifact@v4
+       with:
+         name: failed-tests-${{matrix.vector.jobname}}
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+-- 
+2.39.3 (Apple Git-145)
+

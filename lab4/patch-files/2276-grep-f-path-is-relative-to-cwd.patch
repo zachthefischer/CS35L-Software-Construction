@@ -1,0 +1,86 @@
+From 5b2424b658701c16e4fe12babf83fdb15d0f165a Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 12 Oct 2023 10:28:16 -0700
+Subject: [PATCH 2276/2871] grep: -f <path> is relative to $cwd
+
+Just like OPT_FILENAME() does, "git grep -f <path>" should treat
+the <path> relative to the original $cwd by paying attention to the
+prefix the command is given.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/grep.c  | 13 +++++++++++--
+ t/t7810-grep.sh | 13 +++++++++++++
+ 2 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/grep.c b/builtin/grep.c
+index 50e712a184..8851184eab 100644
+--- a/builtin/grep.c
++++ b/builtin/grep.c
+@@ -4,6 +4,7 @@
+  * Copyright (c) 2006 Junio C Hamano
+  */
+ #include "builtin.h"
++#include "abspath.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "repository.h"
+@@ -812,14 +813,20 @@ static int file_callback(const struct option *opt, const char *arg, int unset)
+ {
+ 	struct grep_opt *grep_opt = opt->value;
+ 	int from_stdin;
++	const char *filename = arg;
+ 	FILE *patterns;
+ 	int lno = 0;
+ 	struct strbuf sb = STRBUF_INIT;
+ 
+ 	BUG_ON_OPT_NEG(unset);
+ 
+-	from_stdin = !strcmp(arg, "-");
+-	patterns = from_stdin ? stdin : fopen(arg, "r");
++	if (!*filename)
++		; /* leave it as-is */
++	else
++		filename = prefix_filename_except_for_dash(grep_prefix, filename);
++
++	from_stdin = !strcmp(filename, "-");
++	patterns = from_stdin ? stdin : fopen(filename, "r");
+ 	if (!patterns)
+ 		die_errno(_("cannot open '%s'"), arg);
+ 	while (strbuf_getline(&sb, patterns) == 0) {
+@@ -833,6 +840,8 @@ static int file_callback(const struct option *opt, const char *arg, int unset)
+ 	if (!from_stdin)
+ 		fclose(patterns);
+ 	strbuf_release(&sb);
++	if (filename != arg)
++		free((void *)filename);
+ 	return 0;
+ }
+ 
+diff --git a/t/t7810-grep.sh b/t/t7810-grep.sh
+index 39d6d713ec..91ac66935f 100755
+--- a/t/t7810-grep.sh
++++ b/t/t7810-grep.sh
+@@ -808,6 +808,19 @@ test_expect_success 'grep -f, ignore empty lines, read patterns from stdin' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'grep -f, use cwd relative file' '
++	test_when_finished "git rm -f sub/dir/file" &&
++	mkdir -p sub/dir &&
++	echo hit >sub/dir/file &&
++	git add sub/dir/file &&
++	echo hit >sub/dir/pattern &&
++	echo miss >pattern &&
++	(
++		cd sub/dir && git grep -f pattern file
++	) &&
++	git -C sub/dir grep -f pattern file
++'
++
+ cat >expected <<EOF
+ y:y yy
+ --
+-- 
+2.39.3 (Apple Git-145)
+

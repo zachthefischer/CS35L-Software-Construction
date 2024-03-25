@@ -1,0 +1,64 @@
+From 30bd55f901c97c310e674c051f00920f38a66ee0 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Sat, 10 Feb 2024 18:32:20 +0000
+Subject: [PATCH 2845/2871] completion: add space after config variable names
+ also in Bash 3
+
+In be6444d1ca (completion: bash: add correct suffix in variables,
+2021-08-16), __git_complete_config_variable_name was changed to use
+"${sfx- }" instead of "$sfx" as the fourth argument of _gitcomp_nl and
+_gitcomp_nl_append, such that this argument evaluates to a space if sfx
+is unset. This was to ensure that e.g.
+
+	git config branch.autoSetupMe[TAB]
+
+correctly completes to 'branch.autoSetupMerge ' with the trailing space.
+This commits notes that the fix only works in Bash 4 because in Bash 3
+the 'local sfx' construct at the beginning of
+__git_complete_config_variable_name creates an empty string.
+
+Make the fix also work for Bash 3 by using the "unset or null' parameter
+expansion syntax ("${sfx:- }"), such that the parameter is also expanded
+to a space if it is set but null, as is the behaviour of 'local sfx' in
+Bash 3.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 6662db221d..159a4fd8ad 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2750,7 +2750,7 @@ __git_complete_config_variable_name ()
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_#*.}"
+ 		__gitcomp_direct "$(__git_heads "$pfx" "$cur_" ".")"
+-		__gitcomp_nl_append $'autoSetupMerge\nautoSetupRebase\n' "$pfx" "$cur_" "${sfx- }"
++		__gitcomp_nl_append $'autoSetupMerge\nautoSetupRebase\n' "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
+ 	guitool.*.*)
+@@ -2784,7 +2784,7 @@ __git_complete_config_variable_name ()
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_#*.}"
+ 		__git_compute_all_commands
+-		__gitcomp_nl "$__git_all_commands" "$pfx" "$cur_" "${sfx- }"
++		__gitcomp_nl "$__git_all_commands" "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
+ 	remote.*.*)
+@@ -2800,7 +2800,7 @@ __git_complete_config_variable_name ()
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_#*.}"
+ 		__gitcomp_nl "$(__git_remotes)" "$pfx" "$cur_" "."
+-		__gitcomp_nl_append "pushDefault" "$pfx" "$cur_" "${sfx- }"
++		__gitcomp_nl_append "pushDefault" "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
+ 	url.*.*)
+-- 
+2.39.3 (Apple Git-145)
+

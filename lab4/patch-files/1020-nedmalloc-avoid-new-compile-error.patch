@@ -1,0 +1,40 @@
+From 86f6f4fa91a9a2310c8f73528a86bf2c52d47fe4 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 24 May 2022 00:23:04 +0000
+Subject: [PATCH 1020/2871] nedmalloc: avoid new compile error
+
+GCC v12.x complains thusly:
+
+compat/nedmalloc/nedmalloc.c: In function 'DestroyCaches':
+compat/nedmalloc/nedmalloc.c:326:12: error: the comparison will always
+                              evaluate as 'true' for the address of 'caches'
+                              will never be NULL [-Werror=address]
+  326 |         if(p->caches)
+      |            ^
+compat/nedmalloc/nedmalloc.c:196:22: note: 'caches' declared here
+  196 |         threadcache *caches[THREADCACHEMAXCACHES];
+      |                      ^~~~~~
+
+... and it is correct, of course.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/nedmalloc/nedmalloc.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/compat/nedmalloc/nedmalloc.c b/compat/nedmalloc/nedmalloc.c
+index 1cc31c3502..141c30f07f 100644
+--- a/compat/nedmalloc/nedmalloc.c
++++ b/compat/nedmalloc/nedmalloc.c
+@@ -323,7 +323,6 @@ static NOINLINE void RemoveCacheEntries(nedpool *p, threadcache *tc, unsigned in
+ }
+ static void DestroyCaches(nedpool *p) THROWSPEC
+ {
+-	if(p->caches)
+ 	{
+ 		threadcache *tc;
+ 		int n;
+-- 
+2.39.3 (Apple Git-145)
+

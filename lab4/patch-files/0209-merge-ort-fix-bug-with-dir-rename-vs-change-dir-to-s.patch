@@ -1,0 +1,182 @@
+From 2b86c10084a54ee2b2e2cfd69ac02f3719fb47e0 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Oct 2022 19:04:10 +0000
+Subject: [PATCH 0209/2871] merge-ort: fix bug with dir rename vs change dir to
+ symlink
+
+When changing a directory to a symlink on one side of history, and
+renaming the parent of that directory to a different directory name
+on the other side, e.g. with this kind of setup:
+
+    Base commit: Has a file named dir/subdir/file
+    Side1:       Rename dir/ -> renamed-dir/
+    Side2:       delete dir/subdir/file, add dir/subdir as symlink
+
+Then merge-ort was running into an assertion failure:
+
+    git: merge-ort.c:2622: apply_directory_rename_modifications: Assertion `ci->dirmask == 0' failed
+
+merge-recursive did not have as obvious an issue handling this case,
+likely because we never fixed it to handle the case from commit
+902c521a35 ("t6423: more involved directory rename test", 2020-10-15)
+where we need to be careful about nested renames when a directory rename
+occurs (dir/ -> renamed-dir/ implies dir/subdir/ ->
+renamed-dir/subdir/).  However, merge-recursive does have multiple
+problems with this testcase:
+
+  * Incorrect stages for the file: merge-recursive omits the stage in
+    the index corresponding to the base stage, making `git status`
+    report "added by us" for renamed-dir/subdir/file instead of the
+    expected "deleted by them".
+
+  * Poor directory/file conflict handling: For the renamed-dir/subdir
+    symlink, instead of reporting a file/directory conflict as
+    expected, it reports "Error: Refusing to lose untracked file at
+    renamed-dir/subdir".  This is a lie because there is no untracked
+    file at that location.  It then does the normal suboptimal
+    merge-recursive thing of having the symlink be tracked in the index
+    at a location where it can't be written due to D/F conflicts
+    (namely, renamed-dir/subdir), but writes it to the working tree at
+    a different location as a new untracked file (namely,
+    renamed-dir/subdir~B^0)
+
+Technically, these problems don't prevent the user from resolving the
+merge if they can figure out to ignore the confusion, but because both
+pieces of output are quite confusing I don't want to modify the test
+to claim the recursive also passes it even if it doesn't have the bug
+that ort did.
+
+So, fix the bug in ort by splitting the conflict_info for "dir/subdir"
+into two, one for the directory part, one for the file (i.e. symlink)
+part, since the symlink is being renamed by directory rename detection.
+The directory part is needed for proper nesting, since there are still
+conflict_info fields for files underneath it (though those are marked
+as is_null, they are still present until the entries are processed,
+and the entry processing wants every non-toplevel entry to have a
+parent directory).
+
+Reported-by: Stefano Rivera <stefano@rivera.za.net>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c                         | 36 +++++++++++++++++--
+ t/t6423-merge-rename-directories.sh | 56 +++++++++++++++++++++++++++++
+ 2 files changed, 90 insertions(+), 2 deletions(-)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index e5f41cce48..2cbca60e6c 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -2619,8 +2619,40 @@ static void apply_directory_rename_modifications(struct merge_options *opt,
+ 	}
+ 
+ 	assert(ci->filemask == 2 || ci->filemask == 4);
+-	assert(ci->dirmask == 0);
+-	strmap_remove(&opt->priv->paths, old_path, 0);
++	assert(ci->dirmask == 0 || ci->dirmask == 1);
++	if (ci->dirmask == 0)
++		strmap_remove(&opt->priv->paths, old_path, 0);
++	else {
++		/*
++		 * This file exists on one side, but we still had a directory
++		 * at the old location that we can't remove until after
++		 * processing all paths below it.  So, make a copy of ci in
++		 * new_ci and only put the file information into it.
++		 */
++		new_ci = mem_pool_calloc(&opt->priv->pool, 1, sizeof(*new_ci));
++		memcpy(new_ci, ci, sizeof(*ci));
++		assert(!new_ci->match_mask);
++		new_ci->dirmask = 0;
++		new_ci->stages[1].mode = 0;
++		oidcpy(&new_ci->stages[1].oid, null_oid());
++
++		/*
++		 * Now that we have the file information in new_ci, make sure
++		 * ci only has the directory information.
++		 */
++		ci->filemask = 0;
++		ci->merged.clean = 1;
++		for (i = MERGE_BASE; i <= MERGE_SIDE2; i++) {
++			if (ci->dirmask & (1 << i))
++				continue;
++			/* zero out any entries related to files */
++			ci->stages[i].mode = 0;
++			oidcpy(&ci->stages[i].oid, null_oid());
++		}
++
++		// Now we want to focus on new_ci, so reassign ci to it
++		ci = new_ci;
++	}
+ 
+ 	branch_with_new_path   = (ci->filemask == 2) ? opt->branch1 : opt->branch2;
+ 	branch_with_dir_rename = (ci->filemask == 2) ? opt->branch2 : opt->branch1;
+diff --git a/t/t6423-merge-rename-directories.sh b/t/t6423-merge-rename-directories.sh
+index a4941878fe..944de75b80 100755
+--- a/t/t6423-merge-rename-directories.sh
++++ b/t/t6423-merge-rename-directories.sh
+@@ -5304,6 +5304,62 @@ test_expect_merge_algorithm failure success '12l (A into B): Rename into each ot
+ 	)
+ '
+ 
++# Testcase 12m, Directory rename, plus change of parent dir to symlink
++#   Commit O:  dir/subdir/file
++#   Commit A:  renamed-dir/subdir/file
++#   Commit B:  dir/subdir
++#   In words:
++#     A: dir/subdir/ -> renamed-dir/subdir
++#     B: delete dir/subdir/file, add dir/subdir as symlink
++#
++#   Expected: CONFLICT (rename/delete): renamed-dir/subdir/file,
++#             CONFLICT (file location): renamed-dir/subdir vs. dir/subdir
++#             CONFLICT (directory/file): renamed-dir/subdir symlink has
++#                                        renamed-dir/subdir in the way
++
++test_setup_12m () {
++	git init 12m &&
++	(
++		cd 12m &&
++
++		mkdir -p dir/subdir &&
++		echo 1 >dir/subdir/file &&
++		git add . &&
++		git commit -m "O" &&
++
++		git branch O &&
++		git branch A &&
++		git branch B &&
++
++		git switch A &&
++		git mv dir/ renamed-dir/ &&
++		git add . &&
++		git commit -m "A" &&
++
++		git switch B &&
++		git rm dir/subdir/file &&
++		mkdir dir &&
++		ln -s /dev/null dir/subdir &&
++		git add . &&
++		git commit -m "B"
++	)
++}
++
++test_expect_merge_algorithm failure success '12m: Change parent of renamed-dir to symlink on other side' '
++	test_setup_12m &&
++	(
++		cd 12m &&
++
++		git checkout -q A^0 &&
++
++		test_must_fail git -c merge.directoryRenames=conflict merge -s recursive B^0 &&
++
++		test_stdout_line_count = 3 git ls-files -s &&
++		test_stdout_line_count = 2 ls -1 renamed-dir &&
++		test_path_is_missing dir
++	)
++'
++
+ ###########################################################################
+ # SECTION 13: Checking informational and conflict messages
+ #
+-- 
+2.39.3 (Apple Git-145)
+

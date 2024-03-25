@@ -1,0 +1,138 @@
+From b23285a921a84c3b83d9aaca31afedf290c59254 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 23 Nov 2023 15:00:31 +0900
+Subject: [PATCH 2535/2871] checkout: forbid "-B <branch>" from touching a
+ branch used elsewhere
+
+"git checkout -B <branch> [<start-point>]", being a "forced" version
+of "-b", switches to the <branch>, after optionally resetting its
+tip to the <start-point>, even if the <branch> is in use in another
+worktree, which is somewhat unexpected.
+
+Protect the <branch> using the same logic that forbids "git checkout
+<branch>" from touching a branch that is in use elsewhere.
+
+This is a breaking change that may deserve backward compatibliity
+warning in the Release Notes.  The "--ignore-other-worktrees" option
+can be used as an escape hatch if the finger memory of existing
+users depend on the current behaviour of "-B".
+
+Reported-by: Willem Verstraeten <willem.verstraeten@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-checkout.txt |  4 +++-
+ Documentation/git-switch.txt   |  9 +++++++--
+ builtin/checkout.c             |  7 +++++++
+ t/t2060-switch.sh              |  2 ++
+ t/t2400-worktree-add.sh        | 22 ++++++++++++++++++++++
+ 5 files changed, 41 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-checkout.txt b/Documentation/git-checkout.txt
+index 240c54639e..55a50b5b23 100644
+--- a/Documentation/git-checkout.txt
++++ b/Documentation/git-checkout.txt
+@@ -63,7 +63,9 @@ $ git checkout <branch>
+ ------------
+ +
+ that is to say, the branch is not reset/created unless "git checkout" is
+-successful.
++successful (e.g., when the branch is in use in another worktree, not
++just the current branch stays the same, but the branch is not reset to
++the start-point, either).
+ 
+ 'git checkout' --detach [<branch>]::
+ 'git checkout' [--detach] <commit>::
+diff --git a/Documentation/git-switch.txt b/Documentation/git-switch.txt
+index c60fc9c138..6137421ede 100644
+--- a/Documentation/git-switch.txt
++++ b/Documentation/git-switch.txt
+@@ -59,13 +59,18 @@ out at most one of `A` and `B`, in which case it defaults to `HEAD`.
+ -c <new-branch>::
+ --create <new-branch>::
+ 	Create a new branch named `<new-branch>` starting at
+-	`<start-point>` before switching to the branch. This is a
+-	convenient shortcut for:
++	`<start-point>` before switching to the branch. This is the
++	transactional equivalent of
+ +
+ ------------
+ $ git branch <new-branch>
+ $ git switch <new-branch>
+ ------------
+++
++that is to say, the branch is not reset/created unless "git switch" is
++successful (e.g., when the branch is in use in another worktree, not
++just the current branch stays the same, but the branch is not reset to
++the start-point, either).
+ 
+ -C <new-branch>::
+ --force-create <new-branch>::
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index b4ab972c5a..8a8ad23e98 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -1600,6 +1600,13 @@ static int checkout_branch(struct checkout_opts *opts,
+ 	if (new_branch_info->path && !opts->force_detach && !opts->new_branch)
+ 		die_if_switching_to_a_branch_in_use(opts, new_branch_info->path);
+ 
++	/* "git checkout -B <branch>" */
++	if (opts->new_branch_force) {
++		char *full_ref = xstrfmt("refs/heads/%s", opts->new_branch);
++		die_if_switching_to_a_branch_in_use(opts, full_ref);
++		free(full_ref);
++	}
++
+ 	if (!new_branch_info->commit && opts->new_branch) {
+ 		struct object_id rev;
+ 		int flag;
+diff --git a/t/t2060-switch.sh b/t/t2060-switch.sh
+index e247a4735b..c91c4db936 100755
+--- a/t/t2060-switch.sh
++++ b/t/t2060-switch.sh
+@@ -170,8 +170,10 @@ test_expect_success 'switch back when temporarily detached and checked out elsew
+ 	# we test in both worktrees to ensure that works
+ 	# as expected with "first" and "next" worktrees
+ 	test_must_fail git -C wt1 switch shared &&
++	test_must_fail git -C wt1 switch -C shared &&
+ 	git -C wt1 switch --ignore-other-worktrees shared &&
+ 	test_must_fail git -C wt2 switch shared &&
++	test_must_fail git -C wt2 switch -C shared &&
+ 	git -C wt2 switch --ignore-other-worktrees shared
+ '
+ 
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index df4aff7825..5d5064e63d 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -126,6 +126,28 @@ test_expect_success 'die the same branch is already checked out' '
+ 	)
+ '
+ 
++test_expect_success 'refuse to reset a branch in use elsewhere' '
++	(
++		cd here &&
++
++		# we know we are on detached HEAD but just in case ...
++		git checkout --detach HEAD &&
++		git rev-parse --verify HEAD >old.head &&
++
++		git rev-parse --verify refs/heads/newmain >old.branch &&
++		test_must_fail git checkout -B newmain 2>error &&
++		git rev-parse --verify refs/heads/newmain >new.branch &&
++		git rev-parse --verify HEAD >new.head &&
++
++		grep "already used by worktree at" error &&
++		test_cmp old.branch new.branch &&
++		test_cmp old.head new.head &&
++
++		# and we must be still on the same detached HEAD state
++		test_must_fail git symbolic-ref HEAD
++	)
++'
++
+ test_expect_success SYMLINKS 'die the same branch is already checked out (symlink)' '
+ 	head=$(git -C there rev-parse --git-path HEAD) &&
+ 	ref=$(git -C there symbolic-ref HEAD) &&
+-- 
+2.39.3 (Apple Git-145)
+

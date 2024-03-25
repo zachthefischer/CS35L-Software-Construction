@@ -1,0 +1,42 @@
+From d051f1718e5e5692d096778f2c7f497fc0dae8b6 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 22 Mar 2023 13:43:22 -0400
+Subject: [PATCH 1102/2871] fast-export: drop unused parameter from
+ anonymize_commit_message()
+
+As the comment above the function indicates, we do not bother actually
+storing commit messages in our anonymization map. But we still take the
+message as a parameter, and just ignore it. Let's stop doing that, which
+will make -Wunused-parameter happier.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fast-export.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/fast-export.c b/builtin/fast-export.c
+index 12adf75964..f3cc548686 100644
+--- a/builtin/fast-export.c
++++ b/builtin/fast-export.c
+@@ -556,7 +556,7 @@ static const char *anonymize_refname(const char *refname)
+  * We do not even bother to cache commit messages, as they are unlikely
+  * to be repeated verbatim, and it is not that interesting when they are.
+  */
+-static char *anonymize_commit_message(const char *old)
++static char *anonymize_commit_message(void)
+ {
+ 	static int counter;
+ 	return xstrfmt("subject %d\n\nbody\n", counter++);
+@@ -683,7 +683,7 @@ static void handle_commit(struct commit *commit, struct rev_info *rev,
+ 
+ 	mark_next_object(&commit->object);
+ 	if (anonymize) {
+-		reencoded = anonymize_commit_message(message);
++		reencoded = anonymize_commit_message();
+ 	} else if (encoding) {
+ 		switch(reencode_mode) {
+ 		case REENCODE_YES:
+-- 
+2.39.3 (Apple Git-145)
+

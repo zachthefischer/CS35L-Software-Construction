@@ -1,0 +1,116 @@
+From 6ff658cc78f36baa74c0f25314b0043a8f4b4fc6 Mon Sep 17 00:00:00 2001
+From: Todd Zullinger <tmz@pobox.com>
+Date: Thu, 16 Nov 2023 14:30:11 -0500
+Subject: [PATCH 2429/2871] send-email: avoid duplicate specification warnings
+
+A warning is issued for options which are specified more than once
+beginning with perl-Getopt-Long >= 2.55.  In addition to causing users
+to see warnings, this results in test failures which compare the output.
+An example, from t9001-send-email.37:
+
+  | +++ diff -u expect actual
+  | --- expect      2023-11-14 10:38:23.854346488 +0000
+  | +++ actual      2023-11-14 10:38:23.848346466 +0000
+  | @@ -1,2 +1,7 @@
+  | +Duplicate specification "no-chain-reply-to" for option "no-chain-reply-to"
+  | +Duplicate specification "to-cover|to-cover!" for option "to-cover"
+  | +Duplicate specification "cc-cover|cc-cover!" for option "cc-cover"
+  | +Duplicate specification "no-thread" for option "no-thread"
+  | +Duplicate specification "no-to-cover" for option "no-to-cover"
+  |  fatal: longline.patch:35 is longer than 998 characters
+  |  warning: no patches were sent
+  | error: last command exited with $?=1
+  | not ok 37 - reject long lines
+
+Remove the duplicate option specs.  These are primarily the explicit
+'--no-' prefix opts which were added in f471494303 (git-send-email.perl:
+support no- prefix with older GetOptions, 2015-01-30).  This was done
+specifically to support perl-5.8.0 which includes Getopt::Long 2.32[1].
+
+Getopt::Long 2.33 added support for the '--no-' prefix natively by
+appending '!' to the option specification string, which was included in
+perl-5.8.1 and is not present in perl-5.8.0.  The previous commit bumped
+the minimum supported Perl version to 5.8.1 so we no longer need to
+provide the '--no-' variants for negatable options manually.
+
+Teach `--git-completion-helper` to output the '--no-' options.  They are
+not included in the options hash and would otherwise be lost.
+
+Signed-off-by: Todd Zullinger <tmz@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl | 19 ++++++-------------
+ 1 file changed, 6 insertions(+), 13 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 041db702d4..60afafb375 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -119,13 +119,16 @@ sub completion_helper {
+ 
+ 	foreach my $key (keys %$original_opts) {
+ 		unless (exists $not_for_completion{$key}) {
+-			$key =~ s/!$//;
++			my $negatable = ($key =~ s/!$//);
+ 
+ 			if ($key =~ /[:=][si]$/) {
+ 				$key =~ s/[:=][si]$//;
+ 				push (@send_email_opts, "--$_=") foreach (split (/\|/, $key));
+ 			} else {
+ 				push (@send_email_opts, "--$_") foreach (split (/\|/, $key));
++				if ($negatable) {
++					push (@send_email_opts, "--no-$_") foreach (split (/\|/, $key));
++				}
+ 			}
+ 		}
+ 	}
+@@ -491,7 +494,6 @@ sub config_regexp {
+ 		    "bcc=s" => \@getopt_bcc,
+ 		    "no-bcc" => \$no_bcc,
+ 		    "chain-reply-to!" => \$chain_reply_to,
+-		    "no-chain-reply-to" => sub {$chain_reply_to = 0},
+ 		    "sendmail-cmd=s" => \$sendmail_cmd,
+ 		    "smtp-server=s" => \$smtp_server,
+ 		    "smtp-server-option=s" => \@smtp_server_options,
+@@ -506,36 +508,27 @@ sub config_regexp {
+ 		    "smtp-auth=s" => \$smtp_auth,
+ 		    "no-smtp-auth" => sub {$smtp_auth = 'none'},
+ 		    "annotate!" => \$annotate,
+-		    "no-annotate" => sub {$annotate = 0},
+ 		    "compose" => \$compose,
+ 		    "quiet" => \$quiet,
+ 		    "cc-cmd=s" => \$cc_cmd,
+ 		    "header-cmd=s" => \$header_cmd,
+ 		    "no-header-cmd" => \$no_header_cmd,
+ 		    "suppress-from!" => \$suppress_from,
+-		    "no-suppress-from" => sub {$suppress_from = 0},
+ 		    "suppress-cc=s" => \@suppress_cc,
+ 		    "signed-off-cc|signed-off-by-cc!" => \$signed_off_by_cc,
+-		    "no-signed-off-cc|no-signed-off-by-cc" => sub {$signed_off_by_cc = 0},
+-		    "cc-cover|cc-cover!" => \$cover_cc,
+-		    "no-cc-cover" => sub {$cover_cc = 0},
+-		    "to-cover|to-cover!" => \$cover_to,
+-		    "no-to-cover" => sub {$cover_to = 0},
++		    "cc-cover!" => \$cover_cc,
++		    "to-cover!" => \$cover_to,
+ 		    "confirm=s" => \$confirm,
+ 		    "dry-run" => \$dry_run,
+ 		    "envelope-sender=s" => \$envelope_sender,
+ 		    "thread!" => \$thread,
+-		    "no-thread" => sub {$thread = 0},
+ 		    "validate!" => \$validate,
+-		    "no-validate" => sub {$validate = 0},
+ 		    "transfer-encoding=s" => \$target_xfer_encoding,
+ 		    "format-patch!" => \$format_patch,
+-		    "no-format-patch" => sub {$format_patch = 0},
+ 		    "8bit-encoding=s" => \$auto_8bit_encoding,
+ 		    "compose-encoding=s" => \$compose_encoding,
+ 		    "force" => \$force,
+ 		    "xmailer!" => \$use_xmailer,
+-		    "no-xmailer" => sub {$use_xmailer = 0},
+ 		    "batch-size=i" => \$batch_size,
+ 		    "relogin-delay=i" => \$relogin_delay,
+ 		    "git-completion-helper" => \$git_completion_helper,
+-- 
+2.39.3 (Apple Git-145)
+

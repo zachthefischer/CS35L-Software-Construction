@@ -1,0 +1,195 @@
+From a64acf7298e87740a596123d2b39fefe623fd46f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 21 Mar 2023 06:26:02 +0000
+Subject: [PATCH 1084/2871] treewide: remove unnecessary includes of cache.h
+
+The last several commits were geared at replacing the include of cache.h
+in strbuf.c with an include of git-compat-util.h.  Unfortunately, I had
+to drop a patch moving some functions from cache.h to object-name.h, due
+to excessive conflicts with other in-flight topics.
+
+However, even without that patch, the series of patches so far allows us
+to modify a number of C files to replace an include of cache.h with
+git-compat-util.h.  Do that to reduce our dependencies.
+
+(If we could have kept our object-name.h patch in this series, it would
+have also let us reduce the includes in checkout.c and fmt-merge-msg.c
+in addition to strbuf.c).
+
+Just to ensure that nothing else was bringing in cache.h, all of the
+affected files have been checked to ensure that
+    gcc -E -I. $SOURCE_FILE | grep '"cache.h"'
+found no hits and that
+    make DEVELOPER=1 ${OBJECT_FILE_FOR_SOURCE_FILE}
+successfully compiles without warnings.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/terminal.c      | 2 +-
+ gpg-interface.c        | 2 +-
+ lockfile.c             | 2 +-
+ parse-options.c        | 1 -
+ t/helper/test-delta.c  | 1 -
+ t/helper/test-trace2.c | 2 +-
+ tempfile.c             | 3 ++-
+ trace2/tr2_cfg.c       | 4 +++-
+ trace2/tr2_cmd_name.c  | 3 ++-
+ trace2/tr2_dst.c       | 3 ++-
+ trace2/tr2_sid.c       | 3 ++-
+ usage.c                | 3 ++-
+ 12 files changed, 17 insertions(+), 12 deletions(-)
+
+diff --git a/compat/terminal.c b/compat/terminal.c
+index ed2b30b38f..d87e321189 100644
+--- a/compat/terminal.c
++++ b/compat/terminal.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "compat/terminal.h"
+ #include "gettext.h"
+ #include "sigchain.h"
+diff --git a/gpg-interface.c b/gpg-interface.c
+index 6644701fda..aceeb08336 100644
+--- a/gpg-interface.c
++++ b/gpg-interface.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "commit.h"
+ #include "config.h"
+ #include "gettext.h"
+diff --git a/lockfile.c b/lockfile.c
+index 673c21d17a..1d5ed01682 100644
+--- a/lockfile.c
++++ b/lockfile.c
+@@ -2,7 +2,7 @@
+  * Copyright (c) 2005, Junio C Hamano
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "gettext.h"
+ #include "lockfile.h"
+diff --git a/parse-options.c b/parse-options.c
+index a577cc85f6..b6803647d0 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1,7 +1,6 @@
+ #include "git-compat-util.h"
+ #include "parse-options.h"
+ #include "abspath.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "commit.h"
+ #include "color.h"
+diff --git a/t/helper/test-delta.c b/t/helper/test-delta.c
+index 6609fcbc12..e7d134ec25 100644
+--- a/t/helper/test-delta.c
++++ b/t/helper/test-delta.c
+@@ -11,7 +11,6 @@
+ #include "test-tool.h"
+ #include "git-compat-util.h"
+ #include "delta.h"
+-#include "cache.h"
+ #include "wrapper.h"
+ 
+ static const char usage_str[] =
+diff --git a/t/helper/test-trace2.c b/t/helper/test-trace2.c
+index f374c21ec3..a476df6c6c 100644
+--- a/t/helper/test-trace2.c
++++ b/t/helper/test-trace2.c
+@@ -1,9 +1,9 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "strvec.h"
+ #include "run-command.h"
+ #include "exec-cmd.h"
+ #include "config.h"
++#include "trace2.h"
+ 
+ typedef int(fn_unit_test)(int argc, const char **argv);
+ 
+diff --git a/tempfile.c b/tempfile.c
+index cdd2cab3ba..50c377134c 100644
+--- a/tempfile.c
++++ b/tempfile.c
+@@ -42,7 +42,8 @@
+  * file created by its parent.
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
++#include "path.h"
+ #include "tempfile.h"
+ #include "sigchain.h"
+ #include "wrapper.h"
+diff --git a/trace2/tr2_cfg.c b/trace2/tr2_cfg.c
+index ec9ac1a6ef..78cfc15d52 100644
+--- a/trace2/tr2_cfg.c
++++ b/trace2/tr2_cfg.c
+@@ -1,5 +1,7 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
++#include "strbuf.h"
++#include "trace2.h"
+ #include "trace2/tr2_cfg.h"
+ #include "trace2/tr2_sysenv.h"
+ 
+diff --git a/trace2/tr2_cmd_name.c b/trace2/tr2_cmd_name.c
+index dd313204f5..b7b5a869b7 100644
+--- a/trace2/tr2_cmd_name.c
++++ b/trace2/tr2_cmd_name.c
+@@ -1,4 +1,5 @@
+-#include "cache.h"
++#include "git-compat-util.h"
++#include "strbuf.h"
+ #include "trace2/tr2_cmd_name.h"
+ 
+ #define TR2_ENVVAR_PARENT_NAME "GIT_TRACE2_PARENT_NAME"
+diff --git a/trace2/tr2_dst.c b/trace2/tr2_dst.c
+index 273260e1f1..5be892cd5c 100644
+--- a/trace2/tr2_dst.c
++++ b/trace2/tr2_dst.c
+@@ -1,6 +1,7 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "sigchain.h"
++#include "strbuf.h"
+ #include "trace2/tr2_dst.h"
+ #include "trace2/tr2_sid.h"
+ #include "trace2/tr2_sysenv.h"
+diff --git a/trace2/tr2_sid.c b/trace2/tr2_sid.c
+index 5f1ce6f85c..09c4ef0d17 100644
+--- a/trace2/tr2_sid.c
++++ b/trace2/tr2_sid.c
+@@ -1,5 +1,6 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "hex.h"
++#include "strbuf.h"
+ #include "trace2/tr2_tbuf.h"
+ #include "trace2/tr2_sid.h"
+ 
+diff --git a/usage.c b/usage.c
+index b53c99dbe5..46d99f8bd4 100644
+--- a/usage.c
++++ b/usage.c
+@@ -3,8 +3,9 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
++#include "trace2.h"
+ #include "wrapper.h"
+ 
+ static void vreportf(const char *prefix, const char *err, va_list params)
+-- 
+2.39.3 (Apple Git-145)
+

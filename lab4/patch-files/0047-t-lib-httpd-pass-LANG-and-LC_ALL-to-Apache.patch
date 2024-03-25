@@ -1,0 +1,42 @@
+From 7a2d8ea47e8127676adc5dc39fef853aae572e66 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Thu, 6 Oct 2022 17:33:07 +0200
+Subject: [PATCH 0047/2871] t/lib-httpd: pass LANG and LC_ALL to Apache
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+t5411 starts a web server with no explicit language setting, so it uses
+the system default.  Ten of its tests expect it to return error messages
+containing the prefix "fatal: ", emitted by die().  This prefix can be
+localized since a1fd2cf8cd (i18n: mark message helpers prefix for
+translation, 2022-06-21), however.  As a result these ten tests break
+for me on a system with LANG="de_DE.UTF-8" because the web server sends
+localized messages with "Schwerwiegend: " instead of "fatal: ".
+
+Fix these tests by passing LANG and LC_ALL to the web server, which are
+set to "C" by t/test-lib.sh, to get untranslated messages on both sides.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-httpd/apache.conf | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/t/lib-httpd/apache.conf b/t/lib-httpd/apache.conf
+index 497b9b9d92..706799391b 100644
+--- a/t/lib-httpd/apache.conf
++++ b/t/lib-httpd/apache.conf
+@@ -80,6 +80,8 @@ PassEnv LSAN_OPTIONS
+ PassEnv GIT_TRACE
+ PassEnv GIT_CONFIG_NOSYSTEM
+ PassEnv GIT_TEST_SIDEBAND_ALL
++PassEnv LANG
++PassEnv LC_ALL
+ 
+ Alias /dumb/ www/
+ Alias /auth/dumb/ www/auth/dumb/
+-- 
+2.39.3 (Apple Git-145)
+

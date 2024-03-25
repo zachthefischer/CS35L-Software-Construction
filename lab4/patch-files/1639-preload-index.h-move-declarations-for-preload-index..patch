@@ -1,0 +1,227 @@
+From fbffdfb11cba61dbce46442d0b136dcf2ddaeadc Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:52 +0000
+Subject: [PATCH 1639/2871] preload-index.h: move declarations for
+ preload-index.c from elsewhere
+
+We already have a preload-index.c file; move the declarations for the
+functions in that file into a new preload-index.h.  These were
+previously split between cache.h and repository.h.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ add-interactive.c           |  1 +
+ builtin/add.c               |  1 +
+ builtin/am.c                |  1 +
+ builtin/checkout.c          |  1 +
+ builtin/commit.c            |  1 +
+ builtin/diff-files.c        |  1 +
+ builtin/diff-index.c        |  1 +
+ builtin/diff.c              |  1 +
+ builtin/stash.c             |  1 +
+ builtin/submodule--helper.c |  1 +
+ cache.h                     |  3 ---
+ preload-index.c             |  1 +
+ preload-index.h             | 15 +++++++++++++++
+ read-cache.c                |  1 +
+ repository.h                |  3 ---
+ 15 files changed, 27 insertions(+), 6 deletions(-)
+ create mode 100644 preload-index.h
+
+diff --git a/add-interactive.c b/add-interactive.c
+index de877ca052..99f7dc3b0d 100644
+--- a/add-interactive.c
++++ b/add-interactive.c
+@@ -5,6 +5,7 @@
+ #include "diffcore.h"
+ #include "gettext.h"
+ #include "hex.h"
++#include "preload-index.h"
+ #include "revision.h"
+ #include "refs.h"
+ #include "string-list.h"
+diff --git a/builtin/add.c b/builtin/add.c
+index 36ddbb159b..8397be4f8d 100644
+--- a/builtin/add.c
++++ b/builtin/add.c
+@@ -17,6 +17,7 @@
+ #include "cache-tree.h"
+ #include "run-command.h"
+ #include "parse-options.h"
++#include "preload-index.h"
+ #include "diff.h"
+ #include "diffcore.h"
+ #include "revision.h"
+diff --git a/builtin/am.c b/builtin/am.c
+index 5c83f2e003..0d8f46f8d5 100644
+--- a/builtin/am.c
++++ b/builtin/am.c
+@@ -29,6 +29,7 @@
+ #include "unpack-trees.h"
+ #include "branch.h"
+ #include "object-name.h"
++#include "preload-index.h"
+ #include "sequencer.h"
+ #include "revision.h"
+ #include "merge-recursive.h"
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index d6765c9dbd..2d72a742d9 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -20,6 +20,7 @@
+ #include "object-name.h"
+ #include "object-store.h"
+ #include "parse-options.h"
++#include "preload-index.h"
+ #include "refs.h"
+ #include "remote.h"
+ #include "resolve-undo.h"
+diff --git a/builtin/commit.c b/builtin/commit.c
+index ee296e5ec6..877955e894 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -30,6 +30,7 @@
+ #include "utf8.h"
+ #include "object-name.h"
+ #include "parse-options.h"
++#include "preload-index.h"
+ #include "string-list.h"
+ #include "rerere.h"
+ #include "unpack-trees.h"
+diff --git a/builtin/diff-files.c b/builtin/diff-files.c
+index 360464e6ef..3ac175264d 100644
+--- a/builtin/diff-files.c
++++ b/builtin/diff-files.c
+@@ -8,6 +8,7 @@
+ #include "diff.h"
+ #include "diff-merges.h"
+ #include "commit.h"
++#include "preload-index.h"
+ #include "revision.h"
+ #include "builtin.h"
+ #include "submodule.h"
+diff --git a/builtin/diff-index.c b/builtin/diff-index.c
+index b9a19bb7d3..9b98db2e77 100644
+--- a/builtin/diff-index.c
++++ b/builtin/diff-index.c
+@@ -3,6 +3,7 @@
+ #include "diff.h"
+ #include "diff-merges.h"
+ #include "commit.h"
++#include "preload-index.h"
+ #include "revision.h"
+ #include "builtin.h"
+ #include "setup.h"
+diff --git a/builtin/diff.c b/builtin/diff.c
+index 7b64659fe7..967550739a 100644
+--- a/builtin/diff.c
++++ b/builtin/diff.c
+@@ -16,6 +16,7 @@
+ #include "diff.h"
+ #include "diff-merges.h"
+ #include "diffcore.h"
++#include "preload-index.h"
+ #include "revision.h"
+ #include "log-tree.h"
+ #include "builtin.h"
+diff --git a/builtin/stash.c b/builtin/stash.c
+index 8856ac6d5c..06527ee847 100644
+--- a/builtin/stash.c
++++ b/builtin/stash.c
+@@ -17,6 +17,7 @@
+ #include "run-command.h"
+ #include "dir.h"
+ #include "entry.h"
++#include "preload-index.h"
+ #include "rerere.h"
+ #include "revision.h"
+ #include "setup.h"
+diff --git a/builtin/submodule--helper.c b/builtin/submodule--helper.c
+index fa30959535..7b201d76a8 100644
+--- a/builtin/submodule--helper.c
++++ b/builtin/submodule--helper.c
+@@ -11,6 +11,7 @@
+ #include "parse-options.h"
+ #include "quote.h"
+ #include "pathspec.h"
++#include "preload-index.h"
+ #include "dir.h"
+ #include "setup.h"
+ #include "sparse-index.h"
+diff --git a/cache.h b/cache.h
+index 79daaa166b..b79802a463 100644
+--- a/cache.h
++++ b/cache.h
+@@ -318,9 +318,6 @@ extern struct index_state the_index;
+ 
+ /* Initialize and use the cache information */
+ struct lock_file;
+-void preload_index(struct index_state *index,
+-		   const struct pathspec *pathspec,
+-		   unsigned int refresh_flags);
+ int do_read_index(struct index_state *istate, const char *path,
+ 		  int must_exist); /* for testting only! */
+ int read_index_from(struct index_state *, const char *path,
+diff --git a/preload-index.c b/preload-index.c
+index 7a26b08c21..c26739debf 100644
+--- a/preload-index.c
++++ b/preload-index.c
+@@ -8,6 +8,7 @@
+ #include "fsmonitor.h"
+ #include "gettext.h"
+ #include "config.h"
++#include "preload-index.h"
+ #include "progress.h"
+ #include "thread-utils.h"
+ #include "repository.h"
+diff --git a/preload-index.h b/preload-index.h
+new file mode 100644
+index 0000000000..251b1ed88e
+--- /dev/null
++++ b/preload-index.h
+@@ -0,0 +1,15 @@
++#ifndef PRELOAD_INDEX_H
++#define PRELOAD_INDEX_H
++
++struct index_state;
++struct pathspec;
++struct repository;
++
++void preload_index(struct index_state *index,
++		   const struct pathspec *pathspec,
++		   unsigned int refresh_flags);
++int repo_read_index_preload(struct repository *,
++			    const struct pathspec *pathspec,
++			    unsigned refresh_flags);
++
++#endif /* PRELOAD_INDEX_H */
+diff --git a/read-cache.c b/read-cache.c
+index e1016ae031..3fad839fb6 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -27,6 +27,7 @@
+ #include "mem-pool.h"
+ #include "name-hash.h"
+ #include "object-name.h"
++#include "preload-index.h"
+ #include "resolve-undo.h"
+ #include "revision.h"
+ #include "run-command.h"
+diff --git a/repository.h b/repository.h
+index 74ae26635a..655a95026d 100644
+--- a/repository.h
++++ b/repository.h
+@@ -221,9 +221,6 @@ int repo_hold_locked_index(struct repository *repo,
+ 			   struct lock_file *lf,
+ 			   int flags);
+ 
+-int repo_read_index_preload(struct repository *,
+-			    const struct pathspec *pathspec,
+-			    unsigned refresh_flags);
+ int repo_read_index_unmerged(struct repository *);
+ /*
+  * Opportunistically update the index but do not complain if we can't.
+-- 
+2.39.3 (Apple Git-145)
+

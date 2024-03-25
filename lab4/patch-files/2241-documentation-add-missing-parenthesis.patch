@@ -1,0 +1,29 @@
+From 5fbcdb2082ab5e154133048547c8f60c418b875c Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:27 +0000
+Subject: [PATCH 2241/2871] documentation: add missing parenthesis
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-remote-fd.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-remote-fd.txt b/Documentation/git-remote-fd.txt
+index 94700b89be..1dd2648a79 100644
+--- a/Documentation/git-remote-fd.txt
++++ b/Documentation/git-remote-fd.txt
+@@ -19,7 +19,7 @@ If only <infd> is given, it is assumed to be a bidirectional socket connected
+ to a remote Git server (git-upload-pack, git-receive-pack, or
+ git-upload-archive). If both <infd> and <outfd> are given, they are assumed
+ to be pipes connected to a remote Git server (<infd> being the inbound pipe
+-and <outfd> being the outbound pipe.
++and <outfd> being the outbound pipe).
+ 
+ It is assumed that any handshaking procedures have already been completed
+ (such as sending service request for git://) before this helper is started.
+-- 
+2.39.3 (Apple Git-145)
+

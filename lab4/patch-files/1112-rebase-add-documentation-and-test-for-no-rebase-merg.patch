@@ -1,0 +1,89 @@
+From 7e5dcec3ca4dee6d8aedd64f4dba037949f36a67 Mon Sep 17 00:00:00 2001
+From: Alex Henrie <alexhenrie24@gmail.com>
+Date: Sat, 25 Mar 2023 21:06:34 -0600
+Subject: [PATCH 1112/2871] rebase: add documentation and test for
+ --no-rebase-merges
+
+As far as I can tell, --no-rebase-merges has always worked, but has
+never been documented. It is especially important to document it before
+a rebase.rebaseMerges option is introduced so that users know how to
+override the config option on the command line. It's also important to
+clarify that --rebase-merges without an argument is not the same as
+--no-rebase-merges and not passing --rebase-merges is not the same as
+passing --rebase-merges=no-rebase-cousins.
+
+A test case is necessary to make sure that --no-rebase-merges keeps
+working after its code is refactored in the following patches of this
+series. The test case is a little contrived: It's unlikely that a user
+would type both --rebase-merges and --no-rebase-merges at the same time.
+However, if an alias is defined which includes --rebase-merges, the user
+might decide to add --no-rebase-merges to countermand that part of the
+alias but leave alone other flags set by the alias.
+
+Signed-off-by: Alex Henrie <alexhenrie24@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt | 18 +++++++++++-------
+ t/t3430-rebase-merges.sh     | 10 ++++++++++
+ 2 files changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 9a295bcee4..4e57a87624 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -529,20 +529,24 @@ See also INCOMPATIBLE OPTIONS below.
+ 
+ -r::
+ --rebase-merges[=(rebase-cousins|no-rebase-cousins)]::
++--no-rebase-merges::
+ 	By default, a rebase will simply drop merge commits from the todo
+ 	list, and put the rebased commits into a single, linear branch.
+ 	With `--rebase-merges`, the rebase will instead try to preserve
+ 	the branching structure within the commits that are to be rebased,
+ 	by recreating the merge commits. Any resolved merge conflicts or
+ 	manual amendments in these merge commits will have to be
+-	resolved/re-applied manually.
++	resolved/re-applied manually. `--no-rebase-merges` can be used to
++	countermand a previous `--rebase-merges`.
+ +
+-By default, or when `no-rebase-cousins` was specified, commits which do not
+-have `<upstream>` as direct ancestor will keep their original branch point,
+-i.e. commits that would be excluded by linkgit:git-log[1]'s
+-`--ancestry-path` option will keep their original ancestry by default. If
+-the `rebase-cousins` mode is turned on, such commits are instead rebased
+-onto `<upstream>` (or `<onto>`, if specified).
++When rebasing merges, there are two modes: `rebase-cousins` and
++`no-rebase-cousins`. If the mode is not specified, it defaults to
++`no-rebase-cousins`. In `no-rebase-cousins` mode, commits which do not have
++`<upstream>` as direct ancestor will keep their original branch point, i.e.
++commits that would be excluded by linkgit:git-log[1]'s `--ancestry-path`
++option will keep their original ancestry by default. In `rebase-cousins` mode,
++such commits are instead rebased onto `<upstream>` (or `<onto>`, if
++specified).
+ +
+ It is currently only possible to recreate the merge commits using the
+ `ort` merge strategy; different merge strategies can be used only via
+diff --git a/t/t3430-rebase-merges.sh b/t/t3430-rebase-merges.sh
+index fa2a06c19f..d46d9545f2 100755
+--- a/t/t3430-rebase-merges.sh
++++ b/t/t3430-rebase-merges.sh
+@@ -250,6 +250,16 @@ test_expect_success 'with a branch tip that was cherry-picked already' '
+ 	EOF
+ '
+ 
++test_expect_success '--no-rebase-merges countermands --rebase-merges' '
++	git checkout -b no-rebase-merges E &&
++	git rebase --rebase-merges --no-rebase-merges C &&
++	test_cmp_graph C.. <<-\EOF
++	* B
++	* D
++	o C
++	EOF
++'
++
+ test_expect_success 'do not rebase cousins unless asked for' '
+ 	git checkout -b cousins main &&
+ 	before="$(git rev-parse --verify HEAD)" &&
+-- 
+2.39.3 (Apple Git-145)
+

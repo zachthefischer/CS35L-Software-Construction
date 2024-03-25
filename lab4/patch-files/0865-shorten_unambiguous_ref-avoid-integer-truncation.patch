@@ -1,0 +1,68 @@
+From dd5e4d39765f44492031f2d9319c24f0868bbe1a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 15 Feb 2023 10:16:14 -0500
+Subject: [PATCH 0865/2871] shorten_unambiguous_ref(): avoid integer truncation
+
+We parse the shortened name "foo" out of the full refname
+"refs/heads/foo", and then assign the result of strlen(short_name) to an
+int, which may truncate or wrap to negative.
+
+In practice, this should never happen, as it requires a 2GB refname. And
+even somebody trying to do something malicious should at worst end up
+with a confused answer (we use the size only to feed back as a
+placeholder length to strbuf_addf() to see if there are any collisions
+in the lookup rules).
+
+And it may even be impossible to trigger this, as we parse the string
+with sscanf(), and stdio formatting functions are not known for handling
+large strings well. I didn't test, but I wouldn't be surprised if
+sscanf() on many platforms simply reports no match here.
+
+But even if it is not a problem in practice so far, it is worth fixing
+for two reasons:
+
+  1. We'll shortly be replacing the sscanf() call with a real parser
+     which will handle arbitrary-sized strings.
+
+  2. Assigning strlen() to an int is an anti-pattern that requires
+     people to look twice when auditing for real overflow problems.
+
+So we'll make this a size_t. Unfortunately we still have to cast to int
+eventually for the strbuf_addf() call, but at least we can localize the
+cast there, and check that it will be valid. I used our new cast helper
+here, which will just bail completely. That should be OK, as anybody
+with a 2GB refname is up to no good, but if we really wanted to, we
+could detect it manually and just refuse to shorten the refname.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/refs.c b/refs.c
+index 2c7e88b190..40d5edfce6 100644
+--- a/refs.c
++++ b/refs.c
+@@ -1356,7 +1356,7 @@ char *refs_shorten_unambiguous_ref(struct ref_store *refs,
+ 	for (i = nr_rules - 1; i > 0 ; --i) {
+ 		int j;
+ 		int rules_to_fail = i;
+-		int short_name_len;
++		size_t short_name_len;
+ 
+ 		if (1 != sscanf(refname, scanf_fmts[i], short_name))
+ 			continue;
+@@ -1388,7 +1388,8 @@ char *refs_shorten_unambiguous_ref(struct ref_store *refs,
+ 			 */
+ 			strbuf_reset(&resolved_buf);
+ 			strbuf_addf(&resolved_buf, rule,
+-				    short_name_len, short_name);
++				    cast_size_t_to_int(short_name_len),
++				    short_name);
+ 			if (refs_ref_exists(refs, resolved_buf.buf))
+ 				break;
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

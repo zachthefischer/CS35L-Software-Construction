@@ -1,0 +1,230 @@
+From 4fe42f326e10a547dc65dfe9e5ceaeeee02b98db Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 12 May 2023 21:34:42 +0000
+Subject: [PATCH 1437/2871] pack-refs: teach pack-refs --include option
+
+Allow users to be more selective over which refs to pack by adding an
+--include option to git-pack-refs.
+
+The existing options allow some measure of selectivity. By default
+git-pack-refs packs all tags. --all can be used to include all refs,
+and the previous commit added the ability to exclude certain refs with
+--exclude.
+
+While these knobs give the user some selection over which refs to pack,
+it could be useful to give more control. For instance, a repository may
+have a set of branches that are rarely updated and would benefit from
+being packed. --include would allow the user to easily include a set of
+branches to be packed while leaving everything else unpacked.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-pack-refs.txt | 14 +++++++++++++-
+ builtin/pack-refs.c             | 15 +++++++++++++--
+ refs.h                          |  1 +
+ refs/files-backend.c            | 18 ++++++++++--------
+ t/helper/test-ref-store.c       | 10 +++++++++-
+ t/t3210-pack-refs.sh            | 21 +++++++++++++++++++++
+ 6 files changed, 67 insertions(+), 12 deletions(-)
+
+diff --git a/Documentation/git-pack-refs.txt b/Documentation/git-pack-refs.txt
+index 546aa122df..284956acb3 100644
+--- a/Documentation/git-pack-refs.txt
++++ b/Documentation/git-pack-refs.txt
+@@ -8,7 +8,7 @@ git-pack-refs - Pack heads and tags for efficient repository access
+ SYNOPSIS
+ --------
+ [verse]
+-'git pack-refs' [--all] [--no-prune] [--exclude <pattern>]
++'git pack-refs' [--all] [--no-prune] [--include <pattern>] [--exclude <pattern>]
+ 
+ DESCRIPTION
+ -----------
+@@ -60,6 +60,15 @@ with many branches of historical interests.
+ The command usually removes loose refs under `$GIT_DIR/refs`
+ hierarchy after packing them.  This option tells it not to.
+ 
++--include <pattern>::
++
++Pack refs based on a `glob(7)` pattern. Repetitions of this option
++accumulate inclusion patterns. If a ref is both included in `--include` and
++`--exclude`, `--exclude` takes precedence. Using `--include` will preclude all
++tags from being included by default. Symbolic refs and broken refs will never
++be packed. When used with `--all`, it will be a noop. Use `--no-include` to clear
++and reset the list of patterns.
++
+ --exclude <pattern>::
+ 
+ Do not pack refs matching the given `glob(7)` pattern. Repetitions of this option
+@@ -70,6 +79,9 @@ unpack it.
+ When used with `--all`, pack only loose refs which do not match any of
+ the provided `--exclude` patterns.
+ 
++When used with `--include`, refs provided to `--include`, minus refs that are
++provided to `--exclude` will be packed.
++
+ 
+ BUGS
+ ----
+diff --git a/builtin/pack-refs.c b/builtin/pack-refs.c
+index 1d1a64fe38..bcf383cac9 100644
+--- a/builtin/pack-refs.c
++++ b/builtin/pack-refs.c
+@@ -7,7 +7,7 @@
+ #include "revision.h"
+ 
+ static char const * const pack_refs_usage[] = {
+-	N_("git pack-refs [--all] [--no-prune] [--exclude <pattern>]"),
++	N_("git pack-refs [--all] [--no-prune] [--include <pattern>] [--exclude <pattern>]"),
+ 	NULL
+ };
+ 
+@@ -15,13 +15,18 @@ int cmd_pack_refs(int argc, const char **argv, const char *prefix)
+ {
+ 	unsigned int flags = PACK_REFS_PRUNE;
+ 	static struct ref_exclusions excludes = REF_EXCLUSIONS_INIT;
+-	struct pack_refs_opts pack_refs_opts = {.exclusions = &excludes, .flags = flags};
++	static struct string_list included_refs = STRING_LIST_INIT_NODUP;
++	struct pack_refs_opts pack_refs_opts = { .exclusions = &excludes,
++						 .includes = &included_refs,
++						 .flags = flags };
+ 	static struct string_list option_excluded_refs = STRING_LIST_INIT_NODUP;
+ 	struct string_list_item *item;
+ 
+ 	struct option opts[] = {
+ 		OPT_BIT(0, "all",   &pack_refs_opts.flags, N_("pack everything"), PACK_REFS_ALL),
+ 		OPT_BIT(0, "prune", &pack_refs_opts.flags, N_("prune loose refs (default)"), PACK_REFS_PRUNE),
++		OPT_STRING_LIST(0, "include", pack_refs_opts.includes, N_("pattern"),
++			N_("references to include")),
+ 		OPT_STRING_LIST(0, "exclude", &option_excluded_refs, N_("pattern"),
+ 			N_("references to exclude")),
+ 		OPT_END(),
+@@ -33,5 +38,11 @@ int cmd_pack_refs(int argc, const char **argv, const char *prefix)
+ 	for_each_string_list_item(item, &option_excluded_refs)
+ 		add_ref_exclusion(pack_refs_opts.exclusions, item->string);
+ 
++	if (pack_refs_opts.flags & PACK_REFS_ALL)
++		string_list_append(pack_refs_opts.includes, "*");
++
++	if (!pack_refs_opts.includes->nr)
++		string_list_append(pack_refs_opts.includes, "refs/tags/*");
++
+ 	return refs_pack_refs(get_main_ref_store(the_repository), &pack_refs_opts);
+ }
+diff --git a/refs.h b/refs.h
+index 46020bd335..933fdebe58 100644
+--- a/refs.h
++++ b/refs.h
+@@ -66,6 +66,7 @@ struct worktree;
+ struct pack_refs_opts {
+ 	unsigned int flags;
+ 	struct ref_exclusions *exclusions;
++	struct string_list *includes;
+ };
+ 
+ const char *refs_resolve_ref_unsafe(struct ref_store *refs,
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index 8620e01362..fcaf842ed4 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -1176,18 +1176,13 @@ static int should_pack_ref(const char *refname,
+ 			   const struct object_id *oid, unsigned int ref_flags,
+ 			   struct pack_refs_opts *opts)
+ {
++	struct string_list_item *item;
++
+ 	/* Do not pack per-worktree refs: */
+ 	if (parse_worktree_ref(refname, NULL, NULL, NULL) !=
+ 	    REF_WORKTREE_SHARED)
+ 		return 0;
+ 
+-	if (ref_excluded(opts->exclusions, refname))
+-		return 0;
+-
+-	/* Do not pack non-tags unless PACK_REFS_ALL is set: */
+-	if (!(opts->flags & PACK_REFS_ALL) && !starts_with(refname, "refs/tags/"))
+-		return 0;
+-
+ 	/* Do not pack symbolic refs: */
+ 	if (ref_flags & REF_ISSYMREF)
+ 		return 0;
+@@ -1196,7 +1191,14 @@ static int should_pack_ref(const char *refname,
+ 	if (!ref_resolves_to_object(refname, the_repository, oid, ref_flags))
+ 		return 0;
+ 
+-	return 1;
++	if (ref_excluded(opts->exclusions, refname))
++		return 0;
++
++	for_each_string_list_item(item, opts->includes)
++		if (!wildmatch(item->string, refname, 0))
++			return 1;
++
++	return 0;
+ }
+ 
+ static int files_pack_refs(struct ref_store *ref_store,
+diff --git a/t/helper/test-ref-store.c b/t/helper/test-ref-store.c
+index de4197708d..a6977b5e83 100644
+--- a/t/helper/test-ref-store.c
++++ b/t/helper/test-ref-store.c
+@@ -5,6 +5,7 @@
+ #include "worktree.h"
+ #include "object-store.h"
+ #include "repository.h"
++#include "revision.h"
+ 
+ struct flag_definition {
+ 	const char *name;
+@@ -116,7 +117,14 @@ static struct flag_definition pack_flags[] = { FLAG_DEF(PACK_REFS_PRUNE),
+ static int cmd_pack_refs(struct ref_store *refs, const char **argv)
+ {
+ 	unsigned int flags = arg_flags(*argv++, "flags", pack_flags);
+-	struct pack_refs_opts pack_opts = { .flags = flags };
++	static struct ref_exclusions exclusions = REF_EXCLUSIONS_INIT;
++	static struct string_list included_refs = STRING_LIST_INIT_NODUP;
++	struct pack_refs_opts pack_opts = { .flags = flags,
++					    .exclusions = &exclusions,
++					    .includes = &included_refs };
++
++	if (pack_opts.flags & PACK_REFS_ALL)
++		string_list_append(pack_opts.includes, "*");
+ 
+ 	return refs_pack_refs(refs, &pack_opts);
+ }
+diff --git a/t/t3210-pack-refs.sh b/t/t3210-pack-refs.sh
+index 925b90cd3b..9f399d2f75 100755
+--- a/t/t3210-pack-refs.sh
++++ b/t/t3210-pack-refs.sh
+@@ -124,6 +124,27 @@ test_expect_success 'test --no-exclude refs clears excluded refs' '
+ 	! test -f .git/refs/heads/dont_pack3 &&
+ 	! test -f .git/refs/heads/dont_pack4'
+ 
++test_expect_success 'test only included refs are packed' '
++	git branch pack_this1 &&
++	git branch pack_this2 &&
++	git tag dont_pack5 &&
++	git pack-refs --include "refs/heads/pack_this*" &&
++	test -f .git/refs/tags/dont_pack5 &&
++	! test -f .git/refs/heads/pack_this1 &&
++	! test -f .git/refs/heads/pack_this2'
++
++test_expect_success 'test --no-include refs clears included refs' '
++	git branch pack1 &&
++	git branch pack2 &&
++	git pack-refs --include "refs/heads/pack*" --no-include &&
++	test -f .git/refs/heads/pack1 &&
++	test -f .git/refs/heads/pack2'
++
++test_expect_success 'test --exclude takes precedence over --include' '
++	git branch dont_pack5 &&
++	git pack-refs --include "refs/heads/pack*" --exclude "refs/heads/pack*" &&
++	test -f .git/refs/heads/dont_pack5'
++
+ test_expect_success \
+ 	'see if up-to-date packed refs are preserved' \
+ 	'git branch q &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,81 @@
+From 57e2c6ebbe7108b35ba30184dcbcb6c34c929ad8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 14 Dec 2022 17:43:27 +0900
+Subject: [PATCH 0564/2871] Start the 2.40 cycle
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 37 +++++++++++++++++++++++++++++++
+ GIT-VERSION-GEN                   |  2 +-
+ RelNotes                          |  2 +-
+ 3 files changed, 39 insertions(+), 2 deletions(-)
+ create mode 100644 Documentation/RelNotes/2.40.0.txt
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+new file mode 100644
+index 0000000000..669a03518b
+--- /dev/null
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -0,0 +1,37 @@
++Git v2.40 Release Notes
++=======================
++
++UI, Workflows & Features
++
++ * "merge-tree" learns a new `--merge-base` option.
++
++ * "git jump" (in contrib/) learned to present the "quickfix list" to
++   its standard output (instead of letting it consumed by the editor
++   it invokes), and learned to also drive emacs/emacsclient.
++
++ * "git var UNKNOWN_VARIABLE" and "git var VARIABLE" with the variable
++   given an empty value used to behave identically.  Now the latter
++   just gives an empty output, while the former still gives an error
++   message.
++
++
++Performance, Internal Implementation, Development Support etc.
++
++ * `git bisect` becomes a builtin.
++
++ * The pack-bitmap machinery is taught to log the paths of redundant
++   bitmap(s) to trace2 instead of stderr.
++
++
++
++Fixes since v2.39
++-----------------
++
++ * Various leak fixes.
++   (merge ac95f5d36a ab/various-leak-fixes later to maint).
++
++ * Fix a bug where `pack-objects` would not respect multiple `--filter`
++   arguments when invoked directly.
++   (merge d4f7036887 rs/multi-filter-args later to maint).
++
++ * Other code cleanup, docfix, build fix, etc.
+diff --git a/GIT-VERSION-GEN b/GIT-VERSION-GEN
+index b2580ab851..c4c2d3e022 100755
+--- a/GIT-VERSION-GEN
++++ b/GIT-VERSION-GEN
+@@ -1,7 +1,7 @@
+ #!/bin/sh
+ 
+ GVF=GIT-VERSION-FILE
+-DEF_VER=v2.39.0
++DEF_VER=v2.39.GIT
+ 
+ LF='
+ '
+diff --git a/RelNotes b/RelNotes
+index 758368388a..47807bf257 120000
+--- a/RelNotes
++++ b/RelNotes
+@@ -1 +1 @@
+-Documentation/RelNotes/2.39.0.txt
+\ No newline at end of file
++Documentation/RelNotes/2.40.0.txt
+\ No newline at end of file
+-- 
+2.39.3 (Apple Git-145)
+

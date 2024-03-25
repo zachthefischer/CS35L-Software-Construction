@@ -1,0 +1,32 @@
+From 0050f8e401a70b1eda9e7358b04e6d6ef3d64ab1 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 9 Aug 2023 16:54:47 +0000
+Subject: [PATCH 1915/2871] git maintenance: avoid console window in scheduled
+ tasks on Windows
+
+We just introduced a helper to avoid showing a console window when the
+scheduled task runs `git.exe`. Let's actually use it.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Derrick Stolee <dstolee@microsoft.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index f3942188a6..fa6e52ddde 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -2068,7 +2068,7 @@ static int schtasks_schedule_task(const char *exec_path, enum schedule_priority
+ 	      "</Settings>\n"
+ 	      "<Actions Context=\"Author\">\n"
+ 	      "<Exec>\n"
+-	      "<Command>\"%s\\git.exe\"</Command>\n"
++	      "<Command>\"%s\\headless-git.exe\"</Command>\n"
+ 	      "<Arguments>--exec-path=\"%s\" for-each-repo --config=maintenance.repo maintenance run --schedule=%s</Arguments>\n"
+ 	      "</Exec>\n"
+ 	      "</Actions>\n"
+-- 
+2.39.3 (Apple Git-145)
+

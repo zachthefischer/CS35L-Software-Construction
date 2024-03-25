@@ -1,0 +1,46 @@
+From 615993d092269d62473b93fa29c944ca4e3bc18f Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Nov 2023 11:01:28 +0100
+Subject: [PATCH 2406/2871] Makefile: stop using `test -o` when unlinking
+ duplicate executables
+
+When building executables we may end up with both `foo` and `foo.exe` in
+the project's root directory. This can cause issues on Cygwin, which is
+why we unlink the `foo` binary (see 6fc301bbf68 (Makefile: remove $foo
+when $foo.exe is built/installed., 2007-01-10)). This step is skipped if
+either:
+
+    - `foo` is a directory, which can happen when building Git on
+      Windows via MSVC (see ade2ca0ca9f (Do not try to remove
+      directories when removing old links, 2009-10-27)).
+
+    - `foo` is a hardlink to `foo.exe`, which can happen on Cygwin (see
+      0d768f7c8f1 (Makefile: building git in cygwin 1.7.0, 2008-08-15)).
+
+These two conditions are currently chained together via `test -o`, which
+is discouraged by our code style guide. Convert the recipe to instead
+use an `if` statement with `&&`'d conditions, which both matches our
+style guide and is easier to ready.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 03adcb5a48..1094a55771 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2342,7 +2342,7 @@ profile-fast: profile-clean
+ 
+ all:: $(ALL_COMMANDS_TO_INSTALL) $(SCRIPT_LIB) $(OTHER_PROGRAMS) GIT-BUILD-OPTIONS
+ ifneq (,$X)
+-	$(QUIET_BUILT_IN)$(foreach p,$(patsubst %$X,%,$(filter %$X,$(ALL_COMMANDS_TO_INSTALL) $(OTHER_PROGRAMS))), test -d '$p' -o '$p' -ef '$p$X' || $(RM) '$p';)
++	$(QUIET_BUILT_IN)$(foreach p,$(patsubst %$X,%,$(filter %$X,$(ALL_COMMANDS_TO_INSTALL) $(OTHER_PROGRAMS))), if test ! -d '$p' && test ! '$p' -ef '$p$X'; then $(RM) '$p'; fi;)
+ endif
+ 
+ all::
+-- 
+2.39.3 (Apple Git-145)
+

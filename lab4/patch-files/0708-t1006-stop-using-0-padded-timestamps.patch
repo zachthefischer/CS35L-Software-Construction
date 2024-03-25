@@ -1,0 +1,49 @@
+From 61cc4be7ec21f0217abacc396287ca12c68e923d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 18 Jan 2023 15:35:52 -0500
+Subject: [PATCH 0708/2871] t1006: stop using 0-padded timestamps
+
+The fake objects in t1006 use dummy timestamps like "0000000000 +0000".
+While this does make them look more like normal timestamps (which,
+unless it is 1970, have many digits), it actually violates our fsck
+checks, which complain about zero-padded timestamps.
+
+This doesn't currently break anything, but let's future-proof our tests
+against a version of hash-object which is a little more careful about
+its input. We don't actually care about the exact values here (and in
+fact, the helper functions in this script end up removing the timestamps
+anyway, so we don't even have to adjust other parts of the tests).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1006-cat-file.sh | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/t/t1006-cat-file.sh b/t/t1006-cat-file.sh
+index 23b8942edb..2d875b17d8 100755
+--- a/t/t1006-cat-file.sh
++++ b/t/t1006-cat-file.sh
+@@ -292,8 +292,8 @@ commit_message="Initial commit"
+ commit_sha1=$(echo_without_newline "$commit_message" | git commit-tree $tree_sha1)
+ commit_size=$(($(test_oid hexsz) + 137))
+ commit_content="tree $tree_sha1
+-author $GIT_AUTHOR_NAME <$GIT_AUTHOR_EMAIL> 0000000000 +0000
+-committer $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 0000000000 +0000
++author $GIT_AUTHOR_NAME <$GIT_AUTHOR_EMAIL> 0 +0000
++committer $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 0 +0000
+ 
+ $commit_message"
+ 
+@@ -304,7 +304,7 @@ type blob
+ tag hellotag
+ tagger $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL>"
+ tag_description="This is a tag"
+-tag_content="$tag_header_without_timestamp 0000000000 +0000
++tag_content="$tag_header_without_timestamp 0 +0000
+ 
+ $tag_description"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

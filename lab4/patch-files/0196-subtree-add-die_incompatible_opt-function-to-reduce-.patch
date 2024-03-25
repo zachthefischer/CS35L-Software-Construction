@@ -1,0 +1,113 @@
+From 2e94339fdc3122fd2f92e865105523bc3866a65f Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Fri, 21 Oct 2022 15:13:33 +0000
+Subject: [PATCH 0196/2871] subtree: add 'die_incompatible_opt' function to
+ reduce duplication
+
+9a3e3ca2ba (subtree: be stricter about validating flags, 2021-04-27)
+added validation code to check that options given to 'git subtree <cmd>'
+made sense with the command being used.
+
+Refactor these checks by adding a 'die_incompatible_opt' function to
+reduce code duplication.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/git-subtree.sh | 32 ++++++++++++++++++++------------
+ 1 file changed, 20 insertions(+), 12 deletions(-)
+
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index 49ef493ef9..f5eab198c8 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -102,6 +102,14 @@ assert () {
+ 	fi
+ }
+ 
++# Usage: die_incompatible_opt OPTION COMMAND
++die_incompatible_opt () {
++	assert test "$#" = 2
++	opt="$1"
++	arg_command="$2"
++	die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++}
++
+ main () {
+ 	if test $# -eq 0
+ 	then
+@@ -176,16 +184,16 @@ main () {
+ 			arg_debug=1
+ 			;;
+ 		--annotate)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_split_annotate="$1"
+ 			shift
+ 			;;
+ 		--no-annotate)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_split_annotate=
+ 			;;
+ 		-b)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_split_branch="$1"
+ 			shift
+ 			;;
+@@ -194,7 +202,7 @@ main () {
+ 			shift
+ 			;;
+ 		-m)
+-			test -n "$allow_addmerge" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_addmerge" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_addmerge_message="$1"
+ 			shift
+ 			;;
+@@ -202,34 +210,34 @@ main () {
+ 			arg_prefix=
+ 			;;
+ 		--onto)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_split_onto="$1"
+ 			shift
+ 			;;
+ 		--no-onto)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_split_onto=
+ 			;;
+ 		--rejoin)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			;;
+ 		--no-rejoin)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			;;
+ 		--ignore-joins)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_split_ignore_joins=1
+ 			;;
+ 		--no-ignore-joins)
+-			test -n "$allow_split" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_split" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_split_ignore_joins=
+ 			;;
+ 		--squash)
+-			test -n "$allow_addmerge" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_addmerge" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_addmerge_squash=1
+ 			;;
+ 		--no-squash)
+-			test -n "$allow_addmerge" || die "The '$opt' flag does not make sense with 'git subtree $arg_command'."
++			test -n "$allow_addmerge" || die_incompatible_opt "$opt" "$arg_command"
+ 			arg_addmerge_squash=
+ 			;;
+ 		--)
+-- 
+2.39.3 (Apple Git-145)
+

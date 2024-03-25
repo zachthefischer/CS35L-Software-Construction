@@ -1,0 +1,77 @@
+From 89aaab11a34d9b4a7421fbd10a0e399135b2dc2c Mon Sep 17 00:00:00 2001
+From: Anh Le <anh@canva.com>
+Date: Thu, 3 Nov 2022 23:05:00 +0000
+Subject: [PATCH 0305/2871] index: add trace2 region for clear skip worktree
+
+When using sparse checkout, clear_skip_worktree_from_present_files() must
+enumerate index entries to find ones with the SKIP_WORKTREE bit to
+determine whether those index entries exist on disk (in which case their
+SKIP_WORKTREE bit should be removed).
+
+In a large repository, this may take considerable time depending on the
+size of the index.
+
+Add a trace2 region to surface this information, keeping a count of how
+many paths have been checked. Separately, keep counts after a full index is
+materialized.
+
+Signed-off-by: Anh Le <anh@canva.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ sparse-index.c | 28 ++++++++++++++++++++++------
+ 1 file changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/sparse-index.c b/sparse-index.c
+index e4a54ce194..8713a15611 100644
+--- a/sparse-index.c
++++ b/sparse-index.c
+@@ -493,24 +493,40 @@ void clear_skip_worktree_from_present_files(struct index_state *istate)
+ 	int dir_found = 1;
+ 
+ 	int i;
++	int path_count[2] = {0, 0};
++	int restarted = 0;
+ 
+ 	if (!core_apply_sparse_checkout ||
+ 	    sparse_expect_files_outside_of_patterns)
+ 		return;
+ 
++	trace2_region_enter("index", "clear_skip_worktree_from_present_files",
++			    istate->repo);
+ restart:
+ 	for (i = 0; i < istate->cache_nr; i++) {
+ 		struct cache_entry *ce = istate->cache[i];
+ 
+-		if (ce_skip_worktree(ce) &&
+-		    path_found(ce->name, &last_dirname, &dir_len, &dir_found)) {
+-			if (S_ISSPARSEDIR(ce->ce_mode)) {
+-				ensure_full_index(istate);
+-				goto restart;
++		if (ce_skip_worktree(ce)) {
++			path_count[restarted]++;
++			if (path_found(ce->name, &last_dirname, &dir_len, &dir_found)) {
++				if (S_ISSPARSEDIR(ce->ce_mode)) {
++					ensure_full_index(istate);
++					restarted = 1;
++					goto restart;
++				}
++				ce->ce_flags &= ~CE_SKIP_WORKTREE;
+ 			}
+-			ce->ce_flags &= ~CE_SKIP_WORKTREE;
+ 		}
+ 	}
++
++	if (path_count[0])
++		trace2_data_intmax("index", istate->repo,
++				   "sparse_path_count", path_count[0]);
++	if (restarted)
++		trace2_data_intmax("index", istate->repo,
++				   "sparse_path_count_full", path_count[1]);
++	trace2_region_leave("index", "clear_skip_worktree_from_present_files",
++			    istate->repo);
+ }
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

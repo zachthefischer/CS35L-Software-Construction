@@ -1,0 +1,64 @@
+From 1686de55facd0225739290e6afb51e3600351883 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 30 Mar 2023 15:27:49 -0400
+Subject: [PATCH 1180/2871] tests: replace chainlint subshell with a function
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+To test that we don't break the &&-chain, test-lib.sh does something
+like:
+
+   (exit 117) && $test_commands
+
+and checks that the result is exit code 117. We don't care what that
+initial command is, as long as it exits with a unique code. Using "exit"
+works and is simple, but is a bit expensive since it requires a subshell
+(to avoid exiting the whole script!). This isn't usually very
+noticeable, but it can add up for scripts which have a large number of
+tests.
+
+Using "return" naively won't work here, because we'd return from the
+function eval-ing the snippet (and it wouldn't find &&-chain breakages).
+But if we further push that into its own function, it does exactly what
+we want, without extra subshell overhead.
+
+According to hyperfine, this produces a measurable improvement when
+running t3070 (which has 1800 tests, all of them quite short):
+
+  'HEAD' ran
+    1.09 ± 0.01 times faster than 'HEAD~1'
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib.sh | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 0978956637..cfcbd899c5 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -1086,6 +1086,10 @@ test_eval_ () {
+ 	return $test_eval_ret_
+ }
+ 
++fail_117 () {
++	return 117
++}
++
+ test_run_ () {
+ 	test_cleanup=:
+ 	expecting_failure=$2
+@@ -1097,7 +1101,7 @@ test_run_ () {
+ 		trace=
+ 		# 117 is magic because it is unlikely to match the exit
+ 		# code of other programs
+-		if test "OK-117" != "$(test_eval_ "(exit 117) && $1${LF}${LF}echo OK-\$?" 3>&1)"
++		if test "OK-117" != "$(test_eval_ "fail_117 && $1${LF}${LF}echo OK-\$?" 3>&1)"
+ 		then
+ 			BUG "broken &&-chain or run-away HERE-DOC: $1"
+ 		fi
+-- 
+2.39.3 (Apple Git-145)
+

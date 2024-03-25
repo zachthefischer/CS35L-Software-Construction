@@ -1,0 +1,52 @@
+From acd6f0d973e6cf27188d80ad3e8e6876bf0e3da9 Mon Sep 17 00:00:00 2001
+From: Jonathan Tan <jonathantanmy@google.com>
+Date: Wed, 14 Dec 2022 11:17:40 -0800
+Subject: [PATCH 0565/2871] object-file: remove OBJECT_INFO_IGNORE_LOOSE
+
+Its last user was removed in 97b2fa08b6 (fetch-pack: drop
+custom loose object cache, 2018-11-12), so we can remove it.
+
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Jonathan Tan <jonathantanmy@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-file.c  | 3 ---
+ object-store.h | 4 +---
+ 2 files changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/object-file.c b/object-file.c
+index 26290554bb..cf724bc19b 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -1575,9 +1575,6 @@ static int do_oid_object_info_extended(struct repository *r,
+ 		if (find_pack_entry(r, real, &e))
+ 			break;
+ 
+-		if (flags & OBJECT_INFO_IGNORE_LOOSE)
+-			return -1;
+-
+ 		/* Most likely it's a loose object. */
+ 		if (!loose_object_info(r, real, oi, flags))
+ 			return 0;
+diff --git a/object-store.h b/object-store.h
+index 1be57abaf1..b1ec0bde82 100644
+--- a/object-store.h
++++ b/object-store.h
+@@ -434,13 +434,11 @@ struct object_info {
+ #define OBJECT_INFO_ALLOW_UNKNOWN_TYPE 2
+ /* Do not retry packed storage after checking packed and loose storage */
+ #define OBJECT_INFO_QUICK 8
+-/* Do not check loose object */
+-#define OBJECT_INFO_IGNORE_LOOSE 16
+ /*
+  * Do not attempt to fetch the object if missing (even if fetch_is_missing is
+  * nonzero).
+  */
+-#define OBJECT_INFO_SKIP_FETCH_OBJECT 32
++#define OBJECT_INFO_SKIP_FETCH_OBJECT 16
+ /*
+  * This is meant for bulk prefetching of missing blobs in a partial
+  * clone. Implies OBJECT_INFO_SKIP_FETCH_OBJECT and OBJECT_INFO_QUICK
+-- 
+2.39.3 (Apple Git-145)
+

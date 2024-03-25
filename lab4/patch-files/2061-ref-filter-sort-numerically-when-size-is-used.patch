@@ -1,0 +1,156 @@
+From 6d79cd8474b7bb4979f2a7544fd736bed190261a Mon Sep 17 00:00:00 2001
+From: Kousik Sanagavarapu <five231003@gmail.com>
+Date: Sat, 2 Sep 2023 14:30:39 +0530
+Subject: [PATCH 2061/2871] ref-filter: sort numerically when ":size" is used
+
+Atoms like "raw" and "contents" have a ":size" option which can be used
+to know the size of the data. Since these atoms have the cmp_type
+FIELD_STR, they are sorted alphabetically from 'a' to 'z' and '0' to
+'9'. Meaning, even when the ":size" option is used and what we
+ultimatlely have is numbers, we still sort alphabetically.
+
+For example, consider the the following case in a repo
+
+refname			contents:size		raw:size
+=======			=============		========
+refs/heads/branch1	1130			1210
+refs/heads/master	300			410
+refs/tags/v1.0		140			260
+
+Sorting with "--format="%(refname) %(contents:size) --sort=contents:size"
+would give
+
+refs/heads/branch1 1130
+refs/tags/v1.0.0 140
+refs/heads/master 300
+
+which is an alphabetic sort, while what one might really expect is
+
+refs/tags/v1.0.0 140
+refs/heads/master 300
+refs/heads/branch1 1130
+
+which is a numeric sort (that is, a "$ sort -n file" as opposed to a
+"$ sort file", where "file" contains only the "contents:size" or
+"raw:size" info, each of which is on a newline).
+
+Same is the case with "--sort=raw:size".
+
+So, sort numerically whenever the sort is done with "contents:size" or
+"raw:size" and do it the normal alphabetic way when "contents" or "raw"
+are used with some other option (they are FIELD_STR anyways).
+
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Kousik Sanagavarapu <five231003@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c            | 21 +++++++++++++--------
+ t/t6300-for-each-ref.sh | 15 +++++++++++++--
+ 2 files changed, 26 insertions(+), 10 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index 1bfaf20fbf..9dbc4f71bd 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -582,9 +582,10 @@ static int contents_atom_parser(struct ref_format *format, struct used_atom *ato
+ 		atom->u.contents.option = C_BARE;
+ 	else if (!strcmp(arg, "body"))
+ 		atom->u.contents.option = C_BODY;
+-	else if (!strcmp(arg, "size"))
++	else if (!strcmp(arg, "size")) {
++		atom->type = FIELD_ULONG;
+ 		atom->u.contents.option = C_LENGTH;
+-	else if (!strcmp(arg, "signature"))
++	} else if (!strcmp(arg, "signature"))
+ 		atom->u.contents.option = C_SIG;
+ 	else if (!strcmp(arg, "subject"))
+ 		atom->u.contents.option = C_SUB;
+@@ -690,9 +691,10 @@ static int raw_atom_parser(struct ref_format *format UNUSED,
+ {
+ 	if (!arg)
+ 		atom->u.raw_data.option = RAW_BARE;
+-	else if (!strcmp(arg, "size"))
++	else if (!strcmp(arg, "size")) {
++		atom->type = FIELD_ULONG;
+ 		atom->u.raw_data.option = RAW_LENGTH;
+-	else
++	} else
+ 		return err_bad_arg(err, "raw", arg);
+ 	return 0;
+ }
+@@ -1857,7 +1859,8 @@ static void grab_sub_body_contents(struct atom_value *val, int deref, struct exp
+ 				v->s = xmemdupz(buf, buf_size);
+ 				v->s_size = buf_size;
+ 			} else if (atom->u.raw_data.option == RAW_LENGTH) {
+-				v->s = xstrfmt("%"PRIuMAX, (uintmax_t)buf_size);
++				v->value = buf_size;
++				v->s = xstrfmt("%"PRIuMAX, v->value);
+ 			}
+ 			continue;
+ 		}
+@@ -1883,9 +1886,10 @@ static void grab_sub_body_contents(struct atom_value *val, int deref, struct exp
+ 			v->s = strbuf_detach(&sb, NULL);
+ 		} else if (atom->u.contents.option == C_BODY_DEP)
+ 			v->s = xmemdupz(bodypos, bodylen);
+-		else if (atom->u.contents.option == C_LENGTH)
+-			v->s = xstrfmt("%"PRIuMAX, (uintmax_t)strlen(subpos));
+-		else if (atom->u.contents.option == C_BODY)
++		else if (atom->u.contents.option == C_LENGTH) {
++			v->value = strlen(subpos);
++			v->s = xstrfmt("%"PRIuMAX, v->value);
++		} else if (atom->u.contents.option == C_BODY)
+ 			v->s = xmemdupz(bodypos, nonsiglen);
+ 		else if (atom->u.contents.option == C_SIG)
+ 			v->s = xmemdupz(sigpos, siglen);
+@@ -2265,6 +2269,7 @@ static int populate_value(struct ref_array_item *ref, struct strbuf *err)
+ 
+ 		v->s_size = ATOM_SIZE_UNSPECIFIED;
+ 		v->handler = append_atom;
++		v->value = 0;
+ 		v->atom = atom;
+ 
+ 		if (*name == '*') {
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 5b434ab451..1b84bf66e0 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1017,16 +1017,16 @@ test_expect_success 'Verify sorts with raw' '
+ test_expect_success 'Verify sorts with raw:size' '
+ 	cat >expected <<-EOF &&
+ 	refs/myblobs/blob8
+-	refs/myblobs/first
+ 	refs/myblobs/blob7
+-	refs/heads/main
+ 	refs/myblobs/blob4
+ 	refs/myblobs/blob1
+ 	refs/myblobs/blob2
+ 	refs/myblobs/blob3
+ 	refs/myblobs/blob5
+ 	refs/myblobs/blob6
++	refs/myblobs/first
+ 	refs/mytrees/first
++	refs/heads/main
+ 	EOF
+ 	git for-each-ref --format="%(refname)" --sort=raw:size \
+ 		refs/heads/main refs/myblobs/ refs/mytrees/first >actual &&
+@@ -1138,6 +1138,17 @@ test_expect_success 'for-each-ref --format compare with cat-file --batch' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'verify sorts with contents:size' '
++	cat >expect <<-\EOF &&
++	refs/heads/main
++	refs/heads/newtag
++	refs/heads/ambiguous
++	EOF
++	git for-each-ref --format="%(refname)" \
++		--sort=contents:size refs/heads/ >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'set up multiple-sort tags' '
+ 	for when in 100000 200000
+ 	do
+-- 
+2.39.3 (Apple Git-145)
+

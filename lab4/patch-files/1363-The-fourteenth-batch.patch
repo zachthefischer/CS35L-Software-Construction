@@ -1,0 +1,29 @@
+From f85cd430b12b0d3e4f1a30ef3239a1b73d5f6331 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 27 Apr 2023 16:00:32 -0700
+Subject: [PATCH 1363/2871] The fourteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.41.0.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.41.0.txt b/Documentation/RelNotes/2.41.0.txt
+index 63345b9595..e7f371466b 100644
+--- a/Documentation/RelNotes/2.41.0.txt
++++ b/Documentation/RelNotes/2.41.0.txt
+@@ -113,6 +113,11 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * "git write-tree" learns to work better with sparse-index.
+ 
++ * The on-disk reverse index that allows mapping from the pack offset
++   to the object name for the object stored at the offset has been
++   enabled by default.
++
++ * "git fsck" learned to validate the on-disk pack reverse index files.
+ 
+ 
+ Fixes since v2.40
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,35 @@
+From c512f31109ea09a6db72af0af4572dc0a2c2df0f Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 18 Apr 2023 16:40:35 -0400
+Subject: [PATCH 1298/2871] builtin/repack.c: fix incorrect reference to '-C'
+
+When cruft packs were originally being developed, `-C` was designated as
+the short-form for `--cruft` (as in `git repack -C`).
+
+This was dropped due to confusion with Git's top-level `-C` option
+before submitting to the list. But the reference to it in
+`--cruft-expiration`'s help text was never updated. Fix that dangling
+reference in this patch.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index df4d8e0f0b..d9eee15c2f 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -774,7 +774,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 				N_("same as -a, pack unreachable cruft objects separately"),
+ 				   PACK_CRUFT),
+ 		OPT_STRING(0, "cruft-expiration", &cruft_expiration, N_("approxidate"),
+-				N_("with -C, expire objects older than this")),
++				N_("with --cruft, expire objects older than this")),
+ 		OPT_BOOL('d', NULL, &delete_redundant,
+ 				N_("remove redundant packs, and run git-prune-packed")),
+ 		OPT_BOOL('f', NULL, &po_args.no_reuse_delta,
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,52 @@
+From 02b5c1a94698a14b6df71a9e8d38b75169787fa3 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 11 Jan 2024 14:47:27 +0100
+Subject: [PATCH 2675/2871] git-p4: stop reaching into the refdb
+
+The git-p4 tool creates a bunch of temporary branches that share a
+common prefix "refs/git-p4-tmp/". These branches get cleaned up via
+git-update-ref(1) after the import has finished. Once done, we try to
+manually remove the now supposedly-empty ".git/refs/git-p4-tmp/"
+directory.
+
+This last step can fail in case there still are any temporary branches
+around that we failed to delete because `os.rmdir()` refuses to delete a
+non-empty directory. It can thus be seen as kind of a sanity check to
+verify that we really did delete all temporary branches. Another failure
+mode though is when the directory didn't exist in the first place, which
+can be the case when using an alternate ref backend like the upcoming
+"reftable" backend.
+
+Convert the code to instead use git-for-each-ref(1) to verify that there
+are no more temporary branches around. This works alright with alternate
+ref backends while retaining the sanity check that we really did prune
+all temporary branches.
+
+This is a modification in behaviour for the "files" backend because the
+empty directory does not get deleted anymore. But arguably we should not
+care about such implementation details of the ref backend anyway, and
+this should not cause any user-visible change in behaviour.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-p4.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/git-p4.py b/git-p4.py
+index 0eb3bb4c47..3ea1c405e5 100755
+--- a/git-p4.py
++++ b/git-p4.py
+@@ -4251,7 +4251,8 @@ def run(self, args):
+         if self.tempBranches != []:
+             for branch in self.tempBranches:
+                 read_pipe(["git", "update-ref", "-d", branch])
+-            os.rmdir(os.path.join(os.environ.get("GIT_DIR", ".git"), self.tempBranchLocation))
++            if len(read_pipe(["git", "for-each-ref", self.tempBranchLocation])) > 0:
++                   die("There are unexpected temporary branches")
+ 
+         # Create a symbolic ref p4/HEAD pointing to p4/<branch> to allow
+         # a convenient shortcut refname "p4".
+-- 
+2.39.3 (Apple Git-145)
+

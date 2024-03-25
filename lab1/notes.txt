@@ -1,0 +1,127 @@
+LAB 1.4 NOTES
+- Rather than copying each comment, moving up to the page, yanking, going back down and repeating, I killed all of the comments into the kill region first and then moved up the page one time yanking as I went. There are a lot of arrow key registrations because I was moving through the kill region, so the dribble file might look a little messy but it was a lot more efficient than traversing back and forth. 
+
+Lab 1.5 - Exploring the operating system outside Emacs
+
+1. Where are the sh, sleep, and type commands located?
+which sh, which sleep, which type
+sh - /usr/bin/sh
+sleep - /usr/local/cs/bin/sleep
+type - /usr/bin/type
+
+
+
+2. What executable programs in /usr/bin have names that are exactly three characters long and start with the two letters se, and what do they do?
+ls /usr/bin/se?
+man sed, man seq
+
+sed and seq
+sed - stream editor for filtering and transforming text
+seq - print a sequence of numbers
+
+
+
+3. When you execute the command named by the symbolic link /usr/local/cs/bin/emacs, which file actually is executed?
+readlink -f /usr/local/cs/bin/emacs
+
+/usr/local/cs/emacs-29.1/bin/emacs-29.1
+
+
+
+4. What is the version number of the /usr/bin/gcc program? of the plain gcc program? Why are they different programs?
+/usr/bin/gcc -v
+gcc -v
+which gcc
+
+/usr/bin/gcc - version gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-4)
+plain gcc - gcc (GCC) 13.2.0
+They are different versions because they are different programs. The  plain gcc refers to the gcc prepended by the /usr/local/cs/bin path, which is different than the /usr/bin/gcc program.
+
+
+
+5. The chmod program changes permissions on a file. What does the symbolic mode u+sx,o-w mean, in terms of permissions?
+man chmod
+
+u+sx means add Set UID and Execute permissions to the User permissions.
+o-w means remove Writing permissions from the Other people's permissions.
+
+
+
+6. Use the find command to find all directories that are located under (or are the same as) the directory /usr/local/cs, and that were modified after the directory /usr/local/cs/lib was modified. Sort the directory names alphabetically and list just the first five names, or list them all if there are fewer than five names.
+find /usr/local/cs -type d -newer /usr/local/cs/lib | sort | head -5
+
+/usr/local/cs
+/usr/local/cs/autoconf-2.72
+/usr/local/cs/bash-5.2.21
+/usr/local/cs/bin
+/usr/local/cs/.del
+
+7. How many regular files are in the Python source code distribution located in the directory matching the globbing pattern /usr/local/cs/src/python/Python-*? Do not count directories or symbolic links or anything else; just regular files.
+find /usr/local/cs/src/python/Python-* -type f | wc -l
+
+9841
+
+
+
+8. How many of the files in /usr/local/cs/bin are symbolic links?
+find /usr/local/cs/bin -type l | wc -l
+
+371
+
+
+
+9. What is the oldest file in the /usr/lib64 directory? Use the last-modified time to determine age. Specify the name of the file without the /usr/lib64/ prefix. Don’t ignore files whose names start with ".", but do ignore files under subdirectories of /usr/lib64/. Consider files of all types, that is, your answer might be a regular file, or a directory, or something else.
+find /usr/lib64 -type f -printf '%T+ %p\n' | sort | head -n 1
+-->  2011-04-01+03:37:25.0000000000 /usr/lib64/pygtk/2.0/demos/appwindow.py
+
+pygtk/2.0/demos/appwindow.py
+
+
+10. In Emacs, what commands have transpose in their name?
+C-h a transpose
+
+transpose-chars
+transpose-lines
+transpose-paragraphs
+transpose-regions
+transpose-sentences
+transpose-sexps
+transpose-words
+
+
+
+11. What does the Emacs yank function do, and how can you easily invoke it using keystrokes?
+C-h f yank
+
+C-y
+The yank function pastes/reinserts the most recent stretch of killed text.
+
+
+
+12. Use the ps command to find your own login shell’s process, all that process’s ancestors, and all its descendants. Some ps options that you might find useful include -e, -f, -j, -l, -t, -H, and -T.
+OWN LOGIN PROCESS
+ps -l:
+F S   UID     PID    PPID  C PRI  NI ADDR SZ WCHAN  TTY          TIME CMD
+0 S 10838 3156040 3156026  0  80   0 - 16675 -      pts/49   00:00:00 bash
+Process is bash
+
+PROCESS ANCESTORS
+In order to find ancestors, you can run the "ps -p PID -o ppid=" command repeatedly to get the parent ID of the current process, and go all the way up until you get to the root.
+
+ps -p $$ -o ppid=,cmd=
+ps -p 3156026 -o ppid=,cmd=
+ps -p ps -p 3153641 -o ppid=,cmd=
+ps -p 1185 -o ppid=,cmd=
+ps -p 1 -o ppid=,cmd=
+
+root
+ \_ /usr/sbin/sshd -D -oCiphers=aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr,aes256-
+    \_ classzfi [priv]
+      \_ classzfi@pts/49
+        \_ bash (current)
+
+PROCESS CHILDREN
+Look at the whole process tree (ps -e)
+Find every element whose parent PID matches the current process PID 
+Repeat that process for each descendent of $$
+

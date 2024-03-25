@@ -1,0 +1,30 @@
+From a6c6f6d2fe1a628cd1e86451c998de55b6a2693a Mon Sep 17 00:00:00 2001
+From: Vincent Bernat <vincent@bernat.ch>
+Date: Sun, 6 Nov 2022 08:37:27 +0100
+Subject: [PATCH 0310/2871] ls-files: fix --ignored and --killed flags in
+ synopsis
+
+Signed-off-by: Vincent Bernat <vincent@bernat.ch>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/git-ls-files.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-ls-files.txt b/Documentation/git-ls-files.txt
+index d7986419c2..440043cdb8 100644
+--- a/Documentation/git-ls-files.txt
++++ b/Documentation/git-ls-files.txt
+@@ -10,8 +10,8 @@ SYNOPSIS
+ --------
+ [verse]
+ 'git ls-files' [-z] [-t] [-v] [-f]
+-		[-c|--cached] [-d|--deleted] [-o|--others] [-i|--|ignored]
+-		[-s|--stage] [-u|--unmerged] [-k|--|killed] [-m|--modified]
++		[-c|--cached] [-d|--deleted] [-o|--others] [-i|--ignored]
++		[-s|--stage] [-u|--unmerged] [-k|--killed] [-m|--modified]
+ 		[--directory [--no-empty-directory]] [--eol]
+ 		[--deduplicate]
+ 		[-x <pattern>|--exclude=<pattern>]
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,64 @@
+From e7e03ef9950df84d60b093ab925ccf34a8453369 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 13 Nov 2023 20:25:08 +0000
+Subject: [PATCH 2411/2871] ci: avoid running the test suite _twice_
+
+This is a late amendment of 4a6e4b960263 (CI: remove Travis CI support,
+2021-11-23), whereby the `.prove` file (being written by the `prove`
+command that is used to run the test suite) is no longer retained
+between CI builds: This feature was only ever used in the Travis CI
+builds, we tried for a while to do the same in Azure Pipelines CI runs
+(but I gave up on it after a while), and we never used that feature in
+GitHub Actions (nor does the new GitLab CI code use it).
+
+Retaining the Prove cache has been fragile from the start, even though
+the idea seemed good at the time, the idea being that the `.prove` file
+caches information about previous `prove` runs (`save`) and uses them
+(`slow`) to run the tests in the order from longer-running to shorter
+ones, making optimal use of the parallelism implied by `--jobs=<N>`.
+
+However, using a Prove cache can cause some surprising behavior: When
+the `prove` caches information about a test script it has run,
+subsequent `prove` runs (with `--state=slow`) will run the same test
+script again even if said script is not specified on the `prove`
+command-line!
+
+So far, this bug did not matter. Right until d8f416bbb87c (ci: run unit
+tests in CI, 2023-11-09) did it not matter.
+
+But starting with that commit, we invoke `prove` _twice_ in CI, once to
+run the regular test suite of regression test scripts, and once to run
+the unit tests. Due to the bug, the second invocation re-runs all of the
+tests that were already run as part of the first invocation. This not
+only wastes build minutes, it also frequently causes the `osx-*` jobs to
+fail because they already take a long time and now are likely to run
+into a timeout.
+
+The worst part about it is that there is actually no benefit to keep
+running with `--state=slow,save`, ever since we decided no longer to
+try to reuse the Prove cache between CI runs.
+
+So let's just drop that Prove option and live happily ever after.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 6dfc90d7f5..307a8df0b5 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -281,7 +281,7 @@ else
+ fi
+ 
+ MAKEFLAGS="$MAKEFLAGS --jobs=$JOBS"
+-GIT_PROVE_OPTS="--timer --jobs $JOBS --state=failed,slow,save"
++GIT_PROVE_OPTS="--timer --jobs $JOBS"
+ 
+ GIT_TEST_OPTS="$GIT_TEST_OPTS --verbose-log -x"
+ case "$CI_OS_NAME" in
+-- 
+2.39.3 (Apple Git-145)
+

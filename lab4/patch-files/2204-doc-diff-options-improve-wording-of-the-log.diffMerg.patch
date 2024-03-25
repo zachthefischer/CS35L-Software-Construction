@@ -1,0 +1,39 @@
+From 043465a6cf251202171b70b304b02dc306eff5f8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0t=C4=9Bp=C3=A1n=20N=C4=9Bmec?= <stepnem@smrk.net>
+Date: Thu, 5 Oct 2023 11:00:52 +0200
+Subject: [PATCH 2204/2871] doc/diff-options: improve wording of the
+ log.diffMerges mention
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fix the grammar ("which default value is") and reword to match other
+similar descriptions (say "configuration variable" instead of
+"parameter", link to git-config(1)).
+
+Signed-off-by: Štěpán Němec <stepnem@smrk.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/diff-options.txt | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/diff-options.txt b/Documentation/diff-options.txt
+index ee256ec077..48a5012748 100644
+--- a/Documentation/diff-options.txt
++++ b/Documentation/diff-options.txt
+@@ -53,9 +53,9 @@ ifdef::git-log[]
+ -m:::
+ 	This option makes diff output for merge commits to be shown in
+ 	the default format. `-m` will produce the output only if `-p`
+-	is given as well. The default format could be changed using
+-	`log.diffMerges` configuration parameter, which default value
+-	is `separate`.
++	is given as well. The default format can be specified using
++	the configuration variable `log.diffMerges` (see
++	linkgit:git-config[1]). It defaults to `separate`.
+ +
+ --diff-merges=first-parent:::
+ --diff-merges=1:::
+-- 
+2.39.3 (Apple Git-145)
+

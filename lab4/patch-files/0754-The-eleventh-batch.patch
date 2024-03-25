@@ -1,0 +1,53 @@
+From 5cc9858f1b470844dea5c5d3e936af183fdf2c68 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 27 Jan 2023 08:51:41 -0800
+Subject: [PATCH 0754/2871] The eleventh batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index df729641ea..01f539ec0b 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -40,6 +40,9 @@ UI, Workflows & Features
+ 
+  * "scalar" learned to give progress bar.
+ 
++ * "grep -P" learned to use Unicode Character Property to grok
++   character classes when processing \b and \w etc.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -172,6 +175,20 @@ Fixes since v2.39
+    joined.
+    (merge 238a9dfe86 sk/win32-close-handle-upon-pthread-join later to maint).
+ 
++ * "git send-email -v 3" used to be expanded to "git send-email
++   --validate 3" when the user meant to pass them down to
++   "format-patch", which has been corrected.
++   (merge 8774aa56ad km/send-email-with-v-reroll-count later to maint).
++
++ * Document that "branch -f <branch>" disables only the safety to
++   avoid recreating an existing branch.
++   (merge bf08abac56 jc/doc-branch-update-checked-out-branch later to maint).
++
++ * "git fetch <group>", when "<group>" of remotes lists the same
++   remote twice, unnecessarily failed when parallel fetching was
++   enabled, which has been corrected.
++   (merge 06a668cb90 cw/fetch-remote-group-with-duplication later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 77e04b2ed4 rs/t4205-do-not-exit-in-test-script later to maint).
+    (merge faebba436e rs/plug-pattern-list-leak-in-lof later to maint).
+@@ -201,3 +218,4 @@ Fixes since v2.39
+    (merge cf4936ed74 tl/ls-tree-code-clean-up later to maint).
+    (merge dcb47e52b0 en/t6426-todo-cleanup later to maint).
+    (merge 5b8db44bdd jc/format-patch-v-unleak later to maint).
++   (merge 590b636737 jk/hash-object-literally-fd-leak later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

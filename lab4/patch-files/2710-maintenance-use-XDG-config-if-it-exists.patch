@@ -1,0 +1,139 @@
+From 74e12192e6d2c7747c411261aee247a7479d5703 Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Thu, 18 Jan 2024 17:12:52 +0100
+Subject: [PATCH 2710/2871] maintenance: use XDG config if it exists
+
+`git maintenance register` registers the repository in the user's global
+config. `$XDG_CONFIG_HOME/git/config` is supposed to be used if
+`~/.gitconfig` does not exist. However, this command creates a
+`~/.gitconfig` file and writes to that one even though the XDG variant
+exists.
+
+This used to work correctly until 50a044f1e4 (gc: replace config
+subprocesses with API calls, 2022-09-27), when the command started calling
+the config API instead of git-config(1).
+
+Also change `unregister` accordingly.
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c           | 27 ++++++++++++-------------
+ t/t7900-maintenance.sh | 45 ++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+), 14 deletions(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index c078751824..cb80ced6cb 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -1543,19 +1543,18 @@ static int maintenance_register(int argc, const char **argv, const char *prefix)
+ 
+ 	if (!found) {
+ 		int rc;
+-		char *user_config = NULL, *xdg_config = NULL;
++		char *global_config_file = NULL;
+ 
+ 		if (!config_file) {
+-			git_global_config_paths(&user_config, &xdg_config);
+-			config_file = user_config;
+-			if (!user_config)
+-				die(_("$HOME not set"));
++			global_config_file = git_global_config();
++			config_file = global_config_file;
+ 		}
++		if (!config_file)
++			die(_("$HOME not set"));
+ 		rc = git_config_set_multivar_in_file_gently(
+ 			config_file, "maintenance.repo", maintpath,
+ 			CONFIG_REGEX_NONE, 0);
+-		free(user_config);
+-		free(xdg_config);
++		free(global_config_file);
+ 
+ 		if (rc)
+ 			die(_("unable to add '%s' value of '%s'"),
+@@ -1612,18 +1611,18 @@ static int maintenance_unregister(int argc, const char **argv, const char *prefi
+ 
+ 	if (found) {
+ 		int rc;
+-		char *user_config = NULL, *xdg_config = NULL;
++		char *global_config_file = NULL;
++
+ 		if (!config_file) {
+-			git_global_config_paths(&user_config, &xdg_config);
+-			config_file = user_config;
+-			if (!user_config)
+-				die(_("$HOME not set"));
++			global_config_file = git_global_config();
++			config_file = global_config_file;
+ 		}
++		if (!config_file)
++			die(_("$HOME not set"));
+ 		rc = git_config_set_multivar_in_file_gently(
+ 			config_file, key, NULL, maintpath,
+ 			CONFIG_FLAGS_MULTI_REPLACE | CONFIG_FLAGS_FIXED_VALUE);
+-		free(user_config);
+-		free(xdg_config);
++		free(global_config_file);
+ 
+ 		if (rc &&
+ 		    (!force || rc == CONFIG_NOTHING_SET))
+diff --git a/t/t7900-maintenance.sh b/t/t7900-maintenance.sh
+index 00d29871e6..0943dfa18a 100755
+--- a/t/t7900-maintenance.sh
++++ b/t/t7900-maintenance.sh
+@@ -67,6 +67,51 @@ test_expect_success 'maintenance.auto config option' '
+ 	test_subcommand ! git maintenance run --auto --quiet  <false
+ '
+ 
++test_expect_success 'register uses XDG_CONFIG_HOME config if it exists' '
++	test_when_finished rm -r .config/git/config &&
++	(
++		XDG_CONFIG_HOME=.config &&
++		export XDG_CONFIG_HOME &&
++		mkdir -p $XDG_CONFIG_HOME/git &&
++		>$XDG_CONFIG_HOME/git/config &&
++		git maintenance register &&
++		git config --file=$XDG_CONFIG_HOME/git/config --get maintenance.repo >actual &&
++		pwd >expect &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success 'register does not need XDG_CONFIG_HOME config to exist' '
++	test_when_finished git maintenance unregister &&
++	test_path_is_missing $XDG_CONFIG_HOME/git/config &&
++	git maintenance register &&
++	git config --global --get maintenance.repo >actual &&
++	pwd >expect &&
++	test_cmp expect actual
++'
++
++test_expect_success 'unregister uses XDG_CONFIG_HOME config if it exists' '
++	test_when_finished rm -r .config/git/config &&
++	(
++		XDG_CONFIG_HOME=.config &&
++		export XDG_CONFIG_HOME &&
++		mkdir -p $XDG_CONFIG_HOME/git &&
++		>$XDG_CONFIG_HOME/git/config &&
++		git maintenance register &&
++		git maintenance unregister &&
++		test_must_fail git config --file=$XDG_CONFIG_HOME/git/config --get maintenance.repo >actual &&
++		test_must_be_empty actual
++	)
++'
++
++test_expect_success 'unregister does not need XDG_CONFIG_HOME config to exist' '
++	test_path_is_missing $XDG_CONFIG_HOME/git/config &&
++	git maintenance register &&
++	git maintenance unregister &&
++	test_must_fail git config --global --get maintenance.repo >actual &&
++	test_must_be_empty actual
++'
++
+ test_expect_success 'maintenance.<task>.enabled' '
+ 	git config maintenance.gc.enabled false &&
+ 	git config maintenance.commit-graph.enabled true &&
+-- 
+2.39.3 (Apple Git-145)
+

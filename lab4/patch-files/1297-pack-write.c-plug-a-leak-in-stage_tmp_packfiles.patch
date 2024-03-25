@@ -1,0 +1,70 @@
+From c41258359e2f77a4fba000b2bbb975ebaf7d641b Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 18 Apr 2023 16:40:32 -0400
+Subject: [PATCH 1297/2871] pack-write.c: plug a leak in stage_tmp_packfiles()
+
+The function `stage_tmp_packfiles()` generates a filename to use for
+staging the contents of what will become the pack's ".mtimes" file.
+
+The name is generated in `write_mtimes_file()` and the result is
+returned back to `stage_tmp_packfiles()` which uses it to rename the
+temporary file into place via `rename_tmp_packfiles()`.
+
+`write_mtimes_file()` returns a `const char *`, indicating that callers
+are not expected to free its result (similar to, e.g., `oid_to_hex()`).
+But callers are expected to free its result, so this return type is
+incorrect.
+
+Change the function's signature to return a non-const `char *`, and free
+it at the end of `stage_tmp_packfiles()`.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-write.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/pack-write.c b/pack-write.c
+index f171405495..4da0ccc5f5 100644
+--- a/pack-write.c
++++ b/pack-write.c
+@@ -312,13 +312,13 @@ static void write_mtimes_trailer(struct hashfile *f, const unsigned char *hash)
+ 	hashwrite(f, hash, the_hash_algo->rawsz);
+ }
+ 
+-static const char *write_mtimes_file(struct packing_data *to_pack,
+-				     struct pack_idx_entry **objects,
+-				     uint32_t nr_objects,
+-				     const unsigned char *hash)
++static char *write_mtimes_file(struct packing_data *to_pack,
++			       struct pack_idx_entry **objects,
++			       uint32_t nr_objects,
++			       const unsigned char *hash)
+ {
+ 	struct strbuf tmp_file = STRBUF_INIT;
+-	const char *mtimes_name;
++	char *mtimes_name;
+ 	struct hashfile *f;
+ 	int fd;
+ 
+@@ -544,7 +544,7 @@ void stage_tmp_packfiles(struct strbuf *name_buffer,
+ 			 char **idx_tmp_name)
+ {
+ 	const char *rev_tmp_name = NULL;
+-	const char *mtimes_tmp_name = NULL;
++	char *mtimes_tmp_name = NULL;
+ 
+ 	if (adjust_shared_perm(pack_tmp_name))
+ 		die_errno("unable to make temporary pack file readable");
+@@ -568,6 +568,8 @@ void stage_tmp_packfiles(struct strbuf *name_buffer,
+ 		rename_tmp_packfile(name_buffer, rev_tmp_name, "rev");
+ 	if (mtimes_tmp_name)
+ 		rename_tmp_packfile(name_buffer, mtimes_tmp_name, "mtimes");
++
++	free(mtimes_tmp_name);
+ }
+ 
+ void write_promisor_file(const char *promisor_name, struct ref **sought, int nr_sought)
+-- 
+2.39.3 (Apple Git-145)
+

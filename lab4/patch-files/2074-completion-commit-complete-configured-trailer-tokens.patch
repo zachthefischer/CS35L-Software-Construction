@@ -1,0 +1,52 @@
+From c7153fad2d7e11b28d1cde21db040f8accae1900 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Thu, 7 Sep 2023 17:42:31 +0000
+Subject: [PATCH 2074/2871] completion: commit: complete configured trailer
+ tokens
+
+Since 2daae3d1d1 (commit: add --trailer option, 2021-03-23), 'git
+commit' can add trailers to commit messages. To make that feature more
+pleasant to use at the command line, update the Bash completion code to
+offer configured trailer tokens.
+
+Add a __git_trailer_tokens function to list the configured trailers
+tokens, and use it in _git_commit to suggest the configured tokens,
+suffixing the completion words with ':' so that the user only has to add
+the trailer value.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 133ec92bfa..b5eb75aadc 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1677,6 +1677,11 @@ _git_clone ()
+ 
+ __git_untracked_file_modes="all no normal"
+ 
++__git_trailer_tokens ()
++{
++	git config --name-only --get-regexp trailer.\*.key | awk -F. '{print $2}'
++}
++
+ _git_commit ()
+ {
+ 	case "$prev" in
+@@ -1701,6 +1706,10 @@ _git_commit ()
+ 		__gitcomp "$__git_untracked_file_modes" "" "${cur##--untracked-files=}"
+ 		return
+ 		;;
++	--trailer=*)
++		__gitcomp_nl "$(__git_trailer_tokens)" "" "${cur##--trailer=}" ":"
++		return
++		;;
+ 	--*)
+ 		__gitcomp_builtin commit
+ 		return
+-- 
+2.39.3 (Apple Git-145)
+

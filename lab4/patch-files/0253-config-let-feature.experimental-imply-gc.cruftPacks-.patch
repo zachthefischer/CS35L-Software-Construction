@@ -1,0 +1,171 @@
+From c695592850a3b4b7857fc11721cbc7d2b332f41e Mon Sep 17 00:00:00 2001
+From: Emily Shaffer <emilyshaffer@google.com>
+Date: Wed, 26 Oct 2022 17:32:45 -0400
+Subject: [PATCH 0253/2871] config: let feature.experimental imply
+ gc.cruftPacks=true
+
+We are interested in exploring whether gc.cruftPacks=true should become
+the default value.
+
+To determine whether it is safe to do so, let's encourage more users to
+try it out.
+
+Users who have set feature.experimental=true have already volunteered to
+try new and possibly-breaking config changes, so let's try this new
+default with that set of users.
+
+Signed-off-by: Emily Shaffer <emilyshaffer@google.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/feature.txt |  3 ++
+ builtin/gc.c                     |  7 +++--
+ repo-settings.c                  |  1 +
+ repository.h                     |  1 +
+ t/t6500-gc.sh                    | 53 ++++++++++++++++++++++++++++++++
+ 5 files changed, 63 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/config/feature.txt b/Documentation/config/feature.txt
+index cdecd04e5b..95975e5091 100644
+--- a/Documentation/config/feature.txt
++++ b/Documentation/config/feature.txt
+@@ -14,6 +14,9 @@ feature.experimental::
+ +
+ * `fetch.negotiationAlgorithm=skipping` may improve fetch negotiation times by
+ skipping more commits at a time, reducing the number of round trips.
+++
++* `gc.cruftPacks=true` reduces disk space used by unreachable objects during
++garbage collection, preventing loose object explosions.
+ 
+ feature.manyFiles::
+ 	Enable config options that optimize for repos with many files in the
+diff --git a/builtin/gc.c b/builtin/gc.c
+index eeff2b760e..60a8f94c62 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -42,7 +42,7 @@ static const char * const builtin_gc_usage[] = {
+ 
+ static int pack_refs = 1;
+ static int prune_reflogs = 1;
+-static int cruft_packs = 0;
++static int cruft_packs = -1;
+ static int aggressive_depth = 50;
+ static int aggressive_window = 250;
+ static int gc_auto_threshold = 6700;
+@@ -600,6 +600,10 @@ int cmd_gc(int argc, const char **argv, const char *prefix)
+ 	if (prune_expire && parse_expiry_date(prune_expire, &dummy))
+ 		die(_("failed to parse prune expiry value %s"), prune_expire);
+ 
++	prepare_repo_settings(the_repository);
++	if (cruft_packs < 0)
++		cruft_packs = the_repository->settings.gc_cruft_packs;
++
+ 	if (aggressive) {
+ 		strvec_push(&repack, "-f");
+ 		if (aggressive_depth > 0)
+@@ -711,7 +715,6 @@ int cmd_gc(int argc, const char **argv, const char *prefix)
+ 		clean_pack_garbage();
+ 	}
+ 
+-	prepare_repo_settings(the_repository);
+ 	if (the_repository->settings.gc_write_commit_graph == 1)
+ 		write_commit_graph_reachable(the_repository->objects->odb,
+ 					     !quiet && !daemonized ? COMMIT_GRAPH_WRITE_PROGRESS : 0,
+diff --git a/repo-settings.c b/repo-settings.c
+index 43bc881bfc..a36b9411e1 100644
+--- a/repo-settings.c
++++ b/repo-settings.c
+@@ -43,6 +43,7 @@ void prepare_repo_settings(struct repository *r)
+ 	/* Defaults modified by feature.* */
+ 	if (experimental) {
+ 		r->settings.fetch_negotiation_algorithm = FETCH_NEGOTIATION_SKIPPING;
++		r->settings.gc_cruft_packs = 1;
+ 	}
+ 	if (manyfiles) {
+ 		r->settings.index_version = 4;
+diff --git a/repository.h b/repository.h
+index 797f471cce..f235622a92 100644
+--- a/repository.h
++++ b/repository.h
+@@ -33,6 +33,7 @@ struct repo_settings {
+ 	int commit_graph_generation_version;
+ 	int commit_graph_read_changed_paths;
+ 	int gc_write_commit_graph;
++	int gc_cruft_packs;
+ 	int fetch_write_commit_graph;
+ 	int command_requires_full_index;
+ 	int sparse_index;
+diff --git a/t/t6500-gc.sh b/t/t6500-gc.sh
+index 928a522194..d9acb63951 100755
+--- a/t/t6500-gc.sh
++++ b/t/t6500-gc.sh
+@@ -221,6 +221,11 @@ assert_cruft_packs () {
+ 	done <packs
+ }
+ 
++assert_no_cruft_packs () {
++	find .git/objects/pack -name "*.mtimes" >mtimes &&
++	test_must_be_empty mtimes
++}
++
+ test_expect_success 'gc --cruft generates a cruft pack' '
+ 	test_when_finished "rm -fr crufts" &&
+ 	git init crufts &&
+@@ -245,6 +250,54 @@ test_expect_success 'gc.cruftPacks=true generates a cruft pack' '
+ 	)
+ '
+ 
++test_expect_success 'feature.experimental=true generates a cruft pack' '
++	git init crufts &&
++	test_when_finished "rm -fr crufts" &&
++	(
++		cd crufts &&
++
++		prepare_cruft_history &&
++		git -c feature.experimental=true gc &&
++		assert_cruft_packs
++	)
++'
++
++test_expect_success 'feature.experimental=false allows explicit cruft packs' '
++	git init crufts &&
++	test_when_finished "rm -fr crufts" &&
++	(
++		cd crufts &&
++
++		prepare_cruft_history &&
++		git -c gc.cruftPacks=true -c feature.experimental=false gc &&
++		assert_cruft_packs
++	)
++'
++
++test_expect_success 'feature.experimental=true can be overridden' '
++	git init crufts &&
++	test_when_finished "rm -fr crufts" &&
++	(
++		cd crufts &&
++
++		prepare_cruft_history &&
++		git -c feature.expiremental=true -c gc.cruftPacks=false gc &&
++		assert_no_cruft_packs
++	)
++'
++
++test_expect_success 'feature.experimental=false avoids cruft packs by default' '
++	git init crufts &&
++	test_when_finished "rm -fr crufts" &&
++	(
++		cd crufts &&
++
++		prepare_cruft_history &&
++		git -c feature.experimental=false gc &&
++		assert_no_cruft_packs
++	)
++'
++
+ run_and_wait_for_auto_gc () {
+ 	# We read stdout from gc for the side effect of waiting until the
+ 	# background gc process exits, closing its fd 9.  Furthermore, the
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,31 @@
+From 982ff3a649221d9db79049e5823425f645b3228e Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 22 May 2023 19:29:01 +0000
+Subject: [PATCH 1528/2871] completion: complete AUTO_MERGE
+
+The pseudoref AUTO_MERGE is documented since the previous commit. To
+make it easier to use, let __git_refs in the Bash completion code
+complete it.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index bcda376735..945d2543b0 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -767,7 +767,7 @@ __git_refs ()
+ 			track=""
+ 			;;
+ 		*)
+-			for i in HEAD FETCH_HEAD ORIG_HEAD MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_HEAD; do
++			for i in HEAD FETCH_HEAD ORIG_HEAD MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_HEAD AUTO_MERGE; do
+ 				case "$i" in
+ 				$match*|$umatch*)
+ 					if [ -e "$dir/$i" ]; then
+-- 
+2.39.3 (Apple Git-145)
+

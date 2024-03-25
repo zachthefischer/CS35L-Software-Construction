@@ -1,0 +1,80 @@
+From 48051257101bc4689f91b4ea2eec9606d71686dc Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 14 Dec 2023 17:24:14 -0500
+Subject: [PATCH 2555/2871] pack-objects: prepare `write_reused_pack()` for
+ multi-pack reuse
+
+The function `write_reused_pack()` within `builtin/pack-objects.c` is
+responsible for performing pack-reuse on a single pack, and has two main
+functions:
+
+  - it dispatches a call to `write_reused_pack_verbatim()` to see if we
+    can reuse portions of the packfile in whole-word chunks
+
+  - for any remaining objects (that is, any objects that appear after
+    the first "gap" in the bitmap), call write_reused_pack_one() on that
+    object to record it for reuse.
+
+Prepare this function for multi-pack reuse by removing the assumption
+that the bit position corresponding to the first object being reused
+from a given pack must be at bit position zero.
+
+The changes in this function are mostly straightforward. Initialize `i`
+to the position of the first word to contain bits corresponding to that
+reuse pack. In most situations, we throw the initialized value away,
+since we end up replacing it with the return value from
+write_reused_pack_verbatim(), moving us past the section of whole words
+that we reused.
+
+Likewise, modify the per-object loop to ignore any bits at the beginning
+of the first word that do not belong to the pack currently being reused,
+as well as skip to the "done" section once we have processed the last
+bit corresponding to this pack.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-objects.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 07c849b5d4..6ce52d88a9 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -1127,7 +1127,7 @@ static size_t write_reused_pack_verbatim(struct bitmapped_pack *reuse_packfile,
+ static void write_reused_pack(struct bitmapped_pack *reuse_packfile,
+ 			      struct hashfile *f)
+ {
+-	size_t i = 0;
++	size_t i = reuse_packfile->bitmap_pos / BITS_IN_EWORD;
+ 	uint32_t offset;
+ 	off_t pack_start = hashfile_total(f) - sizeof(struct pack_header);
+ 	struct pack_window *w_curs = NULL;
+@@ -1145,17 +1145,23 @@ static void write_reused_pack(struct bitmapped_pack *reuse_packfile,
+ 				break;
+ 
+ 			offset += ewah_bit_ctz64(word >> offset);
++			if (pos + offset < reuse_packfile->bitmap_pos)
++				continue;
++			if (pos + offset >= reuse_packfile->bitmap_pos + reuse_packfile->bitmap_nr)
++				goto done;
+ 			/*
+ 			 * Can use bit positions directly, even for MIDX
+ 			 * bitmaps. See comment in try_partial_reuse()
+ 			 * for why.
+ 			 */
+-			write_reused_pack_one(reuse_packfile->p, pos + offset,
++			write_reused_pack_one(reuse_packfile->p,
++					      pos + offset - reuse_packfile->bitmap_pos,
+ 					      f, pack_start, &w_curs);
+ 			display_progress(progress_state, ++written);
+ 		}
+ 	}
+ 
++done:
+ 	unuse_pack(&w_curs);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

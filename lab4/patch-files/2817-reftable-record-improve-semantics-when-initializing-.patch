@@ -1,0 +1,231 @@
+From 3ddef475d008b8a705a53e6bb1405bb773ffdc50 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 6 Feb 2024 07:35:59 +0100
+Subject: [PATCH 2817/2871] reftable/record: improve semantics when
+ initializing records
+
+According to our usual coding style, the `reftable_new_record()`
+function would indicate that it is allocating a new record. This is not
+the case though as the function merely initializes records without
+allocating any memory.
+
+Replace `reftable_new_record()` with a new `reftable_record_init()`
+function that takes a record pointer as input and initializes it
+accordingly.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/block.c       | 18 +++++++++---------
+ reftable/merged.c      |  8 +++++---
+ reftable/reader.c      |  4 ++--
+ reftable/record.c      | 43 ++++++++++--------------------------------
+ reftable/record.h      | 10 +++++-----
+ reftable/record_test.c |  4 ++--
+ 6 files changed, 33 insertions(+), 54 deletions(-)
+
+diff --git a/reftable/block.c b/reftable/block.c
+index 838759823a..ce8a7d24f3 100644
+--- a/reftable/block.c
++++ b/reftable/block.c
+@@ -382,23 +382,23 @@ int block_reader_seek(struct block_reader *br, struct block_iter *it,
+ 		.key = *want,
+ 		.r = br,
+ 	};
+-	struct reftable_record rec = reftable_new_record(block_reader_type(br));
+-	int err = 0;
+ 	struct block_iter next = BLOCK_ITER_INIT;
++	struct reftable_record rec;
++	int err = 0, i;
+ 
+-	int i = binsearch(br->restart_count, &restart_key_less, &args);
+ 	if (args.error) {
+ 		err = REFTABLE_FORMAT_ERROR;
+ 		goto done;
+ 	}
+ 
+-	it->br = br;
+-	if (i > 0) {
+-		i--;
+-		it->next_off = block_reader_restart_offset(br, i);
+-	} else {
++	i = binsearch(br->restart_count, &restart_key_less, &args);
++	if (i > 0)
++		it->next_off = block_reader_restart_offset(br, i - 1);
++	else
+ 		it->next_off = br->header_off + 4;
+-	}
++	it->br = br;
++
++	reftable_record_init(&rec, block_reader_type(br));
+ 
+ 	/* We're looking for the last entry less/equal than the wanted key, so
+ 	   we have to go one entry too far and then back up.
+diff --git a/reftable/merged.c b/reftable/merged.c
+index 0e60e2a39b..a0f222e07b 100644
+--- a/reftable/merged.c
++++ b/reftable/merged.c
+@@ -21,11 +21,11 @@ static int merged_iter_init(struct merged_iter *mi)
+ {
+ 	for (size_t i = 0; i < mi->stack_len; i++) {
+ 		struct pq_entry e = {
+-			.rec = reftable_new_record(mi->typ),
+ 			.index = i,
+ 		};
+ 		int err;
+ 
++		reftable_record_init(&e.rec, mi->typ);
+ 		err = iterator_next(&mi->stack[i], &e.rec);
+ 		if (err < 0)
+ 			return err;
+@@ -57,10 +57,12 @@ static int merged_iter_advance_nonnull_subiter(struct merged_iter *mi,
+ 					       size_t idx)
+ {
+ 	struct pq_entry e = {
+-		.rec = reftable_new_record(mi->typ),
+ 		.index = idx,
+ 	};
+-	int err = iterator_next(&mi->stack[idx], &e.rec);
++	int err;
++
++	reftable_record_init(&e.rec, mi->typ);
++	err = iterator_next(&mi->stack[idx], &e.rec);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/reftable/reader.c b/reftable/reader.c
+index 3e0de5e8ad..5e6c8f30a1 100644
+--- a/reftable/reader.c
++++ b/reftable/reader.c
+@@ -444,13 +444,13 @@ static int reader_start(struct reftable_reader *r, struct table_iter *ti,
+ static int reader_seek_linear(struct table_iter *ti,
+ 			      struct reftable_record *want)
+ {
+-	struct reftable_record rec =
+-		reftable_new_record(reftable_record_type(want));
+ 	struct strbuf want_key = STRBUF_INIT;
+ 	struct strbuf got_key = STRBUF_INIT;
+ 	struct table_iter next = TABLE_ITER_INIT;
++	struct reftable_record rec;
+ 	int err = -1;
+ 
++	reftable_record_init(&rec, reftable_record_type(want));
+ 	reftable_record_key(want, &want_key);
+ 
+ 	while (1) {
+diff --git a/reftable/record.c b/reftable/record.c
+index 2f3cd6b62c..26c5e43f9b 100644
+--- a/reftable/record.c
++++ b/reftable/record.c
+@@ -1259,45 +1259,22 @@ reftable_record_vtable(struct reftable_record *rec)
+ 	abort();
+ }
+ 
+-struct reftable_record reftable_new_record(uint8_t typ)
++void reftable_record_init(struct reftable_record *rec, uint8_t typ)
+ {
+-	struct reftable_record clean = {
+-		.type = typ,
+-	};
++	memset(rec, 0, sizeof(*rec));
++	rec->type = typ;
+ 
+-	/* the following is involved, but the naive solution (just return
+-	 * `clean` as is, except for BLOCK_TYPE_INDEX), returns a garbage
+-	 * clean.u.obj.offsets pointer on Windows VS CI.  Go figure.
+-	 */
+ 	switch (typ) {
+-	case BLOCK_TYPE_OBJ:
+-	{
+-		struct reftable_obj_record obj = { 0 };
+-		clean.u.obj = obj;
+-		break;
+-	}
+-	case BLOCK_TYPE_INDEX:
+-	{
+-		struct reftable_index_record idx = {
+-			.last_key = STRBUF_INIT,
+-		};
+-		clean.u.idx = idx;
+-		break;
+-	}
+ 	case BLOCK_TYPE_REF:
+-	{
+-		struct reftable_ref_record ref = { 0 };
+-		clean.u.ref = ref;
+-		break;
+-	}
+ 	case BLOCK_TYPE_LOG:
+-	{
+-		struct reftable_log_record log = { 0 };
+-		clean.u.log = log;
+-		break;
+-	}
++	case BLOCK_TYPE_OBJ:
++		return;
++	case BLOCK_TYPE_INDEX:
++		strbuf_init(&rec->u.idx.last_key, 0);
++		return;
++	default:
++		BUG("unhandled record type");
+ 	}
+-	return clean;
+ }
+ 
+ void reftable_record_print(struct reftable_record *rec, int hash_size)
+diff --git a/reftable/record.h b/reftable/record.h
+index fd80cd451d..e64ed30c80 100644
+--- a/reftable/record.h
++++ b/reftable/record.h
+@@ -69,9 +69,6 @@ struct reftable_record_vtable {
+ /* returns true for recognized block types. Block start with the block type. */
+ int reftable_is_block_type(uint8_t typ);
+ 
+-/* return an initialized record for the given type */
+-struct reftable_record reftable_new_record(uint8_t typ);
+-
+ /* Encode `key` into `dest`. Sets `is_restart` to indicate a restart. Returns
+  * number of bytes written. */
+ int reftable_encode_key(int *is_restart, struct string_view dest,
+@@ -100,8 +97,8 @@ struct reftable_obj_record {
+ /* record is a generic wrapper for different types of records. It is normally
+  * created on the stack, or embedded within another struct. If the type is
+  * known, a fresh instance can be initialized explicitly. Otherwise, use
+- * reftable_new_record() to initialize generically (as the index_record is not
+- * valid as 0-initialized structure)
++ * `reftable_record_init()` to initialize generically (as the index_record is
++ * not valid as 0-initialized structure)
+  */
+ struct reftable_record {
+ 	uint8_t type;
+@@ -113,6 +110,9 @@ struct reftable_record {
+ 	} u;
+ };
+ 
++/* Initialize the reftable record for the given type */
++void reftable_record_init(struct reftable_record *rec, uint8_t typ);
++
+ /* see struct record_vtable */
+ int reftable_record_equal(struct reftable_record *a, struct reftable_record *b, int hash_size);
+ void reftable_record_print(struct reftable_record *rec, int hash_size);
+diff --git a/reftable/record_test.c b/reftable/record_test.c
+index 999366ad46..a86cff5526 100644
+--- a/reftable/record_test.c
++++ b/reftable/record_test.c
+@@ -16,11 +16,11 @@
+ 
+ static void test_copy(struct reftable_record *rec)
+ {
+-	struct reftable_record copy = { 0 };
++	struct reftable_record copy;
+ 	uint8_t typ;
+ 
+ 	typ = reftable_record_type(rec);
+-	copy = reftable_new_record(typ);
++	reftable_record_init(&copy, typ);
+ 	reftable_record_copy_from(&copy, rec, GIT_SHA1_RAWSZ);
+ 	/* do it twice to catch memory leaks */
+ 	reftable_record_copy_from(&copy, rec, GIT_SHA1_RAWSZ);
+-- 
+2.39.3 (Apple Git-145)
+

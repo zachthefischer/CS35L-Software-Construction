@@ -1,0 +1,78 @@
+From 88f59d9e310799b2da9d6ea0bd98ab325f515c9e Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 3 Jan 2024 07:22:26 +0100
+Subject: [PATCH 2643/2871] reftable/record: constify some parts of the
+ interface
+
+We're about to convert reftable records to stop storing their object IDs
+as allocated hashes. Prepare for this refactoring by constifying some
+parts of the interface that will be impacted by this.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/record.c          | 8 ++++----
+ reftable/reftable-record.h | 4 ++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/reftable/record.c b/reftable/record.c
+index fbaa1fbef5..5e258c734b 100644
+--- a/reftable/record.c
++++ b/reftable/record.c
+@@ -76,7 +76,7 @@ int reftable_is_block_type(uint8_t typ)
+ 	return 0;
+ }
+ 
+-uint8_t *reftable_ref_record_val1(const struct reftable_ref_record *rec)
++const unsigned char *reftable_ref_record_val1(const struct reftable_ref_record *rec)
+ {
+ 	switch (rec->value_type) {
+ 	case REFTABLE_REF_VAL1:
+@@ -88,7 +88,7 @@ uint8_t *reftable_ref_record_val1(const struct reftable_ref_record *rec)
+ 	}
+ }
+ 
+-uint8_t *reftable_ref_record_val2(const struct reftable_ref_record *rec)
++const unsigned char *reftable_ref_record_val2(const struct reftable_ref_record *rec)
+ {
+ 	switch (rec->value_type) {
+ 	case REFTABLE_REF_VAL2:
+@@ -242,7 +242,7 @@ static char hexdigit(int c)
+ 	return 'a' + (c - 10);
+ }
+ 
+-static void hex_format(char *dest, uint8_t *src, int hash_size)
++static void hex_format(char *dest, const unsigned char *src, int hash_size)
+ {
+ 	assert(hash_size > 0);
+ 	if (src) {
+@@ -1164,7 +1164,7 @@ int reftable_record_equal(struct reftable_record *a, struct reftable_record *b,
+ 		reftable_record_data(a), reftable_record_data(b), hash_size);
+ }
+ 
+-static int hash_equal(uint8_t *a, uint8_t *b, int hash_size)
++static int hash_equal(const unsigned char *a, const unsigned char *b, int hash_size)
+ {
+ 	if (a && b)
+ 		return !memcmp(a, b, hash_size);
+diff --git a/reftable/reftable-record.h b/reftable/reftable-record.h
+index 67104f8fbf..f7eb2d6015 100644
+--- a/reftable/reftable-record.h
++++ b/reftable/reftable-record.h
+@@ -49,11 +49,11 @@ struct reftable_ref_record {
+ 
+ /* Returns the first hash, or NULL if `rec` is not of type
+  * REFTABLE_REF_VAL1 or REFTABLE_REF_VAL2. */
+-uint8_t *reftable_ref_record_val1(const struct reftable_ref_record *rec);
++const unsigned char *reftable_ref_record_val1(const struct reftable_ref_record *rec);
+ 
+ /* Returns the second hash, or NULL if `rec` is not of type
+  * REFTABLE_REF_VAL2. */
+-uint8_t *reftable_ref_record_val2(const struct reftable_ref_record *rec);
++const unsigned char *reftable_ref_record_val2(const struct reftable_ref_record *rec);
+ 
+ /* returns whether 'ref' represents a deletion */
+ int reftable_ref_record_is_deletion(const struct reftable_ref_record *ref);
+-- 
+2.39.3 (Apple Git-145)
+

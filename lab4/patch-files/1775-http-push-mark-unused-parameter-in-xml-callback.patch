@@ -1,0 +1,32 @@
+From e519ac35af2f976323f23e83e47bfd03d920754f Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:44:08 -0400
+Subject: [PATCH 1775/2871] http-push: mark unused parameter in xml callback
+
+The xml_start_tag() function is passed the expat library's
+XML_SetElementHandler() function, so it has to conform to the
+expected interface. But we don't actually care about the attributes
+list. Mark it so that -Wunused-parameter does not complain.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http-push.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/http-push.c b/http-push.c
+index 9ab2383d2b..a704f490fd 100644
+--- a/http-push.c
++++ b/http-push.c
+@@ -783,7 +783,7 @@ static void handle_new_lock_ctx(struct xml_ctx *ctx, int tag_closed)
+ static void one_remote_ref(const char *refname);
+ 
+ static void
+-xml_start_tag(void *userData, const char *name, const char **atts)
++xml_start_tag(void *userData, const char *name, const char **atts UNUSED)
+ {
+ 	struct xml_ctx *ctx = (struct xml_ctx *)userData;
+ 	const char *c = strchr(name, ':');
+-- 
+2.39.3 (Apple Git-145)
+

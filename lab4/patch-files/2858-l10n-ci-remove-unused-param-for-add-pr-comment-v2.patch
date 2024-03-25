@@ -1,0 +1,33 @@
+From 4d733f09f03c8e28a26470ebe046a2f3efa891d9 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <worldhello.net@gmail.com>
+Date: Fri, 16 Feb 2024 11:01:04 +0800
+Subject: [PATCH 2858/2871] l10n: ci: remove unused param for add-pr-comment@v2
+
+When we upgraded GitHub Actions "mshick/add-pr-comment" to v2, the
+following warning message was reported every time we ran the CI.
+
+    Unexpected input(s) 'repo-token-user-login', valid inputs ...
+
+Removed the obsolete parameter "repo-token-user-login" to suppress
+warning messages.
+
+Signed-off-by: Jiang Xin <worldhello.net@gmail.com>
+---
+ .github/workflows/l10n.yml | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/.github/workflows/l10n.yml b/.github/workflows/l10n.yml
+index 3d89758981..6d3ae9daf1 100644
+--- a/.github/workflows/l10n.yml
++++ b/.github/workflows/l10n.yml
+@@ -98,7 +98,6 @@ jobs:
+           env.COMMENT_BODY != ''
+         with:
+           repo-token: ${{ secrets.GITHUB_TOKEN }}
+-          repo-token-user-login: 'github-actions[bot]'
+           message: >
+             ${{ steps.check-commits.outcome == 'failure' && 'Errors and warnings' || 'Warnings' }}
+             found by [git-po-helper](https://github.com/git-l10n/git-po-helper#readme) in workflow
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,30 @@
+From b674f25b81b7d6cb1136a5a47d917b0d289e8d26 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 7 Sep 2023 22:20:02 +0000
+Subject: [PATCH 2082/2871] trailer --no-divider help: describe usual "---"
+ meaning
+
+It's unclear what treating something "specially" means.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/interpret-trailers.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/interpret-trailers.c b/builtin/interpret-trailers.c
+index cf4f703c4e..a7623dbfb2 100644
+--- a/builtin/interpret-trailers.c
++++ b/builtin/interpret-trailers.c
+@@ -109,7 +109,7 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
+ 		OPT_BOOL(0, "unfold", &opts.unfold, N_("join whitespace-continued values")),
+ 		OPT_CALLBACK_F(0, "parse", &opts, NULL, N_("set parsing options"),
+ 			PARSE_OPT_NOARG | PARSE_OPT_NONEG, parse_opt_parse),
+-		OPT_BOOL(0, "no-divider", &opts.no_divider, N_("do not treat --- specially")),
++		OPT_BOOL(0, "no-divider", &opts.no_divider, N_("do not treat \"---\" as the end of input")),
+ 		OPT_CALLBACK(0, "trailer", &trailers, N_("trailer"),
+ 				N_("trailer(s) to add"), option_parse_trailer),
+ 		OPT_END()
+-- 
+2.39.3 (Apple Git-145)
+

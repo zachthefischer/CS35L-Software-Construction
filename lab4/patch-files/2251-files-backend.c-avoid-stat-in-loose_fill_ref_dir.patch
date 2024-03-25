@@ -1,0 +1,101 @@
+From 2cdb796101be2feb47a57760b3b0057ad71402bf Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Mon, 9 Oct 2023 21:58:56 +0000
+Subject: [PATCH 2251/2871] files-backend.c: avoid stat in 'loose_fill_ref_dir'
+
+Modify the 'readdir' loop in 'loose_fill_ref_dir' to, rather than 'stat' a
+file to determine whether it is a directory or not, use 'get_dtype'.
+
+Currently, the loop uses 'stat' to determine whether each dirent is a
+directory itself or not in order to construct the appropriate ref cache
+entry. If 'stat' fails (returning a negative value), the dirent is silently
+skipped; otherwise, 'S_ISDIR(st.st_mode)' is used to check whether the entry
+is a directory.
+
+On platforms that include an entry's d_type in in the 'dirent' struct, this
+extra 'stat' check is redundant. We can use the 'get_dtype' method to
+extract this information on platforms that support it (i.e. where
+NO_D_TYPE_IN_DIRENT is unset), and derive it with 'stat' on platforms that
+don't. Because 'stat' is an expensive call, this confers a
+modest-but-noticeable performance improvement when iterating over large
+numbers of refs (approximately 20% speedup in 'git for-each-ref' in a 30k
+ref repo).
+
+Unlike other existing usage of 'get_dtype', the 'follow_symlinks' arg is set
+to 1 to replicate the existing handling of symlink dirents. This
+unfortunately requires calling 'stat' on the associated entry regardless of
+platform, but symlinks in the loose ref store are highly unlikely since
+they'd need to be created manually by a user.
+
+Note that this patch also changes the condition for skipping creation of a
+ref entry from "when 'stat' fails" to "when the d_type is anything other
+than DT_REG or DT_DIR". If a dirent's d_type is DT_UNKNOWN (either because
+the platform doesn't support d_type in dirents or some other reason) or
+DT_LNK, 'get_dtype' will try to derive the underlying type with 'stat'. If
+the 'stat' fails, the d_type will remain 'DT_UNKNOWN' and dirent will be
+skipped. However, it will also be skipped if it is any other valid d_type
+(e.g. DT_FIFO for named pipes, DT_LNK for a nested symlink). Git does not
+handle these properly anyway, so we can safely constrain accepted types to
+directories and regular files.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs/files-backend.c | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index 341354182b..db5c0c7a72 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -246,10 +246,8 @@ static void loose_fill_ref_dir(struct ref_store *ref_store,
+ 	int dirnamelen = strlen(dirname);
+ 	struct strbuf refname;
+ 	struct strbuf path = STRBUF_INIT;
+-	size_t path_baselen;
+ 
+ 	files_ref_path(refs, &path, dirname);
+-	path_baselen = path.len;
+ 
+ 	d = opendir(path.buf);
+ 	if (!d) {
+@@ -262,23 +260,22 @@ static void loose_fill_ref_dir(struct ref_store *ref_store,
+ 
+ 	while ((de = readdir(d)) != NULL) {
+ 		struct object_id oid;
+-		struct stat st;
+ 		int flag;
++		unsigned char dtype;
+ 
+ 		if (de->d_name[0] == '.')
+ 			continue;
+ 		if (ends_with(de->d_name, ".lock"))
+ 			continue;
+ 		strbuf_addstr(&refname, de->d_name);
+-		strbuf_addstr(&path, de->d_name);
+-		if (stat(path.buf, &st) < 0) {
+-			; /* silently ignore */
+-		} else if (S_ISDIR(st.st_mode)) {
++
++		dtype = get_dtype(de, &path, 1);
++		if (dtype == DT_DIR) {
+ 			strbuf_addch(&refname, '/');
+ 			add_entry_to_dir(dir,
+ 					 create_dir_entry(dir->cache, refname.buf,
+ 							  refname.len));
+-		} else {
++		} else if (dtype == DT_REG) {
+ 			if (!refs_resolve_ref_unsafe(&refs->base,
+ 						     refname.buf,
+ 						     RESOLVE_REF_READING,
+@@ -308,7 +305,6 @@ static void loose_fill_ref_dir(struct ref_store *ref_store,
+ 					 create_ref_entry(refname.buf, &oid, flag));
+ 		}
+ 		strbuf_setlen(&refname, dirnamelen);
+-		strbuf_setlen(&path, path_baselen);
+ 	}
+ 	strbuf_release(&refname);
+ 	strbuf_release(&path);
+-- 
+2.39.3 (Apple Git-145)
+

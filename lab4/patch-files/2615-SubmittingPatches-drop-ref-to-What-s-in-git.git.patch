@@ -1,0 +1,31 @@
+From 127106294a591ebbc8400ac691e271b58e843f09 Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Thu, 28 Dec 2023 04:55:18 +0000
+Subject: [PATCH 2615/2871] SubmittingPatches: drop ref to "What's in git.git"
+
+"What's in git.git" was last seen in 2010:
+  https://lore.kernel.org/git/?q=%22what%27s+in+git.git%22
+  https://lore.kernel.org/git/7vaavikg72.fsf@alter.siamese.dyndns.org/
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index bce7f97815..32e9023877 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -570,7 +570,7 @@ their trees themselves.
+   master).
+ 
+ * Read the Git mailing list, the maintainer regularly posts messages
+-  entitled "What's cooking in git.git" and "What's in git.git" giving
++  entitled "What's cooking in git.git" giving
+   the status of various proposed changes.
+ 
+ == GitHub CI[[GHCI]]
+-- 
+2.39.3 (Apple Git-145)
+

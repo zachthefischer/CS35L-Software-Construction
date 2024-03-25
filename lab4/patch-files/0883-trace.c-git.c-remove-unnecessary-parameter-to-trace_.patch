@@ -1,0 +1,79 @@
+From 17ab64e1b57b84d551a10e516d2722367e00e76c Mon Sep 17 00:00:00 2001
+From: idriss fekir <mcsm224@gmail.com>
+Date: Sun, 19 Feb 2023 01:25:27 +0100
+Subject: [PATCH 0883/2871] trace.c, git.c: remove unnecessary parameter to
+ trace_repo_setup()
+
+trace_repo_setup() of trace.c is called with the argument 'prefix' from
+only one location, run_builtin of git.c, which sets 'prefix' to the return
+value of setup_git_directory() or setup_git_directory_gently() (a wrapper
+of the former).
+
+Now that "prefix" is in startup_info there is no need for the parameter
+of trace_repo_setup() because setup_git_directory() sets "startup_info->prefix"
+to the same value it returns. It would be less confusing to use "prefix"
+from startup_info instead of passing it as an argument.
+
+Signed-off-by: Idriss Fekir <mcsm224@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git.c   | 2 +-
+ trace.c | 7 +++----
+ trace.h | 2 +-
+ 3 files changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/git.c b/git.c
+index 96b0a2837d..6171fd6769 100644
+--- a/git.c
++++ b/git.c
+@@ -430,7 +430,7 @@ static int run_builtin(struct cmd_struct *p, int argc, const char **argv)
+ 		use_pager = 1;
+ 	if (run_setup && startup_info->have_repository)
+ 		/* get_git_dir() may set up repo, avoid that */
+-		trace_repo_setup(prefix);
++		trace_repo_setup();
+ 	commit_pager_choice();
+ 
+ 	if (!help && p->option & NEED_WORK_TREE)
+diff --git a/trace.c b/trace.c
+index 794a087c21..efa4e2d8e0 100644
+--- a/trace.c
++++ b/trace.c
+@@ -291,10 +291,9 @@ static const char *quote_crnl(const char *path)
+ 	return new_path.buf;
+ }
+ 
+-/* FIXME: move prefix to startup_info struct and get rid of this arg */
+-void trace_repo_setup(const char *prefix)
++void trace_repo_setup(void)
+ {
+-	const char *git_work_tree;
++	const char *git_work_tree, *prefix = startup_info->prefix;
+ 	char *cwd;
+ 
+ 	if (!trace_want(&trace_setup_key))
+@@ -305,7 +304,7 @@ void trace_repo_setup(const char *prefix)
+ 	if (!(git_work_tree = get_git_work_tree()))
+ 		git_work_tree = "(null)";
+ 
+-	if (!prefix)
++	if (!startup_info->prefix)
+ 		prefix = "(null)";
+ 
+ 	trace_printf_key(&trace_setup_key, "setup: git_dir: %s\n", quote_crnl(get_git_dir()));
+diff --git a/trace.h b/trace.h
+index 4e771f86ac..b6e35b9470 100644
+--- a/trace.h
++++ b/trace.h
+@@ -93,7 +93,7 @@ extern struct trace_key trace_default_key;
+ extern struct trace_key trace_perf_key;
+ extern struct trace_key trace_setup_key;
+ 
+-void trace_repo_setup(const char *prefix);
++void trace_repo_setup(void);
+ 
+ /**
+  * Checks whether the trace key is enabled. Used to prevent expensive
+-- 
+2.39.3 (Apple Git-145)
+

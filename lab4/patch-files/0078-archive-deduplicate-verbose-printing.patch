@@ -1,0 +1,48 @@
+From e3733b646dcec33947aa4658c0ed89a8a4b42c4b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 11 Oct 2022 11:29:38 +0200
+Subject: [PATCH 0078/2871] archive: deduplicate verbose printing
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+94bc671a1f (Add directory pattern matching to attributes, 2012-12-08)
+moved the code for adding the trailing slash to names of directories and
+submodules up.  This left both branches of the if statement starting
+with the same conditional fprintf call.  Deduplicate it.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ archive.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/archive.c b/archive.c
+index d571249cf3..ec0ed75809 100644
+--- a/archive.c
++++ b/archive.c
+@@ -165,18 +165,16 @@ static int write_archive_entry(const struct object_id *oid, const char *base,
+ 		args->convert = check_attr_export_subst(check);
+ 	}
+ 
++	if (args->verbose)
++		fprintf(stderr, "%.*s\n", (int)path.len, path.buf);
++
+ 	if (S_ISDIR(mode) || S_ISGITLINK(mode)) {
+-		if (args->verbose)
+-			fprintf(stderr, "%.*s\n", (int)path.len, path.buf);
+ 		err = write_entry(args, oid, path.buf, path.len, mode, NULL, 0);
+ 		if (err)
+ 			return err;
+ 		return (S_ISDIR(mode) ? READ_TREE_RECURSIVE : 0);
+ 	}
+ 
+-	if (args->verbose)
+-		fprintf(stderr, "%.*s\n", (int)path.len, path.buf);
+-
+ 	/* Stream it? */
+ 	if (S_ISREG(mode) && !args->convert &&
+ 	    oid_object_info(args->repo, oid, &size) == OBJ_BLOB &&
+-- 
+2.39.3 (Apple Git-145)
+

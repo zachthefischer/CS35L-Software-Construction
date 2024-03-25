@@ -1,0 +1,588 @@
+From c23f592117bac30765ca22545386c3e9304da803 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 12 Oct 2022 12:52:36 +0000
+Subject: [PATCH 0090/2871] bundle-uri: fetch a list of bundles
+
+When the content at a given bundle URI is not understood as a bundle
+(based on inspecting the initial content), then Git currently gives up
+and ignores that content. Independent bundle providers may want to split
+up the bundle content into multiple bundles, but still make them
+available from a single URI.
+
+Teach Git to attempt parsing the bundle URI content as a Git config file
+providing the key=value pairs for a bundle list. Git then looks at the
+mode of the list to see if ANY single bundle is sufficient or if ALL
+bundles are required. The content at the selected URIs are downloaded
+and the content is inspected again, creating a recursive process.
+
+To guard the recursion against malformed or malicious content, limit the
+recursion depth to a reasonable four for now. This can be converted to a
+configured value in the future if necessary. The value of four is twice
+as high as expected to be useful (a bundle list is unlikely to point to
+more bundle lists).
+
+To test this scenario, create an interesting bundle topology where three
+incremental bundles are built on top of a single full bundle. By using a
+merge commit, the two middle bundles are "independent" in that they do
+not require each other in order to unbundle themselves. They each only
+need the base bundle. The bundle containing the merge commit requires
+both of the middle bundles, though. This leads to some interesting
+decisions when unbundling, especially when we later implement heuristics
+that promote downloading bundles until the prerequisite commits are
+satisfied.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c                | 203 ++++++++++++++++++++++++++---
+ bundle-uri.h                |  13 ++
+ t/t5558-clone-bundle-uri.sh | 248 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 448 insertions(+), 16 deletions(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 8a7c11c639..70bfd2defe 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -37,6 +37,8 @@ static int clear_remote_bundle_info(struct remote_bundle_info *bundle,
+ {
+ 	FREE_AND_NULL(bundle->id);
+ 	FREE_AND_NULL(bundle->uri);
++	FREE_AND_NULL(bundle->file);
++	bundle->unbundled = 0;
+ 	return 0;
+ }
+ 
+@@ -334,18 +336,117 @@ static int unbundle_from_file(struct repository *r, const char *file)
+ 	return result;
+ }
+ 
++struct bundle_list_context {
++	struct repository *r;
++	struct bundle_list *list;
++	enum bundle_list_mode mode;
++	int count;
++	int depth;
++};
++
++/*
++ * This early definition is necessary because we use indirect recursion:
++ *
++ * While iterating through a bundle list that was downloaded as part
++ * of fetch_bundle_uri_internal(), iterator methods eventually call it
++ * again, but with depth + 1.
++ */
++static int fetch_bundle_uri_internal(struct repository *r,
++				     struct remote_bundle_info *bundle,
++				     int depth,
++				     struct bundle_list *list);
++
++static int download_bundle_to_file(struct remote_bundle_info *bundle, void *data)
++{
++	int res;
++	struct bundle_list_context *ctx = data;
++
++	if (ctx->mode == BUNDLE_MODE_ANY && ctx->count)
++		return 0;
++
++	res = fetch_bundle_uri_internal(ctx->r, bundle, ctx->depth + 1, ctx->list);
++
++	/*
++	 * Only increment count if the download succeeded. If our mode is
++	 * BUNDLE_MODE_ANY, then we will want to try other URIs in the
++	 * list in case they work instead.
++	 */
++	if (!res)
++		ctx->count++;
++
++	/*
++	 * To be opportunistic as possible, we continue iterating and
++	 * download as many bundles as we can, so we can apply the ones
++	 * that work, even in BUNDLE_MODE_ALL mode.
++	 */
++	return 0;
++}
++
++static int download_bundle_list(struct repository *r,
++				struct bundle_list *local_list,
++				struct bundle_list *global_list,
++				int depth)
++{
++	struct bundle_list_context ctx = {
++		.r = r,
++		.list = global_list,
++		.depth = depth + 1,
++		.mode = local_list->mode,
++	};
++
++	return for_all_bundles_in_list(local_list, download_bundle_to_file, &ctx);
++}
++
++static int fetch_bundle_list_in_config_format(struct repository *r,
++					      struct bundle_list *global_list,
++					      struct remote_bundle_info *bundle,
++					      int depth)
++{
++	int result;
++	struct bundle_list list_from_bundle;
++
++	init_bundle_list(&list_from_bundle);
++
++	if ((result = bundle_uri_parse_config_format(bundle->uri,
++						     bundle->file,
++						     &list_from_bundle)))
++		goto cleanup;
++
++	if (list_from_bundle.mode == BUNDLE_MODE_NONE) {
++		warning(_("unrecognized bundle mode from URI '%s'"),
++			bundle->uri);
++		result = -1;
++		goto cleanup;
++	}
++
++	if ((result = download_bundle_list(r, &list_from_bundle,
++					   global_list, depth)))
++		goto cleanup;
++
++cleanup:
++	clear_bundle_list(&list_from_bundle);
++	return result;
++}
++
+ /**
+  * This limits the recursion on fetch_bundle_uri_internal() when following
+  * bundle lists.
+  */
+ static int max_bundle_uri_depth = 4;
+ 
++/**
++ * Recursively download all bundles advertised at the given URI
++ * to files. If the file is a bundle, then add it to the given
++ * 'list'. Otherwise, expect a bundle list and recurse on the
++ * URIs in that list according to the list mode (ANY or ALL).
++ */
+ static int fetch_bundle_uri_internal(struct repository *r,
+-				     const char *uri,
+-				     int depth)
++				     struct remote_bundle_info *bundle,
++				     int depth,
++				     struct bundle_list *list)
+ {
+ 	int result = 0;
+-	char *filename;
++	struct remote_bundle_info *bcopy;
+ 
+ 	if (depth >= max_bundle_uri_depth) {
+ 		warning(_("exceeded bundle URI recursion limit (%d)"),
+@@ -353,36 +454,106 @@ static int fetch_bundle_uri_internal(struct repository *r,
+ 		return -1;
+ 	}
+ 
+-	if (!(filename = find_temp_filename())) {
++	if (!bundle->file &&
++	    !(bundle->file = find_temp_filename())) {
+ 		result = -1;
+ 		goto cleanup;
+ 	}
+ 
+-	if ((result = copy_uri_to_file(filename, uri))) {
+-		warning(_("failed to download bundle from URI '%s'"), uri);
++	if ((result = copy_uri_to_file(bundle->file, bundle->uri))) {
++		warning(_("failed to download bundle from URI '%s'"), bundle->uri);
+ 		goto cleanup;
+ 	}
+ 
+-	if ((result = !is_bundle(filename, 0))) {
+-		warning(_("file at URI '%s' is not a bundle"), uri);
++	if ((result = !is_bundle(bundle->file, 1))) {
++		result = fetch_bundle_list_in_config_format(
++				r, list, bundle, depth);
++		if (result)
++			warning(_("file at URI '%s' is not a bundle or bundle list"),
++				bundle->uri);
+ 		goto cleanup;
+ 	}
+ 
+-	if ((result = unbundle_from_file(r, filename))) {
+-		warning(_("failed to unbundle bundle from URI '%s'"), uri);
+-		goto cleanup;
+-	}
++	/* Copy the bundle and insert it into the global list. */
++	CALLOC_ARRAY(bcopy, 1);
++	bcopy->id = xstrdup(bundle->id);
++	bcopy->file = xstrdup(bundle->file);
++	hashmap_entry_init(&bcopy->ent, strhash(bcopy->id));
++	hashmap_add(&list->bundles, &bcopy->ent);
+ 
+ cleanup:
+-	if (filename)
+-		unlink(filename);
+-	free(filename);
++	if (result && bundle->file)
++		unlink(bundle->file);
+ 	return result;
+ }
+ 
++/**
++ * This loop iterator breaks the loop with nonzero return code on the
++ * first successful unbundling of a bundle.
++ */
++static int attempt_unbundle(struct remote_bundle_info *info, void *data)
++{
++	struct repository *r = data;
++
++	if (!info->file || info->unbundled)
++		return 0;
++
++	if (!unbundle_from_file(r, info->file)) {
++		info->unbundled = 1;
++		return 1;
++	}
++
++	return 0;
++}
++
++static int unbundle_all_bundles(struct repository *r,
++				struct bundle_list *list)
++{
++	/*
++	 * Iterate through all bundles looking for ones that can
++	 * successfully unbundle. If any succeed, then perhaps another
++	 * will succeed in the next attempt.
++	 *
++	 * Keep in mind that a non-zero result for the loop here means
++	 * the loop terminated early on a successful unbundling, which
++	 * signals that we can try again.
++	 */
++	while (for_all_bundles_in_list(list, attempt_unbundle, r)) ;
++
++	return 0;
++}
++
++static int unlink_bundle(struct remote_bundle_info *info, void *data)
++{
++	if (info->file)
++		unlink_or_warn(info->file);
++	return 0;
++}
++
+ int fetch_bundle_uri(struct repository *r, const char *uri)
+ {
+-	return fetch_bundle_uri_internal(r, uri, 0);
++	int result;
++	struct bundle_list list;
++	struct remote_bundle_info bundle = {
++		.uri = xstrdup(uri),
++		.id = xstrdup(""),
++	};
++
++	init_bundle_list(&list);
++
++	/* If a bundle is added to this global list, then it is required. */
++	list.mode = BUNDLE_MODE_ALL;
++
++	if ((result = fetch_bundle_uri_internal(r, &bundle, 0, &list)))
++		goto cleanup;
++
++	result = unbundle_all_bundles(r, &list);
++
++cleanup:
++	for_all_bundles_in_list(&list, unlink_bundle, NULL);
++	clear_bundle_list(&list);
++	clear_remote_bundle_info(&bundle, NULL);
++	return result;
+ }
+ 
+ /**
+diff --git a/bundle-uri.h b/bundle-uri.h
+index bc13d4c992..4dbc269823 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -28,6 +28,19 @@ struct remote_bundle_info {
+ 	 * if there was no table of contents.
+ 	 */
+ 	char *uri;
++
++	/**
++	 * If the bundle has been downloaded, then 'file' is a
++	 * filename storing its contents. Otherwise, 'file' is
++	 * NULL.
++	 */
++	char *file;
++
++	/**
++	 * If the bundle has been unbundled successfully, then
++	 * this boolean is true.
++	 */
++	unsigned unbundled:1;
+ };
+ 
+ #define REMOTE_BUNDLE_INFO_INIT { 0 }
+diff --git a/t/t5558-clone-bundle-uri.sh b/t/t5558-clone-bundle-uri.sh
+index ad666a2d28..a86dc04f52 100755
+--- a/t/t5558-clone-bundle-uri.sh
++++ b/t/t5558-clone-bundle-uri.sh
+@@ -41,6 +41,195 @@ test_expect_success 'clone with file:// bundle' '
+ 	test_cmp expect actual
+ '
+ 
++# To get interesting tests for bundle lists, we need to construct a
++# somewhat-interesting commit history.
++#
++# ---------------- bundle-4
++#
++#       4
++#      / \
++# ----|---|------- bundle-3
++#     |   |
++#     |   3
++#     |   |
++# ----|---|------- bundle-2
++#     |   |
++#     2   |
++#     |   |
++# ----|---|------- bundle-1
++#      \ /
++#       1
++#       |
++# (previous commits)
++test_expect_success 'construct incremental bundle list' '
++	(
++		cd clone-from &&
++		git checkout -b base &&
++		test_commit 1 &&
++		git checkout -b left &&
++		test_commit 2 &&
++		git checkout -b right base &&
++		test_commit 3 &&
++		git checkout -b merge left &&
++		git merge right -m "4" &&
++
++		git bundle create bundle-1.bundle base &&
++		git bundle create bundle-2.bundle base..left &&
++		git bundle create bundle-3.bundle base..right &&
++		git bundle create bundle-4.bundle merge --not left right
++	)
++'
++
++test_expect_success 'clone bundle list (file, no heuristic)' '
++	cat >bundle-list <<-EOF &&
++	[bundle]
++		version = 1
++		mode = all
++
++	[bundle "bundle-1"]
++		uri = file://$(pwd)/clone-from/bundle-1.bundle
++
++	[bundle "bundle-2"]
++		uri = file://$(pwd)/clone-from/bundle-2.bundle
++
++	[bundle "bundle-3"]
++		uri = file://$(pwd)/clone-from/bundle-3.bundle
++
++	[bundle "bundle-4"]
++		uri = file://$(pwd)/clone-from/bundle-4.bundle
++	EOF
++
++	git clone --bundle-uri="file://$(pwd)/bundle-list" clone-from clone-list-file &&
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-list-file cat-file --batch-check <oids &&
++
++	git -C clone-list-file for-each-ref --format="%(refname)" >refs &&
++	grep "refs/bundles/" refs >actual &&
++	cat >expect <<-\EOF &&
++	refs/bundles/base
++	refs/bundles/left
++	refs/bundles/merge
++	refs/bundles/right
++	EOF
++	test_cmp expect actual
++'
++
++test_expect_success 'clone bundle list (file, all mode, some failures)' '
++	cat >bundle-list <<-EOF &&
++	[bundle]
++		version = 1
++		mode = all
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-0"]
++		uri = file://$(pwd)/clone-from/bundle-0.bundle
++
++	[bundle "bundle-1"]
++		uri = file://$(pwd)/clone-from/bundle-1.bundle
++
++	[bundle "bundle-2"]
++		uri = file://$(pwd)/clone-from/bundle-2.bundle
++
++	# No bundle-3 means bundle-4 will not apply.
++
++	[bundle "bundle-4"]
++		uri = file://$(pwd)/clone-from/bundle-4.bundle
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-5"]
++		uri = file://$(pwd)/clone-from/bundle-5.bundle
++	EOF
++
++	GIT_TRACE2_PERF=1 \
++	git clone --bundle-uri="file://$(pwd)/bundle-list" clone-from clone-all-some &&
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-all-some cat-file --batch-check <oids &&
++
++	git -C clone-all-some for-each-ref --format="%(refname)" >refs &&
++	grep "refs/bundles/" refs >actual &&
++	cat >expect <<-\EOF &&
++	refs/bundles/base
++	refs/bundles/left
++	EOF
++	test_cmp expect actual
++'
++
++test_expect_success 'clone bundle list (file, all mode, all failures)' '
++	cat >bundle-list <<-EOF &&
++	[bundle]
++		version = 1
++		mode = all
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-0"]
++		uri = file://$(pwd)/clone-from/bundle-0.bundle
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-5"]
++		uri = file://$(pwd)/clone-from/bundle-5.bundle
++	EOF
++
++	git clone --bundle-uri="file://$(pwd)/bundle-list" clone-from clone-all-fail &&
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-all-fail cat-file --batch-check <oids &&
++
++	git -C clone-all-fail for-each-ref --format="%(refname)" >refs &&
++	! grep "refs/bundles/" refs
++'
++
++test_expect_success 'clone bundle list (file, any mode)' '
++	cat >bundle-list <<-EOF &&
++	[bundle]
++		version = 1
++		mode = any
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-0"]
++		uri = file://$(pwd)/clone-from/bundle-0.bundle
++
++	[bundle "bundle-1"]
++		uri = file://$(pwd)/clone-from/bundle-1.bundle
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-5"]
++		uri = file://$(pwd)/clone-from/bundle-5.bundle
++	EOF
++
++	git clone --bundle-uri="file://$(pwd)/bundle-list" clone-from clone-any-file &&
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-any-file cat-file --batch-check <oids &&
++
++	git -C clone-any-file for-each-ref --format="%(refname)" >refs &&
++	grep "refs/bundles/" refs >actual &&
++	cat >expect <<-\EOF &&
++	refs/bundles/base
++	EOF
++	test_cmp expect actual
++'
++
++test_expect_success 'clone bundle list (file, any mode, all failures)' '
++	cat >bundle-list <<-EOF &&
++	[bundle]
++		version = 1
++		mode = any
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-0"]
++		uri = $HTTPD_URL/bundle-0.bundle
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-5"]
++		uri = $HTTPD_URL/bundle-5.bundle
++	EOF
++
++	git clone --bundle-uri="file://$(pwd)/bundle-list" clone-from clone-any-fail &&
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-any-fail cat-file --batch-check <oids &&
++
++	git -C clone-any-fail for-each-ref --format="%(refname)" >refs &&
++	! grep "refs/bundles/" refs
++'
++
+ #########################################################################
+ # HTTP tests begin here
+ 
+@@ -75,6 +264,65 @@ test_expect_success 'clone HTTP bundle' '
+ 	test_config -C clone-http log.excludedecoration refs/bundle/
+ '
+ 
++test_expect_success 'clone bundle list (HTTP, no heuristic)' '
++	cp clone-from/bundle-*.bundle "$HTTPD_DOCUMENT_ROOT_PATH/" &&
++	cat >"$HTTPD_DOCUMENT_ROOT_PATH/bundle-list" <<-EOF &&
++	[bundle]
++		version = 1
++		mode = all
++
++	[bundle "bundle-1"]
++		uri = $HTTPD_URL/bundle-1.bundle
++
++	[bundle "bundle-2"]
++		uri = $HTTPD_URL/bundle-2.bundle
++
++	[bundle "bundle-3"]
++		uri = $HTTPD_URL/bundle-3.bundle
++
++	[bundle "bundle-4"]
++		uri = $HTTPD_URL/bundle-4.bundle
++	EOF
++
++	git clone --bundle-uri="$HTTPD_URL/bundle-list" clone-from clone-list-http &&
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-list-http cat-file --batch-check <oids
++'
++
++test_expect_success 'clone bundle list (HTTP, any mode)' '
++	cp clone-from/bundle-*.bundle "$HTTPD_DOCUMENT_ROOT_PATH/" &&
++	cat >"$HTTPD_DOCUMENT_ROOT_PATH/bundle-list" <<-EOF &&
++	[bundle]
++		version = 1
++		mode = any
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-0"]
++		uri = $HTTPD_URL/bundle-0.bundle
++
++	[bundle "bundle-1"]
++		uri = $HTTPD_URL/bundle-1.bundle
++
++	# Does not exist. Should be skipped.
++	[bundle "bundle-5"]
++		uri = $HTTPD_URL/bundle-5.bundle
++	EOF
++
++	git clone --bundle-uri="$HTTPD_URL/bundle-list" clone-from clone-any-http &&
++	git -C clone-from for-each-ref --format="%(objectname)" >oids &&
++	git -C clone-any-http cat-file --batch-check <oids &&
++
++	git -C clone-list-file for-each-ref --format="%(refname)" >refs &&
++	grep "refs/bundles/" refs >actual &&
++	cat >expect <<-\EOF &&
++	refs/bundles/base
++	refs/bundles/left
++	refs/bundles/merge
++	refs/bundles/right
++	EOF
++	test_cmp expect actual
++'
++
+ # Do not add tests here unless they use the HTTP server, as they will
+ # not run unless the HTTP dependencies exist.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

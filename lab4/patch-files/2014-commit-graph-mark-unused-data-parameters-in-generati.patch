@@ -1,0 +1,62 @@
+From e1cba404dbe54f2bf0511b3bd480c0e05fb65360 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:17 -0400
+Subject: [PATCH 2014/2871] commit-graph: mark unused data parameters in
+ generation callbacks
+
+The compute_generation_info code uses function pointers to abstract the
+get/set generation operations. Some callers don't need the extra void
+data pointer, which should be annotated to appease -Wunused-parameter.
+
+Note that we can drop the assignment of the "data" parameter in
+compute_generation_numbers(), as we've just shown that neither of the
+callbacks it uses will access it. This matches the caller in
+ensure_generations_valid(), which already does not bother to set "data".
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 0aa1640d15..e11f326097 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -1568,12 +1568,14 @@ static void compute_topological_levels(struct write_commit_graph_context *ctx)
+ 	stop_progress(&ctx->progress);
+ }
+ 
+-static timestamp_t get_generation_from_graph_data(struct commit *c, void *data)
++static timestamp_t get_generation_from_graph_data(struct commit *c,
++						  void *data UNUSED)
+ {
+ 	return commit_graph_data_at(c)->generation;
+ }
+ 
+-static void set_generation_v2(struct commit *c, timestamp_t t, void *data)
++static void set_generation_v2(struct commit *c, timestamp_t t,
++			      void *data UNUSED)
+ {
+ 	struct commit_graph_data *g = commit_graph_data_at(c);
+ 	g->generation = t;
+@@ -1587,7 +1589,6 @@ static void compute_generation_numbers(struct write_commit_graph_context *ctx)
+ 		.commits = &ctx->commits,
+ 		.get_generation = get_generation_from_graph_data,
+ 		.set_generation = set_generation_v2,
+-		.data = ctx,
+ 	};
+ 
+ 	if (ctx->report_progress)
+@@ -1616,7 +1617,7 @@ static void compute_generation_numbers(struct write_commit_graph_context *ctx)
+ }
+ 
+ static void set_generation_in_graph_data(struct commit *c, timestamp_t t,
+-					 void *data)
++					 void *data UNUSED)
+ {
+ 	commit_graph_data_at(c)->generation = t;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

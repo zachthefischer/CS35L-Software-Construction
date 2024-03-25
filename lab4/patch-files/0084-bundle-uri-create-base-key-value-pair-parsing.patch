@@ -1,0 +1,215 @@
+From bff03c47f7342c2a08fac6c0af7229b1579fea15 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 12 Oct 2022 12:52:30 +0000
+Subject: [PATCH 0084/2871] bundle-uri: create base key-value pair parsing
+
+There will be two primary ways to advertise a bundle list: as a list of
+packet lines in Git's protocol v2 and as a config file served from a
+bundle URI. Both of these fundamentally use a list of key-value pairs.
+We will use the same set of key-value pairs across these formats.
+
+Create a new bundle_list_update() method that is currently unusued, but
+will be used in the next change. It inspects each key to see if it is
+understood and then applies it to the given bundle_list. Here are the
+keys that we teach Git to understand:
+
+* bundle.version: This value should be an integer. Git currently
+  understands only version 1 and will ignore the list if the version is
+  any other value. This version can be increased in the future if we
+  need to add new keys that Git should not ignore. We can add new
+  "heuristic" keys without incrementing the version.
+
+* bundle.mode: This value should be one of "all" or "any". If this
+  mode is not understood, then Git will ignore the list. This mode
+  indicates whether Git needs all of the bundle list items to make a
+  complete view of the content or if any single item is sufficient.
+
+The rest of the keys use a bundle identifier "<id>" as part of the key
+name. Keys using the same "<id>" describe a single bundle list item.
+
+* bundle.<id>.uri: This stores the URI of the bundle item. This
+  currently is expected to be an absolute URI, but will be relaxed to be
+  a relative URI in the future.
+
+While parsing, return an error if a URI key is repeated, since we can
+make that restriction with bundle lists.
+
+Make the git_parse_int() method global so we can parse the integer
+version value carefully.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config.txt        |  2 +
+ Documentation/config/bundle.txt | 24 +++++++++++
+ bundle-uri.c                    | 76 +++++++++++++++++++++++++++++++++
+ config.c                        |  2 +-
+ config.h                        |  1 +
+ 5 files changed, 104 insertions(+), 1 deletion(-)
+ create mode 100644 Documentation/config/bundle.txt
+
+diff --git a/Documentation/config.txt b/Documentation/config.txt
+index 5b5b976569..4f9002efd6 100644
+--- a/Documentation/config.txt
++++ b/Documentation/config.txt
+@@ -387,6 +387,8 @@ include::config/branch.txt[]
+ 
+ include::config/browser.txt[]
+ 
++include::config/bundle.txt[]
++
+ include::config/checkout.txt[]
+ 
+ include::config/clean.txt[]
+diff --git a/Documentation/config/bundle.txt b/Documentation/config/bundle.txt
+new file mode 100644
+index 0000000000..daa21eb674
+--- /dev/null
++++ b/Documentation/config/bundle.txt
+@@ -0,0 +1,24 @@
++bundle.*::
++	The `bundle.*` keys may appear in a bundle list file found via the
++	`git clone --bundle-uri` option. These keys currently have no effect
++	if placed in a repository config file, though this will change in the
++	future. See link:technical/bundle-uri.html[the bundle URI design
++	document] for more details.
++
++bundle.version::
++	This integer value advertises the version of the bundle list format
++	used by the bundle list. Currently, the only accepted value is `1`.
++
++bundle.mode::
++	This string value should be either `all` or `any`. This value describes
++	whether all of the advertised bundles are required to unbundle a
++	complete understanding of the bundled information (`all`) or if any one
++	of the listed bundle URIs is sufficient (`any`).
++
++bundle.<id>.*::
++	The `bundle.<id>.*` keys are used to describe a single item in the
++	bundle list, grouped under `<id>` for identification purposes.
++
++bundle.<id>.uri::
++	This string value defines the URI by which Git can reach the contents
++	of this `<id>`. This URI may be a bundle file or another bundle list.
+diff --git a/bundle-uri.c b/bundle-uri.c
+index f9a8db221b..0bc59dd9c3 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -6,6 +6,7 @@
+ #include "run-command.h"
+ #include "hashmap.h"
+ #include "pkt-line.h"
++#include "config.h"
+ 
+ static int compare_bundles(const void *hashmap_cmp_fn_data,
+ 			   const struct hashmap_entry *he1,
+@@ -65,6 +66,81 @@ int for_all_bundles_in_list(struct bundle_list *list,
+ 	return 0;
+ }
+ 
++/**
++ * Given a key-value pair, update the state of the given bundle list.
++ * Returns 0 if the key-value pair is understood. Returns -1 if the key
++ * is not understood or the value is malformed.
++ */
++MAYBE_UNUSED
++static int bundle_list_update(const char *key, const char *value,
++			      struct bundle_list *list)
++{
++	struct strbuf id = STRBUF_INIT;
++	struct remote_bundle_info lookup = REMOTE_BUNDLE_INFO_INIT;
++	struct remote_bundle_info *bundle;
++	const char *subsection, *subkey;
++	size_t subsection_len;
++
++	if (parse_config_key(key, "bundle", &subsection, &subsection_len, &subkey))
++		return -1;
++
++	if (!subsection_len) {
++		if (!strcmp(subkey, "version")) {
++			int version;
++			if (!git_parse_int(value, &version))
++				return -1;
++			if (version != 1)
++				return -1;
++
++			list->version = version;
++			return 0;
++		}
++
++		if (!strcmp(subkey, "mode")) {
++			if (!strcmp(value, "all"))
++				list->mode = BUNDLE_MODE_ALL;
++			else if (!strcmp(value, "any"))
++				list->mode = BUNDLE_MODE_ANY;
++			else
++				return -1;
++			return 0;
++		}
++
++		/* Ignore other unknown global keys. */
++		return 0;
++	}
++
++	strbuf_add(&id, subsection, subsection_len);
++
++	/*
++	 * Check for an existing bundle with this <id>, or create one
++	 * if necessary.
++	 */
++	lookup.id = id.buf;
++	hashmap_entry_init(&lookup.ent, strhash(lookup.id));
++	if (!(bundle = hashmap_get_entry(&list->bundles, &lookup, ent, NULL))) {
++		CALLOC_ARRAY(bundle, 1);
++		bundle->id = strbuf_detach(&id, NULL);
++		hashmap_entry_init(&bundle->ent, strhash(bundle->id));
++		hashmap_add(&list->bundles, &bundle->ent);
++	}
++	strbuf_release(&id);
++
++	if (!strcmp(subkey, "uri")) {
++		if (bundle->uri)
++			return -1;
++		bundle->uri = xstrdup(value);
++		return 0;
++	}
++
++	/*
++	 * At this point, we ignore any information that we don't
++	 * understand, assuming it to be hints for a heuristic the client
++	 * does not currently understand.
++	 */
++	return 0;
++}
++
+ static char *find_temp_filename(void)
+ {
+ 	int fd;
+diff --git a/config.c b/config.c
+index e8ebef77d5..1cb35bea2f 100644
+--- a/config.c
++++ b/config.c
+@@ -1214,7 +1214,7 @@ static int git_parse_unsigned(const char *value, uintmax_t *ret, uintmax_t max)
+ 	return 0;
+ }
+ 
+-static int git_parse_int(const char *value, int *ret)
++int git_parse_int(const char *value, int *ret)
+ {
+ 	intmax_t tmp;
+ 	if (!git_parse_signed(value, &tmp, maximum_signed_value_of_type(int)))
+diff --git a/config.h b/config.h
+index ca994d7714..ef9eade641 100644
+--- a/config.h
++++ b/config.h
+@@ -206,6 +206,7 @@ int config_with_options(config_fn_t fn, void *,
+ 
+ int git_parse_ssize_t(const char *, ssize_t *);
+ int git_parse_ulong(const char *, unsigned long *);
++int git_parse_int(const char *value, int *ret);
+ 
+ /**
+  * Same as `git_config_bool`, except that it returns -1 on error rather
+-- 
+2.39.3 (Apple Git-145)
+

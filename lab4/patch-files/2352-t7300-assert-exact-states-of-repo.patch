@@ -1,0 +1,87 @@
+From 390c5b07e2c2a1df515f0d9d9077f3ad2fe11f0b Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 2 Nov 2023 09:47:06 +0100
+Subject: [PATCH 2352/2871] t7300: assert exact states of repo
+
+Some of the tests in t7300 verify that git-clean(1) doesn't touch
+repositories that are embedded into the main repository. This is done by
+asserting a small set of substructures that are assumed to always exist,
+like the "refs/", "objects/" or "HEAD". This has the downside that we
+need to assume a specific repository structure that may be subject to
+change when new backends for the refdb land. At the same time, we don't
+thoroughly assert that git-clean(1) really didn't end up cleaning any
+files in the repository either.
+
+Convert the tests to instead assert that all files continue to exist
+after git-clean(1) by comparing a file listing via find(1) before and
+after executing clean. This makes our actual assertions stricter while
+having to care less about the repository's actual on-disk format.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7300-clean.sh | 23 ++++++++++++++---------
+ 1 file changed, 14 insertions(+), 9 deletions(-)
+
+diff --git a/t/t7300-clean.sh b/t/t7300-clean.sh
+index 0ef7b78457..d7d9202f37 100755
+--- a/t/t7300-clean.sh
++++ b/t/t7300-clean.sh
+@@ -517,8 +517,12 @@ test_expect_success 'nested (empty) git should be kept' '
+ 	git init empty_repo &&
+ 	mkdir to_clean &&
+ 	>to_clean/should_clean.this &&
++	# Note that we put the expect file in the .git directory so that it
++	# does not get cleaned.
++	find empty_repo | sort >.git/expect &&
+ 	git clean -f -d &&
+-	test_path_is_file empty_repo/.git/HEAD &&
++	find empty_repo | sort >actual &&
++	test_cmp .git/expect actual &&
+ 	test_path_is_missing to_clean
+ '
+ 
+@@ -559,10 +563,10 @@ test_expect_success 'giving path in nested git work tree will NOT remove it' '
+ 		mkdir -p bar/baz &&
+ 		test_commit msg bar/baz/hello.world
+ 	) &&
++	find repo | sort >expect &&
+ 	git clean -f -d repo/bar/baz &&
+-	test_path_is_file repo/.git/HEAD &&
+-	test_path_is_dir repo/bar/ &&
+-	test_path_is_file repo/bar/baz/hello.world
++	find repo | sort >actual &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'giving path to nested .git will not remove it' '
+@@ -573,10 +577,10 @@ test_expect_success 'giving path to nested .git will not remove it' '
+ 		git init &&
+ 		test_commit msg hello.world
+ 	) &&
++	find repo | sort >expect &&
+ 	git clean -f -d repo/.git &&
+-	test_path_is_file repo/.git/HEAD &&
+-	test_path_is_dir repo/.git/refs &&
+-	test_path_is_dir repo/.git/objects &&
++	find repo | sort >actual &&
++	test_cmp expect actual &&
+ 	test_path_is_dir untracked/
+ '
+ 
+@@ -588,9 +592,10 @@ test_expect_success 'giving path to nested .git/ will NOT remove contents' '
+ 		git init &&
+ 		test_commit msg hello.world
+ 	) &&
++	find repo | sort >expect &&
+ 	git clean -f -d repo/.git/ &&
+-	test_path_is_dir repo/.git &&
+-	test_path_is_file repo/.git/HEAD &&
++	find repo | sort >actual &&
++	test_cmp expect actual &&
+ 	test_path_is_dir untracked/
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

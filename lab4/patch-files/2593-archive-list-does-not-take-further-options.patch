@@ -1,0 +1,51 @@
+From d6b6cd139359097f565023f9481c9943989e4463 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 21 Dec 2023 10:13:58 -0800
+Subject: [PATCH 2593/2871] archive: "--list" does not take further options
+
+"git archive --list blah" should notice an extra command line
+parameter that goes unused.  Make it so.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ archive.c           |  2 ++
+ t/t5000-tar-tree.sh | 10 ++++++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/archive.c b/archive.c
+index ca11db185b..8da820d1ce 100644
+--- a/archive.c
++++ b/archive.c
+@@ -685,6 +685,8 @@ static int parse_archive_args(int argc, const char **argv,
+ 		base = "";
+ 
+ 	if (list) {
++		if (argc)
++			die(_("extra command line parameter '%s'"), *argv);
+ 		for (i = 0; i < nr_archivers; i++)
+ 			if (!is_remote || archivers[i]->flags & ARCHIVER_REMOTE)
+ 				printf("%s\n", archivers[i]->name);
+diff --git a/t/t5000-tar-tree.sh b/t/t5000-tar-tree.sh
+index 4b4c3315d8..72b8d0ff02 100755
+--- a/t/t5000-tar-tree.sh
++++ b/t/t5000-tar-tree.sh
+@@ -124,6 +124,16 @@ test_expect_success 'setup' '
+ 	EOF
+ '
+ 
++test_expect_success '--list notices extra parameters' '
++	test_must_fail git archive --list blah &&
++	test_must_fail git archive --remote=. --list blah
++'
++
++test_expect_success 'end-of-options is correctly eaten' '
++	git archive --list --end-of-options &&
++	git archive --remote=. --list --end-of-options
++'
++
+ test_expect_success 'populate workdir' '
+ 	mkdir a &&
+ 	echo simple textfile >a/a &&
+-- 
+2.39.3 (Apple Git-145)
+

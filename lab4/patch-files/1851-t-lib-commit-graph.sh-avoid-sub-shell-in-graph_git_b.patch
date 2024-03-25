@@ -1,0 +1,47 @@
+From f1b9cebc8bdc01c5b8643fac9f78f2962df82cf3 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Jul 2023 12:39:34 -0400
+Subject: [PATCH 1851/2871] t/lib-commit-graph.sh: avoid sub-shell in
+ `graph_git_behavior()`
+
+In a previous commit, we introduced a sub-shell in the implementation of
+`graph_git_behavior()`, in order to allow us to pass `-C "$DIR"`
+directly to the git processes spawned by `graph_git_two_modes()`.
+
+Now that its callers are always operating from the "$TRASH_DIRECTORY"
+instead of one of its sub-directories, we can drop the inner sub-shell,
+as it is no longer required.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-commit-graph.sh | 13 +++++--------
+ 1 file changed, 5 insertions(+), 8 deletions(-)
+
+diff --git a/t/lib-commit-graph.sh b/t/lib-commit-graph.sh
+index c8bd76a777..89b26676fb 100755
+--- a/t/lib-commit-graph.sh
++++ b/t/lib-commit-graph.sh
+@@ -27,14 +27,11 @@ graph_git_behavior() {
+ 	BRANCH=$3
+ 	COMPARE=$4
+ 	test_expect_success "check normal git operations: $MSG" '
+-		(
+-			cd "$TRASH_DIRECTORY" &&
+-			graph_git_two_modes "${DIR:+-C $DIR} log --oneline $BRANCH" &&
+-			graph_git_two_modes "${DIR:+-C $DIR} log --topo-order $BRANCH" &&
+-			graph_git_two_modes "${DIR:+-C $DIR} log --graph $COMPARE..$BRANCH" &&
+-			graph_git_two_modes "${DIR:+-C $DIR} branch -vv" &&
+-			graph_git_two_modes "${DIR:+-C $DIR} merge-base -a $BRANCH $COMPARE"
+-		)
++		graph_git_two_modes "${DIR:+-C $DIR} log --oneline $BRANCH" &&
++		graph_git_two_modes "${DIR:+-C $DIR} log --topo-order $BRANCH" &&
++		graph_git_two_modes "${DIR:+-C $DIR} log --graph $COMPARE..$BRANCH" &&
++		graph_git_two_modes "${DIR:+-C $DIR} branch -vv" &&
++		graph_git_two_modes "${DIR:+-C $DIR} merge-base -a $BRANCH $COMPARE"
+ 	'
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

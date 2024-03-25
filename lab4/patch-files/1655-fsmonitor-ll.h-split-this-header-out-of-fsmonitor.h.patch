@@ -1,0 +1,350 @@
+From 68d686460f58e45f2eb080e0cdf314987eca5ce5 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:34:08 +0000
+Subject: [PATCH 1655/2871] fsmonitor-ll.h: split this header out of
+ fsmonitor.h
+
+This creates a new fsmonitor-ll.h with most of the functions from
+fsmonitor.h, though it leaves three inline functions where they were.
+Two-thirds of the files that previously included fsmonitor.h did not
+need those three inline functions or the six extra includes those inline
+functions required, so this allows them to only include the lower level
+header.
+
+Diff best viewed with `--color-moved`.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsmonitor--daemon.c              |  4 +-
+ compat/fsmonitor/fsm-health-darwin.c     |  2 +-
+ compat/fsmonitor/fsm-health-win32.c      |  2 +-
+ compat/fsmonitor/fsm-ipc-darwin.c        |  2 +-
+ compat/fsmonitor/fsm-listen-darwin.c     |  3 +-
+ compat/fsmonitor/fsm-listen-win32.c      |  2 +-
+ compat/fsmonitor/fsm-path-utils-darwin.c |  3 +-
+ compat/fsmonitor/fsm-path-utils-win32.c  |  3 +-
+ compat/fsmonitor/fsm-settings-darwin.c   |  2 +-
+ compat/fsmonitor/fsm-settings-win32.c    |  2 +-
+ dir.c                                    |  3 +-
+ fsmonitor-ipc.c                          |  2 +-
+ fsmonitor-ll.h                           | 52 ++++++++++++++++++++++++
+ fsmonitor.h                              | 46 +--------------------
+ sparse-index.c                           |  3 +-
+ 15 files changed, 73 insertions(+), 58 deletions(-)
+ create mode 100644 fsmonitor-ll.h
+
+diff --git a/builtin/fsmonitor--daemon.c b/builtin/fsmonitor--daemon.c
+index f6dd9a784c..74d1d6a585 100644
+--- a/builtin/fsmonitor--daemon.c
++++ b/builtin/fsmonitor--daemon.c
+@@ -5,15 +5,17 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsmonitor-ipc.h"
+ #include "fsmonitor-path-utils.h"
++#include "fsmonitor-settings.h"
+ #include "compat/fsmonitor/fsm-health.h"
+ #include "compat/fsmonitor/fsm-listen.h"
+ #include "fsmonitor--daemon.h"
+ #include "simple-ipc.h"
+ #include "khash.h"
+ #include "pkt-line.h"
++#include "trace.h"
+ #include "trace2.h"
+ 
+ static const char * const builtin_fsmonitor__daemon_usage[] = {
+diff --git a/compat/fsmonitor/fsm-health-darwin.c b/compat/fsmonitor/fsm-health-darwin.c
+index 4c291f8a06..5b1709d63f 100644
+--- a/compat/fsmonitor/fsm-health-darwin.c
++++ b/compat/fsmonitor/fsm-health-darwin.c
+@@ -1,6 +1,6 @@
+ #include "git-compat-util.h"
+ #include "config.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsm-health.h"
+ #include "fsmonitor--daemon.h"
+ 
+diff --git a/compat/fsmonitor/fsm-health-win32.c b/compat/fsmonitor/fsm-health-win32.c
+index 6c81d7ee5c..2d4e245beb 100644
+--- a/compat/fsmonitor/fsm-health-win32.c
++++ b/compat/fsmonitor/fsm-health-win32.c
+@@ -1,6 +1,6 @@
+ #include "git-compat-util.h"
+ #include "config.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsm-health.h"
+ #include "fsmonitor--daemon.h"
+ #include "gettext.h"
+diff --git a/compat/fsmonitor/fsm-ipc-darwin.c b/compat/fsmonitor/fsm-ipc-darwin.c
+index 964bc074db..6f3a95410c 100644
+--- a/compat/fsmonitor/fsm-ipc-darwin.c
++++ b/compat/fsmonitor/fsm-ipc-darwin.c
+@@ -5,7 +5,7 @@
+ #include "path.h"
+ #include "repository.h"
+ #include "strbuf.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsmonitor-ipc.h"
+ #include "fsmonitor-path-utils.h"
+ 
+diff --git a/compat/fsmonitor/fsm-listen-darwin.c b/compat/fsmonitor/fsm-listen-darwin.c
+index 23e24b4b37..36c7e13281 100644
+--- a/compat/fsmonitor/fsm-listen-darwin.c
++++ b/compat/fsmonitor/fsm-listen-darwin.c
+@@ -24,12 +24,13 @@
+ #endif
+ 
+ #include "git-compat-util.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsm-listen.h"
+ #include "fsmonitor--daemon.h"
+ #include "fsmonitor-path-utils.h"
+ #include "gettext.h"
+ #include "string-list.h"
++#include "trace.h"
+ 
+ struct fsm_listen_data
+ {
+diff --git a/compat/fsmonitor/fsm-listen-win32.c b/compat/fsmonitor/fsm-listen-win32.c
+index 3c0df5cff8..a361a7db20 100644
+--- a/compat/fsmonitor/fsm-listen-win32.c
++++ b/compat/fsmonitor/fsm-listen-win32.c
+@@ -1,6 +1,6 @@
+ #include "git-compat-util.h"
+ #include "config.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsm-listen.h"
+ #include "fsmonitor--daemon.h"
+ #include "gettext.h"
+diff --git a/compat/fsmonitor/fsm-path-utils-darwin.c b/compat/fsmonitor/fsm-path-utils-darwin.c
+index ef0142e0fb..049f97eaaf 100644
+--- a/compat/fsmonitor/fsm-path-utils-darwin.c
++++ b/compat/fsmonitor/fsm-path-utils-darwin.c
+@@ -1,7 +1,8 @@
+ #include "git-compat-util.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsmonitor-path-utils.h"
+ #include "gettext.h"
++#include "trace.h"
+ #include <dirent.h>
+ #include <errno.h>
+ #include <fcntl.h>
+diff --git a/compat/fsmonitor/fsm-path-utils-win32.c b/compat/fsmonitor/fsm-path-utils-win32.c
+index 27bb694518..c8a3e9dcdb 100644
+--- a/compat/fsmonitor/fsm-path-utils-win32.c
++++ b/compat/fsmonitor/fsm-path-utils-win32.c
+@@ -1,7 +1,8 @@
+ #include "git-compat-util.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsmonitor-path-utils.h"
+ #include "gettext.h"
++#include "trace.h"
+ 
+ /*
+  * Check remote working directory protocol.
+diff --git a/compat/fsmonitor/fsm-settings-darwin.c b/compat/fsmonitor/fsm-settings-darwin.c
+index 58b623fbb9..a382590635 100644
+--- a/compat/fsmonitor/fsm-settings-darwin.c
++++ b/compat/fsmonitor/fsm-settings-darwin.c
+@@ -1,6 +1,6 @@
+ #include "git-compat-util.h"
+ #include "config.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsmonitor-ipc.h"
+ #include "fsmonitor-settings.h"
+ #include "fsmonitor-path-utils.h"
+diff --git a/compat/fsmonitor/fsm-settings-win32.c b/compat/fsmonitor/fsm-settings-win32.c
+index 3728897864..b6f6744494 100644
+--- a/compat/fsmonitor/fsm-settings-win32.c
++++ b/compat/fsmonitor/fsm-settings-win32.c
+@@ -1,7 +1,7 @@
+ #include "git-compat-util.h"
+ #include "config.h"
+ #include "repository.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "fsmonitor-settings.h"
+ #include "fsmonitor-path-utils.h"
+ 
+diff --git a/dir.c b/dir.c
+index fada2713b9..3acac7beb1 100644
+--- a/dir.c
++++ b/dir.c
+@@ -24,7 +24,8 @@
+ #include "utf8.h"
+ #include "varint.h"
+ #include "ewah/ewok.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
++#include "read-cache-ll.h"
+ #include "setup.h"
+ #include "sparse-index.h"
+ #include "submodule-config.h"
+diff --git a/fsmonitor-ipc.c b/fsmonitor-ipc.c
+index 6ace978a1b..88575aa54c 100644
+--- a/fsmonitor-ipc.c
++++ b/fsmonitor-ipc.c
+@@ -1,5 +1,5 @@
+ #include "git-compat-util.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ #include "gettext.h"
+ #include "simple-ipc.h"
+ #include "fsmonitor-ipc.h"
+diff --git a/fsmonitor-ll.h b/fsmonitor-ll.h
+new file mode 100644
+index 0000000000..0504ca07d6
+--- /dev/null
++++ b/fsmonitor-ll.h
+@@ -0,0 +1,52 @@
++#ifndef FSMONITOR_LL_H
++#define FSMONITOR_LL_H
++
++struct index_state;
++struct strbuf;
++
++extern struct trace_key trace_fsmonitor;
++
++/*
++ * Read the fsmonitor index extension and (if configured) restore the
++ * CE_FSMONITOR_VALID state.
++ */
++int read_fsmonitor_extension(struct index_state *istate, const void *data, unsigned long sz);
++
++/*
++ * Fill the fsmonitor_dirty ewah bits with their state from the index,
++ * before it is split during writing.
++ */
++void fill_fsmonitor_bitmap(struct index_state *istate);
++
++/*
++ * Write the CE_FSMONITOR_VALID state into the fsmonitor index
++ * extension.  Reads from the fsmonitor_dirty ewah in the index.
++ */
++void write_fsmonitor_extension(struct strbuf *sb, struct index_state *istate);
++
++/*
++ * Add/remove the fsmonitor index extension
++ */
++void add_fsmonitor(struct index_state *istate);
++void remove_fsmonitor(struct index_state *istate);
++
++/*
++ * Add/remove the fsmonitor index extension as necessary based on the current
++ * core.fsmonitor setting.
++ */
++void tweak_fsmonitor(struct index_state *istate);
++
++/*
++ * Run the configured fsmonitor integration script and clear the
++ * CE_FSMONITOR_VALID bit for any files returned as dirty.  Also invalidate
++ * any corresponding untracked cache directory structures. Optimized to only
++ * run the first time it is called.
++ */
++void refresh_fsmonitor(struct index_state *istate);
++
++/*
++ * Does the received result contain the "trivial" response?
++ */
++int fsmonitor_is_trivial_response(const struct strbuf *query_result);
++
++#endif /* FSMONITOR_LL_H */
+diff --git a/fsmonitor.h b/fsmonitor.h
+index 7702301d21..5195a8624d 100644
+--- a/fsmonitor.h
++++ b/fsmonitor.h
+@@ -1,57 +1,13 @@
+ #ifndef FSMONITOR_H
+ #define FSMONITOR_H
+ 
++#include "fsmonitor-ll.h"
+ #include "dir.h"
+ #include "fsmonitor-settings.h"
+ #include "object.h"
+ #include "read-cache-ll.h"
+ #include "trace.h"
+ 
+-extern struct trace_key trace_fsmonitor;
+-
+-/*
+- * Read the fsmonitor index extension and (if configured) restore the
+- * CE_FSMONITOR_VALID state.
+- */
+-int read_fsmonitor_extension(struct index_state *istate, const void *data, unsigned long sz);
+-
+-/*
+- * Fill the fsmonitor_dirty ewah bits with their state from the index,
+- * before it is split during writing.
+- */
+-void fill_fsmonitor_bitmap(struct index_state *istate);
+-
+-/*
+- * Write the CE_FSMONITOR_VALID state into the fsmonitor index
+- * extension.  Reads from the fsmonitor_dirty ewah in the index.
+- */
+-void write_fsmonitor_extension(struct strbuf *sb, struct index_state *istate);
+-
+-/*
+- * Add/remove the fsmonitor index extension
+- */
+-void add_fsmonitor(struct index_state *istate);
+-void remove_fsmonitor(struct index_state *istate);
+-
+-/*
+- * Add/remove the fsmonitor index extension as necessary based on the current
+- * core.fsmonitor setting.
+- */
+-void tweak_fsmonitor(struct index_state *istate);
+-
+-/*
+- * Run the configured fsmonitor integration script and clear the
+- * CE_FSMONITOR_VALID bit for any files returned as dirty.  Also invalidate
+- * any corresponding untracked cache directory structures. Optimized to only
+- * run the first time it is called.
+- */
+-void refresh_fsmonitor(struct index_state *istate);
+-
+-/*
+- * Does the received result contain the "trivial" response?
+- */
+-int fsmonitor_is_trivial_response(const struct strbuf *query_result);
+-
+ /*
+  * Check if refresh_fsmonitor has been called at least once.
+  * refresh_fsmonitor is idempotent. Returns true if fsmonitor is
+diff --git a/sparse-index.c b/sparse-index.c
+index 2c47954d93..90d0462256 100644
+--- a/sparse-index.c
++++ b/sparse-index.c
+@@ -3,6 +3,7 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "name-hash.h"
++#include "read-cache-ll.h"
+ #include "repository.h"
+ #include "sparse-index.h"
+ #include "tree.h"
+@@ -11,7 +12,7 @@
+ #include "cache-tree.h"
+ #include "config.h"
+ #include "dir.h"
+-#include "fsmonitor.h"
++#include "fsmonitor-ll.h"
+ 
+ struct modify_index_context {
+ 	struct index_state *write;
+-- 
+2.39.3 (Apple Git-145)
+

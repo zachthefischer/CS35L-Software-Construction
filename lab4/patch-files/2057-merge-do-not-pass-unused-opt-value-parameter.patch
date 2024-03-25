@@ -1,0 +1,39 @@
+From 62c5358a5e728d332e4a991c87d9eb0d5161a02a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 17:21:46 -0400
+Subject: [PATCH 2057/2871] merge: do not pass unused opt->value parameter
+
+The option_parse_strategy() callback does not look at opt->value;
+instead it calls append_strategy(), which manipulates the global
+use_strategies array directly. But the OPT_CALLBACK declaration assigns
+"&use_strategies" to opt->value.
+
+One could argue this is good, as it tells the reader what we generally
+expect the callback to do. But it is also bad, because it can mislead
+you into thinking that swapping out "&use_strategies" there might have
+any effect. Let's switch it to pass NULL (which is what every other
+"does not bother to look at opt->value" callback does). If you want to
+know what the callback does, it's easy to read the function itself.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/merge.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/merge.c b/builtin/merge.c
+index 0436986dab..545da0c8a1 100644
+--- a/builtin/merge.c
++++ b/builtin/merge.c
+@@ -264,7 +264,7 @@ static struct option builtin_merge_options[] = {
+ 	OPT_RERERE_AUTOUPDATE(&allow_rerere_auto),
+ 	OPT_BOOL(0, "verify-signatures", &verify_signatures,
+ 		N_("verify that the named commit has a valid GPG signature")),
+-	OPT_CALLBACK('s', "strategy", &use_strategies, N_("strategy"),
++	OPT_CALLBACK('s', "strategy", NULL, N_("strategy"),
+ 		N_("merge strategy to use"), option_parse_strategy),
+ 	OPT_STRVEC('X', "strategy-option", &xopts, N_("option=value"),
+ 		N_("option for selected merge strategy")),
+-- 
+2.39.3 (Apple Git-145)
+

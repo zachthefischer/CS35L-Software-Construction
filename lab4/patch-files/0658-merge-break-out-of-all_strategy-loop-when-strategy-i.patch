@@ -1,0 +1,32 @@
+From 0c75692ebcddb2443c5e56c68c2e0ed55dd1ae18 Mon Sep 17 00:00:00 2001
+From: Seija Kijin <doremylover123@gmail.com>
+Date: Mon, 9 Jan 2023 17:34:28 +0000
+Subject: [PATCH 0658/2871] merge: break out of all_strategy loop when strategy
+ is found
+
+Once we find a match, there is no point to try finding the second
+match in the inner loop.  Break out of the loop once we find the
+first match.
+
+Signed-off-by: Seija Kijin <doremylover123@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/merge.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/merge.c b/builtin/merge.c
+index 0f093f2a4f..74de2ebd2b 100644
+--- a/builtin/merge.c
++++ b/builtin/merge.c
+@@ -188,7 +188,7 @@ static struct strategy *get_strategy(const char *name)
+ 		for (i = 0; i < main_cmds.cnt; i++) {
+ 			int j, found = 0;
+ 			struct cmdname *ent = main_cmds.names[i];
+-			for (j = 0; j < ARRAY_SIZE(all_strategy); j++)
++			for (j = 0; !found && j < ARRAY_SIZE(all_strategy); j++)
+ 				if (!strncmp(ent->name, all_strategy[j].name, ent->len)
+ 						&& !all_strategy[j].name[ent->len])
+ 					found = 1;
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,27 @@
+From e43f4fd0bd864e0472dd4285190d411f4342e8d8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 21 Jul 2023 13:47:13 -0700
+Subject: [PATCH 1842/2871] The thirteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.42.0.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.42.0.txt b/Documentation/RelNotes/2.42.0.txt
+index a716dc195b..ee120fe424 100644
+--- a/Documentation/RelNotes/2.42.0.txt
++++ b/Documentation/RelNotes/2.42.0.txt
+@@ -57,6 +57,9 @@ Performance, Internal Implementation, Development Support etc.
+  * "imap-send" codepaths got cleaned up to get rid of unused
+    parameters.
+ 
++ * Enumerating refs in the packed-refs file, while excluding refs that
++   match certain patterns, has been optimized.
++
+ 
+ Fixes since v2.41
+ -----------------
+-- 
+2.39.3 (Apple Git-145)
+

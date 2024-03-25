@@ -1,0 +1,104 @@
+From 56090a35ab20c21ef577bd1ed2d9d5b63eb5f649 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 18 Jan 2024 11:23:02 +0100
+Subject: [PATCH 2704/2871] ci: add macOS jobs to GitLab CI
+
+Add a job to GitLab CI which runs tests on macOS, which matches the
+equivalent "osx-clang" job that we have for GitHub Workflows. One
+significant difference though is that this new job runs on Apple M1
+machines and thus uses the "arm64" architecture. As GCC does not yet
+support this comparatively new architecture we cannot easily include an
+equivalent for the "osx-gcc" job that exists in GitHub Workflows.
+
+Note that one test marked as `test_must_fail` is surprisingly passing:
+
+  t7815-grep-binary.sh                             (Wstat: 0 Tests: 22 Failed: 0)
+    TODO passed:   12
+
+This seems to boil down to an unexpected difference in how regcomp(3P)
+works when matching NUL bytes. Cross-checking with the respective GitHub
+job shows that this is not an issue unique to the GitLab CI job as it
+passes in the same way there.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .gitlab-ci.yml | 34 +++++++++++++++++++++++++++++++++-
+ ci/lib.sh      |  9 ++++++++-
+ 2 files changed, 41 insertions(+), 2 deletions(-)
+
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index 793243421c..43bfbd8834 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -7,7 +7,7 @@ workflow:
+     - if: $CI_COMMIT_TAG
+     - if: $CI_COMMIT_REF_PROTECTED == "true"
+ 
+-test:
++test:linux:
+   image: $image
+   before_script:
+     - ./ci/install-docker-dependencies.sh
+@@ -52,6 +52,38 @@ test:
+       - t/failed-test-artifacts
+     when: on_failure
+ 
++test:osx:
++  image: $image
++  tags:
++    - saas-macos-medium-m1
++  variables:
++    TEST_OUTPUT_DIRECTORY: "/Volumes/RAMDisk"
++  before_script:
++    # Create a 4GB RAM disk that we use to store test output on. This small hack
++    # significantly speeds up tests by more than a factor of 2 because the
++    # macOS runners use network-attached storage as disks, which is _really_
++    # slow with the many small writes that our tests do.
++    - sudo diskutil apfs create $(hdiutil attach -nomount ram://8192000) RAMDisk
++    - ./ci/install-dependencies.sh
++  script:
++    - ./ci/run-build-and-tests.sh
++  after_script:
++    - |
++      if test "$CI_JOB_STATUS" != 'success'
++      then
++        ./ci/print-test-failures.sh
++        mv "$TEST_OUTPUT_DIRECTORY"/failed-test-artifacts t/
++      fi
++  parallel:
++    matrix:
++      - jobname: osx-clang
++        image: macos-13-xcode-14
++        CC: clang
++  artifacts:
++    paths:
++      - t/failed-test-artifacts
++    when: on_failure
++
+ static-analysis:
+   image: ubuntu:22.04
+   variables:
+diff --git a/ci/lib.sh b/ci/lib.sh
+index f631206a44..d5dd2f2697 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -252,7 +252,14 @@ then
+ 	CI_COMMIT="$CI_COMMIT_SHA"
+ 	case "$CI_JOB_IMAGE" in
+ 	macos-*)
+-		CI_OS_NAME=osx;;
++		# GitLab CI has Python installed via multiple package managers,
++		# most notably via asdf and Homebrew. Ensure that our builds
++		# pick up the Homebrew one by prepending it to our PATH as the
++		# asdf one breaks tests.
++		export PATH="$(brew --prefix)/bin:$PATH"
++
++		CI_OS_NAME=osx
++		;;
+ 	alpine:*|fedora:*|ubuntu:*)
+ 		CI_OS_NAME=linux;;
+ 	*)
+-- 
+2.39.3 (Apple Git-145)
+

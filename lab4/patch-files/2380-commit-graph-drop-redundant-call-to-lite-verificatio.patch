@@ -1,0 +1,43 @@
+From 92de4c5d56d084325997ca057701b65a9e79276a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Nov 2023 02:13:12 -0500
+Subject: [PATCH 2380/2871] commit-graph: drop redundant call to "lite"
+ verification
+
+The idea of verify_commit_graph_lite() is to have cheap verification
+checks both for everyday use of the graph files (to avoid out of bounds
+reads, etc) as well as for doing a full check via "commit-graph verify"
+(which will also check the hash, etc).
+
+But the expensive verification checks operate on a commit_graph struct,
+which we get by using the normal everyday-reader code! So any problem
+we'd find by calling it would have been found before we even got to the
+verify_one_commit_graph() function.
+
+Removing it simplifies the code a bit, but also frees us up to move the
+"lite" verification steps around within that everyday-reader code.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index d2f1387a8b..87e594c42e 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2690,10 +2690,6 @@ static int verify_one_commit_graph(struct repository *r,
+ 	struct commit *seen_gen_zero = NULL;
+ 	struct commit *seen_gen_non_zero = NULL;
+ 
+-	verify_commit_graph_error = verify_commit_graph_lite(g);
+-	if (verify_commit_graph_error)
+-		return verify_commit_graph_error;
+-
+ 	if (!commit_graph_checksum_valid(g)) {
+ 		graph_report(_("the commit-graph file has incorrect checksum and is likely corrupt"));
+ 		verify_commit_graph_error = VERIFY_COMMIT_GRAPH_ERROR_HASH;
+-- 
+2.39.3 (Apple Git-145)
+

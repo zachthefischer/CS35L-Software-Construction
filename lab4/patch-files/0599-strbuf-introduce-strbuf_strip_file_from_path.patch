@@ -1,0 +1,62 @@
+From 9ea57964953dec11dcbbd5d4bf44a5e3781f5880 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Thu, 22 Dec 2022 15:14:14 +0000
+Subject: [PATCH 0599/2871] strbuf: introduce strbuf_strip_file_from_path()
+
+The strbuf_parent_directory() method was added as a static method in
+contrib/scalar by d0feac4e8c0 (scalar: 'register' sets recommended
+config and starts maintenance, 2021-12-03) and then removed in
+65f6a9eb0b9 (scalar: constrain enlistment search, 2022-08-18), but now
+there is a need for a similar method in the bundle URI feature.
+
+Re-add the method, this time in strbuf.c, but with a new name:
+strbuf_strip_file_from_path(). The method requirements are slightly
+modified to allow a trailing slash, in which case nothing is done, which
+makes the name change valuable.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ strbuf.c |  6 ++++++
+ strbuf.h | 11 +++++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/strbuf.c b/strbuf.c
+index 0890b1405c..c383f41a3c 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -1200,3 +1200,9 @@ int strbuf_edit_interactively(struct strbuf *buffer, const char *path,
+ 	free(path2);
+ 	return res;
+ }
++
++void strbuf_strip_file_from_path(struct strbuf *sb)
++{
++	char *path_sep = find_last_dir_sep(sb->buf);
++	strbuf_setlen(sb, path_sep ? path_sep - sb->buf + 1 : 0);
++}
+diff --git a/strbuf.h b/strbuf.h
+index 76965a17d4..f6dbb9681e 100644
+--- a/strbuf.h
++++ b/strbuf.h
+@@ -664,6 +664,17 @@ int launch_sequence_editor(const char *path, struct strbuf *buffer,
+ int strbuf_edit_interactively(struct strbuf *buffer, const char *path,
+ 			      const char *const *env);
+ 
++/*
++ * Remove the filename from the provided path string. If the path
++ * contains a trailing separator, then the path is considered a directory
++ * and nothing is modified.
++ *
++ * Examples:
++ * - "/path/to/file" -> "/path/to/"
++ * - "/path/to/dir/" -> "/path/to/dir/"
++ */
++void strbuf_strip_file_from_path(struct strbuf *sb);
++
+ void strbuf_add_lines(struct strbuf *sb,
+ 		      const char *prefix,
+ 		      const char *buf,
+-- 
+2.39.3 (Apple Git-145)
+

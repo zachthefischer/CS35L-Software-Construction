@@ -1,0 +1,36 @@
+From 1bb7fcbffc213db044476998f3a14b2597f3c540 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <worldhello.net@gmail.com>
+Date: Fri, 16 Feb 2024 11:20:39 +0800
+Subject: [PATCH 2859/2871] l10n: ci: disable cache for setup-go to suppress
+ warnings
+
+After we upgraded actions/setup-go to v5, the following warning message
+was reported every time we ran the CI.
+
+    Restore cache failed: Dependencies file is not found ...
+
+Disable cache to suppress warning messages as described in the solution
+below.
+
+    https://github.com/actions/setup-go/issues/427
+
+Signed-off-by: Jiang Xin <worldhello.net@gmail.com>
+---
+ .github/workflows/l10n.yml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.github/workflows/l10n.yml b/.github/workflows/l10n.yml
+index 6d3ae9daf1..e2c3dbdcb5 100644
+--- a/.github/workflows/l10n.yml
++++ b/.github/workflows/l10n.yml
+@@ -66,6 +66,7 @@ jobs:
+       - uses: actions/setup-go@v5
+         with:
+           go-version: '>=1.16'
++          cache: false
+       - name: Install git-po-helper
+         run: go install github.com/git-l10n/git-po-helper@main
+       - name: Install other dependencies
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,41 @@
+From 792b86283b13fb2e06b9e62c64fca51b879d0266 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Wed, 6 Dec 2023 12:52:01 +0100
+Subject: [PATCH 2493/2871] worktree: simplify incompatibility message for
+ --orphan and commit-ish
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use a single translatable string to report that the worktree add option
+--orphan is incompatible with a commit-ish instead of having the
+commit-ish in a separate translatable string.  This reduces the number
+of strings to translate and gives translators the full context.
+
+A similar message is used in builtin/describe.c, but with the plural of
+commit-ish, and here we need the singular form.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/worktree.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 036ceaa981..4ac1621541 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -815,8 +815,8 @@ static int add(int ac, const char **av, const char *prefix)
+ 		die(_("options '%s' and '%s' cannot be used together"),
+ 		    "--orphan", "--no-checkout");
+ 	if (opts.orphan && ac == 2)
+-		die(_("'%s' and '%s' cannot be used together"), "--orphan",
+-		    _("<commit-ish>"));
++		die(_("option '%s' and commit-ish cannot be used together"),
++		    "--orphan");
+ 	if (lock_reason && !keep_locked)
+ 		die(_("the option '%s' requires '%s'"), "--reason", "--lock");
+ 	if (lock_reason)
+-- 
+2.39.3 (Apple Git-145)
+

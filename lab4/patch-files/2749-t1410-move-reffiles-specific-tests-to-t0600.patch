@@ -1,0 +1,139 @@
+From c02ce75823c9c35bdf6e5c5adda02cbfc4805ddc Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:55 +0000
+Subject: [PATCH 2749/2871] t1410: move reffiles specific tests to t0600
+
+Move these tests to t0600 with other reffiles specific tests since they
+do things like take a lock on an individual ref, and write directly into
+the reflog refs.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0600-reffiles-backend.sh | 51 +++++++++++++++++++++++++++++++++++++
+ t/t1410-reflog.sh           | 42 ------------------------------
+ 2 files changed, 51 insertions(+), 42 deletions(-)
+
+diff --git a/t/t0600-reffiles-backend.sh b/t/t0600-reffiles-backend.sh
+index dd46b8337d..0d6ec020b3 100755
+--- a/t/t0600-reffiles-backend.sh
++++ b/t/t0600-reffiles-backend.sh
+@@ -308,4 +308,55 @@ test_expect_success 'for_each_reflog()' '
+ 	test_cmp expected actual
+ '
+ 
++# Triggering the bug detected by this test requires a newline to fall
++# exactly BUFSIZ-1 bytes from the end of the file. We don't know
++# what that value is, since it's platform dependent. However, if
++# we choose some value N, we also catch any D which divides N evenly
++# (since we will read backwards in chunks of D). So we choose 8K,
++# which catches glibc (with an 8K BUFSIZ) and *BSD (1K).
++#
++# Each line is 114 characters, so we need 75 to still have a few before the
++# last 8K. The 89-character padding on the final entry lines up our
++# newline exactly.
++test_expect_success SHA1 'parsing reverse reflogs at BUFSIZ boundaries' '
++	git checkout -b reflogskip &&
++	zf=$(test_oid zero_2) &&
++	ident="abc <xyz> 0000000001 +0000" &&
++	for i in $(test_seq 1 75); do
++		printf "$zf%02d $zf%02d %s\t" $i $(($i+1)) "$ident" &&
++		if test $i = 75; then
++			for j in $(test_seq 1 89); do
++				printf X || return 1
++			done
++		else
++			printf X
++		fi &&
++		printf "\n" || return 1
++	done >.git/logs/refs/heads/reflogskip &&
++	git rev-parse reflogskip@{73} >actual &&
++	echo ${zf}03 >expect &&
++	test_cmp expect actual
++'
++
++# This test takes a lock on an individual ref; this is not supported in
++# reftable.
++test_expect_success 'reflog expire operates on symref not referrent' '
++	git branch --create-reflog the_symref &&
++	git branch --create-reflog referrent &&
++	git update-ref referrent HEAD &&
++	git symbolic-ref refs/heads/the_symref refs/heads/referrent &&
++	test_when_finished "rm -f .git/refs/heads/referrent.lock" &&
++	touch .git/refs/heads/referrent.lock &&
++	git reflog expire --expire=all the_symref
++'
++
++test_expect_success 'empty reflog' '
++	test_when_finished "rm -rf empty" &&
++	git init empty &&
++	test_commit -C empty A &&
++	>empty/.git/logs/refs/heads/foo &&
++	git -C empty reflog expire --all 2>err &&
++	test_must_be_empty err
++'
++
+ test_done
+diff --git a/t/t1410-reflog.sh b/t/t1410-reflog.sh
+index a0ff8d51f0..d2f5f42e67 100755
+--- a/t/t1410-reflog.sh
++++ b/t/t1410-reflog.sh
+@@ -354,36 +354,6 @@ test_expect_success 'stale dirs do not cause d/f conflicts (reflogs off)' '
+ 	test_must_be_empty actual
+ '
+ 
+-# Triggering the bug detected by this test requires a newline to fall
+-# exactly BUFSIZ-1 bytes from the end of the file. We don't know
+-# what that value is, since it's platform dependent. However, if
+-# we choose some value N, we also catch any D which divides N evenly
+-# (since we will read backwards in chunks of D). So we choose 8K,
+-# which catches glibc (with an 8K BUFSIZ) and *BSD (1K).
+-#
+-# Each line is 114 characters, so we need 75 to still have a few before the
+-# last 8K. The 89-character padding on the final entry lines up our
+-# newline exactly.
+-test_expect_success REFFILES,SHA1 'parsing reverse reflogs at BUFSIZ boundaries' '
+-	git checkout -b reflogskip &&
+-	zf=$(test_oid zero_2) &&
+-	ident="abc <xyz> 0000000001 +0000" &&
+-	for i in $(test_seq 1 75); do
+-		printf "$zf%02d $zf%02d %s\t" $i $(($i+1)) "$ident" &&
+-		if test $i = 75; then
+-			for j in $(test_seq 1 89); do
+-				printf X || return 1
+-			done
+-		else
+-			printf X
+-		fi &&
+-		printf "\n" || return 1
+-	done >.git/logs/refs/heads/reflogskip &&
+-	git rev-parse reflogskip@{73} >actual &&
+-	echo ${zf}03 >expect &&
+-	test_cmp expect actual
+-'
+-
+ test_expect_success 'no segfaults for reflog containing non-commit sha1s' '
+ 	git update-ref --create-reflog -m "Creating ref" \
+ 		refs/tests/tree-in-reflog HEAD &&
+@@ -397,18 +367,6 @@ test_expect_failure 'reflog with non-commit entries displays all entries' '
+ 	test_line_count = 3 actual
+ '
+ 
+-# This test takes a lock on an individual ref; this is not supported in
+-# reftable.
+-test_expect_success REFFILES 'reflog expire operates on symref not referrent' '
+-	git branch --create-reflog the_symref &&
+-	git branch --create-reflog referrent &&
+-	git update-ref referrent HEAD &&
+-	git symbolic-ref refs/heads/the_symref refs/heads/referrent &&
+-	test_when_finished "rm -f .git/refs/heads/referrent.lock" &&
+-	touch .git/refs/heads/referrent.lock &&
+-	git reflog expire --expire=all the_symref
+-'
+-
+ test_expect_success 'continue walking past root commits' '
+ 	git init orphanage &&
+ 	(
+-- 
+2.39.3 (Apple Git-145)
+

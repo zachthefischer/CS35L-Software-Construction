@@ -1,0 +1,124 @@
+From 666f53eb43f52216d03d579b91a2152ba7821773 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Sat, 19 Nov 2022 14:07:36 +0100
+Subject: [PATCH 0413/2871] {builtin/*,repository}.c: add & use
+ "USE_THE_INDEX_VARIABLE"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Split up the "USE_THE_INDEX_COMPATIBILITY_MACROS" into that setting
+and a more narrow "USE_THE_INDEX_VARIABLE". In the case of these
+built-ins we only need "the_index" variable, but not the compatibility
+wrapper for functions we're not using.
+
+Let's then have some users of "USE_THE_INDEX_COMPATIBILITY_MACROS" use
+this more narrow and descriptive define.
+
+For context: The USE_THE_INDEX_COMPATIBILITY_MACROS macro was added to
+test-tool.h in f8adbec9fea (cache.h: flip
+NO_THE_INDEX_COMPATIBILITY_MACROS switch, 2019-01-24).
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/cat-file.c   | 2 +-
+ builtin/difftool.c   | 2 +-
+ builtin/merge-tree.c | 2 +-
+ builtin/pull.c       | 2 +-
+ cache.h              | 6 +++++-
+ repository.c         | 2 +-
+ 6 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index fa7bd89169..b3be58b1fb 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -3,7 +3,7 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#define USE_THE_INDEX_COMPATIBILITY_MACROS
++#define USE_THE_INDEX_VARIABLE
+ #include "cache.h"
+ #include "config.h"
+ #include "builtin.h"
+diff --git a/builtin/difftool.c b/builtin/difftool.c
+index d7f08c8a7f..d9b76226f6 100644
+--- a/builtin/difftool.c
++++ b/builtin/difftool.c
+@@ -11,7 +11,7 @@
+  *
+  * Copyright (C) 2016 Johannes Schindelin
+  */
+-#define USE_THE_INDEX_COMPATIBILITY_MACROS
++#define USE_THE_INDEX_VARIABLE
+ #include "cache.h"
+ #include "config.h"
+ #include "builtin.h"
+diff --git a/builtin/merge-tree.c b/builtin/merge-tree.c
+index fe853aa8f9..e3767087bb 100644
+--- a/builtin/merge-tree.c
++++ b/builtin/merge-tree.c
+@@ -1,4 +1,4 @@
+-#define USE_THE_INDEX_COMPATIBILITY_MACROS
++#define USE_THE_INDEX_VARIABLE
+ #include "builtin.h"
+ #include "tree-walk.h"
+ #include "xdiff-interface.h"
+diff --git a/builtin/pull.c b/builtin/pull.c
+index 4a2a6db2dc..1ab4de0005 100644
+--- a/builtin/pull.c
++++ b/builtin/pull.c
+@@ -5,7 +5,7 @@
+  *
+  * Fetch one or more remote refs and merge it/them into the current HEAD.
+  */
+-#define USE_THE_INDEX_COMPATIBILITY_MACROS
++#define USE_THE_INDEX_VARIABLE
+ #include "cache.h"
+ #include "config.h"
+ #include "builtin.h"
+diff --git a/cache.h b/cache.h
+index 805e25f9a6..707806d212 100644
+--- a/cache.h
++++ b/cache.h
+@@ -433,9 +433,11 @@ typedef int (*must_prefetch_predicate)(const struct cache_entry *);
+ void prefetch_cache_entries(const struct index_state *istate,
+ 			    must_prefetch_predicate must_prefetch);
+ 
+-#ifdef USE_THE_INDEX_COMPATIBILITY_MACROS
++#if defined(USE_THE_INDEX_COMPATIBILITY_MACROS) || defined(USE_THE_INDEX_VARIABLE)
+ extern struct index_state the_index;
+ 
++#ifndef USE_THE_INDEX_VARIABLE
++#ifdef USE_THE_INDEX_COMPATIBILITY_MACROS
+ #define active_nr (the_index.cache_nr)
+ 
+ #define read_cache() repo_read_index(the_repository)
+@@ -447,6 +449,8 @@ extern struct index_state the_index;
+ #define refresh_and_write_cache(refresh_flags, write_flags, gentle) repo_refresh_and_write_index(the_repository, (refresh_flags), (write_flags), (gentle), NULL, NULL, NULL)
+ #define hold_locked_index(lock_file, flags) repo_hold_locked_index(the_repository, (lock_file), (flags))
+ #endif
++#endif
++#endif
+ 
+ #define TYPE_BITS 3
+ 
+diff --git a/repository.c b/repository.c
+index 5d166b692c..3427085fd6 100644
+--- a/repository.c
++++ b/repository.c
+@@ -2,7 +2,7 @@
+  * not really _using_ the compat macros, just make sure the_index
+  * declaration matches the definition in this file.
+  */
+-#define USE_THE_INDEX_COMPATIBILITY_MACROS
++#define USE_THE_INDEX_VARIABLE
+ #include "cache.h"
+ #include "repository.h"
+ #include "object-store.h"
+-- 
+2.39.3 (Apple Git-145)
+

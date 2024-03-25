@@ -1,0 +1,83 @@
+From 48f3f8cf37043f69e9834d38e2439abfde280964 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:54 -0400
+Subject: [PATCH 1795/2871] commit-graph.c: prevent overflow in
+ `write_commit_graph_file()`
+
+When writing a commit-graph, we use the chunk-format API to write out
+each individual chunk of the commit-graph. Each chunk of the
+commit-graph is tracked via a call to `add_chunk()`, along with the
+expected size of that chunk.
+
+Similar to an earlier commit which handled the identical issue in the
+MIDX machinery, guard against overflow when dealing with a commit-graph
+with a large number of entries to avoid corrupting the contents of the
+commit-graph itself.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 843bdb458d..86c76bd2f8 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -1953,35 +1953,35 @@ static int write_commit_graph_file(struct write_commit_graph_context *ctx)
+ 
+ 	add_chunk(cf, GRAPH_CHUNKID_OIDFANOUT, GRAPH_FANOUT_SIZE,
+ 		  write_graph_chunk_fanout);
+-	add_chunk(cf, GRAPH_CHUNKID_OIDLOOKUP, hashsz * ctx->commits.nr,
++	add_chunk(cf, GRAPH_CHUNKID_OIDLOOKUP, st_mult(hashsz, ctx->commits.nr),
+ 		  write_graph_chunk_oids);
+-	add_chunk(cf, GRAPH_CHUNKID_DATA, (hashsz + 16) * ctx->commits.nr,
++	add_chunk(cf, GRAPH_CHUNKID_DATA, st_mult(hashsz + 16, ctx->commits.nr),
+ 		  write_graph_chunk_data);
+ 
+ 	if (ctx->write_generation_data)
+ 		add_chunk(cf, GRAPH_CHUNKID_GENERATION_DATA,
+-			  sizeof(uint32_t) * ctx->commits.nr,
++			  st_mult(sizeof(uint32_t), ctx->commits.nr),
+ 			  write_graph_chunk_generation_data);
+ 	if (ctx->num_generation_data_overflows)
+ 		add_chunk(cf, GRAPH_CHUNKID_GENERATION_DATA_OVERFLOW,
+-			  sizeof(timestamp_t) * ctx->num_generation_data_overflows,
++			  st_mult(sizeof(timestamp_t), ctx->num_generation_data_overflows),
+ 			  write_graph_chunk_generation_data_overflow);
+ 	if (ctx->num_extra_edges)
+ 		add_chunk(cf, GRAPH_CHUNKID_EXTRAEDGES,
+-			  4 * ctx->num_extra_edges,
++			  st_mult(4, ctx->num_extra_edges),
+ 			  write_graph_chunk_extra_edges);
+ 	if (ctx->changed_paths) {
+ 		add_chunk(cf, GRAPH_CHUNKID_BLOOMINDEXES,
+-			  sizeof(uint32_t) * ctx->commits.nr,
++			  st_mult(sizeof(uint32_t), ctx->commits.nr),
+ 			  write_graph_chunk_bloom_indexes);
+ 		add_chunk(cf, GRAPH_CHUNKID_BLOOMDATA,
+-			  sizeof(uint32_t) * 3
+-				+ ctx->total_bloom_filter_data_size,
++			  st_add(sizeof(uint32_t) * 3,
++				 ctx->total_bloom_filter_data_size),
+ 			  write_graph_chunk_bloom_data);
+ 	}
+ 	if (ctx->num_commit_graphs_after > 1)
+ 		add_chunk(cf, GRAPH_CHUNKID_BASE,
+-			  hashsz * (ctx->num_commit_graphs_after - 1),
++			  st_mult(hashsz, ctx->num_commit_graphs_after - 1),
+ 			  write_graph_chunk_base);
+ 
+ 	hashwrite_be32(f, GRAPH_SIGNATURE);
+@@ -1999,7 +1999,7 @@ static int write_commit_graph_file(struct write_commit_graph_context *ctx)
+ 			    get_num_chunks(cf));
+ 		ctx->progress = start_delayed_progress(
+ 			progress_title.buf,
+-			get_num_chunks(cf) * ctx->commits.nr);
++			st_mult(get_num_chunks(cf), ctx->commits.nr));
+ 	}
+ 
+ 	write_chunkfile(cf, ctx);
+-- 
+2.39.3 (Apple Git-145)
+

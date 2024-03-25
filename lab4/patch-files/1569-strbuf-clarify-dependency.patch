@@ -1,0 +1,33 @@
+From 16b171fda03d9186e58fade7d727d38613938097 Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Tue, 6 Jun 2023 19:48:38 +0000
+Subject: [PATCH 1569/2871] strbuf: clarify dependency
+
+refs.h was once needed but is no longer so as of 6bab74e7fb8 ("strbuf:
+move strbuf_branchname to sha1_name.c", 2010-11-06). strbuf.h was
+included thru refs.h, so removing refs.h requires strbuf.h to be added
+back.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ strbuf.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/strbuf.c b/strbuf.c
+index 08eec8f1d8..f5dfd093a0 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -5,8 +5,8 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "object-name.h"
+-#include "refs.h"
+ #include "repository.h"
++#include "strbuf.h"
+ #include "string-list.h"
+ #include "utf8.h"
+ #include "date.h"
+-- 
+2.39.3 (Apple Git-145)
+

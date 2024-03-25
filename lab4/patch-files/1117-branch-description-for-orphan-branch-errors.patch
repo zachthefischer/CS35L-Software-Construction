@@ -1,0 +1,124 @@
+From 7a6ccdfb4eeb9d55893eae9b2c7e573b92f3d01d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 27 Mar 2023 00:33:17 +0200
+Subject: [PATCH 1117/2871] branch: description for orphan branch errors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In bcfc82bd48 (branch: description for non-existent branch errors,
+2022-10-08) we checked the HEAD in the current worktree to detect if the
+branch to operate with is an orphan branch, so as to avoid the confusing
+error: "No branch named...".
+
+If we are asked to operate with an orphan branch in a different working
+tree than the current one, we need to check the HEAD in that different
+working tree.
+
+Let's extend the check we did in bcfc82bd48, to check the HEADs in all
+worktrees linked to the current repository, using the helper introduced
+in 31ad6b61bd (branch: add branch_checked_out() helper, 2022-06-15).
+
+The helper, branch_checked_out(), does its work obtaining internally a
+list of worktrees linked to the current repository.  Obtaining that list
+is not a lightweight work because it implies disk access.
+
+In copy_or_rename_branch() we already have a list of worktrees.  Let's
+use that already obtained list, and avoid using here the helper.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c       | 21 ++++++++++++++++-----
+ t/t3202-show-branch.sh | 18 ++++++++++++++++++
+ 2 files changed, 34 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index bac67c27d5..90dcbb0c6e 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -538,13 +538,15 @@ static int replace_each_worktree_head_symref(struct worktree **worktrees,
+ 	return ret;
+ }
+ 
++#define IS_HEAD 1
++
+ static void copy_or_rename_branch(const char *oldname, const char *newname, int copy, int force)
+ {
+ 	struct strbuf oldref = STRBUF_INIT, newref = STRBUF_INIT, logmsg = STRBUF_INIT;
+ 	struct strbuf oldsection = STRBUF_INIT, newsection = STRBUF_INIT;
+ 	const char *interpreted_oldname = NULL;
+ 	const char *interpreted_newname = NULL;
+-	int recovery = 0;
++	int recovery = 0, oldref_usage = 0;
+ 	struct worktree **worktrees = get_worktrees();
+ 
+ 	if (strbuf_check_branch_ref(&oldref, oldname)) {
+@@ -558,8 +560,17 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int
+ 			die(_("Invalid branch name: '%s'"), oldname);
+ 	}
+ 
+-	if ((copy || strcmp(head, oldname)) && !ref_exists(oldref.buf)) {
+-		if (copy && !strcmp(head, oldname))
++	for (int i = 0; worktrees[i]; i++) {
++		struct worktree *wt = worktrees[i];
++
++		if (wt->head_ref && !strcmp(oldref.buf, wt->head_ref)) {
++			oldref_usage |= IS_HEAD;
++			break;
++		}
++	}
++
++	if ((copy || !(oldref_usage & IS_HEAD)) && !ref_exists(oldref.buf)) {
++		if (oldref_usage & IS_HEAD)
+ 			die(_("No commit on branch '%s' yet."), oldname);
+ 		else
+ 			die(_("No branch named '%s'."), oldname);
+@@ -838,7 +849,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 
+ 		strbuf_addf(&branch_ref, "refs/heads/%s", branch_name);
+ 		if (!ref_exists(branch_ref.buf))
+-			error((!argc || !strcmp(head, branch_name))
++			error((!argc || branch_checked_out(branch_ref.buf))
+ 			      ? _("No commit on branch '%s' yet.")
+ 			      : _("No branch named '%s'."),
+ 			      branch_name);
+@@ -883,7 +894,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 		}
+ 
+ 		if (!ref_exists(branch->refname)) {
+-			if (!argc || !strcmp(head, branch->name))
++			if (!argc || branch_checked_out(branch->refname))
+ 				die(_("No commit on branch '%s' yet."), branch->name);
+ 			die(_("branch '%s' does not exist"), branch->name);
+ 		}
+diff --git a/t/t3202-show-branch.sh b/t/t3202-show-branch.sh
+index ea7cfd1951..be20ebe1d5 100755
+--- a/t/t3202-show-branch.sh
++++ b/t/t3202-show-branch.sh
+@@ -221,4 +221,22 @@ test_expect_success 'fatal descriptions on non-existent branch' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'error descriptions on orphan branch' '
++	test_when_finished git worktree remove -f wt &&
++	git worktree add wt --detach &&
++	git -C wt checkout --orphan orphan-branch &&
++	test_branch_op_in_wt() {
++		test_orphan_error() {
++			test_must_fail git $* 2>actual &&
++			test_i18ngrep "No commit on branch .orphan-branch. yet.$" actual
++		} &&
++		test_orphan_error -C wt branch $1 $2 &&                # implicit branch
++		test_orphan_error -C wt branch $1 orphan-branch $2 &&  # explicit branch
++		test_orphan_error branch $1 orphan-branch $2           # different worktree
++	} &&
++	test_branch_op_in_wt --edit-description &&
++	test_branch_op_in_wt --set-upstream-to=ne &&
++	test_branch_op_in_wt -c new-branch
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

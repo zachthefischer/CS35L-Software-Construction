@@ -1,0 +1,101 @@
+From 0a6cb5c42ffad3f20bcc49a9da7ea166441e16c2 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Thu, 18 May 2023 20:03:12 +0000
+Subject: [PATCH 1489/2871] t3500-cherry: modernize test format
+
+Some tests still use the old format with four spaces indentation.
+Standardize the tests to the new format with tab indentation.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3500-cherry.sh | 69 +++++++++++++++++++++++------------------------
+ 1 file changed, 33 insertions(+), 36 deletions(-)
+
+diff --git a/t/t3500-cherry.sh b/t/t3500-cherry.sh
+index 0458a58b4b..78c3eac54b 100755
+--- a/t/t3500-cherry.sh
++++ b/t/t3500-cherry.sh
+@@ -16,46 +16,43 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ GIT_AUTHOR_EMAIL=bogus_email_address
+ export GIT_AUTHOR_EMAIL
+ 
+-test_expect_success \
+-    'prepare repository with topic branch, and check cherry finds the 2 patches from there' \
+-    'echo First > A &&
+-     git update-index --add A &&
+-     test_tick &&
+-     git commit -m "Add A." &&
+-
+-     git checkout -b my-topic-branch &&
+-
+-     echo Second > B &&
+-     git update-index --add B &&
+-     test_tick &&
+-     git commit -m "Add B." &&
+-
+-     echo AnotherSecond > C &&
+-     git update-index --add C &&
+-     test_tick &&
+-     git commit -m "Add C." &&
+-
+-     git checkout -f main &&
+-     rm -f B C &&
+-
+-     echo Third >> A &&
+-     git update-index A &&
+-     test_tick &&
+-     git commit -m "Modify A." &&
+-
+-     expr "$(echo $(git cherry main my-topic-branch) )" : "+ [^ ]* + .*"
++test_expect_success 'prepare repository with topic branch, and check cherry finds the 2 patches from there' '
++	echo First > A &&
++	git update-index --add A &&
++	test_tick &&
++	git commit -m "Add A." &&
++
++	git checkout -b my-topic-branch &&
++
++	echo Second > B &&
++	git update-index --add B &&
++	test_tick &&
++	git commit -m "Add B." &&
++
++	echo AnotherSecond > C &&
++	git update-index --add C &&
++	test_tick &&
++	git commit -m "Add C." &&
++
++	git checkout -f main &&
++	rm -f B C &&
++
++	echo Third >> A &&
++	git update-index A &&
++	test_tick &&
++	git commit -m "Modify A." &&
++
++	expr "$(echo $(git cherry main my-topic-branch) )" : "+ [^ ]* + .*"
+ '
+ 
+-test_expect_success \
+-    'check that cherry with limit returns only the top patch'\
+-    'expr "$(echo $(git cherry main my-topic-branch my-topic-branch^1) )" : "+ [^ ]*"
++test_expect_success 'check that cherry with limit returns only the top patch' '
++	expr "$(echo $(git cherry main my-topic-branch my-topic-branch^1) )" : "+ [^ ]*"
+ '
+ 
+-test_expect_success \
+-    'cherry-pick one of the 2 patches, and check cherry recognized one and only one as new' \
+-    'git cherry-pick my-topic-branch^0 &&
+-     echo $(git cherry main my-topic-branch) &&
+-     expr "$(echo $(git cherry main my-topic-branch) )" : "+ [^ ]* - .*"
++test_expect_success 'cherry-pick one of the 2 patches, and check cherry recognized one and only one as new' '
++	git cherry-pick my-topic-branch^0 &&
++	echo $(git cherry main my-topic-branch) &&
++	expr "$(echo $(git cherry main my-topic-branch) )" : "+ [^ ]* - .*"
+ '
+ 
+ test_expect_success 'cherry ignores whitespace' '
+-- 
+2.39.3 (Apple Git-145)
+

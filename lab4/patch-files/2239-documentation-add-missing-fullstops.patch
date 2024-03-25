@@ -1,0 +1,57 @@
+From 845c6ca90e806ac402cd9f1c981844531176475f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:25 +0000
+Subject: [PATCH 2239/2871] documentation: add missing fullstops
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-check-ref-format.txt | 2 +-
+ Documentation/git-diff-tree.txt        | 2 +-
+ Documentation/git-help.txt             | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-check-ref-format.txt b/Documentation/git-check-ref-format.txt
+index 1d6e08e011..2aacfd1808 100644
+--- a/Documentation/git-check-ref-format.txt
++++ b/Documentation/git-check-ref-format.txt
+@@ -48,7 +48,7 @@ Git imposes the following rules on how references are named:
+ 
+ . They cannot begin or end with a slash `/` or contain multiple
+   consecutive slashes (see the `--normalize` option below for an
+-  exception to this rule)
++  exception to this rule).
+ 
+ . They cannot end with a dot `.`.
+ 
+diff --git a/Documentation/git-diff-tree.txt b/Documentation/git-diff-tree.txt
+index 22380d5c82..143318c411 100644
+--- a/Documentation/git-diff-tree.txt
++++ b/Documentation/git-diff-tree.txt
+@@ -34,7 +34,7 @@ include::diff-options.txt[]
+ 	matching one of the provided pathspecs.
+ 
+ -r::
+-	Recurse into sub-trees
++	Recurse into sub-trees.
+ 
+ -t::
+ 	Show tree entry itself as well as subtrees.  Implies -r.
+diff --git a/Documentation/git-help.txt b/Documentation/git-help.txt
+index 7532625a13..f0bedc1f96 100644
+--- a/Documentation/git-help.txt
++++ b/Documentation/git-help.txt
+@@ -42,7 +42,7 @@ former is internally converted into the latter.
+ 
+ To display the linkgit:git[1] man page, use `git help git`.
+ 
+-This page can be displayed with 'git help help' or `git help --help`
++This page can be displayed with 'git help help' or `git help --help`.
+ 
+ OPTIONS
+ -------
+-- 
+2.39.3 (Apple Git-145)
+

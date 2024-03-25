@@ -1,0 +1,102 @@
+From 47ff853f02a0b4af6d01727b7e45046b61b0a9b4 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 8 May 2023 13:38:09 -0400
+Subject: [PATCH 1413/2871] pack-bitmap.c: extract `fill_in_bitmap()`
+
+To prepare for the boundary-based bitmap walk to perform a fill-in
+traversal using the boundary of either side as the tips, extract routine
+used to perform fill-in traversal by `find_objects()` so that it can be
+used in both places.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-bitmap.c | 65 ++++++++++++++++++++++++++++-----------------------
+ 1 file changed, 36 insertions(+), 29 deletions(-)
+
+diff --git a/pack-bitmap.c b/pack-bitmap.c
+index e0fad723bf..5d2cc6ac96 100644
+--- a/pack-bitmap.c
++++ b/pack-bitmap.c
+@@ -1043,6 +1043,40 @@ static int add_commit_to_bitmap(struct bitmap_index *bitmap_git,
+ 	return 1;
+ }
+ 
++static struct bitmap *fill_in_bitmap(struct bitmap_index *bitmap_git,
++				     struct rev_info *revs,
++				     struct bitmap *base,
++				     struct bitmap *seen)
++{
++	struct include_data incdata;
++	struct bitmap_show_data show_data;
++
++	if (!base)
++		base = bitmap_new();
++
++	incdata.bitmap_git = bitmap_git;
++	incdata.base = base;
++	incdata.seen = seen;
++
++	revs->include_check = should_include;
++	revs->include_check_obj = should_include_obj;
++	revs->include_check_data = &incdata;
++
++	if (prepare_revision_walk(revs))
++		die(_("revision walk setup failed"));
++
++	show_data.bitmap_git = bitmap_git;
++	show_data.base = base;
++
++	traverse_commit_list(revs, show_commit, show_object, &show_data);
++
++	revs->include_check = NULL;
++	revs->include_check_obj = NULL;
++	revs->include_check_data = NULL;
++
++	return base;
++}
++
+ static struct bitmap *find_objects(struct bitmap_index *bitmap_git,
+ 				   struct rev_info *revs,
+ 				   struct object_list *roots,
+@@ -1108,35 +1142,8 @@ static struct bitmap *find_objects(struct bitmap_index *bitmap_git,
+ 		}
+ 	}
+ 
+-	if (needs_walk) {
+-		struct include_data incdata;
+-		struct bitmap_show_data show_data;
+-
+-		if (!base)
+-			base = bitmap_new();
+-
+-		incdata.bitmap_git = bitmap_git;
+-		incdata.base = base;
+-		incdata.seen = seen;
+-
+-		revs->include_check = should_include;
+-		revs->include_check_obj = should_include_obj;
+-		revs->include_check_data = &incdata;
+-
+-		if (prepare_revision_walk(revs))
+-			die(_("revision walk setup failed"));
+-
+-		show_data.bitmap_git = bitmap_git;
+-		show_data.base = base;
+-
+-		traverse_commit_list(revs,
+-				     show_commit, show_object,
+-				     &show_data);
+-
+-		revs->include_check = NULL;
+-		revs->include_check_obj = NULL;
+-		revs->include_check_data = NULL;
+-	}
++	if (needs_walk)
++		base = fill_in_bitmap(bitmap_git, revs, base, seen);
+ 
+ 	return base;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

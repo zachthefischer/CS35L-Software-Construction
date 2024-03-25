@@ -1,0 +1,51 @@
+From 0dda4ce9f697a9ddfc1b2a3825dc07827a99d942 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:24:58 -0500
+Subject: [PATCH 2505/2871] imap-send: don't use git_die_config() inside
+ callback
+
+The point of git_die_config() is to let configset users mention the
+file/line info for invalid config, like:
+
+  if (!git_config_get_int("foo.bar", &value)) {
+	if (!is_ok(value))
+		git_die_config("foo.bar");
+  }
+
+Using it from within a config callback is unnecessary, because we can
+simply return an error, at which point the config machinery will mention
+the file/line of the offending variable. Worse, using git_die_config()
+can actually produce the wrong location when the key is found in
+multiple spots. For instance, with config like:
+
+  [imap]
+  host
+  host = foo
+
+we'll report the line number of the "host = foo" line, but the problem
+is on the implicit-bool "host" line.
+
+We can fix it by just returning an error code.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ imap-send.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/imap-send.c b/imap-send.c
+index 996651e4f8..5b0fe4f95a 100644
+--- a/imap-send.c
++++ b/imap-send.c
+@@ -1346,7 +1346,7 @@ static int git_imap_config(const char *var, const char *val,
+ 		server.port = git_config_int(var, val, ctx->kvi);
+ 	else if (!strcmp("imap.host", var)) {
+ 		if (!val) {
+-			git_die_config("imap.host", "Missing value for 'imap.host'");
++			return error("Missing value for 'imap.host'");
+ 		} else {
+ 			if (starts_with(val, "imap:"))
+ 				val += 5;
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,48 @@
+From ac6d45d11f24921ead899c74569b717a7895f4a5 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 3 Oct 2023 16:27:52 -0400
+Subject: [PATCH 2187/2871] commit-graph: move slab-clearing to
+ close_commit_graph()
+
+When closing and freeing a commit-graph, the main entry point is
+close_commit_graph(), which then uses close_commit_graph_one() to
+recurse through the base_graph links and free each one.
+
+Commit 957ba814bf (commit-graph: when closing the graph, also release
+the slab, 2021-09-08) put the call to clear the slab into the recursive
+function, but this is pointless: there's only a single global slab
+variable. It works OK in practice because clearing the slab is
+idempotent, but it makes the code harder to reason about and refactor.
+
+Move it into the parent function so it's only called once (and there are
+no other direct callers of the recursive close_commit_graph_one(), so we
+are not hurting them).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 5e8a3a5085..dc54ef4776 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -728,13 +728,13 @@ static void close_commit_graph_one(struct commit_graph *g)
+ 	if (!g)
+ 		return;
+ 
+-	clear_commit_graph_data_slab(&commit_graph_data_slab);
+ 	close_commit_graph_one(g->base_graph);
+ 	free_commit_graph(g);
+ }
+ 
+ void close_commit_graph(struct raw_object_store *o)
+ {
++	clear_commit_graph_data_slab(&commit_graph_data_slab);
+ 	close_commit_graph_one(o->commit_graph);
+ 	o->commit_graph = NULL;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

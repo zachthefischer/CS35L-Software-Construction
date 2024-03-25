@@ -1,0 +1,93 @@
+From 4689101a4042ff245a425f476c6939b3c464ebc3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sun, 11 Jun 2023 20:49:35 +0200
+Subject: [PATCH 1582/2871] remote: fix a leak in
+ query_matches_negative_refspec
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In c0192df630 (refspec: add support for negative refspecs, 2020-09-30)
+query_matches_negative_refspec() was introduced.
+
+The function was implemented as a two-loop process, where the former
+loop accumulates and the latter evaluates.  To accumulate, a string_list
+is used.
+
+Within the first loop, there are three cases where a string is added to
+the string_list.  Two of them add strings that do not need to be
+freed.  But in the third case, the string added is returned by
+match_name_with_pattern(), which needs to be freed.
+
+The string_list is initialized with STRING_LIST_INIT_NODUP, i.e.  when
+cleared, the strings added are not freed.  Therefore, the string
+returned by match_name_with_pattern() is not freed, so we have a leak.
+
+   $ git remote add local .
+   $ git update-ref refs/remotes/local/foo HEAD
+   $ git branch --track bar local/foo
+
+   Direct leak of 24 byte(s) in 1 object(s) allocated from:
+       ... in xrealloc wrapper.c
+       ... in strbuf_grow strbuf.c
+       ... in strbuf_add strbuf.c
+       ... in match_name_with_pattern remote.c
+       ... in query_matches_negative_refspec remote.c
+       ... in query_refspecs remote.c
+       ... in remote_find_tracking remote.c
+       ... in find_tracked_branch branch.c
+       ... in for_each_remote remote.c
+       ... in setup_tracking branch.c
+       ... in create_branch branch.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+   Direct leak of 24 byte(s) in 1 object(s) allocated from:
+       ... in xrealloc wrapper.c
+       ... in strbuf_grow strbuf.c
+       ... in strbuf_add strbuf.c
+       ... in match_name_with_pattern remote.c
+       ... in query_matches_negative_refspec remote.c
+       ... in query_refspecs remote.c
+       ... in remote_find_tracking remote.c
+       ... in check_tracking_branch branch.c
+       ... in for_each_remote remote.c
+       ... in validate_remote_tracking_branch branch.c
+       ... in dwim_branch_start branch.c
+       ... in create_branch branch.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+An interesting point to note is that while string_list_append() is used
+in the first two cases described, string_list_append_nodup() is used in
+the third.  This seems to indicate an intention to delegate the
+responsibility for freeing the string, to the string_list.  As if the
+string_list had been initialized with STRING_LIST_INIT_DUP, i.e.  the
+strings are strdup()'d when added (except if the "_nodup" API is used)
+and freed when cleared.
+
+Switching to STRING_LIST_INIT_DUP fixes the leak and probably is what we
+wanted to do originally.  Let's do it.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ remote.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/remote.c b/remote.c
+index 0764fca0db..1bcd36e358 100644
+--- a/remote.c
++++ b/remote.c
+@@ -890,7 +890,7 @@ static int query_matches_negative_refspec(struct refspec *rs, struct refspec_ite
+ {
+ 	int i, matched_negative = 0;
+ 	int find_src = !query->src;
+-	struct string_list reversed = STRING_LIST_INIT_NODUP;
++	struct string_list reversed = STRING_LIST_INIT_DUP;
+ 	const char *needle = find_src ? query->dst : query->src;
+ 
+ 	/*
+-- 
+2.39.3 (Apple Git-145)
+

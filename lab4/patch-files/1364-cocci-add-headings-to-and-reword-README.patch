@@ -1,0 +1,43 @@
+From bd111141aa118e03c969f878540a75381d1c6e9a Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Thu, 27 Apr 2023 22:22:22 +0000
+Subject: [PATCH 1364/2871] cocci: add headings to and reword README
+
+- Drop "examples" since we actually use the patches.
+- Drop sentences that could be headings instead
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/coccinelle/README | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/contrib/coccinelle/README b/contrib/coccinelle/README
+index d1daa1f626..9b28ba1c57 100644
+--- a/contrib/coccinelle/README
++++ b/contrib/coccinelle/README
+@@ -1,7 +1,9 @@
+-This directory provides examples of Coccinelle (http://coccinelle.lip6.fr/)
+-semantic patches that might be useful to developers.
++= coccinelle
+ 
+-There are two types of semantic patches:
++This directory provides Coccinelle (http://coccinelle.lip6.fr/) semantic patches
++that might be useful to developers.
++
++==  Types of semantic patches
+ 
+  * Using the semantic transformation to check for bad patterns in the code;
+    The target 'make coccicheck' is designed to check for these patterns and
+@@ -42,7 +44,7 @@ There are two types of semantic patches:
+    This allows to expose plans of pending large scale refactorings without
+    impacting the bad pattern checks.
+ 
+-Git-specific tips & things to know about how we run "spatch":
++== Git-specific tips & things to know about how we run "spatch":
+ 
+  * The "make coccicheck" will piggy-back on
+    "COMPUTE_HEADER_DEPENDENCIES". If you've built a given object file
+-- 
+2.39.3 (Apple Git-145)
+

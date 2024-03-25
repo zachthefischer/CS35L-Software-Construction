@@ -1,0 +1,42 @@
+From 48d89b51b3bb8a60580c36731b96a7206ce1e5b9 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 28 Apr 2023 15:22:24 -0700
+Subject: [PATCH 1369/2871] The fifteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.41.0.txt | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.41.0.txt b/Documentation/RelNotes/2.41.0.txt
+index e7f371466b..b737371148 100644
+--- a/Documentation/RelNotes/2.41.0.txt
++++ b/Documentation/RelNotes/2.41.0.txt
+@@ -73,6 +73,12 @@ UI, Workflows & Features
+    number of input files and where in the sequence each invocation is
+    via environment variables.
+ 
++ * When "gc" needs to retain unreachable objects, packing them into
++   cruft packs (instead of exploding them into loose object files) has
++   been offered as a more efficient option for some time.  Now the use
++   of cruft packs has been made the default and no longer considered
++   an experimental feature.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -258,6 +264,11 @@ Fixes since v2.40
+    case bugs, which have been corrected.
+    (merge d85cd18777 ps/fix-geom-repack-with-alternates later to maint).
+ 
++ * The "%GT" placeholder for the "--format" option of "git log" and
++   friends caused BUG() to trigger on a commit signed with an unknown
++   key, which has been corrected.
++   (merge 7891e46585 jk/gpg-trust-level-fix later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge f7111175df as/doc-markup-fix later to maint).
+    (merge 90ff7c9898 fc/test-aggregation-clean-up later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

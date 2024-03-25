@@ -1,0 +1,178 @@
+From 69bbbe484ba10bd88efb9ae3f6a58fcc687df69e Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 18 Jan 2023 15:44:12 -0500
+Subject: [PATCH 0712/2871] hash-object: use fsck for object checks
+
+Since c879daa237 (Make hash-object more robust against malformed
+objects, 2011-02-05), we've done some rudimentary checks against objects
+we're about to write by running them through our usual parsers for
+trees, commits, and tags.
+
+These parsers catch some problems, but they are not nearly as careful as
+the fsck functions (which make sense; the parsers are designed to be
+fast and forgiving, bailing only when the input is unintelligible). We
+are better off doing the more thorough fsck checks when writing objects.
+Doing so at write time is much better than writing garbage only to find
+out later (after building more history atop it!) that fsck complains
+about it, or hosts with transfer.fsckObjects reject it.
+
+This is obviously going to be a user-visible behavior change, and the
+test changes earlier in this series show the scope of the impact. But
+I'd argue that this is OK:
+
+  - the documentation for hash-object is already vague about which
+    checks we might do, saying that --literally will allow "any
+    garbage[...] which might not otherwise pass standard object parsing
+    or git-fsck checks". So we are already covered under the documented
+    behavior.
+
+  - users don't generally run hash-object anyway. There are a lot of
+    spots in the tests that needed to be updated because creating
+    garbage objects is something that Git's tests disproportionately do.
+
+  - it's hard to imagine anyone thinking the new behavior is worse. Any
+    object we reject would be a potential problem down the road for the
+    user. And if they really want to create garbage, --literally is
+    already the escape hatch they need.
+
+Note that the change here is actually in index_mem(), which handles the
+HASH_FORMAT_CHECK flag passed by hash-object. That flag is also used by
+"git-replace --edit" to sanity-check the result. Covering that with more
+thorough checks likewise seems like a good thing.
+
+Besides being more thorough, there are a few other bonuses:
+
+  - we get rid of some questionable stack allocations of object structs.
+    These don't seem to currently cause any problems in practice, but
+    they subtly violate some of the assumptions made by the rest of the
+    code (e.g., the "struct commit" we put on the stack and
+    zero-initialize will not have a proper index from
+    alloc_comit_index().
+
+  - likewise, those parsed object structs are the source of some small
+    memory leaks
+
+  - the resulting messages are much better. For example:
+
+      [before]
+      $ echo 'tree 123' | git hash-object -t commit --stdin
+      error: bogus commit object 0000000000000000000000000000000000000000
+      fatal: corrupt commit
+
+      [after]
+      $ echo 'tree 123' | git.compile hash-object -t commit --stdin
+      error: object fails fsck: badTreeSha1: invalid 'tree' line format - bad sha1
+      fatal: refusing to create malformed object
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-file.c          | 55 ++++++++++++++++++------------------------
+ t/t1007-hash-object.sh | 11 +++++++++
+ 2 files changed, 34 insertions(+), 32 deletions(-)
+
+diff --git a/object-file.c b/object-file.c
+index 26290554bb..32280b505e 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -33,6 +33,7 @@
+ #include "object-store.h"
+ #include "promisor-remote.h"
+ #include "submodule.h"
++#include "fsck.h"
+ 
+ /* The maximum size for an object header. */
+ #define MAX_HEADER_LEN 32
+@@ -2312,32 +2313,21 @@ int repo_has_object_file(struct repository *r,
+ 	return repo_has_object_file_with_flags(r, oid, 0);
+ }
+ 
+-static void check_tree(const void *buf, size_t size)
+-{
+-	struct tree_desc desc;
+-	struct name_entry entry;
+-
+-	init_tree_desc(&desc, buf, size);
+-	while (tree_entry(&desc, &entry))
+-		/* do nothing
+-		 * tree_entry() will die() on malformed entries */
+-		;
+-}
+-
+-static void check_commit(const void *buf, size_t size)
+-{
+-	struct commit c;
+-	memset(&c, 0, sizeof(c));
+-	if (parse_commit_buffer(the_repository, &c, buf, size, 0))
+-		die(_("corrupt commit"));
+-}
+-
+-static void check_tag(const void *buf, size_t size)
+-{
+-	struct tag t;
+-	memset(&t, 0, sizeof(t));
+-	if (parse_tag_buffer(the_repository, &t, buf, size))
+-		die(_("corrupt tag"));
++/*
++ * We can't use the normal fsck_error_function() for index_mem(),
++ * because we don't yet have a valid oid for it to report. Instead,
++ * report the minimal fsck error here, and rely on the caller to
++ * give more context.
++ */
++static int hash_format_check_report(struct fsck_options *opts,
++				     const struct object_id *oid,
++				     enum object_type object_type,
++				     enum fsck_msg_type msg_type,
++				     enum fsck_msg_id msg_id,
++				     const char *message)
++{
++	error(_("object fails fsck: %s"), message);
++	return 1;
+ }
+ 
+ static int index_mem(struct index_state *istate,
+@@ -2364,12 +2354,13 @@ static int index_mem(struct index_state *istate,
+ 		}
+ 	}
+ 	if (flags & HASH_FORMAT_CHECK) {
+-		if (type == OBJ_TREE)
+-			check_tree(buf, size);
+-		if (type == OBJ_COMMIT)
+-			check_commit(buf, size);
+-		if (type == OBJ_TAG)
+-			check_tag(buf, size);
++		struct fsck_options opts = FSCK_OPTIONS_DEFAULT;
++
++		opts.strict = 1;
++		opts.error_func = hash_format_check_report;
++		if (fsck_buffer(null_oid(), type, buf, size, &opts))
++			die(_("refusing to create malformed object"));
++		fsck_finish(&opts);
+ 	}
+ 
+ 	if (write_object)
+diff --git a/t/t1007-hash-object.sh b/t/t1007-hash-object.sh
+index 2d2148d8fa..ac3d173767 100755
+--- a/t/t1007-hash-object.sh
++++ b/t/t1007-hash-object.sh
+@@ -222,6 +222,17 @@ test_expect_success 'empty filename in tree' '
+ 	grep "empty filename in tree entry" err
+ '
+ 
++test_expect_success 'duplicate filename in tree' '
++	hex_oid=$(echo foo | git hash-object --stdin -w) &&
++	bin_oid=$(echo $hex_oid | hex2oct) &&
++	{
++		printf "100644 file\0$bin_oid" &&
++		printf "100644 file\0$bin_oid"
++	} >tree-with-duplicate-filename &&
++	test_must_fail git hash-object -t tree tree-with-duplicate-filename 2>err &&
++	grep "duplicateEntries" err
++'
++
+ test_expect_success 'corrupt commit' '
+ 	test_must_fail git hash-object -t commit --stdin </dev/null
+ '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,26 @@
+From 460ba0869d459c1aca98311e925d60b1ea837f19 Mon Sep 17 00:00:00 2001
+From: Benjamin Jorand <benjamin.jorand@doctolib.com>
+Date: Fri, 24 Mar 2023 10:16:43 +0100
+Subject: [PATCH 1506/2871] l10n: fr: fix translation of stash save help
+
+Signed-off-by: Benjamin Jorand <benjamin.jorand@doctolib.com>
+---
+ po/fr.po | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/po/fr.po b/po/fr.po
+index f032441614..098189458c 100644
+--- a/po/fr.po
++++ b/po/fr.po
+@@ -12419,7 +12419,7 @@ msgid "stash staged changes only"
+ msgstr "remiser seulement les modifications indexées"
+ 
+ msgid "stash in patch mode"
+-msgstr "remiser une mode rustine"
++msgstr "remiser en mode rustine"
+ 
+ msgid "quiet mode"
+ msgstr "mode silencieux"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,112 @@
+From ecec57b3c9731cf81cd1b9d515334168c2c68f5b Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Thu, 13 Oct 2022 17:43:47 +0000
+Subject: [PATCH 0144/2871] config: respect includes in protected config
+
+Protected config is implemented by reading a fixed set of paths,
+which ignores config [include]-s. Replace this implementation with a
+call to config_with_options(), which handles [include]-s and saves us
+from duplicating the logic of 1) identifying which paths to read and 2)
+reading command line config.
+
+As a result, git_configset_add_parameters() is unused, so remove it. It
+was introduced alongside protected config in 5b3c650777 (config: learn
+`git_protected_config()`, 2022-07-14) as a way to handle command line
+config.
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c                        | 30 ++++++++----------------------
+ t/t0033-safe-directory.sh       |  9 +++++++++
+ t/t0035-safe-bare-repository.sh |  9 +++++++++
+ 3 files changed, 26 insertions(+), 22 deletions(-)
+
+diff --git a/config.c b/config.c
+index e8ebef77d5..be0e789ccf 100644
+--- a/config.c
++++ b/config.c
+@@ -2391,11 +2391,6 @@ int git_configset_add_file(struct config_set *cs, const char *filename)
+ 	return git_config_from_file(config_set_callback, filename, cs);
+ }
+ 
+-int git_configset_add_parameters(struct config_set *cs)
+-{
+-	return git_config_from_parameters(config_set_callback, cs);
+-}
+-
+ int git_configset_get_value(struct config_set *cs, const char *key, const char **value)
+ {
+ 	const struct string_list *values = NULL;
+@@ -2640,24 +2635,15 @@ int repo_config_get_pathname(struct repository *repo,
+ /* Read values into protected_config. */
+ static void read_protected_config(void)
+ {
+-	char *xdg_config = NULL, *user_config = NULL, *system_config = NULL;
+-
++	struct config_options opts = {
++		.respect_includes = 1,
++		.ignore_repo = 1,
++		.ignore_worktree = 1,
++		.system_gently = 1,
++	};
+ 	git_configset_init(&protected_config);
+-
+-	system_config = git_system_config();
+-	git_global_config(&user_config, &xdg_config);
+-
+-	if (system_config)
+-		git_configset_add_file(&protected_config, system_config);
+-	if (xdg_config)
+-		git_configset_add_file(&protected_config, xdg_config);
+-	if (user_config)
+-		git_configset_add_file(&protected_config, user_config);
+-	git_configset_add_parameters(&protected_config);
+-
+-	free(system_config);
+-	free(xdg_config);
+-	free(user_config);
++	config_with_options(config_set_callback, &protected_config,
++			    NULL, &opts);
+ }
+ 
+ void git_protected_config(config_fn_t fn, void *data)
+diff --git a/t/t0033-safe-directory.sh b/t/t0033-safe-directory.sh
+index f4d737dadd..2dec021e0c 100755
+--- a/t/t0033-safe-directory.sh
++++ b/t/t0033-safe-directory.sh
+@@ -70,4 +70,13 @@ test_expect_success 'safe.directory=*, but is reset' '
+ 	expect_rejected_dir
+ '
+ 
++test_expect_success 'safe.directory in included file' '
++	cat >gitconfig-include <<-EOF &&
++	[safe]
++		directory = "$(pwd)"
++	EOF
++	git config --global --add include.path "$(pwd)/gitconfig-include" &&
++	git status
++'
++
+ test_done
+diff --git a/t/t0035-safe-bare-repository.sh b/t/t0035-safe-bare-repository.sh
+index ecbdc8238d..11c15a48aa 100755
+--- a/t/t0035-safe-bare-repository.sh
++++ b/t/t0035-safe-bare-repository.sh
+@@ -51,4 +51,13 @@ test_expect_success 'safe.bareRepository on the command line' '
+ 		-c safe.bareRepository=all
+ '
+ 
++test_expect_success 'safe.bareRepository in included file' '
++	cat >gitconfig-include <<-\EOF &&
++	[safe]
++		bareRepository = explicit
++	EOF
++	git config --global --add include.path "$(pwd)/gitconfig-include" &&
++	expect_rejected -C outer-repo/bare-repo
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

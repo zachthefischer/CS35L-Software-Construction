@@ -1,0 +1,33 @@
+From d0fc552bfcc20dcb001f78e83b0138ea4374a8c1 Mon Sep 17 00:00:00 2001
+From: Christian Hesse <mail@eworm.de>
+Date: Tue, 22 Aug 2023 15:03:15 +0200
+Subject: [PATCH 1985/2871] t/t6300: drop magic filtering
+
+Now that we ran a trustdb check forcibly, it no longer pollutes the
+output, and filtering is no longer required.
+
+Signed-off-by: Christian Hesse <mail@eworm.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6300-for-each-ref.sh | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 5b434ab451..aa3c7c03c4 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1763,10 +1763,7 @@ test_expect_success GPGSSH 'setup for signature atom using ssh' '
+ '
+ 
+ test_expect_success GPG2 'bare signature atom' '
+-	git verify-commit first-signed 2>out.raw &&
+-	grep -Ev "checking the trustdb|PGP trust model" out.raw >out &&
+-	head -3 out >expect &&
+-	tail -1 out >>expect &&
++	git verify-commit first-signed 2>expect &&
+ 	echo  >>expect &&
+ 	git for-each-ref refs/tags/first-signed \
+ 		--format="%(signature)" >actual &&
+-- 
+2.39.3 (Apple Git-145)
+

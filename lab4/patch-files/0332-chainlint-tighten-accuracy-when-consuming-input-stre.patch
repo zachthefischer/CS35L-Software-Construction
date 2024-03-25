@@ -1,0 +1,52 @@
+From ca748f518358448efa46f01539a8bdce5cfc710f Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Tue, 8 Nov 2022 19:08:28 +0000
+Subject: [PATCH 0332/2871] chainlint: tighten accuracy when consuming input
+ stream
+
+To extract the next token in the input stream, Lexer::scan_token() finds
+the start of the token by skipping whitespace, then consumes characters
+belonging to the token until it encounters a non-token character, such
+as an operator, punctuation, or whitespace. In the case of an operator
+or punctuation which ends a token, before returning the just-scanned
+token, it pushes that operator or punctuation character back onto the
+input stream to ensure that it will be the first character consumed by
+the next call to scan_token().
+
+However, scan_token() is intentionally lax when whitespace ends a token;
+it doesn't bother pushing the whitespace character back onto the token
+stream since it knows that the next call to scan_token() will, as its
+first step, skip over whitespace anyhow when looking for the start of
+the token.
+
+Although such laxity is harmless for the proper functioning of the
+lexical analyzer, it does make it difficult to precisely identify the
+token's end position in the input stream. Accurate token position
+information may be desirable, for instance, to annotate problems or
+highlight other interesting facets of the input found during the parsing
+phase. To accommodate such possibilities, tighten scan_token() by making
+it push the token-ending whitespace character back onto the input
+stream, just as it does for other token-ending characters.
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/chainlint.pl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/chainlint.pl b/t/chainlint.pl
+index 9908de6c75..1f66c03c59 100755
+--- a/t/chainlint.pl
++++ b/t/chainlint.pl
+@@ -179,7 +179,7 @@ sub scan_token {
+ 		# handle special characters
+ 		last unless $$b =~ /\G(.)/sgc;
+ 		my $c = $1;
+-		last if $c =~ /^[ \t]$/; # whitespace ends token
++		pos($$b)--, last if $c =~ /^[ \t]$/; # whitespace ends token
+ 		pos($$b)--, last if length($token) && $c =~ /^[;&|<>(){}\n]$/;
+ 		$token .= $self->scan_sqstring(), next if $c eq "'";
+ 		$token .= $self->scan_dqstring(), next if $c eq '"';
+-- 
+2.39.3 (Apple Git-145)
+

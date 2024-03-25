@@ -1,0 +1,155 @@
+From b6fdc44c8441d04c6659252cdf9adae240339e17 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:41:54 -0700
+Subject: [PATCH 1231/2871] treewide: remove cache.h inclusion due to
+ object-file.h changes
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bulk-checkin.c  | 2 +-
+ commit-graph.c  | 2 +-
+ http-fetch.c    | 2 +-
+ http-walker.c   | 2 +-
+ http.h          | 1 -
+ notes-merge.c   | 2 +-
+ pack-bitmap.c   | 2 +-
+ pack-check.c    | 2 +-
+ pack-mtimes.c   | 2 +-
+ pack-revindex.c | 2 +-
+ streaming.c     | 2 +-
+ tmp-objdir.c    | 2 +-
+ 12 files changed, 11 insertions(+), 12 deletions(-)
+
+diff --git a/bulk-checkin.c b/bulk-checkin.c
+index af15f8a9af..9192298db6 100644
+--- a/bulk-checkin.c
++++ b/bulk-checkin.c
+@@ -1,7 +1,7 @@
+ /*
+  * Copyright (c) 2011, Google Inc.
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "bulk-checkin.h"
+ #include "environment.h"
+diff --git a/commit-graph.c b/commit-graph.c
+index c20e73ceeb..0c4f226644 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/http-fetch.c b/http-fetch.c
+index c874d3402d..fffda59267 100644
+--- a/http-fetch.c
++++ b/http-fetch.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "exec-cmd.h"
+ #include "gettext.h"
+diff --git a/http-walker.c b/http-walker.c
+index 4588e6a340..3b41f5654b 100644
+--- a/http-walker.c
++++ b/http-walker.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "repository.h"
+ #include "commit.h"
+ #include "hex.h"
+diff --git a/http.h b/http.h
+index 783b2b09b8..3a409bccd4 100644
+--- a/http.h
++++ b/http.h
+@@ -3,7 +3,6 @@
+ 
+ struct packed_git;
+ 
+-#include "cache.h"
+ #include "git-zlib.h"
+ 
+ #include <curl/curl.h>
+diff --git a/notes-merge.c b/notes-merge.c
+index cc9538ac5c..233e49e319 100644
+--- a/notes-merge.c
++++ b/notes-merge.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "advice.h"
+ #include "commit.h"
+ #include "gettext.h"
+diff --git a/pack-bitmap.c b/pack-bitmap.c
+index 1371f17d22..48fc2ec76d 100644
+--- a/pack-bitmap.c
++++ b/pack-bitmap.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "commit.h"
+ #include "gettext.h"
+diff --git a/pack-check.c b/pack-check.c
+index 40d88bc5eb..049f2f0bfc 100644
+--- a/pack-check.c
++++ b/pack-check.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "environment.h"
+ #include "hex.h"
+ #include "repository.h"
+diff --git a/pack-mtimes.c b/pack-mtimes.c
+index 0096ace080..020a37f8fe 100644
+--- a/pack-mtimes.c
++++ b/pack-mtimes.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "pack-mtimes.h"
+ #include "object-file.h"
+diff --git a/pack-revindex.c b/pack-revindex.c
+index 22a1958a1f..4d9bb41b4d 100644
+--- a/pack-revindex.c
++++ b/pack-revindex.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "pack-revindex.h"
+ #include "object-file.h"
+diff --git a/streaming.c b/streaming.c
+index b3415724ee..21e39585e8 100644
+--- a/streaming.c
++++ b/streaming.c
+@@ -1,7 +1,7 @@
+ /*
+  * Copyright (c) 2011, Google Inc.
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "convert.h"
+ #include "environment.h"
+ #include "streaming.h"
+diff --git a/tmp-objdir.c b/tmp-objdir.c
+index fff7ff42db..c33a554f92 100644
+--- a/tmp-objdir.c
++++ b/tmp-objdir.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "tmp-objdir.h"
+ #include "abspath.h"
+ #include "chdir-notify.h"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,33 @@
+From 0bd8f30a0e4e474163eb2d8dc3020d51ec3c8a35 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:38:00 -0400
+Subject: [PATCH 1797/2871] commit-graph.c: prevent overflow in
+ `load_oid_from_graph()`
+
+In a similar spirit as previous commits, ensure that we don't overflow
+when trying to compute an offset into the `chunk_oid_lookup` table when
+the `lex_index` of the item we're trying to look up exceeds
+`2^32-1/g->hash_len`.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 17ab3e8029..517c816a94 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -754,7 +754,7 @@ static void load_oid_from_graph(struct commit_graph *g,
+ 
+ 	lex_index = pos - g->num_commits_in_base;
+ 
+-	oidread(oid, g->chunk_oid_lookup + g->hash_len * lex_index);
++	oidread(oid, g->chunk_oid_lookup + st_mult(g->hash_len, lex_index));
+ }
+ 
+ static struct commit_list **insert_parent_or_die(struct repository *r,
+-- 
+2.39.3 (Apple Git-145)
+

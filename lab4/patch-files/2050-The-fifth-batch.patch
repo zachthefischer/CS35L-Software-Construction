@@ -1,0 +1,49 @@
+From d814540bb75bbd2257f9a6bf59661a84fe8cf3cf Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 1 Sep 2023 11:26:14 -0700
+Subject: [PATCH 2050/2871] The fifth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index e04b18cbcb..8c6fafa4bf 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -24,6 +24,11 @@ UI, Workflows & Features
+ 
+  * Git GUI updates.
+ 
++ * "git format-patch" learns a way to feed cover letter description,
++   that (1) can be used on detached HEAD where there is no branch
++   description available, and (2) also can override the branch
++   description if there is one.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -58,6 +63,14 @@ Fixes since v2.42
+    fetch.unpackLimit and receive.unpackLimit instead.
+    (merge f3d33f8cfe ts/unpacklimit-config-fix later to maint).
+ 
++ * The use of API between two calls to require_clean_work_tree() from
++   the sequencer code has been cleaned up for consistency.
++   (merge a9b5955e07 ob/sequencer-empty-hint-fix later to maint).
++
++ * "git diff --no-such-option" and other corner cases around the exit
++   status of the "diff" command has been corrected.
++   (merge 5cc6b2d70b jk/diff-result-code-cleanup later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge fd3ba590d8 ws/git-push-doc-grammofix later to maint).
+    (merge 5f33a843de ds/upload-pack-error-sequence-fix later to maint).
+@@ -65,3 +78,4 @@ Fixes since v2.42
+    (merge b46d806ea5 ob/t9001-indent-fix later to maint).
+    (merge fdc9914c28 ja/worktree-orphan later to maint).
+    (merge c2cbefc510 jc/mv-d-to-d-error-message-fix later to maint).
++   (merge d0fc552bfc ch/t6300-verify-commit-test-cleanup later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,79 @@
+From 3ece9bf0f9e24909b090cf348d89e8920bd4f82f Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 17 May 2023 14:10:39 -0700
+Subject: [PATCH 1461/2871] send-email: clear the $message_id after validation
+
+Recently git-send-email started parsing the same message twice, once
+to validate _all_ the message before sending even the first one, and
+then after the validation hook is happy and each message gets sent,
+to read the contents to find out where to send to etc.
+
+Unfortunately, the effect of reading the messages for validation
+lingered even after the validation is done.  Namely $message_id gets
+assigned if exists in the input files but the variable is global,
+and it is not cleared before pre_process_file runs.  This causes
+reading a message without a message-id followed by reading a message
+with a message-id to misbehave---the sub reports as if the message
+had the same id as the previously written one.
+
+Clear the variable before starting to read the headers in
+pre_process_file.
+
+Tested-by: Douglas Anderson <dianders@chromium.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl   |  2 ++
+ t/t9001-send-email.sh | 17 ++++++++++++++++-
+ 2 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 10c450ef68..37dfd4b8c5 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -1768,6 +1768,8 @@ sub pre_process_file {
+ 	$subject = $initial_subject;
+ 	$message = "";
+ 	$message_num++;
++	undef $message_id;
++
+ 	# First unfold multiline header fields
+ 	while(<$fh>) {
+ 		last if /^\s*$/;
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 36bb85d6b4..8d49eff91a 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -47,7 +47,7 @@ clean_fake_sendmail () {
+ 
+ test_expect_success $PREREQ 'Extract patches' '
+ 	patches=$(git format-patch -s --cc="One <one@example.com>" --cc=two@example.com -n HEAD^1) &&
+-	threaded_patches=$(git format-patch -o threaded -s --in-reply-to="format" HEAD^1)
++	threaded_patches=$(git format-patch -o threaded --thread=shallow -s --in-reply-to="format" HEAD^1)
+ '
+ 
+ # Test no confirm early to ensure remaining tests will not hang
+@@ -588,6 +588,21 @@ test_expect_success $PREREQ "--validate hook supports header argument" '
+ 		outdir/000?-*.patch
+ '
+ 
++test_expect_success $PREREQ 'clear message-id before parsing a new message' '
++	clean_fake_sendmail &&
++	echo true | write_script my-hooks/sendemail-validate &&
++	test_config core.hooksPath my-hooks &&
++	GIT_SEND_EMAIL_NOTTY=1 \
++	git send-email --validate --to=recipient@example.com \
++		--smtp-server="$(pwd)/fake.sendmail" \
++		$patches $threaded_patches &&
++	id0=$(grep "^Message-ID: " $threaded_patches) &&
++	id1=$(grep "^Message-ID: " msgtxt1) &&
++	id2=$(grep "^Message-ID: " msgtxt2) &&
++	test "z$id0" = "z$id2" &&
++	test "z$id1" != "z$id2"
++'
++
+ for enc in 7bit 8bit quoted-printable base64
+ do
+ 	test_expect_success $PREREQ "--transfer-encoding=$enc produces correct header" '
+-- 
+2.39.3 (Apple Git-145)
+

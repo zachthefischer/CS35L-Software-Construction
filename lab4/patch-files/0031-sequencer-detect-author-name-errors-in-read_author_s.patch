@@ -1,0 +1,111 @@
+From 45350aeb11e0d8b5f76a121dfb9fc053af8e6042 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Oct 2022 13:35:02 -0400
+Subject: [PATCH 0031/2871] sequencer: detect author name errors in
+ read_author_script()
+
+As we parse the author-script file, we check for missing or duplicate
+lines for GIT_AUTHOR_NAME, etc. But after reading the whole file, our
+final error conditional checks "date_i" twice and "name_i" not at all.
+This not only leads to us failing to abort, but we may do an
+out-of-bounds read on the string_list array.
+
+The bug goes back to 442c36bd08 (am: improve author-script error
+reporting, 2018-10-31), though the code was soon after moved to this
+spot by bcd33ec25f (add read_author_script() to libgit, 2018-10-31).
+It was presumably just a typo in 442c36bd08.
+
+We'll add test coverage for all the error cases here, though only the
+GIT_AUTHOR_NAME ones fail (even in a vanilla build they segfault
+consistently, but certainly with SANITIZE=address).
+
+Reported-by: Michael V. Scovetta <michael.scovetta@gmail.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c                    |  2 +-
+ t/t3438-rebase-broken-files.sh | 59 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 60 insertions(+), 1 deletion(-)
+ create mode 100755 t/t3438-rebase-broken-files.sh
+
+diff --git a/sequencer.c b/sequencer.c
+index 5213d16e97..d8ae21d0d2 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -872,7 +872,7 @@ int read_author_script(const char *path, char **name, char **email, char **date,
+ 		error(_("missing 'GIT_AUTHOR_EMAIL'"));
+ 	if (date_i == -2)
+ 		error(_("missing 'GIT_AUTHOR_DATE'"));
+-	if (date_i < 0 || email_i < 0 || date_i < 0 || err)
++	if (name_i < 0 || email_i < 0 || date_i < 0 || err)
+ 		goto finish;
+ 	*name = kv.items[name_i].util;
+ 	*email = kv.items[email_i].util;
+diff --git a/t/t3438-rebase-broken-files.sh b/t/t3438-rebase-broken-files.sh
+new file mode 100755
+index 0000000000..b92a3ce46b
+--- /dev/null
++++ b/t/t3438-rebase-broken-files.sh
+@@ -0,0 +1,59 @@
++#!/bin/sh
++
++test_description='rebase behavior when on-disk files are broken'
++. ./test-lib.sh
++
++test_expect_success 'set up conflicting branches' '
++	test_commit base file &&
++	git checkout -b branch1 &&
++	test_commit one file &&
++	git checkout -b branch2 HEAD^ &&
++	test_commit two file
++'
++
++create_conflict () {
++	test_when_finished "git rebase --abort" &&
++	git checkout -B tmp branch2 &&
++	test_must_fail git rebase branch1
++}
++
++check_resolve_fails () {
++	echo resolved >file &&
++	git add file &&
++	test_must_fail git rebase --continue
++}
++
++for item in NAME EMAIL DATE
++do
++	test_expect_success "detect missing GIT_AUTHOR_$item" '
++		create_conflict &&
++
++		grep -v $item .git/rebase-merge/author-script >tmp &&
++		mv tmp .git/rebase-merge/author-script &&
++
++		check_resolve_fails
++	'
++done
++
++for item in NAME EMAIL DATE
++do
++	test_expect_success "detect duplicate GIT_AUTHOR_$item" '
++		create_conflict &&
++
++		grep -i $item .git/rebase-merge/author-script >tmp &&
++		cat tmp >>.git/rebase-merge/author-script &&
++
++		check_resolve_fails
++	'
++done
++
++test_expect_success 'unknown key in author-script' '
++	create_conflict &&
++
++	echo "GIT_AUTHOR_BOGUS=${SQ}whatever${SQ}" \
++		>>.git/rebase-merge/author-script &&
++
++	check_resolve_fails
++'
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

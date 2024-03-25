@@ -1,0 +1,89 @@
+From fc926567ede1f82799ef49dd54aa37b4497a5453 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 17:02:03 -0400
+Subject: [PATCH 2256/2871] midx: check size of oid lookup chunk
+
+When reading an on-disk multi-pack-index, we take the number of objects
+in the midx from the final value of the fanout table. But we just
+blindly assume that the chunk containing the actual oid entries is the
+correct size. This can lead to us reading out-of-bounds memory if the
+lookup chunk is too small (or if the fanout is corrupted; when they
+don't agree we cannot tell which one is wrong).
+
+Note that we bump the assignment of m->num_objects into the fanout
+parser callback, so that it's set when we parse the lookup table
+(otherwise we'd have to manually record the lookup table size and check
+it later).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c                      | 18 +++++++++++++++---
+ t/t5319-multi-pack-index.sh | 10 ++++++++++
+ 2 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index 21d7dd15ef..62e4c03e79 100644
+--- a/midx.c
++++ b/midx.c
+@@ -71,6 +71,20 @@ static int midx_read_oid_fanout(const unsigned char *chunk_start,
+ 		error(_("multi-pack-index OID fanout is of the wrong size"));
+ 		return 1;
+ 	}
++	m->num_objects = ntohl(m->chunk_oid_fanout[255]);
++	return 0;
++}
++
++static int midx_read_oid_lookup(const unsigned char *chunk_start,
++				size_t chunk_size, void *data)
++{
++	struct multi_pack_index *m = data;
++	m->chunk_oid_lookup = chunk_start;
++
++	if (chunk_size != st_mult(m->hash_len, m->num_objects)) {
++		error(_("multi-pack-index OID lookup chunk is the wrong size"));
++		return 1;
++	}
+ 	return 0;
+ }
+ 
+@@ -147,7 +161,7 @@ struct multi_pack_index *load_multi_pack_index(const char *object_dir, int local
+ 		die(_("multi-pack-index required pack-name chunk missing or corrupted"));
+ 	if (read_chunk(cf, MIDX_CHUNKID_OIDFANOUT, midx_read_oid_fanout, m))
+ 		die(_("multi-pack-index required OID fanout chunk missing or corrupted"));
+-	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_OIDLOOKUP, &m->chunk_oid_lookup))
++	if (read_chunk(cf, MIDX_CHUNKID_OIDLOOKUP, midx_read_oid_lookup, m))
+ 		die(_("multi-pack-index required OID lookup chunk missing or corrupted"));
+ 	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_OBJECTOFFSETS, &m->chunk_object_offsets))
+ 		die(_("multi-pack-index required object offsets chunk missing or corrupted"));
+@@ -157,8 +171,6 @@ struct multi_pack_index *load_multi_pack_index(const char *object_dir, int local
+ 	if (git_env_bool("GIT_TEST_MIDX_READ_RIDX", 1))
+ 		pair_chunk_unsafe(cf, MIDX_CHUNKID_REVINDEX, &m->chunk_revindex);
+ 
+-	m->num_objects = ntohl(m->chunk_oid_fanout[255]);
+-
+ 	CALLOC_ARRAY(m->pack_names, m->num_packs);
+ 	CALLOC_ARRAY(m->packs, m->num_packs);
+ 
+diff --git a/t/t5319-multi-pack-index.sh b/t/t5319-multi-pack-index.sh
+index b8fe85aeba..2722e495b2 100755
+--- a/t/t5319-multi-pack-index.sh
++++ b/t/t5319-multi-pack-index.sh
+@@ -1073,4 +1073,14 @@ test_expect_success 'reader notices too-small oid fanout chunk' '
+ 	test_cmp expect err
+ '
+ 
++test_expect_success 'reader notices too-small oid lookup chunk' '
++	corrupt_chunk OIDL clear 00000000 &&
++	test_must_fail git log 2>err &&
++	cat >expect <<-\EOF &&
++	error: multi-pack-index OID lookup chunk is the wrong size
++	fatal: multi-pack-index required OID lookup chunk missing or corrupted
++	EOF
++	test_cmp expect err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

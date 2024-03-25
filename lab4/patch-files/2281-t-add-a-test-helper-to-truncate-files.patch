@@ -1,0 +1,94 @@
+From 678eb55f5da174fce21f686f0073d56904c081c9 Mon Sep 17 00:00:00 2001
+From: "brian m. carlson" <bk2204@github.com>
+Date: Thu, 12 Oct 2023 16:09:29 +0000
+Subject: [PATCH 2281/2871] t: add a test helper to truncate files
+
+In a future commit, we're going to work with some large files which will
+be at least 4 GiB in size.  To take advantage of the sparseness
+functionality on most Unix systems and avoid running the system out of
+disk, it would be convenient to use truncate(2) to simply create a
+sparse file of sufficient size.
+
+However, the GNU truncate(1) utility isn't portable, so let's write a
+tiny test helper that does the work for us.
+
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile                 |  1 +
+ t/helper/test-tool.c     |  1 +
+ t/helper/test-tool.h     |  1 +
+ t/helper/test-truncate.c | 25 +++++++++++++++++++++++++
+ 4 files changed, 28 insertions(+)
+ create mode 100644 t/helper/test-truncate.c
+
+diff --git a/Makefile b/Makefile
+index 5776309365..3a6889d2bc 100644
+--- a/Makefile
++++ b/Makefile
+@@ -852,6 +852,7 @@ TEST_BUILTINS_OBJS += test-submodule-nested-repo-config.o
+ TEST_BUILTINS_OBJS += test-submodule.o
+ TEST_BUILTINS_OBJS += test-subprocess.o
+ TEST_BUILTINS_OBJS += test-trace2.o
++TEST_BUILTINS_OBJS += test-truncate.o
+ TEST_BUILTINS_OBJS += test-urlmatch-normalization.o
+ TEST_BUILTINS_OBJS += test-userdiff.o
+ TEST_BUILTINS_OBJS += test-wildmatch.o
+diff --git a/t/helper/test-tool.c b/t/helper/test-tool.c
+index abe8a785eb..9bd223b365 100644
+--- a/t/helper/test-tool.c
++++ b/t/helper/test-tool.c
+@@ -86,6 +86,7 @@ static struct test_cmd cmds[] = {
+ 	{ "submodule-nested-repo-config", cmd__submodule_nested_repo_config },
+ 	{ "subprocess", cmd__subprocess },
+ 	{ "trace2", cmd__trace2 },
++	{ "truncate", cmd__truncate },
+ 	{ "userdiff", cmd__userdiff },
+ 	{ "urlmatch-normalization", cmd__urlmatch_normalization },
+ 	{ "xml-encode", cmd__xml_encode },
+diff --git a/t/helper/test-tool.h b/t/helper/test-tool.h
+index ea2672436c..f41a4d0aa8 100644
+--- a/t/helper/test-tool.h
++++ b/t/helper/test-tool.h
+@@ -79,6 +79,7 @@ int cmd__submodule_config(int argc, const char **argv);
+ int cmd__submodule_nested_repo_config(int argc, const char **argv);
+ int cmd__subprocess(int argc, const char **argv);
+ int cmd__trace2(int argc, const char **argv);
++int cmd__truncate(int argc, const char **argv);
+ int cmd__userdiff(int argc, const char **argv);
+ int cmd__urlmatch_normalization(int argc, const char **argv);
+ int cmd__xml_encode(int argc, const char **argv);
+diff --git a/t/helper/test-truncate.c b/t/helper/test-truncate.c
+new file mode 100644
+index 0000000000..3931deaec7
+--- /dev/null
++++ b/t/helper/test-truncate.c
+@@ -0,0 +1,25 @@
++#include "test-tool.h"
++#include "git-compat-util.h"
++
++/*
++ * Truncate a file to the given size.
++ */
++int cmd__truncate(int argc, const char **argv)
++{
++	char *p = NULL;
++	uintmax_t sz = 0;
++	int fd = -1;
++
++	if (argc != 3)
++		die("expected filename and size");
++
++	sz = strtoumax(argv[2], &p, 0);
++	if (*p)
++		die("invalid size");
++
++	fd = xopen(argv[1], O_WRONLY | O_CREAT, 0600);
++
++	if (ftruncate(fd, (off_t) sz) < 0)
++		die_errno("failed to truncate file");
++	return 0;
++}
+-- 
+2.39.3 (Apple Git-145)
+

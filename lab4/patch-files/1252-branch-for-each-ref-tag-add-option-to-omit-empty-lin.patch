@@ -1,0 +1,253 @@
+From aabfdc9514a51d8d9a2f3afbc29e5044ccf7191b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=98ystein=20Walle?= <oystwa@gmail.com>
+Date: Fri, 7 Apr 2023 19:53:16 +0200
+Subject: [PATCH 1252/2871] branch, for-each-ref, tag: add option to omit empty
+ lines
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+If the given format string expands to the empty string, a newline is
+still printed. This makes using the output linewise more tedious. For
+example, git update-ref --stdin does not accept empty lines.
+
+Add options to "git branch", "git for-each-ref", and "git tag" to
+not print these empty lines.  The default behavior remains the same.
+
+Signed-off-by: Øystein Walle <oystwa@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-branch.txt       |  4 ++++
+ Documentation/git-for-each-ref.txt |  4 ++++
+ Documentation/git-tag.txt          |  4 ++++
+ builtin/branch.c                   |  6 +++++-
+ builtin/for-each-ref.c             |  7 +++++--
+ builtin/tag.c                      |  6 +++++-
+ t/t3203-branch-output.sh           | 24 ++++++++++++++++++++++++
+ t/t6300-for-each-ref.sh            |  8 ++++++++
+ t/t7004-tag.sh                     | 16 ++++++++++++++++
+ 9 files changed, 75 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-branch.txt b/Documentation/git-branch.txt
+index d382ac69f7..d207da9101 100644
+--- a/Documentation/git-branch.txt
++++ b/Documentation/git-branch.txt
+@@ -156,6 +156,10 @@ in another worktree linked to the same repository.
+ --ignore-case::
+ 	Sorting and filtering branches are case insensitive.
+ 
++--omit-empty::
++	Do not print a newline after formatted refs where the format expands
++	to the empty string.
++
+ --column[=<options>]::
+ --no-column::
+ 	Display branch listing in columns. See configuration variable
+diff --git a/Documentation/git-for-each-ref.txt b/Documentation/git-for-each-ref.txt
+index 6da899c629..af790bfa4e 100644
+--- a/Documentation/git-for-each-ref.txt
++++ b/Documentation/git-for-each-ref.txt
+@@ -93,6 +93,10 @@ OPTIONS
+ --ignore-case::
+ 	Sorting and filtering refs are case insensitive.
+ 
++--omit-empty::
++	Do not print a newline after formatted refs where the format expands
++	to the empty string.
++
+ FIELD NAMES
+ -----------
+ 
+diff --git a/Documentation/git-tag.txt b/Documentation/git-tag.txt
+index fdc72b5875..7f61c1edb3 100644
+--- a/Documentation/git-tag.txt
++++ b/Documentation/git-tag.txt
+@@ -131,6 +131,10 @@ options for details.
+ --ignore-case::
+ 	Sorting and filtering tags are case insensitive.
+ 
++--omit-empty::
++	Do not print a newline after formatted refs where the format expands
++	to the empty string.
++
+ --column[=<options>]::
+ --no-column::
+ 	Display tag listing in columns. See configuration variable
+diff --git a/builtin/branch.c b/builtin/branch.c
+index f63fd45edb..b47fef51fb 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -41,6 +41,7 @@ static const char *head;
+ static struct object_id head_oid;
+ static int recurse_submodules = 0;
+ static int submodule_propagate_branches = 0;
++static int omit_empty = 0;
+ 
+ static int branch_use_color = -1;
+ static char branch_colors[][COLOR_MAXLEN] = {
+@@ -461,7 +462,8 @@ static void print_ref_list(struct ref_filter *filter, struct ref_sorting *sortin
+ 			string_list_append(output, out.buf);
+ 		} else {
+ 			fwrite(out.buf, 1, out.len, stdout);
+-			putchar('\n');
++			if (out.len || !omit_empty)
++				putchar('\n');
+ 		}
+ 	}
+ 
+@@ -670,6 +672,8 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 		OPT_BIT('D', NULL, &delete, N_("delete branch (even if not merged)"), 2),
+ 		OPT_BIT('m', "move", &rename, N_("move/rename a branch and its reflog"), 1),
+ 		OPT_BIT('M', NULL, &rename, N_("move/rename a branch, even if target exists"), 2),
++		OPT_BOOL(0, "omit-empty",  &omit_empty,
++			N_("do not output a newline after empty formatted refs")),
+ 		OPT_BIT('c', "copy", &copy, N_("copy a branch and its reflog"), 1),
+ 		OPT_BIT('C', NULL, &copy, N_("copy a branch, even if target exists"), 2),
+ 		OPT_BOOL('l', "list", &list, N_("list branch names")),
+diff --git a/builtin/for-each-ref.c b/builtin/for-each-ref.c
+index 6f62f40d12..1fc5130481 100644
+--- a/builtin/for-each-ref.c
++++ b/builtin/for-each-ref.c
+@@ -19,7 +19,7 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
+ 	int i;
+ 	struct ref_sorting *sorting;
+ 	struct string_list sorting_options = STRING_LIST_INIT_DUP;
+-	int maxcount = 0, icase = 0;
++	int maxcount = 0, icase = 0, omit_empty = 0;
+ 	struct ref_array array;
+ 	struct ref_filter filter;
+ 	struct ref_format format = REF_FORMAT_INIT;
+@@ -35,6 +35,8 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
+ 			N_("quote placeholders suitably for python"), QUOTE_PYTHON),
+ 		OPT_BIT(0 , "tcl",  &format.quote_style,
+ 			N_("quote placeholders suitably for Tcl"), QUOTE_TCL),
++		OPT_BOOL(0, "omit-empty",  &omit_empty,
++			N_("do not output a newline after empty formatted refs")),
+ 
+ 		OPT_GROUP(""),
+ 		OPT_INTEGER( 0 , "count", &maxcount, N_("show only <n> matched refs")),
+@@ -88,7 +90,8 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
+ 		if (format_ref_array_item(array.items[i], &format, &output, &err))
+ 			die("%s", err.buf);
+ 		fwrite(output.buf, 1, output.len, stdout);
+-		putchar('\n');
++		if (output.len || !omit_empty)
++			putchar('\n');
+ 	}
+ 
+ 	strbuf_release(&err);
+diff --git a/builtin/tag.c b/builtin/tag.c
+index d428c45dc8..61bc732c92 100644
+--- a/builtin/tag.c
++++ b/builtin/tag.c
+@@ -37,6 +37,7 @@ static const char * const git_tag_usage[] = {
+ static unsigned int colopts;
+ static int force_sign_annotate;
+ static int config_sign_tag = -1; /* unspecified */
++static int omit_empty = 0;
+ 
+ static int list_tags(struct ref_filter *filter, struct ref_sorting *sorting,
+ 		     struct ref_format *format)
+@@ -74,7 +75,8 @@ static int list_tags(struct ref_filter *filter, struct ref_sorting *sorting,
+ 		if (format_ref_array_item(array.items[i], format, &output, &err))
+ 			die("%s", err.buf);
+ 		fwrite(output.buf, 1, output.len, stdout);
+-		putchar('\n');
++		if (output.len || !omit_empty)
++			putchar('\n');
+ 	}
+ 
+ 	strbuf_release(&err);
+@@ -473,6 +475,8 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 		OPT_WITHOUT(&filter.no_commit, N_("print only tags that don't contain the commit")),
+ 		OPT_MERGED(&filter, N_("print only tags that are merged")),
+ 		OPT_NO_MERGED(&filter, N_("print only tags that are not merged")),
++		OPT_BOOL(0, "omit-empty",  &omit_empty,
++			N_("do not output a newline after empty formatted refs")),
+ 		OPT_REF_SORT(&sorting_options),
+ 		{
+ 			OPTION_CALLBACK, 0, "points-at", &filter.points_at, N_("object"),
+diff --git a/t/t3203-branch-output.sh b/t/t3203-branch-output.sh
+index d34d77f893..c06906d83e 100755
+--- a/t/t3203-branch-output.sh
++++ b/t/t3203-branch-output.sh
+@@ -341,6 +341,30 @@ test_expect_success 'git branch with --format=%(rest) must fail' '
+ 	test_must_fail git branch --format="%(rest)" >actual
+ '
+ 
++test_expect_success 'git branch --format --omit-empty' '
++	cat >expect <<-\EOF &&
++	Refname is (HEAD detached from fromtag)
++	Refname is refs/heads/ambiguous
++	Refname is refs/heads/branch-one
++	Refname is refs/heads/branch-two
++
++	Refname is refs/heads/ref-to-branch
++	Refname is refs/heads/ref-to-remote
++	EOF
++	git branch --format="%(if:notequals=refs/heads/main)%(refname)%(then)Refname is %(refname)%(end)" >actual &&
++	test_cmp expect actual &&
++	cat >expect <<-\EOF &&
++	Refname is (HEAD detached from fromtag)
++	Refname is refs/heads/ambiguous
++	Refname is refs/heads/branch-one
++	Refname is refs/heads/branch-two
++	Refname is refs/heads/ref-to-branch
++	Refname is refs/heads/ref-to-remote
++	EOF
++	git branch --omit-empty --format="%(if:notequals=refs/heads/main)%(refname)%(then)Refname is %(refname)%(end)" >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'worktree colors correct' '
+ 	cat >expect <<-EOF &&
+ 	* <GREEN>(HEAD detached from fromtag)<RESET>
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index c466fd989f..d4ccc22d99 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1374,6 +1374,14 @@ test_expect_success 'for-each-ref --ignore-case ignores case' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'for-each-ref --omit-empty works' '
++	git for-each-ref --format="%(refname)" >actual &&
++	test_line_count -gt 1 actual &&
++	git for-each-ref --format="%(if:equals=refs/heads/main)%(refname)%(then)%(refname)%(end)" --omit-empty >actual &&
++	echo refs/heads/main >expect &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'for-each-ref --ignore-case works on multiple sort keys' '
+ 	# name refs numerically to avoid case-insensitive filesystem conflicts
+ 	nr=0 &&
+diff --git a/t/t7004-tag.sh b/t/t7004-tag.sh
+index 9aa1660651..6493583110 100755
+--- a/t/t7004-tag.sh
++++ b/t/t7004-tag.sh
+@@ -2001,6 +2001,22 @@ test_expect_success '--format should list tags as per format given' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success '--format --omit-empty works' '
++	cat >expect <<-\EOF &&
++	refname : refs/tags/v1.0
++
++	refname : refs/tags/v1.1.3
++	EOF
++	git tag -l --format="%(if:notequals=refs/tags/v1.0.1)%(refname)%(then)refname : %(refname)%(end)" "v1*" >actual &&
++	test_cmp expect actual &&
++	cat >expect <<-\EOF &&
++	refname : refs/tags/v1.0
++	refname : refs/tags/v1.1.3
++	EOF
++	git tag -l --omit-empty --format="%(if:notequals=refs/tags/v1.0.1)%(refname)%(then)refname : %(refname)%(end)" "v1*" >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'git tag -l with --format="%(rest)" must fail' '
+ 	test_must_fail git tag -l --format="%(rest)" "v1*"
+ '
+-- 
+2.39.3 (Apple Git-145)
+

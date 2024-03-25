@@ -1,0 +1,84 @@
+From e3a3f5edf52c7f6161b167058b4d7c3a31dc0c3b Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:29 +0000
+Subject: [PATCH 1342/2871] reftable: ensure git-compat-util.h is the first
+ (indirect) include
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/error.c         | 1 +
+ reftable/publicbasics.c  | 2 +-
+ reftable/tree.c          | 2 +-
+ reftable/tree_test.c     | 1 +
+ t/helper/test-reftable.c | 1 +
+ 5 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/reftable/error.c b/reftable/error.c
+index 93941f2145..0d1766735e 100644
+--- a/reftable/error.c
++++ b/reftable/error.c
+@@ -6,6 +6,7 @@ license that can be found in the LICENSE file or at
+ https://developers.google.com/open-source/licenses/bsd
+ */
+ 
++#include "system.h"
+ #include "reftable-error.h"
+ 
+ #include <stdio.h>
+diff --git a/reftable/publicbasics.c b/reftable/publicbasics.c
+index 0ad7d5c0ff..bcb82530d6 100644
+--- a/reftable/publicbasics.c
++++ b/reftable/publicbasics.c
+@@ -6,10 +6,10 @@ license that can be found in the LICENSE file or at
+ https://developers.google.com/open-source/licenses/bsd
+ */
+ 
++#include "system.h"
+ #include "reftable-malloc.h"
+ 
+ #include "basics.h"
+-#include "system.h"
+ 
+ static void *(*reftable_malloc_ptr)(size_t sz);
+ static void *(*reftable_realloc_ptr)(void *, size_t);
+diff --git a/reftable/tree.c b/reftable/tree.c
+index b8899e060a..a5bf880985 100644
+--- a/reftable/tree.c
++++ b/reftable/tree.c
+@@ -6,10 +6,10 @@ license that can be found in the LICENSE file or at
+ https://developers.google.com/open-source/licenses/bsd
+ */
+ 
++#include "system.h"
+ #include "tree.h"
+ 
+ #include "basics.h"
+-#include "system.h"
+ 
+ struct tree_node *tree_search(void *key, struct tree_node **rootp,
+ 			      int (*compare)(const void *, const void *),
+diff --git a/reftable/tree_test.c b/reftable/tree_test.c
+index cbff125588..ac3a045ad4 100644
+--- a/reftable/tree_test.c
++++ b/reftable/tree_test.c
+@@ -6,6 +6,7 @@ license that can be found in the LICENSE file or at
+ https://developers.google.com/open-source/licenses/bsd
+ */
+ 
++#include "system.h"
+ #include "tree.h"
+ 
+ #include "basics.h"
+diff --git a/t/helper/test-reftable.c b/t/helper/test-reftable.c
+index 1f0a28cbb6..00237ef0d9 100644
+--- a/t/helper/test-reftable.c
++++ b/t/helper/test-reftable.c
+@@ -1,3 +1,4 @@
++#include "reftable/system.h"
+ #include "reftable/reftable-tests.h"
+ #include "test-tool.h"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

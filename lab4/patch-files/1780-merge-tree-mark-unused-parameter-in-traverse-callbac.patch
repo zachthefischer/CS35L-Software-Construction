@@ -1,0 +1,40 @@
+From ee550abcce86e27c0be3593a4c9af4dc7322039a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:44:21 -0400
+Subject: [PATCH 1780/2871] merge-tree: mark unused parameter in traverse
+ callback
+
+Our threeway_callback() does not bother to look at its "n" parameter. It
+is static in this file and used only by trivial_merge_trees(), which
+always passes 3 trees (hence the name "threeway"). It also does not look
+at "dirmask". This is OK, as it handles directories specifically by
+looking at the mode bits.
+
+Other traverse_info callbacks need these, so we can't get drop them from
+the interface. But let's annotate these ones to avoid complaints from
+-Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/merge-tree.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/merge-tree.c b/builtin/merge-tree.c
+index 6f7db436d2..0de42aecf4 100644
+--- a/builtin/merge-tree.c
++++ b/builtin/merge-tree.c
+@@ -324,7 +324,9 @@ static void unresolved(const struct traverse_info *info, struct name_entry n[3])
+  * The successful merge rules are the same as for the three-way merge
+  * in git-read-tree.
+  */
+-static int threeway_callback(int n, unsigned long mask, unsigned long dirmask, struct name_entry *entry, struct traverse_info *info)
++static int threeway_callback(int n UNUSED, unsigned long mask,
++			     unsigned long dirmask UNUSED,
++			     struct name_entry *entry, struct traverse_info *info)
+ {
+ 	/* Same in both? */
+ 	if (same_entry(entry+1, entry+2) || both_empty(entry+1, entry+2)) {
+-- 
+2.39.3 (Apple Git-145)
+

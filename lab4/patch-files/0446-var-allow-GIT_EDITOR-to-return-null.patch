@@ -1,0 +1,121 @@
+From 2ad150e35e52705a97f18bee08f34e00a6557d6f Mon Sep 17 00:00:00 2001
+From: Sean Allred <allred.sean@gmail.com>
+Date: Sat, 26 Nov 2022 14:17:57 +0000
+Subject: [PATCH 0446/2871] var: allow GIT_EDITOR to return null
+
+The handling to die early when there is no EDITOR is valuable when
+used in normal code (i.e., editor.c). In git-var, where
+null/empty-string is a perfectly valid value to return, it doesn't
+make as much sense.
+
+Remove this handling from `git var GIT_EDITOR` so that it does not
+fail so noisily when there is no defined editor.
+
+Signed-off-by: Sean Allred <allred.sean@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/var.c      |  7 +-----
+ t/t0007-git-var.sh | 62 ++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 63 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/var.c b/builtin/var.c
+index 5cbe32ec89..a1a2522126 100644
+--- a/builtin/var.c
++++ b/builtin/var.c
+@@ -11,12 +11,7 @@ static const char var_usage[] = "git var (-l | <variable>)";
+ 
+ static const char *editor(int flag)
+ {
+-	const char *pgm = git_editor();
+-
+-	if (!pgm && flag & IDENT_STRICT)
+-		die("Terminal is dumb, but EDITOR unset");
+-
+-	return pgm;
++	return git_editor();
+ }
+ 
+ static const char *pager(int flag)
+diff --git a/t/t0007-git-var.sh b/t/t0007-git-var.sh
+index e56f4b9ac5..433d242897 100755
+--- a/t/t0007-git-var.sh
++++ b/t/t0007-git-var.sh
+@@ -5,6 +5,12 @@ test_description='basic sanity checks for git var'
+ TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
++sane_unset_all_editors () {
++	sane_unset GIT_EDITOR &&
++	sane_unset VISUAL &&
++	sane_unset EDITOR
++}
++
+ test_expect_success 'get GIT_AUTHOR_IDENT' '
+ 	test_tick &&
+ 	echo "$GIT_AUTHOR_NAME <$GIT_AUTHOR_EMAIL> $GIT_AUTHOR_DATE" >expect &&
+@@ -47,6 +53,62 @@ test_expect_success 'get GIT_DEFAULT_BRANCH with configuration' '
+ 	)
+ '
+ 
++test_expect_success 'get GIT_EDITOR without configuration' '
++	(
++		sane_unset_all_editors &&
++		test_expect_code 1 git var GIT_EDITOR >out &&
++		test_must_be_empty out
++	)
++'
++
++test_expect_success 'get GIT_EDITOR with configuration' '
++	test_config core.editor foo &&
++	(
++		sane_unset_all_editors &&
++		echo foo >expect &&
++		git var GIT_EDITOR >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success 'get GIT_EDITOR with environment variable GIT_EDITOR' '
++	(
++		sane_unset_all_editors &&
++		echo bar >expect &&
++		GIT_EDITOR=bar git var GIT_EDITOR >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success 'get GIT_EDITOR with environment variable EDITOR' '
++	(
++		sane_unset_all_editors &&
++		echo bar >expect &&
++		EDITOR=bar git var GIT_EDITOR >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success 'get GIT_EDITOR with configuration and environment variable GIT_EDITOR' '
++	test_config core.editor foo &&
++	(
++		sane_unset_all_editors &&
++		echo bar >expect &&
++		GIT_EDITOR=bar git var GIT_EDITOR >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success 'get GIT_EDITOR with configuration and environment variable EDITOR' '
++	test_config core.editor foo &&
++	(
++		sane_unset_all_editors &&
++		echo foo >expect &&
++		EDITOR=bar git var GIT_EDITOR >actual &&
++		test_cmp expect actual
++	)
++'
++
+ # For git var -l, we check only a representative variable;
+ # testing the whole output would make our test too brittle with
+ # respect to unrelated changes in the test suite's environment.
+-- 
+2.39.3 (Apple Git-145)
+

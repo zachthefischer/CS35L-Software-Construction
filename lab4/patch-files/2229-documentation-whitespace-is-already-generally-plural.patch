@@ -1,0 +1,28 @@
+From 03b3431e6a36d9a529f49d938168043b463ca24b Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:15 +0000
+Subject: [PATCH 2229/2871] documentation: whitespace is already generally
+ plural
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/apply.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/config/apply.txt b/Documentation/config/apply.txt
+index 3f9ff19db6..f9908e210a 100644
+--- a/Documentation/config/apply.txt
++++ b/Documentation/config/apply.txt
+@@ -7,5 +7,5 @@ apply.ignoreWhitespace::
+ 	See linkgit:git-apply[1].
+ 
+ apply.whitespace::
+-	Tells 'git apply' how to handle whitespaces, in the same way
++	Tells 'git apply' how to handle whitespace, in the same way
+ 	as the `--whitespace` option. See linkgit:git-apply[1].
+-- 
+2.39.3 (Apple Git-145)
+

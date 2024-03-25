@@ -1,0 +1,122 @@
+From 1f2e05f0b794d9e4b1cf07d63c9efd1325893ecc Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Mon, 20 Mar 2023 16:10:00 +0000
+Subject: [PATCH 1052/2871] wildmatch: fix exponential behavior
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When dowild() cannot match a '*' or '/**/' wildcard then it must return
+WM_ABORT_TO_STARSTAR or WM_ABORT_ALL respectively. Failure to observe
+this results in unnecessary backtracking and the time taken for a failed
+match increases exponentially with the number of wildcards in the
+pattern [1]. Unfortunately in some instances dowild() returns WM_NOMATCH
+for a failed match resulting in long match times for patterns containing
+multiple wildcards as can be seen in the following benchmark.
+(Note that the timings in the Benchmark 1 are really measuring the time
+to execute test-tool rather than the time to match the pattern)
+
+Benchmark 1: t/helper/test-tool wildmatch wildmatch aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab "*a"
+  Time (mean ± σ):      22.8 ms ±   1.7 ms    [User: 12.1 ms, System: 10.6 ms]
+  Range (min … max):    19.4 ms …  26.9 ms    113 runs
+
+  Warning: Ignoring non-zero exit code.
+
+Benchmark 2: t/helper/test-tool wildmatch wildmatch aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab "*a*a*a*a*a*a*a*a*a"
+  Time (mean ± σ):      5.244 s ±  0.228 s    [User: 5.229 s, System: 0.010 s]
+  Range (min … max):    4.969 s …  5.707 s    10 runs
+
+  Warning: Ignoring non-zero exit code.
+
+Summary
+  't/helper/test-tool wildmatch wildmatch aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab "*a"' ran
+  230.37 ± 20.04 times faster than 't/helper/test-tool wildmatch wildmatch aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab "*a*a*a*a*a*a*a*a*a"'
+
+The security implications are limited as it only affects operations that
+are potentially DoS vectors. For example by creating a blob containing
+such a pattern a malicious user can exploit this behavior to use large
+amounts of CPU time on a remote server by pushing the blob and then
+creating a new clone with --filter=sparse:oid. However this filter type
+is usually disabled as it is known to consume large amounts of CPU time
+even without this bug.
+
+The WM_MATCH changed in the first hunk of this patch comes from the
+original implementation imported from rsync in 5230f605e1 (Import
+wildmatch from rsync, 2012-10-15). Compared to the others converted here
+it is fairly harmless as it only triggers at the end of the pattern and
+so will only cause a single unnecessary backtrack. The others introduced
+by 6f1a31f0aa (wildmatch: advance faster in <asterisk> + <literal>
+patterns, 2013-01-01) and 46983441ae (wildmatch: make a special case for
+"*/" with FNM_PATHNAME, 2013-01-01) are more pernicious and will cause
+exponential behavior.
+
+A new test is added to protect against future regressions.
+
+[1] https://research.swtch.com/glob
+
+Helped-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3070-wildmatch.sh |  9 +++++++++
+ wildmatch.c          | 12 ++++++++----
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/t/t3070-wildmatch.sh b/t/t3070-wildmatch.sh
+index 5d871fde96..b91a7cb712 100755
+--- a/t/t3070-wildmatch.sh
++++ b/t/t3070-wildmatch.sh
+@@ -431,4 +431,13 @@ match 1 1 1 1 'a' '[B-a]'
+ match 0 1 0 1 'z' '[Z-y]'
+ match 1 1 1 1 'Z' '[Z-y]'
+ 
++test_expect_success 'matching does not exhibit exponential behavior' '
++	test-tool wildmatch wildmatch \
++		aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab \
++		"*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a" &
++	pid=$! &&
++	sleep 2 &&
++	! kill $!
++'
++
+ test_done
+diff --git a/wildmatch.c b/wildmatch.c
+index 7e5a7ea1ea..06861bd8bc 100644
+--- a/wildmatch.c
++++ b/wildmatch.c
+@@ -114,7 +114,7 @@ static int dowild(const uchar *p, const uchar *text, unsigned int flags)
+ 				 * only if there are no more slash characters. */
+ 				if (!match_slash) {
+ 					if (strchr((char *)text, '/'))
+-						return WM_NOMATCH;
++						return WM_ABORT_TO_STARSTAR;
+ 				}
+ 				return WM_MATCH;
+ 			} else if (!match_slash && *p == '/') {
+@@ -125,7 +125,7 @@ static int dowild(const uchar *p, const uchar *text, unsigned int flags)
+ 				 */
+ 				const char *slash = strchr((char*)text, '/');
+ 				if (!slash)
+-					return WM_NOMATCH;
++					return WM_ABORT_ALL;
+ 				text = (const uchar*)slash;
+ 				/* the slash is consumed by the top-level for loop */
+ 				break;
+@@ -153,8 +153,12 @@ static int dowild(const uchar *p, const uchar *text, unsigned int flags)
+ 							break;
+ 						text++;
+ 					}
+-					if (t_ch != p_ch)
+-						return WM_NOMATCH;
++					if (t_ch != p_ch) {
++						if (match_slash)
++							return WM_ABORT_ALL;
++						else
++							return WM_ABORT_TO_STARSTAR;
++					}
+ 				}
+ 				if ((matched = dowild(p, text, flags)) != WM_NOMATCH) {
+ 					if (!match_slash || matched != WM_ABORT_TO_STARSTAR)
+-- 
+2.39.3 (Apple Git-145)
+

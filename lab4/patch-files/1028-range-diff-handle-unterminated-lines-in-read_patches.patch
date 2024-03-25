@@ -1,0 +1,102 @@
+From a36df79a37c7c643177905ce725dca8e9bd092d3 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Aug 2021 18:48:39 -0400
+Subject: [PATCH 1028/2871] range-diff: handle unterminated lines in
+ read_patches()
+
+When parsing our buffer of output from git-log, we have a
+find_end_of_line() helper that finds the next newline, and gives us the
+number of bytes to move past it, or the size of the whole remaining
+buffer if there is no newline.
+
+But trying to handle both those cases leads to some oddities:
+
+  - we try to overwrite the newline with NUL in the caller, by writing
+    over line[len-1]. This is at best redundant, since the helper will
+    already have done so if it saw a newline. But if it didn't see a
+    newline, it's actively wrong; we'll overwrite the byte at the end of
+    the (unterminated) line.
+
+    We could solve this just dropping the extra NUL assignment in the
+    caller and just letting the helper do the right thing. But...
+
+  - if we see a "diff --git" line, we'll restore the newline on top of
+    the NUL byte, so we can pass the string to parse_git_diff_header().
+    But if there was no newline in the first place, we can't do this.
+    There's no place to put it (the current code writes a newline
+    over whatever byte we obliterated earlier). The best we can do is
+    feed the complete remainder of the buffer to the function (which is,
+    in fact, a string, by virtue of being a strbuf).
+
+To solve this, the caller needs to know whether we actually found a
+newline or not. We could modify find_end_of_line() to return that
+information, but we can further observe that it has only one caller.
+So let's just inline it in that caller.
+
+Nobody seems to have noticed this case, probably because git-log would
+never produce input that doesn't end with a newline. Arguably we could
+just return an error as soon as we see that the output does not end in a
+newline. But the code to do so actually ends up _longer_, mostly because
+of the cleanup we have to do in handling the error.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Derrick Stolee <dstolee@microsoft.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ range-diff.c | 25 +++++++++++--------------
+ 1 file changed, 11 insertions(+), 14 deletions(-)
+
+diff --git a/range-diff.c b/range-diff.c
+index 559a9291f9..f64e84f56a 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -25,17 +25,6 @@ struct patch_util {
+ 	struct object_id oid;
+ };
+ 
+-static size_t find_end_of_line(char *buffer, unsigned long size)
+-{
+-	char *eol = memchr(buffer, '\n', size);
+-
+-	if (!eol)
+-		return size;
+-
+-	*eol = '\0';
+-	return eol + 1 - buffer;
+-}
+-
+ /*
+  * Reads the patches into a string list, with the `util` field being populated
+  * as struct object_id (will need to be free()d).
+@@ -85,9 +74,16 @@ static int read_patches(const char *range, struct string_list *list,
+ 	size = contents.len;
+ 	for (; size > 0; size -= len, line += len) {
+ 		const char *p;
++		char *eol;
++
++		eol = memchr(line, '\n', size);
++		if (eol) {
++			*eol = '\0';
++			len = eol + 1 - line;
++		} else {
++			len = size;
++		}
+ 
+-		len = find_end_of_line(line, size);
+-		line[len - 1] = '\0';
+ 		if (skip_prefix(line, "commit ", &p)) {
+ 			if (util) {
+ 				string_list_append(list, buf.buf)->util = util;
+@@ -129,7 +125,8 @@ static int read_patches(const char *range, struct string_list *list,
+ 			strbuf_addch(&buf, '\n');
+ 			if (!util->diff_offset)
+ 				util->diff_offset = buf.len;
+-			line[len - 1] = '\n';
++			if (eol)
++				*eol = '\n';
+ 			orig_len = len;
+ 			len = parse_git_diff_header(&root, &linenr, 0, line,
+ 						    len, size, &patch);
+-- 
+2.39.3 (Apple Git-145)
+

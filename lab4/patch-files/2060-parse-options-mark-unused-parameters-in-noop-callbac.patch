@@ -1,0 +1,38 @@
+From 0058b3d5eedcf5777712e872e01f74bf8d933be7 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 17:22:20 -0400
+Subject: [PATCH 2060/2871] parse-options: mark unused parameters in noop
+ callback
+
+Unsurprisingly, the noop options callback doesn't bother to look at any
+of its parameters. Let's mark them so that -Wunused-parameter does not
+complain.
+
+Another option would be to drop the callback and have parse-options
+itself recognize OPT_NOOP_NOARG. But that seems like extra work for no
+real benefit.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options-cb.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/parse-options-cb.c b/parse-options-cb.c
+index a24521dee0..bdc7fae497 100644
+--- a/parse-options-cb.c
++++ b/parse-options-cb.c
+@@ -227,7 +227,9 @@ int parse_opt_strvec(const struct option *opt, const char *arg, int unset)
+ 	return 0;
+ }
+ 
+-int parse_opt_noop_cb(const struct option *opt, const char *arg, int unset)
++int parse_opt_noop_cb(const struct option *opt UNUSED,
++		      const char *arg UNUSED,
++		      int unset UNUSED)
+ {
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

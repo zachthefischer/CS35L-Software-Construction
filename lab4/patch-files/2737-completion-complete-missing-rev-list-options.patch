@@ -1,0 +1,40 @@
+From 706b3e7a0904e1608dbc806d767100872086891b Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Sun, 21 Jan 2024 04:07:48 +0000
+Subject: [PATCH 2737/2871] completion: complete missing rev-list options
+
+Some options listed in rev-list-options.txt, and thus accepted by 'git
+log' and friends, are missing from the Bash completion script.
+
+Add them to __git_log_common_options.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 8c40ade494..6108d523a1 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2071,6 +2071,16 @@ __git_log_common_options="
+ 	--min-age= --until= --before=
+ 	--min-parents= --max-parents=
+ 	--no-min-parents --no-max-parents
++	--alternate-refs --ancestry-path
++	--author-date-order --basic-regexp
++	--bisect --boundary --exclude-first-parent-only
++	--exclude-hidden --extended-regexp
++	--fixed-strings --grep-reflog
++	--ignore-missing --left-only --perl-regexp
++	--reflog --regexp-ignore-case --remove-empty
++	--right-only --show-linear-break
++	--show-notes-by-default --show-pulls
++	--since-as-filter --single-worktree
+ "
+ # Options that go well for log and gitk (not shortlog)
+ __git_log_gitk_options="
+-- 
+2.39.3 (Apple Git-145)
+

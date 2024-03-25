@@ -1,0 +1,127 @@
+From b01e1c7ef0f8c7cd05190898ec6acffe638ccfcf Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 2 Nov 2022 03:42:07 -0400
+Subject: [PATCH 0301/2871] ref-filter: fix parsing of signatures without blank
+ lines
+
+When ref-filter is asked to show %(content:subject), etc, we end up in
+find_subpos() to parse out the three major parts: the subject, the body,
+and the signature (if any).
+
+When searching for the blank line between the subject and body, if we
+don't find anything, we try to treat the whole message as the subject,
+with no body. But our idea of "the whole message" needs to take into
+account the signature, too. Since 9f75ce3d8f (ref-filter: handle CRLF at
+end-of-line more gracefully, 2020-10-29), the code instead goes all the
+way to the end of the buffer, which produces confusing output.
+
+Here's an example. If we have a tag message like this:
+
+  this is the subject
+  -----BEGIN SSH SIGNATURE-----
+  ...some stuff...
+  -----END SSH SIGNATURE-----
+
+then the current parser will put the start of the body at the end of the
+whole buffer. This produces two buggy outcomes:
+
+  - since the subject length is computed as (body - subject), showing
+    %(contents:subject) will print both the subject and the signature,
+    rather than just the single line
+
+  - since the body length is computed as (sig - body), and the body now
+    starts _after_ the signature, we end up with a negative length!
+    Fortunately we never access out-of-bounds memory, because the
+    negative length is fed to xmemdupz(), which casts it to a size_t,
+    and xmalloc() bails trying to allocate an absurdly large value.
+
+    In theory it would be possible for somebody making a malicious tag
+    to wrap it around to a more reasonable value, but it would require a
+    tag on the order of 2^63 bytes. And even if they did, all they get
+    is an out of bounds string read. So the security implications are
+    probably not interesting.
+
+We can fix both by correctly putting the start of the body at the same
+index as the start of the signature (effectively making the body empty).
+
+Note that this is a real issue with signatures generated with gpg.format
+set to "ssh", which would look like the example above. In the new tests
+here I use a hard-coded tag message, for a few reasons:
+
+  - regardless of what the ssh-signing code produces now or in the
+    future, we should be testing this particular case
+
+  - skipping the actual signature makes the tests simpler to write (and
+    allows them to run on more systems)
+
+  - t6300 has helpers for working with gpg signatures; for the purposes
+    of this bug, "BEGIN PGP" is just as good a demonstration, and this
+    simplifies the tests
+
+Curiously, the same issue doesn't happen with real gpg signatures (and
+there are even existing tests in t6300 with cover this). Those have a
+blank line between the header and the content, like:
+
+  this is the subject
+  -----BEGIN PGP SIGNATURE-----
+
+  ...some stuff...
+  -----END PGP SIGNATURE-----
+
+Because we search for the subject/body separator line with a strstr(),
+we find the blank line in the signature, even though it's outside of
+what we'd consider the body. But that puts us unto a separate code path,
+which realizes that we're now in the signature and adjusts the line back
+to "sigstart". So this patch is basically just making the "no line found
+at all" case match that. And note that "sigstart" is always defined (if
+there is no signature, it points to the end of the buffer as you'd
+expect).
+
+Reported-by: Martin Englund <martin@englund.nu>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ ref-filter.c            |  2 +-
+ t/t6300-for-each-ref.sh | 15 +++++++++++++++
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index 914908fac5..6c2148c01e 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -1380,7 +1380,7 @@ static void find_subpos(const char *buf,
+ 	/* check if message uses CRLF */
+ 	} else if (! (eol = strstr(*sub, "\r\n\r\n"))) {
+ 		/* treat whole message as subject */
+-		eol = strrchr(*sub, '\0');
++		eol = sigstart;
+ 	}
+ 	buf = eol;
+ 	*sublen = buf - *sub;
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index dcaab7265f..d7e70027e6 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1406,4 +1406,19 @@ test_expect_success 'for-each-ref reports broken tags' '
+ 		refs/tags/broken-tag-*
+ '
+ 
++test_expect_success 'set up tag with signature and no blank lines' '
++	git tag -F - fake-sig-no-blanks <<-\EOF
++	this is the subject
++	-----BEGIN PGP SIGNATURE-----
++	not a real signature, but we just care about the
++	subject/body parsing. It is important here that
++	there are no blank lines in the signature.
++	-----END PGP SIGNATURE-----
++	EOF
++'
++
++test_atom refs/tags/fake-sig-no-blanks contents:subject 'this is the subject'
++test_atom refs/tags/fake-sig-no-blanks contents:body ''
++test_atom refs/tags/fake-sig-no-blanks contents:signature "$sig"
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,36 @@
+From 5aea3955bcd716c5dcb3323ef4eab72da70db623 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 6 Jan 2024 15:38:37 +0100
+Subject: [PATCH 2654/2871] branch: clarify <oldbranch> term
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 52d59cc645 (branch: add a --copy (-c) option to go with --move
+(-m), 2017-06-18) <oldbranch> is used in more operations than just -m.
+
+Let's also clarify what we do if <oldbranch> is omitted.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-branch.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/git-branch.txt b/Documentation/git-branch.txt
+index 4395aa9354..0b08442932 100644
+--- a/Documentation/git-branch.txt
++++ b/Documentation/git-branch.txt
+@@ -312,7 +312,8 @@ superproject's "origin/main", but tracks the submodule's "origin/main".
+ 	option is omitted, the current HEAD will be used instead.
+ 
+ <oldbranch>::
+-	The name of an existing branch to rename.
++	The name of an existing branch.  If this option is omitted,
++	the name of the current branch will be used instead.
+ 
+ <newbranch>::
+ 	The new name for an existing branch. The same restrictions as for
+-- 
+2.39.3 (Apple Git-145)
+

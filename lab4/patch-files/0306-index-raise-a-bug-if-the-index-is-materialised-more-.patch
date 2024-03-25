@@ -1,0 +1,33 @@
+From 8c7abdc596d572bee5d001d4e889c793f7020588 Mon Sep 17 00:00:00 2001
+From: Anh Le <anh@canva.com>
+Date: Thu, 3 Nov 2022 23:05:01 +0000
+Subject: [PATCH 0306/2871] index: raise a bug if the index is materialised
+ more than once
+
+If clear_skip_worktree_from_present_files() encounter a sparse directory,
+it fully materialise the index which should expand any sparse directories
+and start going through each entries again. If this happens more than once,
+raise it with a BUG.
+
+Signed-off-by: Anh Le <anh@canva.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ sparse-index.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sparse-index.c b/sparse-index.c
+index 8713a15611..8c269dab80 100644
+--- a/sparse-index.c
++++ b/sparse-index.c
+@@ -510,6 +510,8 @@ void clear_skip_worktree_from_present_files(struct index_state *istate)
+ 			path_count[restarted]++;
+ 			if (path_found(ce->name, &last_dirname, &dir_len, &dir_found)) {
+ 				if (S_ISSPARSEDIR(ce->ce_mode)) {
++					if (restarted)
++						BUG("ensure-full-index did not fully flatten?");
+ 					ensure_full_index(istate);
+ 					restarted = 1;
+ 					goto restart;
+-- 
+2.39.3 (Apple Git-145)
+

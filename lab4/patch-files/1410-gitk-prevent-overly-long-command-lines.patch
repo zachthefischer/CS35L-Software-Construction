@@ -1,0 +1,100 @@
+From bb5cb23daf751790950ff9f761f8884e21c88d00 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 24 Jan 2023 11:23:16 +0000
+Subject: [PATCH 1410/2871] gitk: prevent overly long command lines
+
+To avoid running into command line limitations, some of Git's commands
+support the `--stdin` option.
+
+Let's use exactly this option in the three rev-list/log invocations in
+gitk that would otherwise possibly run the danger of trying to invoke a
+too-long command line.
+
+While it is easy to redirect either stdin or stdout in Tcl/Tk scripts,
+what we need here is both. We need to capture the output, yet we also
+need to pipe in the revs/files arguments via stdin (because stdin does
+not have any limit, unlike the command line). To help this, we use the
+neat Tcl feature where you can capture stdout and at the same time feed
+a fixed string as stdin to the spawned process.
+
+One non-obvious aspect about this change is that the `--stdin` option
+allows to specify revs, the double-dash, and files, but *no* other
+options such as `--not`. This is addressed by prefixing the "negative"
+revs with `^` explicitly rather than relying on the `--not` option
+(thanks for coming up with that idea, Max!).
+
+This fixes https://github.com/git-for-windows/git/issues/1987
+
+Analysis-and-initial-patch-by: Max Kirillov <max@max630.net>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gitk | 24 +++++++++++++++++++-----
+ 1 file changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/gitk b/gitk
+index 0ae7d68590..92375ca6a2 100755
+--- a/gitk
++++ b/gitk
+@@ -405,14 +405,16 @@ proc start_rev_list {view} {
+         if {$revs eq {}} {
+             return 0
+         }
+-        set args [concat $vflags($view) $revs]
++        set args $vflags($view)
+     } else {
++        set revs {}
+         set args $vorigargs($view)
+     }
+ 
+     if {[catch {
+         set fd [open [concat | git log --no-color -z --pretty=raw $show_notes \
+-                        --parents --boundary $args "--" $files] r]
++                        --parents --boundary $args --stdin \
++                        "<<[join [concat $revs "--" $files] "\\n"]"] r]
+     } err]} {
+         error_popup "[mc "Error executing git log:"] $err"
+         return 0
+@@ -554,13 +556,19 @@ proc updatecommits {} {
+             set revs $newrevs
+             set vposids($view) [lsort -unique [concat $oldpos $vposids($view)]]
+         }
+-        set args [concat $vflags($view) $revs --not $oldpos]
++        set args $vflags($view)
++        foreach r $oldpos {
++                lappend revs "^$r"
++        }
+     } else {
++        set revs {}
+         set args $vorigargs($view)
+     }
+     if {[catch {
+         set fd [open [concat | git log --no-color -z --pretty=raw $show_notes \
+-                        --parents --boundary $args "--" $vfilelimit($view)] r]
++                        --parents --boundary $args --stdin \
++                        "<<[join [concat $revs "--" \
++                                $vfilelimit($view)] "\\n"]"] r]
+     } err]} {
+         error_popup "[mc "Error executing git log:"] $err"
+         return
+@@ -10231,10 +10239,16 @@ proc getallcommits {} {
+             foreach id $seeds {
+                 lappend ids "^$id"
+             }
++            lappend ids "--"
+         }
+     }
+     if {$ids ne {}} {
+-        set fd [open [concat $cmd $ids] r]
++        if {$ids eq "--all"} {
++            set cmd [concat $cmd "--all"]
++        } else {
++            set cmd [concat $cmd --stdin "<<[join $ids "\\n"]"]
++        }
++        set fd [open $cmd r]
+         fconfigure $fd -blocking 0
+         incr allcommits
+         nowbusy allcommits
+-- 
+2.39.3 (Apple Git-145)
+

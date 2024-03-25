@@ -1,0 +1,80 @@
+From 00271485d4acefda7ff054a1db5d5a39735e28b9 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 13 Dec 2022 06:12:09 -0500
+Subject: [PATCH 0556/2871] list-objects: drop process_gitlink() function
+
+Our object graph traversal code has a process_gitlink() function which
+we call when we see a gitlink entry. The function does nothing; it was
+added in the early days of gitlinks by 6e2f441bd4 (Teach git
+list-objects logic to not follow gitlinks, 2007-04-13).
+
+The comment above the function talks about some things we _could_ do.
+But in the intervening 15 years, nobody has touched the function, and
+the submodule code usually makes its own decisions about when and how to
+examine the links. At the generic traversal layer, we can't assume that
+the pointed-to commit is available.
+
+Let's drop this placeholder that isn't really helping anything. This
+silences some -Wunused-parameter warnings, and also gets rid of a crufty
+use of "const unsigned char *" to pass a raw hash value.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ list-objects.c | 33 +--------------------------------
+ 1 file changed, 1 insertion(+), 32 deletions(-)
+
+diff --git a/list-objects.c b/list-objects.c
+index 250d9de41c..7528fe1db2 100644
+--- a/list-objects.c
++++ b/list-objects.c
+@@ -81,36 +81,6 @@ static void process_blob(struct traversal_context *ctx,
+ 	strbuf_setlen(path, pathlen);
+ }
+ 
+-/*
+- * Processing a gitlink entry currently does nothing, since
+- * we do not recurse into the subproject.
+- *
+- * We *could* eventually add a flag that actually does that,
+- * which would involve:
+- *  - is the subproject actually checked out?
+- *  - if so, see if the subproject has already been added
+- *    to the alternates list, and add it if not.
+- *  - process the commit (or tag) the gitlink points to
+- *    recursively.
+- *
+- * However, it's unclear whether there is really ever any
+- * reason to see superprojects and subprojects as such a
+- * "unified" object pool (potentially resulting in a totally
+- * humongous pack - avoiding which was the whole point of
+- * having gitlinks in the first place!).
+- *
+- * So for now, there is just a note that we *could* follow
+- * the link, and how to do it. Whether it necessarily makes
+- * any sense what-so-ever to ever do that is another issue.
+- */
+-static void process_gitlink(struct traversal_context *ctx,
+-			    const unsigned char *sha1,
+-			    struct strbuf *path,
+-			    const char *name)
+-{
+-	/* Nothing to do */
+-}
+-
+ static void process_tree(struct traversal_context *ctx,
+ 			 struct tree *tree,
+ 			 struct strbuf *base,
+@@ -149,8 +119,7 @@ static void process_tree_contents(struct traversal_context *ctx,
+ 			process_tree(ctx, t, base, entry.path);
+ 		}
+ 		else if (S_ISGITLINK(entry.mode))
+-			process_gitlink(ctx, entry.oid.hash,
+-					base, entry.path);
++			; /* ignore gitlink */
+ 		else {
+ 			struct blob *b = lookup_blob(ctx->revs->repo, &entry.oid);
+ 			if (!b) {
+-- 
+2.39.3 (Apple Git-145)
+

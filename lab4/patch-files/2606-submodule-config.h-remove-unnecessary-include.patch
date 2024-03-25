@@ -1,0 +1,43 @@
+From e9bb1664917a1c6c6379d196172fcd36618e3230 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 23 Dec 2023 17:14:57 +0000
+Subject: [PATCH 2606/2871] submodule-config.h: remove unnecessary include
+
+The unnecessary include in the header transitively pulled in some
+other headers actually needed by source files, though.  Have those
+source files explicitly include the headers they need.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ submodule-config.h        | 1 -
+ t/helper/test-submodule.c | 1 +
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/submodule-config.h b/submodule-config.h
+index e8164cca3e..958f320ac6 100644
+--- a/submodule-config.h
++++ b/submodule-config.h
+@@ -3,7 +3,6 @@
+ 
+ #include "config.h"
+ #include "submodule.h"
+-#include "strbuf.h"
+ #include "tree-walk.h"
+ 
+ /**
+diff --git a/t/helper/test-submodule.c b/t/helper/test-submodule.c
+index 356e0a26c5..50c154d037 100644
+--- a/t/helper/test-submodule.c
++++ b/t/helper/test-submodule.c
+@@ -4,6 +4,7 @@
+ #include "remote.h"
+ #include "repository.h"
+ #include "setup.h"
++#include "strbuf.h"
+ #include "submodule-config.h"
+ #include "submodule.h"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

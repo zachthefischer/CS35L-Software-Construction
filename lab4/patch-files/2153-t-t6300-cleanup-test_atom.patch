@@ -1,0 +1,66 @@
+From 04830eb762c83609a63805716daedb36014f6b6c Mon Sep 17 00:00:00 2001
+From: Kousik Sanagavarapu <five231003@gmail.com>
+Date: Mon, 25 Sep 2023 23:13:08 +0530
+Subject: [PATCH 2153/2871] t/t6300: cleanup test_atom
+
+Previously, when the executable part of "test_expect_{success,failure}"
+(inside "test_atom") got "eval"ed, it would have been syntactically
+incorrect if the second argument ($2, which is the format) to "test_atom"
+were enclosed in single quotes because the $variables would get
+interpolated even before the arguments to "test_expect_{success,failure}"
+are formed.
+
+So fix this and also some style issues along the way.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Mentored-by: Christian Couder <christian.couder@gmail.com>
+Mentored-by: Hariom Verma <hariom18599@gmail.com>
+Signed-off-by: Kousik Sanagavarapu <five231003@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6300-for-each-ref.sh | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 7b943fd34c..7ba9949376 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -41,25 +41,29 @@ test_expect_success setup '
+ 	git config push.default current
+ '
+ 
+-test_atom() {
++test_atom () {
+ 	case "$1" in
+ 		head) ref=refs/heads/main ;;
+ 		 tag) ref=refs/tags/testtag ;;
+ 		 sym) ref=refs/heads/sym ;;
+ 		   *) ref=$1 ;;
+ 	esac
++	format=$2
++	test_do=test_expect_${4:-success}
++
+ 	printf '%s\n' "$3" >expected
+-	test_expect_${4:-success} $PREREQ "basic atom: $1 $2" "
+-		git for-each-ref --format='%($2)' $ref >actual &&
++	$test_do $PREREQ "basic atom: $ref $format" '
++		git for-each-ref --format="%($format)" "$ref" >actual &&
+ 		sanitize_pgp <actual >actual.clean &&
+ 		test_cmp expected actual.clean
+-	"
++	'
++
+ 	# Automatically test "contents:size" atom after testing "contents"
+-	if test "$2" = "contents"
++	if test "$format" = "contents"
+ 	then
+ 		# for commit leg, $3 is changed there
+ 		expect=$(printf '%s' "$3" | wc -c)
+-		test_expect_${4:-success} $PREREQ "basic atom: $1 contents:size" '
++		$test_do $PREREQ "basic atom: $ref contents:size" '
+ 			type=$(git cat-file -t "$ref") &&
+ 			case $type in
+ 			tag)
+-- 
+2.39.3 (Apple Git-145)
+

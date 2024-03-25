@@ -1,0 +1,100 @@
+From 28d1122f9ca41a688aded33835bcb4740d1d5d8c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Mar 2023 03:58:16 -0500
+Subject: [PATCH 1009/2871] add-patch: handle "* Unmerged path" lines
+
+When we generate a diff with --cached, unmerged entries have no oid for
+their index entry:
+
+  $ git diff-index --abbrev --cached HEAD
+  :100644 000000 f719efd 0000000 U	my-conflict
+
+So when we are asked to produce a patch, since we only have one side, we
+just emit a special message:
+
+  $ git diff-index --cached -p HEAD
+  * Unmerged path my-conflict
+
+This confuses interactive-patch modes that look at cached diffs. For
+example:
+
+  $ git reset -p
+  BUG: add-patch.c:498: diff starts with unexpected line:
+  * Unmerged path my-conflict
+
+Making things even more confusing, you'll get that error only if the
+unmerged entry is alphabetically the first changed file. Otherwise, we
+simply stick the unrecognized line to the end of the previous hunk.
+There it's mostly harmless, as it eventually gets fed back to "git
+apply", which happily ignores it. But it's still shown to the user
+attached to the hunk, which is wrong.
+
+So let's handle these lines as a noop. There's not really anything
+useful to do with a conflicted merge in this case, and that's what we do
+for other cases like "add -p". There we get a "diff --cc" line, which we
+accept as starting a new file, but we refuse to use any of its hunks
+(their headers start with "@@@" and not "@@ ", so we silently ignore
+them).
+
+It seems like simply recognizing the line and continuing in our parsing
+loop would work. But we actually need to run the rest of the loop body
+to handle matching up our colored/filtered output. But that code assumes
+that we have some active file_diff we're working on. So instead, we'll
+just insert a dummy entry into our array. This ends up the same as if we
+saw a "diff --cc" line (a file with no hunks).
+
+Reported-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ add-patch.c                |  3 ++-
+ t/t3701-add-interactive.sh | 21 +++++++++++++++++++++
+ 2 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/add-patch.c b/add-patch.c
+index a86a92e164..d7fc4f4cd2 100644
+--- a/add-patch.c
++++ b/add-patch.c
+@@ -483,7 +483,8 @@ static int parse_diff(struct add_p_state *s, const struct pathspec *ps)
+ 		if (!eol)
+ 			eol = pend;
+ 
+-		if (starts_with(p, "diff ")) {
++		if (starts_with(p, "diff ") ||
++		    starts_with(p, "* Unmerged path ")) {
+ 			complete_file(marker, hunk);
+ 			ALLOC_GROW_BY(s->file_diff, s->file_diff_nr, 1,
+ 				   file_diff_alloc);
+diff --git a/t/t3701-add-interactive.sh b/t/t3701-add-interactive.sh
+index 5841f280fb..d0a2ba739e 100755
+--- a/t/t3701-add-interactive.sh
++++ b/t/t3701-add-interactive.sh
+@@ -1068,4 +1068,25 @@ test_expect_success 'show help from add--helper' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'reset -p with unmerged files' '
++	test_when_finished "git checkout --force main" &&
++	test_commit one conflict &&
++	git checkout -B side HEAD^ &&
++	test_commit two conflict &&
++	test_must_fail git merge one &&
++
++	# this is a noop with only an unmerged entry
++	git reset -p &&
++
++	# add files that sort before and after unmerged entry
++	echo a >a &&
++	echo z >z &&
++	git add a z &&
++
++	# confirm that we can reset those files
++	printf "%s\n" y y | git reset -p &&
++	git diff-index --cached --diff-filter=u HEAD >staged &&
++	test_must_be_empty staged
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

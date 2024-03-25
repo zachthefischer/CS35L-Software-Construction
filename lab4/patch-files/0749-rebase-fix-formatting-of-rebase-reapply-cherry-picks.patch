@@ -1,0 +1,41 @@
+From 9a7d7ce9f6329e9455dc1c6b6c83e1409efef28b Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:52 +0000
+Subject: [PATCH 0749/2871] rebase: fix formatting of rebase
+ --reapply-cherry-picks option in docs
+
+Commit ce5238a690 ("rebase --keep-base: imply --reapply-cherry-picks",
+2022-10-17) accidentally added some blank lines that cause extra
+paragraphs about --reapply-cherry-picks to be considered not part of
+the documentation of that option.  Remove the blank lines to make it
+clear we are still discussing --reapply-cherry-picks.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index d2b731bd60..99aadac28e 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -338,7 +338,6 @@ See also INCOMPATIBLE OPTIONS below.
+ 	upstream changes, the behavior towards them is controlled by
+ 	the `--empty` flag.)
+ +
+-
+ In the absence of `--keep-base` (or if `--no-reapply-cherry-picks` is
+ given), these commits will be automatically dropped.  Because this
+ necessitates reading all upstream commits, this can be expensive in
+@@ -347,7 +346,6 @@ read. When using the 'merge' backend, warnings will be issued for each
+ dropped commit (unless `--quiet` is given). Advice will also be issued
+ unless `advice.skippedCherryPicks` is set to false (see
+ linkgit:git-config[1]).
+-
+ +
+ `--reapply-cherry-picks` allows rebase to forgo reading all upstream
+ commits, potentially improving performance.
+-- 
+2.39.3 (Apple Git-145)
+

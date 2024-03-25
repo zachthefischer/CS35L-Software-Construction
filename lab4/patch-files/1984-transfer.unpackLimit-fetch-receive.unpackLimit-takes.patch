@@ -1,0 +1,181 @@
+From f3d33f8cfeac8a2a00b4f87eec48dbca1d3080e0 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 22 Aug 2023 18:30:21 -0700
+Subject: [PATCH 1984/2871] transfer.unpackLimit: fetch/receive.unpackLimit
+ takes precedence
+
+The transfer.unpackLimit configuration variable is documented to be
+used only as a fallback value when the more operation-specific
+fetch.unpackLimit and receive.unpackLimit variables are not set, but
+the implementation had the precedence reversed.  Apparently this was
+broken since the transfer.unpackLimit was introduced in e28714c5
+(Consolidate {receive,fetch}.unpackLimit, 2007-01-24).
+
+Often when documentation and code have diverged for so long, we
+prefer to change the documentation instead, to avoid disrupting
+users.  But doing so would make these weirdly unlike most other
+"specific overrides general" config options. And the fact that the
+bug has existed for so long without anyone noticing implies to me
+that nobody really tries to mix and match them much.
+
+Signed-off-by: Taylor Santiago <taylorsantiago@google.com>
+[jc: rewrote the log message, added tests, covered receive-pack as well]
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c    |  6 ++---
+ fetch-pack.c              |  6 ++---
+ t/t5510-fetch.sh          | 46 +++++++++++++++++++++++++++++++++++++++
+ t/t5546-receive-limits.sh | 35 ++++++++++++++++++++++++++---
+ 4 files changed, 84 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index 1a31a58367..03ac7b01d2 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -2524,10 +2524,10 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
+ 	if (cert_nonce_seed)
+ 		push_cert_nonce = prepare_push_cert_nonce(service_dir, time(NULL));
+ 
+-	if (0 <= transfer_unpack_limit)
+-		unpack_limit = transfer_unpack_limit;
+-	else if (0 <= receive_unpack_limit)
++	if (0 <= receive_unpack_limit)
+ 		unpack_limit = receive_unpack_limit;
++	else if (0 <= transfer_unpack_limit)
++		unpack_limit = transfer_unpack_limit;
+ 
+ 	switch (determine_protocol_version_server()) {
+ 	case protocol_v2:
+diff --git a/fetch-pack.c b/fetch-pack.c
+index 0f71054fba..8b300545d5 100644
+--- a/fetch-pack.c
++++ b/fetch-pack.c
+@@ -1911,10 +1911,10 @@ static void fetch_pack_setup(void)
+ 	if (did_setup)
+ 		return;
+ 	fetch_pack_config();
+-	if (0 <= transfer_unpack_limit)
+-		unpack_limit = transfer_unpack_limit;
+-	else if (0 <= fetch_unpack_limit)
++	if (0 <= fetch_unpack_limit)
+ 		unpack_limit = fetch_unpack_limit;
++	else if (0 <= transfer_unpack_limit)
++		unpack_limit = transfer_unpack_limit;
+ 	did_setup = 1;
+ }
+ 
+diff --git a/t/t5510-fetch.sh b/t/t5510-fetch.sh
+index 4f289063ce..19c36b57f4 100755
+--- a/t/t5510-fetch.sh
++++ b/t/t5510-fetch.sh
+@@ -1127,6 +1127,52 @@ do
+ 	'
+ done
+ 
++test_expect_success 'prepare source branch' '
++	echo one >onebranch &&
++	git checkout --orphan onebranch &&
++	git rm --cached -r . &&
++	git add onebranch &&
++	git commit -m onebranch &&
++	git rev-list --objects onebranch -- >actual &&
++	# 3 objects should be created, at least ...
++	test 3 -le $(wc -l <actual)
++'
++
++validate_store_type () {
++	git -C dest count-objects -v >actual &&
++	case "$store_type" in
++	packed)
++		grep "^count: 0$" actual ;;
++	loose)
++		grep "^packs: 0$" actual ;;
++	esac || {
++		echo "store_type is $store_type"
++		cat actual
++		false
++	}
++}
++
++test_unpack_limit () {
++	store_type=$1
++
++	case "$store_type" in
++	packed) fetch_limit=1 transfer_limit=10000 ;;
++	loose) fetch_limit=10000 transfer_limit=1 ;;
++	esac
++
++	test_expect_success "fetch trumps transfer limit" '
++		rm -fr dest &&
++		git --bare init dest &&
++		git -C dest config fetch.unpacklimit $fetch_limit &&
++		git -C dest config transfer.unpacklimit $transfer_limit &&
++		git -C dest fetch .. onebranch &&
++		validate_store_type
++	'
++}
++
++test_unpack_limit packed
++test_unpack_limit loose
++
+ setup_negotiation_tip () {
+ 	SERVER="$1"
+ 	URL="$2"
+diff --git a/t/t5546-receive-limits.sh b/t/t5546-receive-limits.sh
+index eed3c9d81a..9fc9ba552f 100755
+--- a/t/t5546-receive-limits.sh
++++ b/t/t5546-receive-limits.sh
+@@ -9,10 +9,26 @@ TEST_PASSES_SANITIZE_LEAK=true
+ # When the limit is 1, `git receive-pack` will call `git index-pack`.
+ # When the limit is 10000, `git receive-pack` will call `git unpack-objects`.
+ 
++validate_store_type () {
++	git -C dest count-objects -v >actual &&
++	case "$store_type" in
++	index)
++		grep "^count: 0$" actual ;;
++	unpack)
++		grep "^packs: 0$" actual ;;
++	esac || {
++		echo "store_type is $store_type"
++		cat actual
++		false;
++	}
++}
++
+ test_pack_input_limit () {
+-	case "$1" in
+-	index) unpack_limit=1 ;;
+-	unpack) unpack_limit=10000 ;;
++	store_type=$1
++
++	case "$store_type" in
++	index) unpack_limit=1 other_limit=10000 ;;
++	unpack) unpack_limit=10000 other_limit=1 ;;
+ 	esac
+ 
+ 	test_expect_success 'prepare destination repository' '
+@@ -43,6 +59,19 @@ test_pack_input_limit () {
+ 		git --git-dir=dest config receive.maxInputSize 0 &&
+ 		git push dest HEAD
+ 	'
++
++	test_expect_success 'prepare destination repository (once more)' '
++		rm -fr dest &&
++		git --bare init dest
++	'
++
++	test_expect_success 'receive trumps transfer' '
++		git --git-dir=dest config receive.unpacklimit "$unpack_limit" &&
++		git --git-dir=dest config transfer.unpacklimit "$other_limit" &&
++		git push dest HEAD &&
++		validate_store_type
++	'
++
+ }
+ 
+ test_expect_success "create known-size (1024 bytes) commit" '
+-- 
+2.39.3 (Apple Git-145)
+

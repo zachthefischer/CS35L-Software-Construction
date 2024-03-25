@@ -1,0 +1,62 @@
+From 6e2646075c456f2bd3dfe6afd7d72316174b02ed Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 18 Jan 2023 15:35:30 -0500
+Subject: [PATCH 0707/2871] t1007: modernize malformed object tests
+
+The tests in t1007 for detecting malformed objects have two
+anachronisms:
+
+ - they use "sha1" instead of "oid" in variable names, even though the
+   script as a whole has been adapted to handle sha256
+
+ - they use test_i18ngrep, which is no longer necessary
+
+Since we'll be adding a new similar test, let's clean these up so they
+are all consistently using the modern style.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1007-hash-object.sh | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/t/t1007-hash-object.sh b/t/t1007-hash-object.sh
+index ac5ad8c740..2d2148d8fa 100755
+--- a/t/t1007-hash-object.sh
++++ b/t/t1007-hash-object.sh
+@@ -203,23 +203,23 @@ done
+ test_expect_success 'too-short tree' '
+ 	echo abc >malformed-tree &&
+ 	test_must_fail git hash-object -t tree malformed-tree 2>err &&
+-	test_i18ngrep "too-short tree object" err
++	grep "too-short tree object" err
+ '
+ 
+ test_expect_success 'malformed mode in tree' '
+-	hex_sha1=$(echo foo | git hash-object --stdin -w) &&
+-	bin_sha1=$(echo $hex_sha1 | hex2oct) &&
+-	printf "9100644 \0$bin_sha1" >tree-with-malformed-mode &&
++	hex_oid=$(echo foo | git hash-object --stdin -w) &&
++	bin_oid=$(echo $hex_oid | hex2oct) &&
++	printf "9100644 \0$bin_oid" >tree-with-malformed-mode &&
+ 	test_must_fail git hash-object -t tree tree-with-malformed-mode 2>err &&
+-	test_i18ngrep "malformed mode in tree entry" err
++	grep "malformed mode in tree entry" err
+ '
+ 
+ test_expect_success 'empty filename in tree' '
+-	hex_sha1=$(echo foo | git hash-object --stdin -w) &&
+-	bin_sha1=$(echo $hex_sha1 | hex2oct) &&
+-	printf "100644 \0$bin_sha1" >tree-with-empty-filename &&
++	hex_oid=$(echo foo | git hash-object --stdin -w) &&
++	bin_oid=$(echo $hex_oid | hex2oct) &&
++	printf "100644 \0$bin_oid" >tree-with-empty-filename &&
+ 	test_must_fail git hash-object -t tree tree-with-empty-filename 2>err &&
+-	test_i18ngrep "empty filename in tree entry" err
++	grep "empty filename in tree entry" err
+ '
+ 
+ test_expect_success 'corrupt commit' '
+-- 
+2.39.3 (Apple Git-145)
+

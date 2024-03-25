@@ -1,0 +1,40 @@
+From 0dd79e0d49818e964079c6d45f7f06a385bf2704 Mon Sep 17 00:00:00 2001
+From: Andreas Herrmann <aherrmann@suse.de>
+Date: Wed, 19 Jul 2023 16:29:54 +0200
+Subject: [PATCH 1828/2871] configure.ac: don't overwrite NO_EXPAT option
+
+Even if 'configure --with-expat=no' was run, expat support is used,
+because library detection overwrites it. Avoid this overwrite.
+Configure should obey what the user has specified.
+
+Signed-off-by: Andreas Herrmann <aherrmann@suse.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ configure.ac | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 38ff86678a..62cc8197f8 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -581,6 +581,8 @@ fi
+ # Define NO_EXPAT if you do not have expat installed.  git-http-push is
+ # not built, and you cannot push using http:// and https:// transports.
+ 
++if test -z "$NO_EXPAT"; then
++
+ GIT_STASH_FLAGS($EXPATDIR)
+ 
+ AC_CHECK_LIB([expat], [XML_ParserCreate],
+@@ -589,6 +591,8 @@ AC_CHECK_LIB([expat], [XML_ParserCreate],
+ 
+ GIT_UNSTASH_FLAGS($EXPATDIR)
+ 
++fi
++
+ GIT_CONF_SUBST([NO_EXPAT])
+ 
+ #
+-- 
+2.39.3 (Apple Git-145)
+

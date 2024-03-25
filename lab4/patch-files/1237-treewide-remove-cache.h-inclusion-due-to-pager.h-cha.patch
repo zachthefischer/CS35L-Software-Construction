@@ -1,0 +1,73 @@
+From 77f091ed9f289e55c9cc48d2d937d52f4f317de9 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:42:00 -0700
+Subject: [PATCH 1237/2871] treewide: remove cache.h inclusion due to pager.h
+ changes
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ column.c   | 2 +-
+ editor.c   | 2 +-
+ pager.c    | 2 +-
+ pretty.c   | 2 +-
+ progress.c | 2 +-
+ 5 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/column.c b/column.c
+index c89c90328a..ff2f0abf39 100644
+--- a/column.c
++++ b/column.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "column.h"
+ #include "string-list.h"
+diff --git a/editor.c b/editor.c
+index 7c79638549..b34e10606d 100644
+--- a/editor.c
++++ b/editor.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "advice.h"
+ #include "config.h"
+diff --git a/pager.c b/pager.c
+index be78c70664..63055d0873 100644
+--- a/pager.c
++++ b/pager.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "editor.h"
+ #include "pager.h"
+diff --git a/pretty.c b/pretty.c
+index c4671603b5..0bb938021b 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "commit.h"
+diff --git a/progress.c b/progress.c
+index 96a8e36a52..72d5e0c73c 100644
+--- a/progress.c
++++ b/progress.c
+@@ -9,7 +9,7 @@
+  */
+ 
+ #define GIT_TEST_PROGRESS_ONLY
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "pager.h"
+ #include "progress.h"
+ #include "strbuf.h"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,51 @@
+From 3744ffcbcdcd5a619b7522671e6137b33d84626b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Thu, 15 Jun 2023 19:33:39 +0200
+Subject: [PATCH 1599/2871] ls-tree: fix documentation of %x format placeholder
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+ls-tree --format expands %x followed by two hexadecimal digits to the
+character indicated by that hexadecimal number, e.g.:
+
+   $ git ls-tree --format=%x41 HEAD | head -1
+   A
+
+It rejects % followed by a hexadecimal digit, e.g.:
+
+   $ git ls-tree --format=%41 HEAD | head -1
+   fatal: bad ls-tree format: element '41' does not start with '('
+
+This functionality is provided by strbuf_expand_literal_cb(), which has
+not been changed since it was factored out by fd2015b323 (strbuf:
+separate callback for strbuf_expand:ing literals, 2019-01-28).
+
+Adjust the documentation accordingly.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-ls-tree.txt | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-ls-tree.txt b/Documentation/git-ls-tree.txt
+index 0240adb8ee..af06ce14ed 100644
+--- a/Documentation/git-ls-tree.txt
++++ b/Documentation/git-ls-tree.txt
+@@ -86,9 +86,9 @@ OPTIONS
+ --format=<format>::
+ 	A string that interpolates `%(fieldname)` from the result
+ 	being shown. It also interpolates `%%` to `%`, and
+-	`%xx` where `xx` are hex digits interpolates to character
+-	with hex code `xx`; for example `%00` interpolates to
+-	`\0` (NUL), `%09` to `\t` (TAB) and `%0a` to `\n` (LF).
++	`%xNN` where `NN` are hex digits interpolates to character
++	with hex code `NN`; for example `%x00` interpolates to
++	`\0` (NUL), `%x09` to `\t` (TAB) and `%x0a` to `\n` (LF).
+ 	When specified, `--format` cannot be combined with other
+ 	format-altering options, including `--long`, `--name-only`
+ 	and `--object-only`.
+-- 
+2.39.3 (Apple Git-145)
+

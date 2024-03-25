@@ -1,0 +1,102 @@
+From 23a9235d523f3e8e7dd9becee23a15559b4e5a32 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:39:08 +0200
+Subject: [PATCH 0123/2871] doc txt & -h consistency: use "<options>", not
+ "<options>..."
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It's arguably more correct to say "[<option>...]" than either of these
+forms, but the vast majority of our documentation uses the
+"[<options>]" form to indicate an arbitrary number of options, let's
+do the same in these cases, which were the odd ones out.
+
+In the case of "mv" and "sparse-checkout" let's add the missing "[]"
+to indicate that these are optional.
+
+In the case of "t/helper/test-proc-receive.c" there is no *.txt
+version, making it the only hunk in this commit that's not a "doc txt
+& -h consistency" change.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-mv.txt     | 2 +-
+ Documentation/git-status.txt | 2 +-
+ builtin/pack-objects.c       | 4 ++--
+ builtin/sparse-checkout.c    | 2 +-
+ t/helper/test-proc-receive.c | 2 +-
+ 5 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/git-mv.txt b/Documentation/git-mv.txt
+index 79449bf98f..972a055fbd 100644
+--- a/Documentation/git-mv.txt
++++ b/Documentation/git-mv.txt
+@@ -9,7 +9,7 @@ git-mv - Move or rename a file, a directory, or a symlink
+ SYNOPSIS
+ --------
+ [verse]
+-'git mv' <options>... <args>...
++'git mv' [<options>] <args>...
+ 
+ DESCRIPTION
+ -----------
+diff --git a/Documentation/git-status.txt b/Documentation/git-status.txt
+index 54a4b29b47..5e438a7fdc 100644
+--- a/Documentation/git-status.txt
++++ b/Documentation/git-status.txt
+@@ -9,7 +9,7 @@ git-status - Show the working tree status
+ SYNOPSIS
+ --------
+ [verse]
+-'git status' [<options>...] [--] [<pathspec>...]
++'git status' [<options>] [--] [<pathspec>...]
+ 
+ DESCRIPTION
+ -----------
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 46e2677496..6a8edd5711 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -180,8 +180,8 @@ static inline void oe_set_delta_size(struct packing_data *pack,
+ #define SET_DELTA_SIBLING(obj, val) oe_set_delta_sibling(&to_pack, obj, val)
+ 
+ static const char *pack_usage[] = {
+-	N_("git pack-objects --stdout [<options>...] [< <ref-list> | < <object-list>]"),
+-	N_("git pack-objects [<options>...] <base-name> [< <ref-list> | < <object-list>]"),
++	N_("git pack-objects --stdout [<options>] [< <ref-list> | < <object-list>]"),
++	N_("git pack-objects [<options>] <base-name> [< <ref-list> | < <object-list>]"),
+ 	NULL
+ };
+ 
+diff --git a/builtin/sparse-checkout.c b/builtin/sparse-checkout.c
+index aac0f708e4..58a22503f0 100644
+--- a/builtin/sparse-checkout.c
++++ b/builtin/sparse-checkout.c
+@@ -20,7 +20,7 @@
+ static const char *empty_base = "";
+ 
+ static char const * const builtin_sparse_checkout_usage[] = {
+-	N_("git sparse-checkout (init | list | set | add | reapply | disable) <options>"),
++	N_("git sparse-checkout (init | list | set | add | reapply | disable) [<options>]"),
+ 	NULL
+ };
+ 
+diff --git a/t/helper/test-proc-receive.c b/t/helper/test-proc-receive.c
+index cc08506cf0..a4b305f494 100644
+--- a/t/helper/test-proc-receive.c
++++ b/t/helper/test-proc-receive.c
+@@ -6,7 +6,7 @@
+ #include "test-tool.h"
+ 
+ static const char *proc_receive_usage[] = {
+-	"test-tool proc-receive [<options>...]",
++	"test-tool proc-receive [<options>]",
+ 	NULL
+ };
+ 
+-- 
+2.39.3 (Apple Git-145)
+

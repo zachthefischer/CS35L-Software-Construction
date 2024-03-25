@@ -1,0 +1,54 @@
+From 0fd2e21571ac3a26e898fa6ce130894fd408080e Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:58 +0000
+Subject: [PATCH 1645/2871] log-tree: replace include of revision.h with simple
+ forward declaration
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/diff-tree.c | 1 +
+ log-tree.c          | 1 +
+ log-tree.h          | 2 +-
+ 3 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/diff-tree.c b/builtin/diff-tree.c
+index f3a458bb87..d62caa6c8b 100644
+--- a/builtin/diff-tree.c
++++ b/builtin/diff-tree.c
+@@ -9,6 +9,7 @@
+ #include "submodule.h"
+ #include "read-cache-ll.h"
+ #include "repository.h"
++#include "revision.h"
+ #include "tree.h"
+ 
+ static struct rev_info log_tree_opt;
+diff --git a/log-tree.c b/log-tree.c
+index f4b22a60cc..07d0b47b16 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -16,6 +16,7 @@
+ #include "reflog-walk.h"
+ #include "refs.h"
+ #include "replace-object.h"
++#include "revision.h"
+ #include "string-list.h"
+ #include "color.h"
+ #include "gpg-interface.h"
+diff --git a/log-tree.h b/log-tree.h
+index e7e4641cf8..bdb6432815 100644
+--- a/log-tree.h
++++ b/log-tree.h
+@@ -1,7 +1,7 @@
+ #ifndef LOG_TREE_H
+ #define LOG_TREE_H
+ 
+-#include "revision.h"
++struct rev_info;
+ 
+ struct log_info {
+ 	struct commit *commit, *parent;
+-- 
+2.39.3 (Apple Git-145)
+

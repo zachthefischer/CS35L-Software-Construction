@@ -1,0 +1,33 @@
+From f4cbb32c278f95ac8546eccf9aa10b6243030152 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 3 Oct 2023 10:55:21 +0200
+Subject: [PATCH 2183/2871] parse-options: drop unused parse_opt_ctx_t member
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+5c387428f1 (parse-options: don't emit "ambiguous option" for aliases,
+2019-04-29) added "updated_options" to struct parse_opt_ctx_t, but it
+has never been used.  Remove it.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/parse-options.h b/parse-options.h
+index 57a7fe9d91..4a66ec3bf5 100644
+--- a/parse-options.h
++++ b/parse-options.h
+@@ -459,7 +459,6 @@ struct parse_opt_ctx_t {
+ 	unsigned has_subcommands;
+ 	const char *prefix;
+ 	const char **alias_groups; /* must be in groups of 3 elements! */
+-	struct option *updated_options;
+ };
+ 
+ void parse_options_start(struct parse_opt_ctx_t *ctx,
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,77 @@
+From 756991bc88a9c7a089cc7a8746c86159a7a155e8 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Mon, 17 Apr 2023 19:18:28 -0600
+Subject: [PATCH 1390/2871] doc: remove custom callouts format
+
+The code to render callouts for manpages comes from 17 years ago:
+776e994af5 (Properly render asciidoc "callouts" in git man pages.,
+2006-04-28), and it was needed back then, but DocBook Stylesheets added
+support for that in 2008 [1], since 1.74.0 it hasn't been necessary.
+
+What's worse: the format of the upstream callouts is much nicer than our
+hacked version.
+
+Compare this:
+
+     $ git diff            (1)
+     $ git diff --cached   (2)
+     $ git diff HEAD       (3)
+
+  1. Changes in the working tree not yet staged for the next
+     commit.
+  2. Changes between the index and your last commit; what you
+     would be committing if you run git commit without -a
+     option.
+  3. Changes in the working tree since your last commit; what
+     you would be committing if you run git commit -a
+
+To this:
+
+     $ git diff            (1)
+     $ git diff --cached   (2)
+     $ git diff HEAD       (3)
+
+ 1. Changes in the working tree not yet staged for the next commit.
+ 2. Changes between the index and your last commit; what you would
+ be committing if you run git commit without -a option.
+ 3. Changes in the working tree since your last commit; what you
+ would be committing if you run git commit -a
+
+Let's drop our unnecessary inferior custom format and use the official
+one.
+
+[1] https://sourceforge.net/p/docbook/code/7842/
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/manpage-normal.xsl | 15 ---------------
+ 1 file changed, 15 deletions(-)
+
+diff --git a/Documentation/manpage-normal.xsl b/Documentation/manpage-normal.xsl
+index a9c7ec69f4..e4c5874ed3 100644
+--- a/Documentation/manpage-normal.xsl
++++ b/Documentation/manpage-normal.xsl
+@@ -8,19 +8,4 @@
+ <xsl:param name="man.output.quietly" select="1"/>
+ <xsl:param name="refentry.meta.get.quietly" select="1"/>
+ 
+-<!-- convert asciidoc callouts to man page format -->
+-<xsl:template match="co">
+-	<xsl:value-of select="concat('\fB(',substring-after(@id,'-'),')\fR')"/>
+-</xsl:template>
+-<xsl:template match="calloutlist">
+-	<xsl:text>.sp&#10;</xsl:text>
+-	<xsl:apply-templates/>
+-	<xsl:text>&#10;</xsl:text>
+-</xsl:template>
+-<xsl:template match="callout">
+-	<xsl:value-of select="concat('\fB',substring-after(@arearefs,'-'),'. \fR')"/>
+-	<xsl:apply-templates/>
+-	<xsl:text>.br&#10;</xsl:text>
+-</xsl:template>
+-
+ </xsl:stylesheet>
+-- 
+2.39.3 (Apple Git-145)
+

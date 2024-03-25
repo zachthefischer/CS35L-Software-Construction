@@ -1,0 +1,64 @@
+From 894ea945095b74542c6c4f4aefbe20f5b68be437 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 25 Feb 2023 15:22:23 +0100
+Subject: [PATCH 0953/2871] switch: reject if the branch is already checked out
+ elsewhere (test)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 5883034 (checkout: reject if the branch is already checked out
+elsewhere) in normal use, we do not allow multiple worktrees having the
+same checked out branch.
+
+A bug has recently been fixed that caused this to not work as expected.
+
+Let's add a test to notice if this changes in the future.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2060-switch.sh | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/t/t2060-switch.sh b/t/t2060-switch.sh
+index 5a7caf958c..e247a4735b 100755
+--- a/t/t2060-switch.sh
++++ b/t/t2060-switch.sh
+@@ -146,4 +146,33 @@ test_expect_success 'tracking info copied with autoSetupMerge=inherit' '
+ 	test_cmp_config "" --default "" branch.main2.merge
+ '
+ 
++test_expect_success 'switch back when temporarily detached and checked out elsewhere ' '
++	test_when_finished "
++		git worktree remove wt1 ||:
++		git worktree remove wt2 ||:
++		git checkout - ||:
++		git branch -D shared ||:
++	" &&
++	git checkout -b shared &&
++	test_commit shared-first &&
++	HASH1=$(git rev-parse --verify HEAD) &&
++	test_commit shared-second &&
++	test_commit shared-third &&
++	HASH2=$(git rev-parse --verify HEAD) &&
++	git worktree add wt1 -f shared &&
++	git -C wt1 bisect start &&
++	git -C wt1 bisect good $HASH1 &&
++	git -C wt1 bisect bad $HASH2 &&
++	git worktree add wt2 -f shared &&
++	git -C wt2 bisect start &&
++	git -C wt2 bisect good $HASH1 &&
++	git -C wt2 bisect bad $HASH2 &&
++	# we test in both worktrees to ensure that works
++	# as expected with "first" and "next" worktrees
++	test_must_fail git -C wt1 switch shared &&
++	git -C wt1 switch --ignore-other-worktrees shared &&
++	test_must_fail git -C wt2 switch shared &&
++	git -C wt2 switch --ignore-other-worktrees shared
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

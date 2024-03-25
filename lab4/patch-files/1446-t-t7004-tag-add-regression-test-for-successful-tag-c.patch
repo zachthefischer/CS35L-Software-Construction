@@ -1,0 +1,35 @@
+From 669c11de85d0071a31de0e49f6e5b602fd54a9ef Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Tue, 16 May 2023 19:55:45 +0200
+Subject: [PATCH 1446/2871] t/t7004-tag: add regression test for successful tag
+ creation
+
+The standard tag message file is unlinked if the tag is created.
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7004-tag.sh | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/t/t7004-tag.sh b/t/t7004-tag.sh
+index 0fe6ba93a2..13937c3642 100755
+--- a/t/t7004-tag.sh
++++ b/t/t7004-tag.sh
+@@ -2188,4 +2188,13 @@ test_expect_success 'Does --[no-]contains stop at commits? Yes!' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'If tag is created then tag message file is unlinked' '
++	test_when_finished "git tag -d foo" &&
++	write_script fakeeditor <<-\EOF &&
++	echo Message >.git/TAG_EDITMSG
++	EOF
++	GIT_EDITOR=./fakeeditor git tag -a foo &&
++	test_path_is_missing .git/TAG_EDITMSG
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

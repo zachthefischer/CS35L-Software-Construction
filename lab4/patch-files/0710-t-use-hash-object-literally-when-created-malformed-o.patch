@@ -1,0 +1,322 @@
+From 34959d80db602b7d6893c9e2dfa81d78fd16f702 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 18 Jan 2023 15:41:56 -0500
+Subject: [PATCH 0710/2871] t: use hash-object --literally when created
+ malformed objects
+
+Many test scripts use hash-object to create malformed objects to see how
+we handle the results in various commands. In some cases we already have
+to use "hash-object --literally", because it does some rudimentary
+quality checks. But let's use "--literally" more consistently to
+future-proof these tests against hash-object learning to be more
+careful.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1450-fsck.sh                 | 28 ++++++++++++++--------------
+ t/t4054-diff-bogus-tree.sh      |  2 +-
+ t/t4058-diff-duplicates.sh      |  2 +-
+ t/t4212-log-corrupt.sh          |  4 ++--
+ t/t5302-pack-index.sh           |  2 +-
+ t/t5504-fetch-receive-strict.sh |  2 +-
+ t/t5702-protocol-v2.sh          |  2 +-
+ t/t6300-for-each-ref.sh         |  2 +-
+ t/t7509-commit-authorship.sh    |  2 +-
+ t/t7510-signed-commit.sh        |  2 +-
+ t/t7528-signed-commit-ssh.sh    |  2 +-
+ t/t8003-blame-corner-cases.sh   |  2 +-
+ t/t9350-fast-export.sh          |  2 +-
+ 13 files changed, 27 insertions(+), 27 deletions(-)
+
+diff --git a/t/t1450-fsck.sh b/t/t1450-fsck.sh
+index de0f6d5e7f..fdb886dfe4 100755
+--- a/t/t1450-fsck.sh
++++ b/t/t1450-fsck.sh
+@@ -212,7 +212,7 @@ test_expect_success 'email without @ is okay' '
+ test_expect_success 'email with embedded > is not okay' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/@[a-z]/&>/" basis >bad-email &&
+-	new=$(git hash-object -t commit -w --stdin <bad-email) &&
++	new=$(git hash-object --literally -t commit -w --stdin <bad-email) &&
+ 	test_when_finished "remove_object $new" &&
+ 	git update-ref refs/heads/bogus "$new" &&
+ 	test_when_finished "git update-ref -d refs/heads/bogus" &&
+@@ -223,7 +223,7 @@ test_expect_success 'email with embedded > is not okay' '
+ test_expect_success 'missing < email delimiter is reported nicely' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/<//" basis >bad-email-2 &&
+-	new=$(git hash-object -t commit -w --stdin <bad-email-2) &&
++	new=$(git hash-object --literally -t commit -w --stdin <bad-email-2) &&
+ 	test_when_finished "remove_object $new" &&
+ 	git update-ref refs/heads/bogus "$new" &&
+ 	test_when_finished "git update-ref -d refs/heads/bogus" &&
+@@ -234,7 +234,7 @@ test_expect_success 'missing < email delimiter is reported nicely' '
+ test_expect_success 'missing email is reported nicely' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/[a-z]* <[^>]*>//" basis >bad-email-3 &&
+-	new=$(git hash-object -t commit -w --stdin <bad-email-3) &&
++	new=$(git hash-object --literally -t commit -w --stdin <bad-email-3) &&
+ 	test_when_finished "remove_object $new" &&
+ 	git update-ref refs/heads/bogus "$new" &&
+ 	test_when_finished "git update-ref -d refs/heads/bogus" &&
+@@ -245,7 +245,7 @@ test_expect_success 'missing email is reported nicely' '
+ test_expect_success '> in name is reported' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/ </> </" basis >bad-email-4 &&
+-	new=$(git hash-object -t commit -w --stdin <bad-email-4) &&
++	new=$(git hash-object --literally -t commit -w --stdin <bad-email-4) &&
+ 	test_when_finished "remove_object $new" &&
+ 	git update-ref refs/heads/bogus "$new" &&
+ 	test_when_finished "git update-ref -d refs/heads/bogus" &&
+@@ -258,7 +258,7 @@ test_expect_success 'integer overflow in timestamps is reported' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/^\\(author .*>\\) [0-9]*/\\1 18446744073709551617/" \
+ 		<basis >bad-timestamp &&
+-	new=$(git hash-object -t commit -w --stdin <bad-timestamp) &&
++	new=$(git hash-object --literally -t commit -w --stdin <bad-timestamp) &&
+ 	test_when_finished "remove_object $new" &&
+ 	git update-ref refs/heads/bogus "$new" &&
+ 	test_when_finished "git update-ref -d refs/heads/bogus" &&
+@@ -269,7 +269,7 @@ test_expect_success 'integer overflow in timestamps is reported' '
+ test_expect_success 'commit with NUL in header' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/author ./author Q/" <basis | q_to_nul >commit-NUL-header &&
+-	new=$(git hash-object -t commit -w --stdin <commit-NUL-header) &&
++	new=$(git hash-object --literally -t commit -w --stdin <commit-NUL-header) &&
+ 	test_when_finished "remove_object $new" &&
+ 	git update-ref refs/heads/bogus "$new" &&
+ 	test_when_finished "git update-ref -d refs/heads/bogus" &&
+@@ -292,7 +292,7 @@ test_expect_success 'tree object with duplicate entries' '
+ 			git cat-file tree $T &&
+ 			git cat-file tree $T
+ 		) |
+-		git hash-object -w -t tree --stdin
++		git hash-object --literally -w -t tree --stdin
+ 	) &&
+ 	test_must_fail git fsck 2>out &&
+ 	test_i18ngrep "error in tree .*contains duplicate file entries" out
+@@ -426,7 +426,7 @@ test_expect_success 'tag with incorrect tag name & missing tagger' '
+ 	This is an invalid tag.
+ 	EOF
+ 
+-	tag=$(git hash-object -t tag -w --stdin <wrong-tag) &&
++	tag=$(git hash-object --literally -t tag -w --stdin <wrong-tag) &&
+ 	test_when_finished "remove_object $tag" &&
+ 	echo $tag >.git/refs/tags/wrong &&
+ 	test_when_finished "git update-ref -d refs/tags/wrong" &&
+@@ -558,7 +558,7 @@ test_expect_success 'rev-list --verify-objects with commit graph (parent)' '
+ test_expect_success 'force fsck to ignore double author' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/^author .*/&,&/" <basis | tr , \\n >multiple-authors &&
+-	new=$(git hash-object -t commit -w --stdin <multiple-authors) &&
++	new=$(git hash-object --literally -t commit -w --stdin <multiple-authors) &&
+ 	test_when_finished "remove_object $new" &&
+ 	git update-ref refs/heads/bogus "$new" &&
+ 	test_when_finished "git update-ref -d refs/heads/bogus" &&
+@@ -573,7 +573,7 @@ test_expect_success 'fsck notices blob entry pointing to null sha1' '
+ 	(git init null-blob &&
+ 	 cd null-blob &&
+ 	 sha=$(printf "100644 file$_bz$_bzoid" |
+-	       git hash-object -w --stdin -t tree) &&
++	       git hash-object --literally -w --stdin -t tree) &&
+ 	  git fsck 2>out &&
+ 	  test_i18ngrep "warning.*null sha1" out
+ 	)
+@@ -583,7 +583,7 @@ test_expect_success 'fsck notices submodule entry pointing to null sha1' '
+ 	(git init null-commit &&
+ 	 cd null-commit &&
+ 	 sha=$(printf "160000 submodule$_bz$_bzoid" |
+-	       git hash-object -w --stdin -t tree) &&
++	       git hash-object --literally -w --stdin -t tree) &&
+ 	  git fsck 2>out &&
+ 	  test_i18ngrep "warning.*null sha1" out
+ 	)
+@@ -648,7 +648,7 @@ test_expect_success 'NUL in commit' '
+ 		git commit --allow-empty -m "initial commitQNUL after message" &&
+ 		git cat-file commit HEAD >original &&
+ 		q_to_nul <original >munged &&
+-		git hash-object -w -t commit --stdin <munged >name &&
++		git hash-object --literally -w -t commit --stdin <munged >name &&
+ 		git branch bad $(cat name) &&
+ 
+ 		test_must_fail git -c fsck.nulInCommit=error fsck 2>warn.1 &&
+@@ -794,8 +794,8 @@ test_expect_success 'fsck errors in packed objects' '
+ 	git cat-file commit HEAD >basis &&
+ 	sed "s/</one/" basis >one &&
+ 	sed "s/</foo/" basis >two &&
+-	one=$(git hash-object -t commit -w one) &&
+-	two=$(git hash-object -t commit -w two) &&
++	one=$(git hash-object --literally -t commit -w one) &&
++	two=$(git hash-object --literally -t commit -w two) &&
+ 	pack=$(
+ 		{
+ 			echo $one &&
+diff --git a/t/t4054-diff-bogus-tree.sh b/t/t4054-diff-bogus-tree.sh
+index 294fb55313..05c88f8cdf 100755
+--- a/t/t4054-diff-bogus-tree.sh
++++ b/t/t4054-diff-bogus-tree.sh
+@@ -10,7 +10,7 @@ test_expect_success 'create bogus tree' '
+ 	bogus_tree=$(
+ 		printf "100644 fooQ$name" |
+ 		q_to_nul |
+-		git hash-object -w --stdin -t tree
++		git hash-object --literally -w --stdin -t tree
+ 	)
+ '
+ 
+diff --git a/t/t4058-diff-duplicates.sh b/t/t4058-diff-duplicates.sh
+index 54614b814d..2501c89c1c 100755
+--- a/t/t4058-diff-duplicates.sh
++++ b/t/t4058-diff-duplicates.sh
+@@ -29,7 +29,7 @@ make_tree () {
+ 		make_tree_entry "$1" "$2" "$3"
+ 		shift; shift; shift
+ 	done |
+-	git hash-object -w -t tree --stdin
++	git hash-object --literally -w -t tree --stdin
+ }
+ 
+ # this is kind of a convoluted setup, but matches
+diff --git a/t/t4212-log-corrupt.sh b/t/t4212-log-corrupt.sh
+index 30a219894b..e89e1f54b6 100755
+--- a/t/t4212-log-corrupt.sh
++++ b/t/t4212-log-corrupt.sh
+@@ -10,7 +10,7 @@ test_expect_success 'setup' '
+ 
+ 	git cat-file commit HEAD |
+ 	sed "/^author /s/>/>-<>/" >broken_email.commit &&
+-	git hash-object -w -t commit broken_email.commit >broken_email.hash &&
++	git hash-object --literally -w -t commit broken_email.commit >broken_email.hash &&
+ 	git update-ref refs/heads/broken_email $(cat broken_email.hash)
+ '
+ 
+@@ -46,7 +46,7 @@ test_expect_success 'git log --format with broken author email' '
+ munge_author_date () {
+ 	git cat-file commit "$1" >commit.orig &&
+ 	sed "s/^\(author .*>\) [0-9]*/\1 $2/" <commit.orig >commit.munge &&
+-	git hash-object -w -t commit commit.munge
++	git hash-object --literally -w -t commit commit.munge
+ }
+ 
+ test_expect_success 'unparsable dates produce sentinel value' '
+diff --git a/t/t5302-pack-index.sh b/t/t5302-pack-index.sh
+index b0095ab41d..59e9e77223 100755
+--- a/t/t5302-pack-index.sh
++++ b/t/t5302-pack-index.sh
+@@ -263,7 +263,7 @@ tag guten tag
+ This is an invalid tag.
+ EOF
+ 
+-	tag=$(git hash-object -t tag -w --stdin <wrong-tag) &&
++	tag=$(git hash-object -t tag -w --stdin --literally <wrong-tag) &&
+ 	pack1=$(echo $tag $sha | git pack-objects tag-test) &&
+ 	echo remove tag object &&
+ 	thirtyeight=${tag#??} &&
+diff --git a/t/t5504-fetch-receive-strict.sh b/t/t5504-fetch-receive-strict.sh
+index ac4099ca89..88d3c56750 100755
+--- a/t/t5504-fetch-receive-strict.sh
++++ b/t/t5504-fetch-receive-strict.sh
+@@ -138,7 +138,7 @@ This commit object intentionally broken
+ EOF
+ 
+ test_expect_success 'setup bogus commit' '
+-	commit="$(git hash-object -t commit -w --stdin <bogus-commit)"
++	commit="$(git hash-object --literally -t commit -w --stdin <bogus-commit)"
+ '
+ 
+ test_expect_success 'fsck with no skipList input' '
+diff --git a/t/t5702-protocol-v2.sh b/t/t5702-protocol-v2.sh
+index b33cd4afca..e4db7513f4 100755
+--- a/t/t5702-protocol-v2.sh
++++ b/t/t5702-protocol-v2.sh
+@@ -1114,7 +1114,7 @@ test_expect_success 'packfile-uri with transfer.fsckobjects fails on bad object'
+ 
+ 	This commit object intentionally broken
+ 	EOF
+-	BOGUS=$(git -C "$P" hash-object -t commit -w --stdin <bogus-commit) &&
++	BOGUS=$(git -C "$P" hash-object -t commit -w --stdin --literally <bogus-commit) &&
+ 	git -C "$P" branch bogus-branch "$BOGUS" &&
+ 
+ 	echo my-blob >"$P/my-blob" &&
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index fa38b87441..b02a30d8e8 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -606,7 +606,7 @@ test_expect_success 'create tag without tagger' '
+ 	git tag -a -m "Broken tag" taggerless &&
+ 	git tag -f taggerless $(git cat-file tag taggerless |
+ 		sed -e "/^tagger /d" |
+-		git hash-object --stdin -w -t tag)
++		git hash-object --literally --stdin -w -t tag)
+ '
+ 
+ test_atom refs/tags/taggerless type 'commit'
+diff --git a/t/t7509-commit-authorship.sh b/t/t7509-commit-authorship.sh
+index 21c668f75e..5d890949f7 100755
+--- a/t/t7509-commit-authorship.sh
++++ b/t/t7509-commit-authorship.sh
+@@ -105,7 +105,7 @@ test_expect_success '--amend option with empty author' '
+ test_expect_success '--amend option with missing author' '
+ 	git cat-file commit Initial >tmp &&
+ 	sed "s/author [^<]* </author </" tmp >malformed &&
+-	sha=$(git hash-object -t commit -w malformed) &&
++	sha=$(git hash-object --literally -t commit -w malformed) &&
+ 	test_when_finished "remove_object $sha" &&
+ 	git checkout $sha &&
+ 	test_when_finished "git checkout Initial" &&
+diff --git a/t/t7510-signed-commit.sh b/t/t7510-signed-commit.sh
+index 8593b7e3cb..bc7a31ba3e 100755
+--- a/t/t7510-signed-commit.sh
++++ b/t/t7510-signed-commit.sh
+@@ -202,7 +202,7 @@ test_expect_success GPG 'detect fudged signature with NUL' '
+ 	git cat-file commit seventh-signed >raw &&
+ 	cat raw >forged2 &&
+ 	echo Qwik | tr "Q" "\000" >>forged2 &&
+-	git hash-object -w -t commit forged2 >forged2.commit &&
++	git hash-object --literally -w -t commit forged2 >forged2.commit &&
+ 	test_must_fail git verify-commit $(cat forged2.commit) &&
+ 	git show --pretty=short --show-signature $(cat forged2.commit) >actual2 &&
+ 	grep "BAD signature from" actual2 &&
+diff --git a/t/t7528-signed-commit-ssh.sh b/t/t7528-signed-commit-ssh.sh
+index f47e995179..065f780636 100755
+--- a/t/t7528-signed-commit-ssh.sh
++++ b/t/t7528-signed-commit-ssh.sh
+@@ -270,7 +270,7 @@ test_expect_success GPGSSH 'detect fudged signature with NUL' '
+ 	git cat-file commit seventh-signed >raw &&
+ 	cat raw >forged2 &&
+ 	echo Qwik | tr "Q" "\000" >>forged2 &&
+-	git hash-object -w -t commit forged2 >forged2.commit &&
++	git hash-object --literally -w -t commit forged2 >forged2.commit &&
+ 	test_must_fail git verify-commit $(cat forged2.commit) &&
+ 	git show --pretty=short --show-signature $(cat forged2.commit) >actual2 &&
+ 	grep "${GPGSSH_BAD_SIGNATURE}" actual2 &&
+diff --git a/t/t8003-blame-corner-cases.sh b/t/t8003-blame-corner-cases.sh
+index d751d48b7d..8bcd39e81b 100755
+--- a/t/t8003-blame-corner-cases.sh
++++ b/t/t8003-blame-corner-cases.sh
+@@ -201,7 +201,7 @@ committer David Reiss <dreiss@facebook.com> 1234567890 +0000
+ 
+ some message
+ EOF
+-  COMMIT=$(git hash-object -t commit -w badcommit) &&
++  COMMIT=$(git hash-object --literally -t commit -w badcommit) &&
+   git --no-pager blame $COMMIT -- uno >/dev/null
+ '
+ 
+diff --git a/t/t9350-fast-export.sh b/t/t9350-fast-export.sh
+index ff21a12ee6..26c25c0eb2 100755
+--- a/t/t9350-fast-export.sh
++++ b/t/t9350-fast-export.sh
+@@ -373,7 +373,7 @@ EOF
+ 
+ test_expect_success 'cope with tagger-less tags' '
+ 
+-	TAG=$(git hash-object -t tag -w tag-content) &&
++	TAG=$(git hash-object --literally -t tag -w tag-content) &&
+ 	git update-ref refs/tags/sonnenschein $TAG &&
+ 	git fast-export -C -C --signed-tags=strip --all > output &&
+ 	test $(grep -c "^tag " output) = 4 &&
+-- 
+2.39.3 (Apple Git-145)
+

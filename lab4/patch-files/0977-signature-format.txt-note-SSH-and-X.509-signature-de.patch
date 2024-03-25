@@ -1,0 +1,75 @@
+From 31a431b18b33cdfee7ddb61e63902bb1c3964bd5 Mon Sep 17 00:00:00 2001
+From: Gwyneth Morgan <gwymor@tilde.club>
+Date: Mon, 27 Feb 2023 20:27:18 +0000
+Subject: [PATCH 0977/2871] signature-format.txt: note SSH and X.509 signature
+ delimiters
+
+This document only explains PGP signatures, but Git now supports X.509
+signatures as of 1e7adb9756 (gpg-interface: introduce new signature
+format "x509" using gpgsm, 2018-07-17), and SSH signatures as of
+29b315778e (ssh signing: add ssh key format and signing code,
+2021-09-10).
+
+Additionally, explain that these signature formats are controlled
+`gpg.format`, linking to its documentation, and explain in said
+`gpg.format` documentation that the underlying signature format is
+documented in signature-format.txt.
+
+Signed-off-by: Gwyneth Morgan <gwymor@tilde.club>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/gpg.txt          |  3 +++
+ Documentation/gitformat-signature.txt | 22 +++++++++++++++++-----
+ 2 files changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/config/gpg.txt b/Documentation/config/gpg.txt
+index 86f6308c4c..37e2831cd5 100644
+--- a/Documentation/config/gpg.txt
++++ b/Documentation/config/gpg.txt
+@@ -12,6 +12,9 @@ gpg.program::
+ gpg.format::
+ 	Specifies which key format to use when signing with `--gpg-sign`.
+ 	Default is "openpgp". Other possible values are "x509", "ssh".
+++
++See linkgit:gitformat-signature[5] for the signature format, which differs
++based on the selected `gpg.format`.
+ 
+ gpg.<format>.program::
+ 	Use this to customize the program used for the signing format you
+diff --git a/Documentation/gitformat-signature.txt b/Documentation/gitformat-signature.txt
+index a249869faf..a839b7878c 100644
+--- a/Documentation/gitformat-signature.txt
++++ b/Documentation/gitformat-signature.txt
+@@ -17,12 +17,24 @@ DESCRIPTION
+ Git uses cryptographic signatures in various places, currently objects (tags,
+ commits, mergetags) and transactions (pushes). In every case, the command which
+ is about to create an object or transaction determines a payload from that,
+-calls gpg to obtain a detached signature for the payload (`gpg -bsa`) and
+-embeds the signature into the object or transaction.
++calls an external program to obtain a detached signature for the payload
++(`gpg -bsa` in the case of PGP signatures), and embeds the signature into the
++object or transaction.
+ 
+-Signatures always begin with `-----BEGIN PGP SIGNATURE-----`
+-and end with `-----END PGP SIGNATURE-----`, unless gpg is told to
+-produce RFC1991 signatures which use `MESSAGE` instead of `SIGNATURE`.
++Signatures begin with an "ASCII Armor" header line and end with a tail line,
++which differ depending on signature type (as selected by `gpg.format`, see
++linkgit:git-config[1]). These are, for `gpg.format` values:
++
++`gpg` (PGP)::
++	`-----BEGIN PGP SIGNATURE-----` and `-----END PGP SIGNATURE-----`.
++	Or, if gpg is told to produce RFC1991 signatures,
++	`-----BEGIN PGP MESSAGE-----` and `-----END PGP MESSAGE-----`
++
++`ssh` (SSH)::
++	`-----BEGIN SSH SIGNATURE-----` and `-----END SSH SIGNATURE-----`
++
++`x509` (X.509)::
++	`-----BEGIN SIGNED MESSAGE-----` and `-----END SIGNED MESSAGE-----`
+ 
+ Signatures sometimes appear as a part of the normal payload
+ (e.g. a signed tag has the signature block appended after the payload
+-- 
+2.39.3 (Apple Git-145)
+

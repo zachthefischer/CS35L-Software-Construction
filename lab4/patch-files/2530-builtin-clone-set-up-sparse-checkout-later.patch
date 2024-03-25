@@ -1,0 +1,47 @@
+From 360822a3471f779c761694b11f30ff738c6851e9 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 12 Dec 2023 08:00:59 +0100
+Subject: [PATCH 2530/2871] builtin/clone: set up sparse checkout later
+
+When asked to do a sparse checkout, then git-clone(1) will spawn
+`git sparse-checkout set` to set up the configuration accordingly. This
+requires a proper Git repository or otherwise the command will fail. But
+as we are about to move creation of the reference database to a later
+point, this prerequisite will not hold anymore.
+
+Move the logic to a later point in time where we know to have created
+the reference database already.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clone.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/clone.c b/builtin/clone.c
+index d188650881..9c60923f31 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -1185,9 +1185,6 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 	if (option_required_reference.nr || option_optional_reference.nr)
+ 		setup_reference();
+ 
+-	if (option_sparse_checkout && git_sparse_checkout_init(dir))
+-		return 1;
+-
+ 	remote = remote_get(remote_name);
+ 
+ 	refspec_appendf(&remote->fetch, "+%s*:%s*", src_ref_prefix,
+@@ -1426,6 +1423,9 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 		dissociate_from_references();
+ 	}
+ 
++	if (option_sparse_checkout && git_sparse_checkout_init(dir))
++		return 1;
++
+ 	junk_mode = JUNK_LEAVE_REPO;
+ 	err = checkout(submodule_progress, filter_submodules);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

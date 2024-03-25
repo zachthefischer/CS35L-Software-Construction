@@ -1,0 +1,35 @@
+From 3cb4384683ea128e6720b961e41aaf82c45cf1fe Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 30 Jan 2024 11:03:24 -0800
+Subject: [PATCH 2785/2871] t0091: allow test in a repository without tags
+
+The beginning of the [System Info] section, which should match the
+"git version --build-options" output, may not identify our version
+as "git version 2.whatever".  When built in a repository cloned
+without tags, for example, "git version unknown.g00000000" can be a
+legit version string.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0091-bugreport.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t0091-bugreport.sh b/t/t0091-bugreport.sh
+index f6998269be..fb2f053fc4 100755
+--- a/t/t0091-bugreport.sh
++++ b/t/t0091-bugreport.sh
+@@ -39,9 +39,9 @@ test_expect_success 'sanity check "System Info" section' '
+ 
+ 	sed -ne "/^\[System Info\]$/,/^$/p" <git-bugreport-format.txt >system &&
+ 
+-	# The beginning should match "git version --build-info" verbatim,
++	# The beginning should match "git version --build-options" verbatim,
+ 	# but rather than checking bit-for-bit equality, just test some basics.
+-	grep "git version [0-9]." system &&
++	grep "git version " system &&
+ 	grep "shell-path: ." system &&
+ 
+ 	# After the version, there should be some more info.
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,84 @@
+From 5d64229ef5a98537bdea20faadfb5cf54ed077f7 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Tue, 29 Nov 2022 21:15:10 +0800
+Subject: [PATCH 0467/2871] t1301: use test_when_finished for cleanup
+
+Refactor several test cases to use "test_when_finished" for cleanup.
+
+1. For first of these, we used to clean-up outside the test, but instead
+   let's use test_when_finished for that.
+
+2. For the second, we used to leave "new" after we are done, but not use
+   it at all later. Now we do clean up.
+
+3. For the rest, these child.git test repositories used to follow
+   "initialize what we are going to use to a known state before we use"
+   pattern, which is not wrong per-se, but now we use "clean up the
+   cruft we made after we are done" pattern, which may arguably be
+   better simply because the test that makes cruft should know what
+   cruft it created better than whatever comes later that may not know.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1301-shared-repo.sh | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/t/t1301-shared-repo.sh b/t/t1301-shared-repo.sh
+index 7578e75d77..1225abbb6d 100755
+--- a/t/t1301-shared-repo.sh
++++ b/t/t1301-shared-repo.sh
+@@ -25,6 +25,7 @@ test_expect_success 'shared = 0400 (faulty permission u-w)' '
+ for u in 002 022
+ do
+ 	test_expect_success POSIXPERM "shared=1 does not clear bits preset by umask $u" '
++		test_when_finished "rm -rf sub" &&
+ 		mkdir sub && (
+ 			cd sub &&
+ 			umask $u &&
+@@ -42,7 +43,6 @@ do
+ 			;;
+ 		esac
+ 	'
+-	rm -rf sub
+ done
+ 
+ test_expect_success 'shared=all' '
+@@ -132,6 +132,7 @@ test_expect_success POSIXPERM 'git reflog expire honors core.sharedRepository' '
+ '
+ 
+ test_expect_success POSIXPERM 'forced modes' '
++	test_when_finished "rm -rf new" &&
+ 	mkdir -p templates/hooks &&
+ 	echo update-server-info >templates/hooks/post-update &&
+ 	chmod +x templates/hooks/post-update &&
+@@ -174,6 +175,7 @@ test_expect_success POSIXPERM 'forced modes' '
+ '
+ 
+ test_expect_success POSIXPERM 'remote init does not use config from cwd' '
++	test_when_finished "rm -rf child.git" &&
+ 	git config core.sharedrepository 0666 &&
+ 	umask 0022 &&
+ 	git init --bare child.git &&
+@@ -193,7 +195,7 @@ test_expect_success POSIXPERM 're-init respects core.sharedrepository (local)' '
+ '
+ 
+ test_expect_success POSIXPERM 're-init respects core.sharedrepository (remote)' '
+-	rm -rf child.git &&
++	test_when_finished "rm -rf child.git" &&
+ 	umask 0022 &&
+ 	git init --bare --shared=0666 child.git &&
+ 	test_path_is_missing child.git/foo &&
+@@ -204,7 +206,7 @@ test_expect_success POSIXPERM 're-init respects core.sharedrepository (remote)'
+ '
+ 
+ test_expect_success POSIXPERM 'template can set core.sharedrepository' '
+-	rm -rf child.git &&
++	test_when_finished "rm -rf child.git" &&
+ 	umask 0022 &&
+ 	git config core.sharedrepository 0666 &&
+ 	cp .git/config templates/config &&
+-- 
+2.39.3 (Apple Git-145)
+

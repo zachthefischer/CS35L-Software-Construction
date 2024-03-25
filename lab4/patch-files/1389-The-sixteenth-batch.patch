@@ -1,0 +1,53 @@
+From 69c786637d7a7fe3b2b8f7d989af095f5f49c3a8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 2 May 2023 10:13:50 -0700
+Subject: [PATCH 1389/2871] The sixteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.41.0.txt | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.41.0.txt b/Documentation/RelNotes/2.41.0.txt
+index b737371148..52bfa08511 100644
+--- a/Documentation/RelNotes/2.41.0.txt
++++ b/Documentation/RelNotes/2.41.0.txt
+@@ -79,6 +79,10 @@ UI, Workflows & Features
+    of cruft packs has been made the default and no longer considered
+    an experimental feature.
+ 
++ * The output given by "git blame" that attributes a line to contents
++   taken from the file specified by the "--contents" option shows it
++   differently from a line attributed to the working tree file.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -125,6 +129,8 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * "git fsck" learned to validate the on-disk pack reverse index files.
+ 
++ * strtok() and strtok_r() are banned in this codebase.
++
+ 
+ Fixes since v2.40
+ -----------------
+@@ -269,6 +275,15 @@ Fixes since v2.40
+    key, which has been corrected.
+    (merge 7891e46585 jk/gpg-trust-level-fix later to maint).
+ 
++ * The completion script used to use bare "read" without the "-r"
++   option to read the contents of various state files, which risked
++   getting confused with backslashes in them.  This has been
++   corrected.
++   (merge 197152098a ek/completion-use-read-r-to-read-literally later to maint).
++
++ * A small API fix to the ort merge strategy backend.
++   (merge 000c4ceca7 en/ort-finalize-after-0-merges-fix later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge f7111175df as/doc-markup-fix later to maint).
+    (merge 90ff7c9898 fc/test-aggregation-clean-up later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

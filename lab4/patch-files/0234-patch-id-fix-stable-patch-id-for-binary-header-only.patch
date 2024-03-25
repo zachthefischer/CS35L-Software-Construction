@@ -1,0 +1,174 @@
+From 0570be79ead35e47e29ee2587e2c8ea47c091d49 Mon Sep 17 00:00:00 2001
+From: Jerry Zhang <jerry@skydio.com>
+Date: Mon, 24 Oct 2022 20:07:39 +0000
+Subject: [PATCH 0234/2871] patch-id: fix stable patch id for binary /
+ header-only
+
+Patch-ids for binary patches are found by hashing the object
+ids of the before and after objects in succession. However in
+the --stable case, there is a bug where hunks are not flushed
+for binary and header-only patch ids, which would always result
+in a patch-id of 0000. The --unstable case is currently correct.
+
+Reorder the logic to branch into 3 cases for populating the
+patch body: header-only which populates nothing, binary which
+populates the object ids, and normal which populates the text
+diff. All branches will end up flushing the hunk.
+
+Don't populate the ---a/ and +++b/ lines for binary diffs, to correspond
+to those lines not being present in the "git diff" text output.
+This is necessary because we advertise that the patch-id calculated
+internally and used in format-patch is the same that what the
+builtin "git patch-id" would produce when piped from a diff.
+
+Update the test to run on both binary and normal files.
+
+Signed-off-by: Jerry Zhang <jerry@skydio.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                     | 58 +++++++++++++++++++-------------------
+ t/t3419-rebase-patch-id.sh | 34 +++++++++++++++-------
+ 2 files changed, 53 insertions(+), 39 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index e71cf75886..2aee15f2f1 100644
+--- a/diff.c
++++ b/diff.c
+@@ -6221,46 +6221,46 @@ static int diff_get_patch_id(struct diff_options *options, struct object_id *oid
+ 		if (p->one->mode == 0) {
+ 			patch_id_add_string(&ctx, "newfilemode");
+ 			patch_id_add_mode(&ctx, p->two->mode);
+-			patch_id_add_string(&ctx, "---/dev/null");
+-			patch_id_add_string(&ctx, "+++b/");
+-			the_hash_algo->update_fn(&ctx, p->two->path, len2);
+ 		} else if (p->two->mode == 0) {
+ 			patch_id_add_string(&ctx, "deletedfilemode");
+ 			patch_id_add_mode(&ctx, p->one->mode);
+-			patch_id_add_string(&ctx, "---a/");
+-			the_hash_algo->update_fn(&ctx, p->one->path, len1);
+-			patch_id_add_string(&ctx, "+++/dev/null");
+-		} else {
+-			patch_id_add_string(&ctx, "---a/");
+-			the_hash_algo->update_fn(&ctx, p->one->path, len1);
+-			patch_id_add_string(&ctx, "+++b/");
+-			the_hash_algo->update_fn(&ctx, p->two->path, len2);
+ 		}
+ 
+-		if (diff_header_only)
+-			continue;
+-
+-		if (fill_mmfile(options->repo, &mf1, p->one) < 0 ||
+-		    fill_mmfile(options->repo, &mf2, p->two) < 0)
+-			return error("unable to read files to diff");
+-
+-		if (diff_filespec_is_binary(options->repo, p->one) ||
++		if (diff_header_only) {
++			/* don't do anything since we're only populating header info */
++		} else if (diff_filespec_is_binary(options->repo, p->one) ||
+ 		    diff_filespec_is_binary(options->repo, p->two)) {
+ 			the_hash_algo->update_fn(&ctx, oid_to_hex(&p->one->oid),
+ 					the_hash_algo->hexsz);
+ 			the_hash_algo->update_fn(&ctx, oid_to_hex(&p->two->oid),
+ 					the_hash_algo->hexsz);
+-			continue;
+-		}
+-
+-		xpp.flags = 0;
+-		xecfg.ctxlen = 3;
+-		xecfg.flags = XDL_EMIT_NO_HUNK_HDR;
+-		if (xdi_diff_outf(&mf1, &mf2, NULL,
+-				  patch_id_consume, &data, &xpp, &xecfg))
+-			return error("unable to generate patch-id diff for %s",
+-				     p->one->path);
++		} else {
++			if (p->one->mode == 0) {
++				patch_id_add_string(&ctx, "---/dev/null");
++				patch_id_add_string(&ctx, "+++b/");
++				the_hash_algo->update_fn(&ctx, p->two->path, len2);
++			} else if (p->two->mode == 0) {
++				patch_id_add_string(&ctx, "---a/");
++				the_hash_algo->update_fn(&ctx, p->one->path, len1);
++				patch_id_add_string(&ctx, "+++/dev/null");
++			} else {
++				patch_id_add_string(&ctx, "---a/");
++				the_hash_algo->update_fn(&ctx, p->one->path, len1);
++				patch_id_add_string(&ctx, "+++b/");
++				the_hash_algo->update_fn(&ctx, p->two->path, len2);
++			}
+ 
++			if (fill_mmfile(options->repo, &mf1, p->one) < 0 ||
++			    fill_mmfile(options->repo, &mf2, p->two) < 0)
++				return error("unable to read files to diff");
++			xpp.flags = 0;
++			xecfg.ctxlen = 3;
++			xecfg.flags = XDL_EMIT_NO_HUNK_HDR;
++			if (xdi_diff_outf(&mf1, &mf2, NULL,
++					  patch_id_consume, &data, &xpp, &xecfg))
++				return error("unable to generate patch-id diff for %s",
++					     p->one->path);
++		}
+ 		if (stable)
+ 			flush_one_hunk(oid, &ctx);
+ 	}
+diff --git a/t/t3419-rebase-patch-id.sh b/t/t3419-rebase-patch-id.sh
+index 295040f2fe..d24e55aac8 100755
+--- a/t/t3419-rebase-patch-id.sh
++++ b/t/t3419-rebase-patch-id.sh
+@@ -43,15 +43,16 @@ test_expect_success 'setup: 500 lines' '
+ 	git add newfile &&
+ 	git commit -q -m "add small file" &&
+ 
+-	git cherry-pick main >/dev/null 2>&1
+-'
++	git cherry-pick main >/dev/null 2>&1 &&
+ 
+-test_expect_success 'setup attributes' '
+-	echo "file binary" >.gitattributes
++	git branch -f squashed main &&
++	git checkout -q -f squashed &&
++	git reset -q --soft HEAD~2 &&
++	git commit -q -m squashed
+ '
+ 
+ test_expect_success 'detect upstream patch' '
+-	git checkout -q main &&
++	git checkout -q main^{} &&
+ 	scramble file &&
+ 	git add file &&
+ 	git commit -q -m "change big file again" &&
+@@ -61,14 +62,27 @@ test_expect_success 'detect upstream patch' '
+ 	test_must_be_empty revs
+ '
+ 
++test_expect_success 'detect upstream patch binary' '
++	echo "file binary" >.gitattributes &&
++	git checkout -q other^{} &&
++	git rebase main &&
++	git rev-list main...HEAD~ >revs &&
++	test_must_be_empty revs &&
++	test_when_finished "rm .gitattributes"
++'
++
+ test_expect_success 'do not drop patch' '
+-	git branch -f squashed main &&
+-	git checkout -q -f squashed &&
+-	git reset -q --soft HEAD~2 &&
+-	git commit -q -m squashed &&
+ 	git checkout -q other^{} &&
+ 	test_must_fail git rebase squashed &&
+-	git rebase --quit
++	test_when_finished "git rebase --abort"
++'
++
++test_expect_success 'do not drop patch binary' '
++	echo "file binary" >.gitattributes &&
++	git checkout -q other^{} &&
++	test_must_fail git rebase squashed &&
++	test_when_finished "git rebase --abort" &&
++	test_when_finished "rm .gitattributes"
+ '
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

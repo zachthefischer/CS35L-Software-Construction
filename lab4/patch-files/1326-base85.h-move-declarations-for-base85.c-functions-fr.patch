@@ -1,0 +1,83 @@
+From 9b5041f647fa5d9921b9b4f8be6b36cb39591166 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:13 +0000
+Subject: [PATCH 1326/2871] base85.h: move declarations for base85.c functions
+ from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ apply.c  | 1 +
+ base85.c | 3 ++-
+ base85.h | 7 +++++++
+ cache.h  | 4 ----
+ diff.c   | 1 +
+ 5 files changed, 11 insertions(+), 5 deletions(-)
+ create mode 100644 base85.h
+
+diff --git a/apply.c b/apply.c
+index efe2dcb0e6..a65a354eef 100644
+--- a/apply.c
++++ b/apply.c
+@@ -10,6 +10,7 @@
+ #include "cache.h"
+ #include "abspath.h"
+ #include "alloc.h"
++#include "base85.h"
+ #include "config.h"
+ #include "object-store.h"
+ #include "blob.h"
+diff --git a/base85.c b/base85.c
+index 5ca601ee14..bbacdca31b 100644
+--- a/base85.c
++++ b/base85.c
+@@ -1,4 +1,5 @@
+-#include "cache.h"
++#include "git-compat-util.h"
++#include "base85.h"
+ 
+ #undef DEBUG_85
+ 
+diff --git a/base85.h b/base85.h
+new file mode 100644
+index 0000000000..c835086e09
+--- /dev/null
++++ b/base85.h
+@@ -0,0 +1,7 @@
++#ifndef BASE85_H
++#define BASE85_H
++
++int decode_85(char *dst, const char *line, int linelen);
++void encode_85(char *buf, const unsigned char *data, int bytes);
++
++#endif /* BASE85_H */
+diff --git a/cache.h b/cache.h
+index 2b66176479..b89f4c5980 100644
+--- a/cache.h
++++ b/cache.h
+@@ -593,10 +593,6 @@ int df_name_compare(const char *name1, size_t len1, int mode1,
+ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2);
+ int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2);
+ 
+-/* base85 */
+-int decode_85(char *dst, const char *line, int linelen);
+-void encode_85(char *buf, const unsigned char *data, int bytes);
+-
+ /* pkt-line.c */
+ void packet_trace_identity(const char *prog);
+ 
+diff --git a/diff.c b/diff.c
+index fa86d02319..e697f78a64 100644
+--- a/diff.c
++++ b/diff.c
+@@ -4,6 +4,7 @@
+ #include "cache.h"
+ #include "abspath.h"
+ #include "alloc.h"
++#include "base85.h"
+ #include "config.h"
+ #include "convert.h"
+ #include "environment.h"
+-- 
+2.39.3 (Apple Git-145)
+

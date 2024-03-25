@@ -1,0 +1,42 @@
+From dfd2a238855967035cca3bf1475e542ba2f7823b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:08:54 -0400
+Subject: [PATCH 0176/2871] convert: mark unused parameter in null stream
+ filter
+
+The null stream filter unsurprisingly does not look at its "filter"
+argument, since it just eats bytes. But we can't drop it, since it has
+to conform to the same virtual interface that real filters do. Mark the
+unused parameter to appease -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ convert.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/convert.c b/convert.c
+index 95e6a5244f..9b67649032 100644
+--- a/convert.c
++++ b/convert.c
+@@ -1549,7 +1549,7 @@ struct stream_filter {
+ 	struct stream_filter_vtbl *vtbl;
+ };
+ 
+-static int null_filter_fn(struct stream_filter *filter,
++static int null_filter_fn(struct stream_filter *filter UNUSED,
+ 			  const char *input, size_t *isize_p,
+ 			  char *output, size_t *osize_p)
+ {
+@@ -1568,7 +1568,7 @@ static int null_filter_fn(struct stream_filter *filter,
+ 	return 0;
+ }
+ 
+-static void null_free_fn(struct stream_filter *filter)
++static void null_free_fn(struct stream_filter *filter UNUSED)
+ {
+ 	; /* nothing -- null instances are shared */
+ }
+-- 
+2.39.3 (Apple Git-145)
+

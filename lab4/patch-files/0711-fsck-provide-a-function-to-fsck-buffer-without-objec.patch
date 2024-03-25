@@ -1,0 +1,89 @@
+From 35ff327e2da2e9fa9820643d2e44f3b30530d06c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 18 Jan 2023 15:43:53 -0500
+Subject: [PATCH 0711/2871] fsck: provide a function to fsck buffer without
+ object struct
+
+The fsck code has been slowly moving away from requiring an object
+struct in commits like 103fb6d43b (fsck: accept an oid instead of a
+"struct tag" for fsck_tag(), 2019-10-18), c5b4269b57 (fsck: accept an
+oid instead of a "struct commit" for fsck_commit(), 2019-10-18), etc.
+
+However, the only external interface that fsck.c provides is
+fsck_object(), which requires an object struct, then promptly discards
+everything except its oid and type. Let's factor out the post-discard
+part of that function as fsck_buffer(), leaving fsck_object() as a thin
+wrapper around it. That will provide more flexibility for callers which
+may not have a struct.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ fsck.c | 29 ++++++++++++++++++-----------
+ fsck.h |  8 ++++++++
+ 2 files changed, 26 insertions(+), 11 deletions(-)
+
+diff --git a/fsck.c b/fsck.c
+index 47eaeedd70..c2c8facd2d 100644
+--- a/fsck.c
++++ b/fsck.c
+@@ -1237,19 +1237,26 @@ int fsck_object(struct object *obj, void *data, unsigned long size,
+ 	if (!obj)
+ 		return report(options, NULL, OBJ_NONE, FSCK_MSG_BAD_OBJECT_SHA1, "no valid object to fsck");
+ 
+-	if (obj->type == OBJ_BLOB)
+-		return fsck_blob(&obj->oid, data, size, options);
+-	if (obj->type == OBJ_TREE)
+-		return fsck_tree(&obj->oid, data, size, options);
+-	if (obj->type == OBJ_COMMIT)
+-		return fsck_commit(&obj->oid, data, size, options);
+-	if (obj->type == OBJ_TAG)
+-		return fsck_tag(&obj->oid, data, size, options);
+-
+-	return report(options, &obj->oid, obj->type,
++	return fsck_buffer(&obj->oid, obj->type, data, size, options);
++}
++
++int fsck_buffer(const struct object_id *oid, enum object_type type,
++		void *data, unsigned long size,
++		struct fsck_options *options)
++{
++	if (type == OBJ_BLOB)
++		return fsck_blob(oid, data, size, options);
++	if (type == OBJ_TREE)
++		return fsck_tree(oid, data, size, options);
++	if (type == OBJ_COMMIT)
++		return fsck_commit(oid, data, size, options);
++	if (type == OBJ_TAG)
++		return fsck_tag(oid, data, size, options);
++
++	return report(options, oid, type,
+ 		      FSCK_MSG_UNKNOWN_TYPE,
+ 		      "unknown type '%d' (internal fsck error)",
+-		      obj->type);
++		      type);
+ }
+ 
+ int fsck_error_function(struct fsck_options *o,
+diff --git a/fsck.h b/fsck.h
+index fcecf4101c..668330880e 100644
+--- a/fsck.h
++++ b/fsck.h
+@@ -183,6 +183,14 @@ int fsck_walk(struct object *obj, void *data, struct fsck_options *options);
+ int fsck_object(struct object *obj, void *data, unsigned long size,
+ 	struct fsck_options *options);
+ 
++/*
++ * Same as fsck_object(), but for when the caller doesn't have an object
++ * struct.
++ */
++int fsck_buffer(const struct object_id *oid, enum object_type,
++		void *data, unsigned long size,
++		struct fsck_options *options);
++
+ /*
+  * fsck a tag, and pass info about it back to the caller. This is
+  * exposed fsck_object() internals for git-mktag(1).
+-- 
+2.39.3 (Apple Git-145)
+

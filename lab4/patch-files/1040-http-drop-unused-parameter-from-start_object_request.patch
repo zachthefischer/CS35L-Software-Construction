@@ -1,0 +1,55 @@
+From 647edf79d6b61391392ed42435b3214c02f539f1 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 17 Mar 2023 15:16:34 -0400
+Subject: [PATCH 1040/2871] http: drop unused parameter from
+ start_object_request()
+
+We take a "walker" parameter for the request, but don't actually look at
+it. This is due to 5424bc557f (http*: add helper methods for fetching
+objects (loose), 2009-06-06). Before then, we consulted the "walker"
+struct to tell us if we should be verbose, but now those messages are
+printed elsewhere.
+
+Let's drop the unused parameter to make -Wunused-parameter happy.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http-walker.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/http-walker.c b/http-walker.c
+index c3e902c40e..065a03d262 100644
+--- a/http-walker.c
++++ b/http-walker.c
+@@ -53,8 +53,7 @@ static void fetch_alternates(struct walker *walker, const char *base);
+ 
+ static void process_object_response(void *callback_data);
+ 
+-static void start_object_request(struct walker *walker,
+-				 struct object_request *obj_req)
++static void start_object_request(struct object_request *obj_req)
+ {
+ 	struct active_request_slot *slot;
+ 	struct http_object_request *req;
+@@ -111,7 +110,7 @@ static void process_object_response(void *callback_data)
+ 			obj_req->repo =
+ 				obj_req->repo->next;
+ 			release_http_object_request(obj_req->req);
+-			start_object_request(walker, obj_req);
++			start_object_request(obj_req);
+ 			return;
+ 		}
+ 	}
+@@ -139,7 +138,7 @@ static int fill_active_slot(struct walker *walker)
+ 			if (has_object_file(&obj_req->oid))
+ 				obj_req->state = COMPLETE;
+ 			else {
+-				start_object_request(walker, obj_req);
++				start_object_request(obj_req);
+ 				return 1;
+ 			}
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

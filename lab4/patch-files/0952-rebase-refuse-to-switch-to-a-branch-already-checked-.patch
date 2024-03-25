@@ -1,0 +1,52 @@
+From 279f42fa27b4ffd0b3ac7c9378043eeb413f0f5a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 25 Feb 2023 15:22:13 +0100
+Subject: [PATCH 0952/2871] rebase: refuse to switch to a branch already
+ checked out elsewhere (test)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In b5cabb4a9 (rebase: refuse to switch to branch already checked out
+elsewhere, 2020-02-23) we add a condition to prevent a rebase operation
+involving a switch to a branch that is already checked out in another
+worktree.
+
+A bug has recently been fixed that caused this to not work as expected.
+
+Let's add a test to notice if this changes in the future.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3400-rebase.sh | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/t/t3400-rebase.sh b/t/t3400-rebase.sh
+index d5a8ee39fc..3ce918fdb8 100755
+--- a/t/t3400-rebase.sh
++++ b/t/t3400-rebase.sh
+@@ -388,6 +388,20 @@ test_expect_success 'switch to branch checked out here' '
+ 	git rebase main main
+ '
+ 
++test_expect_success 'switch to branch checked out elsewhere fails' '
++	test_when_finished "
++		git worktree remove wt1 &&
++		git worktree remove wt2 &&
++		git branch -d shared
++	" &&
++	git worktree add wt1 -b shared &&
++	git worktree add wt2 -f shared &&
++	# we test in both worktrees to ensure that works
++	# as expected with "first" and "next" worktrees
++	test_must_fail git -C wt1 rebase shared shared &&
++	test_must_fail git -C wt2 rebase shared shared
++'
++
+ test_expect_success 'switch to branch not checked out' '
+ 	git checkout main &&
+ 	git branch other &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,188 @@
+From 41227cb138c91fbd369ac6ee4877f253b39260cc Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:25 +0000
+Subject: [PATCH 0911/2871] hash.h: move some oid-related declarations from
+ cache.h
+
+These defines and enum are all oid-related and as such seem to make
+more sense being included in hash.h.  Further, moving them there
+allows us to remove some includes of cache.h in other files.
+
+The change to line-log.h might look unrelated, but line-log.h includes
+diffcore.h, which previously included cache.h, which included the
+kitchen sink.  Since this patch makes diffcore.h no longer include
+cache.h, the compiler complains about the 'struct string_list *'
+function parameter.  Add a forward declaration for struct string_list to
+address this.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h                                      | 34 --------------------
+ diffcore.h                                   |  4 ++-
+ hash.h                                       | 34 ++++++++++++++++++++
+ line-log.h                                   |  1 +
+ submodule-config.h                           |  1 -
+ t/helper/test-submodule-nested-repo-config.c |  1 +
+ tree-walk.h                                  |  4 ++-
+ 7 files changed, 42 insertions(+), 37 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 0f1f9dde56..daf6150bb3 100644
+--- a/cache.h
++++ b/cache.h
+@@ -1363,40 +1363,6 @@ struct object_context {
+ 	char *path;
+ };
+ 
+-#define GET_OID_QUIETLY           01
+-#define GET_OID_COMMIT            02
+-#define GET_OID_COMMITTISH        04
+-#define GET_OID_TREE             010
+-#define GET_OID_TREEISH          020
+-#define GET_OID_BLOB             040
+-#define GET_OID_FOLLOW_SYMLINKS 0100
+-#define GET_OID_RECORD_PATH     0200
+-#define GET_OID_ONLY_TO_DIE    04000
+-#define GET_OID_REQUIRE_PATH  010000
+-
+-#define GET_OID_DISAMBIGUATORS \
+-	(GET_OID_COMMIT | GET_OID_COMMITTISH | \
+-	GET_OID_TREE | GET_OID_TREEISH | \
+-	GET_OID_BLOB)
+-
+-enum get_oid_result {
+-	FOUND = 0,
+-	MISSING_OBJECT = -1, /* The requested object is missing */
+-	SHORT_NAME_AMBIGUOUS = -2,
+-	/* The following only apply when symlinks are followed */
+-	DANGLING_SYMLINK = -4, /*
+-				* The initial symlink is there, but
+-				* (transitively) points to a missing
+-				* in-tree file
+-				*/
+-	SYMLINK_LOOP = -5,
+-	NOT_DIR = -6, /*
+-		       * Somewhere along the symlink chain, a path is
+-		       * requested which contains a file as a
+-		       * non-final element.
+-		       */
+-};
+-
+ int repo_get_oid(struct repository *r, const char *str, struct object_id *oid);
+ __attribute__((format (printf, 2, 3)))
+ int get_oidf(struct object_id *oid, const char *fmt, ...);
+diff --git a/diffcore.h b/diffcore.h
+index 9b588a1ee1..1701ed50b9 100644
+--- a/diffcore.h
++++ b/diffcore.h
+@@ -4,9 +4,11 @@
+ #ifndef DIFFCORE_H
+ #define DIFFCORE_H
+ 
+-#include "cache.h"
++#include "hash.h"
+ 
+ struct diff_options;
++struct mem_pool;
++struct oid_array;
+ struct repository;
+ struct strintmap;
+ struct strmap;
+diff --git a/hash.h b/hash.h
+index 351afc2ce3..d39f73618c 100644
+--- a/hash.h
++++ b/hash.h
+@@ -123,6 +123,40 @@ struct object_id {
+ 	int algo;	/* XXX requires 4-byte alignment */
+ };
+ 
++#define GET_OID_QUIETLY           01
++#define GET_OID_COMMIT            02
++#define GET_OID_COMMITTISH        04
++#define GET_OID_TREE             010
++#define GET_OID_TREEISH          020
++#define GET_OID_BLOB             040
++#define GET_OID_FOLLOW_SYMLINKS 0100
++#define GET_OID_RECORD_PATH     0200
++#define GET_OID_ONLY_TO_DIE    04000
++#define GET_OID_REQUIRE_PATH  010000
++
++#define GET_OID_DISAMBIGUATORS \
++	(GET_OID_COMMIT | GET_OID_COMMITTISH | \
++	GET_OID_TREE | GET_OID_TREEISH | \
++	GET_OID_BLOB)
++
++enum get_oid_result {
++	FOUND = 0,
++	MISSING_OBJECT = -1, /* The requested object is missing */
++	SHORT_NAME_AMBIGUOUS = -2,
++	/* The following only apply when symlinks are followed */
++	DANGLING_SYMLINK = -4, /*
++				* The initial symlink is there, but
++				* (transitively) points to a missing
++				* in-tree file
++				*/
++	SYMLINK_LOOP = -5,
++	NOT_DIR = -6, /*
++		       * Somewhere along the symlink chain, a path is
++		       * requested which contains a file as a
++		       * non-final element.
++		       */
++};
++
+ /* A suitably aligned type for stack allocations of hash contexts. */
+ union git_hash_ctx {
+ 	git_SHA_CTX sha1;
+diff --git a/line-log.h b/line-log.h
+index 82ae8d98a4..adff361b1b 100644
+--- a/line-log.h
++++ b/line-log.h
+@@ -5,6 +5,7 @@
+ 
+ struct rev_info;
+ struct commit;
++struct string_list;
+ 
+ /* A range [start,end].  Lines are numbered starting at 0, and the
+  * ranges include start but exclude end. */
+diff --git a/submodule-config.h b/submodule-config.h
+index 28a8ca6bf4..c2045875bb 100644
+--- a/submodule-config.h
++++ b/submodule-config.h
+@@ -1,7 +1,6 @@
+ #ifndef SUBMODULE_CONFIG_CACHE_H
+ #define SUBMODULE_CONFIG_CACHE_H
+ 
+-#include "cache.h"
+ #include "config.h"
+ #include "hashmap.h"
+ #include "submodule.h"
+diff --git a/t/helper/test-submodule-nested-repo-config.c b/t/helper/test-submodule-nested-repo-config.c
+index dc1c14bde3..a3848a8b66 100644
+--- a/t/helper/test-submodule-nested-repo-config.c
++++ b/t/helper/test-submodule-nested-repo-config.c
+@@ -1,4 +1,5 @@
+ #include "test-tool.h"
++#include "cache.h"
+ #include "submodule-config.h"
+ 
+ static void die_usage(const char **argv, const char *msg)
+diff --git a/tree-walk.h b/tree-walk.h
+index 6305d53150..25fe27e352 100644
+--- a/tree-walk.h
++++ b/tree-walk.h
+@@ -1,7 +1,9 @@
+ #ifndef TREE_WALK_H
+ #define TREE_WALK_H
+ 
+-#include "cache.h"
++#include "hash.h"
++
++struct index_state;
+ 
+ #define MAX_TRAVERSE_TREES 8
+ 
+-- 
+2.39.3 (Apple Git-145)
+

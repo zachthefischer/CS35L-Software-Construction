@@ -1,0 +1,106 @@
+From 07ffb954b3421f78c5789477a540d400bbe647a2 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:38:30 -0500
+Subject: [PATCH 0927/2871] object-name: mark unused parameters in disambiguate
+ callbacks
+
+The object-name disambiguation code triggers a callback for each
+possible object id we find. This is really used for two purposes:
+
+  - "hint" functions like disambiguate_commit_only report back on
+    whether the value is usable
+
+  - iterator functions like repo_for_each_abbrev() use it to collect
+    and report matching names.
+
+Compiling with -Wunused-parameter generates several warnings, but
+they're distinct for each type. The "hint" functions never look at the
+void cb_data pointer; they only care whether the oid matches our hint.
+The iterator functions never look at the "struct repository" parameter;
+they're just reporting back the oids they see, and always return 0.
+
+So arguably these could be two separate interfaces:
+
+  int (*hint)(struct repository *r, const struct object_id *oid);
+  void (*iter)(const struct object_id *oid, void *cb_data);
+
+But doing so would complicate the disambiguation code, which now has to
+accept and call the two different types. Since we can easily squelch the
+compiler warnings by annotating the functions, let's just do that.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-name.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/object-name.c b/object-name.c
+index 2dd1a0f56e..7d1986ad48 100644
+--- a/object-name.c
++++ b/object-name.c
+@@ -223,7 +223,7 @@ static int finish_object_disambiguation(struct disambiguate_state *ds,
+ 
+ static int disambiguate_commit_only(struct repository *r,
+ 				    const struct object_id *oid,
+-				    void *cb_data_unused)
++				    void *cb_data UNUSED)
+ {
+ 	int kind = oid_object_info(r, oid, NULL);
+ 	return kind == OBJ_COMMIT;
+@@ -231,7 +231,7 @@ static int disambiguate_commit_only(struct repository *r,
+ 
+ static int disambiguate_committish_only(struct repository *r,
+ 					const struct object_id *oid,
+-					void *cb_data_unused)
++					void *cb_data UNUSED)
+ {
+ 	struct object *obj;
+ 	int kind;
+@@ -251,7 +251,7 @@ static int disambiguate_committish_only(struct repository *r,
+ 
+ static int disambiguate_tree_only(struct repository *r,
+ 				  const struct object_id *oid,
+-				  void *cb_data_unused)
++				  void *cb_data UNUSED)
+ {
+ 	int kind = oid_object_info(r, oid, NULL);
+ 	return kind == OBJ_TREE;
+@@ -259,7 +259,7 @@ static int disambiguate_tree_only(struct repository *r,
+ 
+ static int disambiguate_treeish_only(struct repository *r,
+ 				     const struct object_id *oid,
+-				     void *cb_data_unused)
++				     void *cb_data UNUSED)
+ {
+ 	struct object *obj;
+ 	int kind;
+@@ -279,7 +279,7 @@ static int disambiguate_treeish_only(struct repository *r,
+ 
+ static int disambiguate_blob_only(struct repository *r,
+ 				  const struct object_id *oid,
+-				  void *cb_data_unused)
++				  void *cb_data UNUSED)
+ {
+ 	int kind = oid_object_info(r, oid, NULL);
+ 	return kind == OBJ_BLOB;
+@@ -473,7 +473,7 @@ static int collect_ambiguous(const struct object_id *oid, void *data)
+ 	return 0;
+ }
+ 
+-static int repo_collect_ambiguous(struct repository *r,
++static int repo_collect_ambiguous(struct repository *r UNUSED,
+ 				  const struct object_id *oid,
+ 				  void *data)
+ {
+@@ -665,7 +665,7 @@ static int extend_abbrev_len(const struct object_id *oid, void *cb_data)
+ 	return 0;
+ }
+ 
+-static int repo_extend_abbrev_len(struct repository *r,
++static int repo_extend_abbrev_len(struct repository *r UNUSED,
+ 				  const struct object_id *oid,
+ 				  void *cb_data)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

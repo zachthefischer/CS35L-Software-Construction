@@ -1,0 +1,46 @@
+From 75d790608f1e57602a36e29591d356953da26857 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 3 Jan 2024 07:22:17 +0100
+Subject: [PATCH 2641/2871] reftable/stack: do not auto-compact twice in
+ `reftable_stack_add()`
+
+In 5c086453ff (reftable/stack: perform auto-compaction with
+transactional interface, 2023-12-11), we fixed a bug where the
+transactional interface to add changes to a reftable stack did not
+perform auto-compaction by calling `reftable_stack_auto_compact()` in
+`reftable_stack_addition_commit()`. While correct, this change may now
+cause us to perform auto-compaction twice in the non-transactional
+interface `reftable_stack_add()`:
+
+  - It performs auto-compaction by itself.
+
+  - It now transitively performs auto-compaction via the transactional
+    interface.
+
+Remove the first instance so that we only end up doing auto-compaction
+once.
+
+Reported-by: Han-Wen Nienhuys <hanwenn@gmail.com>
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index 8729508dc3..7ffeb3ee10 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -425,9 +425,6 @@ int reftable_stack_add(struct reftable_stack *st,
+ 		return err;
+ 	}
+ 
+-	if (!st->disable_auto_compact)
+-		return reftable_stack_auto_compact(st);
+-
+ 	return 0;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

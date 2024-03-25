@@ -1,0 +1,48 @@
+From 25aec063265f9efbe542f1a15e6f634b715d305d Mon Sep 17 00:00:00 2001
+From: Illia Bobyr <illia.bobyr@gmail.com>
+Date: Thu, 4 Jan 2024 17:14:26 -0800
+Subject: [PATCH 2653/2871] rebase: clarify --reschedule-failed-exec default
+
+Documentation should mention the default behavior.
+
+It is better to explain the persistent nature of the
+--reschedule-failed-exec flag from the user standpoint, rather than from
+the implementation standpoint.
+
+Signed-off-by: Illia Bobyr <illia.bobyr@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index b4526ca246..426e817ab5 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -620,13 +620,16 @@ See also INCOMPATIBLE OPTIONS below.
+ 	Automatically reschedule `exec` commands that failed. This only makes
+ 	sense in interactive mode (or when an `--exec` option was provided).
+ +
+-Even though this option applies once a rebase is started, it's set for
+-the whole rebase at the start based on either the
+-`rebase.rescheduleFailedExec` configuration (see linkgit:git-config[1]
+-or "CONFIGURATION" below) or whether this option is
+-provided. Otherwise an explicit `--no-reschedule-failed-exec` at the
+-start would be overridden by the presence of
+-`rebase.rescheduleFailedExec=true` configuration.
++This option applies once a rebase is started. It is preserved for the whole
++rebase based on, in order, the command line option provided to the initial `git
++rebase`, the `rebase.rescheduleFailedExec` configuration (see
++linkgit:git-config[1] or "CONFIGURATION" below), or it defaults to false.
+++
++Recording this option for the whole rebase is a convenience feature. Otherwise
++an explicit `--no-reschedule-failed-exec` at the start would be overridden by
++the presence of a `rebase.rescheduleFailedExec=true` configuration when `git
++rebase --continue` is invoked. Currently, you cannot pass
++`--[no-]reschedule-failed-exec` to `git rebase --continue`.
+ 
+ --update-refs::
+ --no-update-refs::
+-- 
+2.39.3 (Apple Git-145)
+

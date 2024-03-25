@@ -1,0 +1,383 @@
+From 5e3f94dfe3c69bc2a711a9dc3b1635e7ff91ab54 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:23 +0000
+Subject: [PATCH 1336/2871] treewide: remove cache.h inclusion due to previous
+ changes
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ archive-zip.c                 | 2 +-
+ bundle-uri.c                  | 2 +-
+ color.c                       | 2 +-
+ combine-diff.c                | 2 +-
+ common-main.c                 | 2 +-
+ config.c                      | 2 +-
+ copy.c                        | 2 +-
+ credential.c                  | 2 +-
+ daemon.c                      | 2 +-
+ date.c                        | 2 +-
+ diagnose.c                    | 2 +-
+ environment.c                 | 2 +-
+ ll-merge.c                    | 2 +-
+ match-trees.c                 | 2 +-
+ midx.c                        | 2 +-
+ object-file.c                 | 2 +-
+ packfile.c                    | 2 +-
+ pkt-line.c                    | 2 +-
+ range-diff.c                  | 2 +-
+ ref-filter.c                  | 2 +-
+ t/helper/test-match-trees.c   | 1 -
+ t/helper/test-mergesort.c     | 1 -
+ t/helper/test-oid-array.c     | 1 -
+ t/helper/test-oidtree.c       | 1 -
+ t/helper/test-parse-options.c | 1 -
+ t/helper/test-read-midx.c     | 1 -
+ t/helper/test-string-list.c   | 1 -
+ tree-diff.c                   | 2 +-
+ tree-walk.c                   | 2 +-
+ tree.c                        | 2 +-
+ wrapper.c                     | 3 ++-
+ 31 files changed, 25 insertions(+), 31 deletions(-)
+
+diff --git a/archive-zip.c b/archive-zip.c
+index ef538a90df..d0d065a312 100644
+--- a/archive-zip.c
++++ b/archive-zip.c
+@@ -1,7 +1,7 @@
+ /*
+  * Copyright (c) 2006 Rene Scharfe
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "archive.h"
+ #include "gettext.h"
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 6d44662ee1..ec1552bbca 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "bundle-uri.h"
+ #include "bundle.h"
+ #include "copy.h"
+diff --git a/color.c b/color.c
+index f8a25ca807..83abb11eda 100644
+--- a/color.c
++++ b/color.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "color.h"
+ #include "editor.h"
+diff --git a/combine-diff.c b/combine-diff.c
+index f7e9fb5747..f8d6196577 100644
+--- a/combine-diff.c
++++ b/combine-diff.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "object-store.h"
+ #include "commit.h"
+ #include "convert.h"
+diff --git a/common-main.c b/common-main.c
+index 8ab50fa37a..033778b3c5 100644
+--- a/common-main.c
++++ b/common-main.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "exec-cmd.h"
+ #include "gettext.h"
+ #include "attr.h"
+diff --git a/config.c b/config.c
+index 97063a0743..2a9ed27efe 100644
+--- a/config.c
++++ b/config.c
+@@ -5,7 +5,7 @@
+  * Copyright (C) Johannes Schindelin, 2005
+  *
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "advice.h"
+ #include "alloc.h"
+diff --git a/copy.c b/copy.c
+index 923d8a6dc6..882c79cffb 100644
+--- a/copy.c
++++ b/copy.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "copy.h"
+ #include "path.h"
+ #include "wrapper.h"
+diff --git a/credential.c b/credential.c
+index 42194efc9e..a600d0c1ac 100644
+--- a/credential.c
++++ b/credential.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "config.h"
+ #include "credential.h"
+diff --git a/daemon.c b/daemon.c
+index f89f99d7ef..7139cc201d 100644
+--- a/daemon.c
++++ b/daemon.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
+diff --git a/date.c b/date.c
+index bc030da012..a6ca6b318b 100644
+--- a/date.c
++++ b/date.c
+@@ -4,7 +4,7 @@
+  * Copyright (C) Linus Torvalds, 2005
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "date.h"
+ #include "gettext.h"
+ #include "pager.h"
+diff --git a/diagnose.c b/diagnose.c
+index f9a2496c7f..58f49f76c7 100644
+--- a/diagnose.c
++++ b/diagnose.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "diagnose.h"
+ #include "compat/disk.h"
+ #include "archive.h"
+diff --git a/environment.c b/environment.c
+index 541f0b19ac..28d18eaca8 100644
+--- a/environment.c
++++ b/environment.c
+@@ -7,7 +7,7 @@
+  * even if you might want to know where the git directory etc
+  * are.
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "branch.h"
+ #include "convert.h"
+diff --git a/ll-merge.c b/ll-merge.c
+index 85517e668e..1993530688 100644
+--- a/ll-merge.c
++++ b/ll-merge.c
+@@ -4,7 +4,7 @@
+  * Copyright (c) 2007 Junio C Hamano
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "convert.h"
+ #include "attr.h"
+diff --git a/match-trees.c b/match-trees.c
+index 9b78d99507..6bc8eb7647 100644
+--- a/match-trees.c
++++ b/match-trees.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "hex.h"
+ #include "match-trees.h"
+ #include "tree.h"
+diff --git a/midx.c b/midx.c
+index 2d0da57328..c7679c3c4f 100644
+--- a/midx.c
++++ b/midx.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
+diff --git a/object-file.c b/object-file.c
+index 8163ddbadd..8e0df7360a 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -6,7 +6,7 @@
+  * This handles basic git object files - packing, unpacking,
+  * creation etc.
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
+diff --git a/packfile.c b/packfile.c
+index 9ae2278c22..1ee9f65242 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/pkt-line.c b/pkt-line.c
+index 8b5fa78851..62b4208b66 100644
+--- a/pkt-line.c
++++ b/pkt-line.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "copy.h"
+ #include "pkt-line.h"
+ #include "gettext.h"
+diff --git a/range-diff.c b/range-diff.c
+index a1e0cffb9f..6a704e6f47 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "range-diff.h"
+diff --git a/ref-filter.c b/ref-filter.c
+index 5387f79be6..594e66ad36 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/t/helper/test-match-trees.c b/t/helper/test-match-trees.c
+index 3c62e33ccd..a0afc1b4bc 100644
+--- a/t/helper/test-match-trees.c
++++ b/t/helper/test-match-trees.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "match-trees.h"
+ #include "object-name.h"
+diff --git a/t/helper/test-mergesort.c b/t/helper/test-mergesort.c
+index 3aabae6c1c..42ccc87051 100644
+--- a/t/helper/test-mergesort.c
++++ b/t/helper/test-mergesort.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "mem-pool.h"
+ #include "mergesort.h"
+ #include "strbuf.h"
+diff --git a/t/helper/test-oid-array.c b/t/helper/test-oid-array.c
+index ea3bf27898..241e5da315 100644
+--- a/t/helper/test-oid-array.c
++++ b/t/helper/test-oid-array.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "oid-array.h"
+ #include "setup.h"
+diff --git a/t/helper/test-oidtree.c b/t/helper/test-oidtree.c
+index 796c9811e0..dc509fb806 100644
+--- a/t/helper/test-oidtree.c
++++ b/t/helper/test-oidtree.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "oidtree.h"
+ #include "setup.h"
+diff --git a/t/helper/test-parse-options.c b/t/helper/test-parse-options.c
+index 20a81a1eb2..3003987ec1 100644
+--- a/t/helper/test-parse-options.c
++++ b/t/helper/test-parse-options.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "parse-options.h"
+ #include "strbuf.h"
+ #include "string-list.h"
+diff --git a/t/helper/test-read-midx.c b/t/helper/test-read-midx.c
+index b32abff7f1..211addaa00 100644
+--- a/t/helper/test-read-midx.c
++++ b/t/helper/test-read-midx.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "midx.h"
+ #include "repository.h"
+diff --git a/t/helper/test-string-list.c b/t/helper/test-string-list.c
+index 959f27c74c..042c6ff005 100644
+--- a/t/helper/test-string-list.c
++++ b/t/helper/test-string-list.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "strbuf.h"
+ #include "string-list.h"
+ 
+diff --git a/tree-diff.c b/tree-diff.c
+index a76e6dae61..9ea2dd7a6c 100644
+--- a/tree-diff.c
++++ b/tree-diff.c
+@@ -1,7 +1,7 @@
+ /*
+  * Helper functions for tree diff generation
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "diff.h"
+ #include "diffcore.h"
+ #include "tree.h"
+diff --git a/tree-walk.c b/tree-walk.c
+index 2993c48c2f..d3c48e06df 100644
+--- a/tree-walk.c
++++ b/tree-walk.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "tree-walk.h"
+ #include "alloc.h"
+ #include "dir.h"
+diff --git a/tree.c b/tree.c
+index f242a7ab69..0dd2029a8a 100644
+--- a/tree.c
++++ b/tree.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "cache-tree.h"
+ #include "hex.h"
+ #include "tree.h"
+diff --git a/wrapper.c b/wrapper.c
+index 5ab0460de5..67f5f5dbe1 100644
+--- a/wrapper.c
++++ b/wrapper.c
+@@ -1,10 +1,11 @@
+ /*
+  * Various trivial helper wrappers around standard functions
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "config.h"
+ #include "gettext.h"
++#include "object.h"
+ #include "repository.h"
+ #include "strbuf.h"
+ #include "trace2.h"
+-- 
+2.39.3 (Apple Git-145)
+

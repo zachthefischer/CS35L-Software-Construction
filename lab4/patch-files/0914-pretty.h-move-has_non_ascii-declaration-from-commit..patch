@@ -1,0 +1,64 @@
+From b6c09c03eba37934871239ff98d88bd023c60b5a Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:28 +0000
+Subject: [PATCH 0914/2871] pretty.h: move has_non_ascii() declaration from
+ commit.h
+
+The function is defined in pretty.c, so this moves the declaration to
+a more logical place.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit.h           | 1 -
+ diffcore-pickaxe.c | 4 ++--
+ pretty.h           | 2 ++
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/commit.h b/commit.h
+index cc2c5da7bd..06657b4c6e 100644
+--- a/commit.h
++++ b/commit.h
+@@ -205,7 +205,6 @@ void free_commit_list(struct commit_list *list);
+ 
+ struct rev_info; /* in revision.h, it circularly uses enum cmit_fmt */
+ 
+-int has_non_ascii(const char *text);
+ const char *logmsg_reencode(const struct commit *commit,
+ 			    char **commit_encoding,
+ 			    const char *output_encoding);
+diff --git a/diffcore-pickaxe.c b/diffcore-pickaxe.c
+index 03fcbcb40b..13c98a7b5e 100644
+--- a/diffcore-pickaxe.c
++++ b/diffcore-pickaxe.c
+@@ -2,12 +2,12 @@
+  * Copyright (C) 2005 Junio C Hamano
+  * Copyright (C) 2010 Google Inc.
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "diff.h"
+ #include "diffcore.h"
+ #include "xdiff-interface.h"
+ #include "kwset.h"
+-#include "commit.h"
++#include "pretty.h"
+ #include "quote.h"
+ 
+ typedef int (*pickaxe_fn)(mmfile_t *one, mmfile_t *two,
+diff --git a/pretty.h b/pretty.h
+index 9508c22f03..921dd6e0ca 100644
+--- a/pretty.h
++++ b/pretty.h
+@@ -153,6 +153,8 @@ int commit_format_is_empty(enum cmit_fmt);
+ /* Make subject of commit message suitable for filename */
+ void format_sanitized_subject(struct strbuf *sb, const char *msg, size_t len);
+ 
++int has_non_ascii(const char *text);
++
+ /*
+  * Set values of fields in "struct process_trailer_options"
+  * according to trailers arguments.
+-- 
+2.39.3 (Apple Git-145)
+

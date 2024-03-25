@@ -1,0 +1,53 @@
+From bd19ee9c459b2d7872a8e486fd9c2f1b17d662a5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 7 Jul 2023 21:08:33 +0200
+Subject: [PATCH 1739/2871] pretty: use strchr(3) in
+ userformat_find_requirements()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The strbuf_expand_step() loop in userformat_find_requirements() iterates
+through the percent signs in the string "fmt", but we're not interested
+in its effect on the strbuf "dummy".  Use strchr(3) instead and get rid
+of the strbuf that we no longer need.
+
+Suggested-by: Jeff King <peff@peff.net>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pretty.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/pretty.c b/pretty.c
+index 4c08f9856b..51ee7a5f12 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1873,14 +1873,13 @@ static size_t format_commit_item(struct strbuf *sb, /* in UTF-8 */
+ 
+ void userformat_find_requirements(const char *fmt, struct userformat_want *w)
+ {
+-	struct strbuf dummy = STRBUF_INIT;
+-
+ 	if (!fmt) {
+ 		if (!user_format)
+ 			return;
+ 		fmt = user_format;
+ 	}
+-	while (strbuf_expand_step(&dummy, &fmt)) {
++	while ((fmt = strchr(fmt, '%'))) {
++		fmt++;
+ 		if (skip_prefix(fmt, "%", &fmt))
+ 			continue;
+ 
+@@ -1900,7 +1899,6 @@ void userformat_find_requirements(const char *fmt, struct userformat_want *w)
+ 			break;
+ 		}
+ 	}
+-	strbuf_release(&dummy);
+ }
+ 
+ void repo_format_commit_message(struct repository *r,
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,177 @@
+From 61568efa95608fdafffe67967a82e88bcd90fade Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 28 Aug 2023 18:49:07 -0400
+Subject: [PATCH 2004/2871] builtin/pack-objects.c: support `--max-pack-size`
+ with `--cruft`
+
+When pack-objects learned the `--cruft` option back in b757353676
+(builtin/pack-objects.c: --cruft without expiration, 2022-05-20), we
+explicitly forbade `--cruft` with `--max-pack-size`.
+
+At the time, there was no specific rationale given in the patch for not
+supporting the `--max-pack-size` option with `--cruft`. (As best I can
+remember, it's because we were trying to push users towards only ever
+having a single cruft pack, but I cannot be sure).
+
+However, `--max-pack-size` is flexible enough that it already works with
+`--cruft` and can shard unreachable objects across multiple cruft packs,
+creating separate ".mtimes" files as appropriate. In fact, the
+`--max-pack-size` option worked with `--cruft` as far back as
+b757353676!
+
+This is because we overwrite the `written_list`, and pass down the
+appropriate length, i.e. the number of objects written in each pack
+shard.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-pack-objects.txt |  4 +--
+ builtin/pack-objects.c             |  4 +--
+ builtin/repack.c                   |  3 +-
+ t/t5329-pack-objects-cruft.sh      | 54 ++++++++++++++++++++++++------
+ 4 files changed, 48 insertions(+), 17 deletions(-)
+
+diff --git a/Documentation/git-pack-objects.txt b/Documentation/git-pack-objects.txt
+index a9995a932c..dea7eacb0f 100644
+--- a/Documentation/git-pack-objects.txt
++++ b/Documentation/git-pack-objects.txt
+@@ -116,9 +116,7 @@ unreachable object whose mtime is newer than the `--cruft-expiration`).
+ +
+ Incompatible with `--unpack-unreachable`, `--keep-unreachable`,
+ `--pack-loose-unreachable`, `--stdin-packs`, as well as any other
+-options which imply `--revs`. Also incompatible with `--max-pack-size`;
+-when this option is set, the maximum pack size is not inferred from
+-`pack.packSizeLimit`.
++options which imply `--revs`.
+ 
+ --cruft-expiration=<approxidate>::
+ 	If specified, objects are eliminated from the cruft pack if they
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 868efe7e0f..72241bdca4 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -4382,7 +4382,7 @@ int cmd_pack_objects(int argc, const char **argv, const char *prefix)
+ 
+ 	if (!HAVE_THREADS && delta_search_threads != 1)
+ 		warning(_("no threads support, ignoring --threads"));
+-	if (!pack_to_stdout && !pack_size_limit && !cruft)
++	if (!pack_to_stdout && !pack_size_limit)
+ 		pack_size_limit = pack_size_limit_cfg;
+ 	if (pack_to_stdout && pack_size_limit)
+ 		die(_("--max-pack-size cannot be used to build a pack for transfer"));
+@@ -4414,8 +4414,6 @@ int cmd_pack_objects(int argc, const char **argv, const char *prefix)
+ 			die(_("cannot use internal rev list with --cruft"));
+ 		if (stdin_packs)
+ 			die(_("cannot use --stdin-packs with --cruft"));
+-		if (pack_size_limit)
+-			die(_("cannot use --max-pack-size with --cruft"));
+ 	}
+ 
+ 	/*
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 2b43a5be08..6943c5ba11 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -720,7 +720,6 @@ static int write_cruft_pack(const struct pack_objects_args *args,
+ 
+ 	strvec_push(&cmd.args, "--honor-pack-keep");
+ 	strvec_push(&cmd.args, "--non-empty");
+-	strvec_push(&cmd.args, "--max-pack-size=0");
+ 
+ 	cmd.in = -1;
+ 
+@@ -1048,6 +1047,8 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 			cruft_po_args.depth = po_args.depth;
+ 		if (!cruft_po_args.threads)
+ 			cruft_po_args.threads = po_args.threads;
++		if (!cruft_po_args.max_pack_size)
++			cruft_po_args.max_pack_size = po_args.max_pack_size;
+ 
+ 		cruft_po_args.local = po_args.local;
+ 		cruft_po_args.quiet = po_args.quiet;
+diff --git a/t/t5329-pack-objects-cruft.sh b/t/t5329-pack-objects-cruft.sh
+index 45667d4999..fc5fedbe9b 100755
+--- a/t/t5329-pack-objects-cruft.sh
++++ b/t/t5329-pack-objects-cruft.sh
+@@ -573,23 +573,54 @@ test_expect_success 'cruft repack with no reachable objects' '
+ 	)
+ '
+ 
+-test_expect_success 'cruft repack ignores --max-pack-size' '
++write_blob () {
++	test-tool genrandom "$@" >in &&
++	git hash-object -w -t blob in
++}
++
++find_pack () {
++	for idx in $(ls $packdir/pack-*.idx)
++	do
++		git show-index <$idx >out &&
++		if grep -q "$1" out
++		then
++			echo $idx
++		fi || return 1
++	done
++}
++
++test_expect_success 'cruft repack with --max-pack-size' '
+ 	git init max-pack-size &&
+ 	(
+ 		cd max-pack-size &&
+ 		test_commit base &&
++
+ 		# two cruft objects which exceed the maximum pack size
+-		test-tool genrandom foo 1048576 | git hash-object --stdin -w &&
+-		test-tool genrandom bar 1048576 | git hash-object --stdin -w &&
++		foo=$(write_blob foo 1048576) &&
++		bar=$(write_blob bar 1048576) &&
++		test-tool chmtime --get -1000 \
++			"$objdir/$(test_oid_to_path $foo)" >foo.mtime &&
++		test-tool chmtime --get -2000 \
++			"$objdir/$(test_oid_to_path $bar)" >bar.mtime &&
+ 		git repack --cruft --max-pack-size=1M &&
+ 		find $packdir -name "*.mtimes" >cruft &&
+-		test_line_count = 1 cruft &&
+-		test-tool pack-mtimes "$(basename "$(cat cruft)")" >objects &&
+-		test_line_count = 2 objects
++		test_line_count = 2 cruft &&
++
++		foo_mtimes="$(basename $(find_pack $foo) .idx).mtimes" &&
++		bar_mtimes="$(basename $(find_pack $bar) .idx).mtimes" &&
++		test-tool pack-mtimes $foo_mtimes >foo.actual &&
++		test-tool pack-mtimes $bar_mtimes >bar.actual &&
++
++		echo "$foo $(cat foo.mtime)" >foo.expect &&
++		echo "$bar $(cat bar.mtime)" >bar.expect &&
++
++		test_cmp foo.expect foo.actual &&
++		test_cmp bar.expect bar.actual &&
++		test "$foo_mtimes" != "$bar_mtimes"
+ 	)
+ '
+ 
+-test_expect_success 'cruft repack ignores pack.packSizeLimit' '
++test_expect_success 'cruft repack with pack.packSizeLimit' '
+ 	(
+ 		cd max-pack-size &&
+ 		# repack everything back together to remove the existing cruft
+@@ -599,9 +630,12 @@ test_expect_success 'cruft repack ignores pack.packSizeLimit' '
+ 		# ensure the same post condition is met when --max-pack-size
+ 		# would otherwise be inferred from the configuration
+ 		find $packdir -name "*.mtimes" >cruft &&
+-		test_line_count = 1 cruft &&
+-		test-tool pack-mtimes "$(basename "$(cat cruft)")" >objects &&
+-		test_line_count = 2 objects
++		test_line_count = 2 cruft &&
++		for pack in $(cat cruft)
++		do
++			test-tool pack-mtimes "$(basename $pack)" >objects &&
++			test_line_count = 1 objects || return 1
++		done
+ 	)
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

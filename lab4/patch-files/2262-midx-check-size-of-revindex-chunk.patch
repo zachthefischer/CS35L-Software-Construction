@@ -1,0 +1,117 @@
+From c0fe9b2da5610bd4ff62d7871dfbbfa0247c7949 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 17:05:33 -0400
+Subject: [PATCH 2262/2871] midx: check size of revindex chunk
+
+When we load a revindex from disk, we check the size of the file
+compared to the number of objects we expect it to have. But when we use
+a RIDX chunk stored directly in the midx, we just access the memory
+directly. This can lead to out-of-bounds memory access for a corrupted
+or malicious multi-pack-index file.
+
+We can catch this by recording the RIDX chunk size, and then checking it
+against the expected size when we "load" the revindex. Note that this
+check is much simpler than the one that load_revindex_from_disk() does,
+because we just have the data array with no header (so we do not need
+to account for the header size, and nor do we need to bother validating
+the header values).
+
+The test confirms both that we catch this case, and that we continue the
+process (the revindex is required to use the midx bitmaps, but we
+fallback to a non-bitmap traversal).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c                      |  3 ++-
+ midx.h                      |  1 +
+ pack-revindex.c             | 13 ++++++++++++-
+ t/t5319-multi-pack-index.sh | 17 +++++++++++++++++
+ 4 files changed, 32 insertions(+), 2 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index 3e768d0df0..2f3863c936 100644
+--- a/midx.c
++++ b/midx.c
+@@ -184,7 +184,8 @@ struct multi_pack_index *load_multi_pack_index(const char *object_dir, int local
+ 		   &m->chunk_large_offsets_len);
+ 
+ 	if (git_env_bool("GIT_TEST_MIDX_READ_RIDX", 1))
+-		pair_chunk_unsafe(cf, MIDX_CHUNKID_REVINDEX, &m->chunk_revindex);
++		pair_chunk(cf, MIDX_CHUNKID_REVINDEX, &m->chunk_revindex,
++			   &m->chunk_revindex_len);
+ 
+ 	CALLOC_ARRAY(m->pack_names, m->num_packs);
+ 	CALLOC_ARRAY(m->packs, m->num_packs);
+diff --git a/midx.h b/midx.h
+index e8e8884d16..a5d98919c8 100644
+--- a/midx.h
++++ b/midx.h
+@@ -39,6 +39,7 @@ struct multi_pack_index {
+ 	const unsigned char *chunk_large_offsets;
+ 	size_t chunk_large_offsets_len;
+ 	const unsigned char *chunk_revindex;
++	size_t chunk_revindex_len;
+ 
+ 	const char **pack_names;
+ 	struct packed_git **packs;
+diff --git a/pack-revindex.c b/pack-revindex.c
+index 7fffcad912..6d8fd3645a 100644
+--- a/pack-revindex.c
++++ b/pack-revindex.c
+@@ -343,6 +343,17 @@ int verify_pack_revindex(struct packed_git *p)
+ 	return res;
+ }
+ 
++static int can_use_midx_ridx_chunk(struct multi_pack_index *m)
++{
++	if (!m->chunk_revindex)
++		return 0;
++	if (m->chunk_revindex_len != st_mult(sizeof(uint32_t), m->num_objects)) {
++		error(_("multi-pack-index reverse-index chunk is the wrong size"));
++		return 0;
++	}
++	return 1;
++}
++
+ int load_midx_revindex(struct multi_pack_index *m)
+ {
+ 	struct strbuf revindex_name = STRBUF_INIT;
+@@ -351,7 +362,7 @@ int load_midx_revindex(struct multi_pack_index *m)
+ 	if (m->revindex_data)
+ 		return 0;
+ 
+-	if (m->chunk_revindex) {
++	if (can_use_midx_ridx_chunk(m)) {
+ 		/*
+ 		 * If the MIDX `m` has a `RIDX` chunk, then use its contents for
+ 		 * the reverse index instead of trying to load a separate `.rev`
+diff --git a/t/t5319-multi-pack-index.sh b/t/t5319-multi-pack-index.sh
+index 16050f39d9..2a11dd1af6 100755
+--- a/t/t5319-multi-pack-index.sh
++++ b/t/t5319-multi-pack-index.sh
+@@ -1138,4 +1138,21 @@ test_expect_success 'reader bounds-checks large offset table' '
+ 	)
+ '
+ 
++test_expect_success 'reader notices too-small revindex chunk' '
++	# We only get a revindex with bitmaps (and likewise only
++	# load it when they are asked for).
++	test_config repack.writeBitmaps true &&
++	corrupt_chunk RIDX clear 00000000 &&
++	git -c core.multipackIndex=false rev-list \
++		--all --use-bitmap-index >expect.out &&
++	git -c core.multipackIndex=true rev-list \
++		--all --use-bitmap-index >out 2>err &&
++	test_cmp expect.out out &&
++	cat >expect.err <<-\EOF &&
++	error: multi-pack-index reverse-index chunk is the wrong size
++	warning: multi-pack bitmap is missing required reverse index
++	EOF
++	test_cmp expect.err err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

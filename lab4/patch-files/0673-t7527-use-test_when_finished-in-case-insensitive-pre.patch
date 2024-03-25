@@ -1,0 +1,54 @@
+From a87a20cbb4208db7f08f66376179e5e2bd327807 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Thu, 12 Jan 2023 00:32:42 +0100
+Subject: [PATCH 0673/2871] t7527: use test_when_finished in 'case
+ insensitive+preserving'
+
+Most tests in t7527-builtin-fsmonitor.sh that start a daemon, use the
+helper function test_when_finished with stop_daemon_delete_repo.
+Function stop_daemon_delete_repo explicitly stops the daemon.  Calling
+it via test_when_finished is needed for tests that don't check daemon's
+automatic shutdown logic [1] and it is needed to avoid daemons being
+left running in case of breakage of the logic of automatic shutdown of
+the daemon.
+
+Unlike these tests, test 'case insensitive+preserving' added in [2] has
+a call to function test_when_finished commented out.  It was commented
+out in all versions of the patch [2] during development [3].  This seems
+to not be intentional, because neither commit message in [2], nor the
+comment above the test mention this line being commented out.  Compare
+it, for example, to "# unicode_debug=true" which is explicitly described
+by a documentation comment above it.
+
+Uncomment test_when_finished for stop_daemon_delete_repo in test 'case
+insensitive+preserving' to ensure that daemons are not left running in
+cases when automatic shutdown logic of daemon itself is broken.
+
+[1] See documentation in "fsmonitor--daemon.h" for details.
+[2] caa9c37ec0 (t7527: test FSMonitor on case insensitive+preserving
+    file system, 2022-05-26)
+[3] See mailing list thread
+    https://lore.kernel.org/git/41f8cbc2ae45cb86e299eb230ad3cb0319256c37.1653601644.git.gitgitgadget@gmail.com/T/#t
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7527-builtin-fsmonitor.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t7527-builtin-fsmonitor.sh b/t/t7527-builtin-fsmonitor.sh
+index 4abc74db2b..96d83df102 100755
+--- a/t/t7527-builtin-fsmonitor.sh
++++ b/t/t7527-builtin-fsmonitor.sh
+@@ -918,7 +918,7 @@ test_expect_success "stray submodule super-prefix warning" '
+ # the file/directory.
+ #
+ test_expect_success CASE_INSENSITIVE_FS 'case insensitive+preserving' '
+-#	test_when_finished "stop_daemon_delete_repo test_insensitive" &&
++	test_when_finished "stop_daemon_delete_repo test_insensitive" &&
+ 
+ 	git init test_insensitive &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

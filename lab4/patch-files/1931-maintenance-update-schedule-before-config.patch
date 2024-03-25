@@ -1,0 +1,68 @@
+From 69ecfcacfd136810f2343b548174efe9ae3fdead Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Thu, 10 Aug 2023 20:39:47 +0000
+Subject: [PATCH 1931/2871] maintenance: update schedule before config
+
+When running 'git maintenance start', the current pattern is to
+configure global config settings to enable maintenance on the current
+repository and set 'maintenance.auto' to false and _then_ to set up the
+schedule with the system scheduler.
+
+This has a problematic error condition: if the scheduler fails to
+initialize, the repository still will not use automatic maintenance due
+to the 'maintenance.auto' setting.
+
+Fix this gap by swapping the order of operations. If Git fails to
+initialize maintenance, then the config changes should never happen.
+
+Reported-by: Phillip Wood <phillip.wood123@gmail.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c           |  5 ++++-
+ t/t7900-maintenance.sh | 13 +++++++++++++
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 6f8df366fb..fe5f871c49 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -2728,9 +2728,12 @@ static int maintenance_start(int argc, const char **argv, const char *prefix)
+ 	opts.scheduler = resolve_scheduler(opts.scheduler);
+ 	validate_scheduler(opts.scheduler);
+ 
++	if (update_background_schedule(&opts, 1))
++		die(_("failed to set up maintenance schedule"));
++
+ 	if (maintenance_register(ARRAY_SIZE(register_args)-1, register_args, NULL))
+ 		warning(_("failed to add repo to global config"));
+-	return update_background_schedule(&opts, 1);
++	return 0;
+ }
+ 
+ static const char *const builtin_maintenance_stop_usage[] = {
+diff --git a/t/t7900-maintenance.sh b/t/t7900-maintenance.sh
+index 9ffe76729e..e56f5980dc 100755
+--- a/t/t7900-maintenance.sh
++++ b/t/t7900-maintenance.sh
+@@ -849,4 +849,17 @@ test_expect_success 'register and unregister bare repo' '
+ 	)
+ '
+ 
++test_expect_success 'failed schedule prevents config change' '
++	git init --bare failcase &&
++
++	for scheduler in crontab launchctl schtasks systemctl
++	do
++		GIT_TEST_MAINT_SCHEDULER="$scheduler:false" &&
++		export GIT_TEST_MAINT_SCHEDULER &&
++		test_must_fail \
++			git -C failcase maintenance start &&
++		test_must_fail git -C failcase config maintenance.auto || return 1
++	done
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

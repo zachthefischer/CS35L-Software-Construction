@@ -1,0 +1,206 @@
+From 9eb5419799f08402ee3bd185c2d2c50ded669b06 Mon Sep 17 00:00:00 2001
+From: "Eric W. Biederman" <ebiederm@gmail.com>
+Date: Tue, 26 Sep 2023 10:58:43 -0500
+Subject: [PATCH 2157/2871] bulk-checkin: only support blobs in
+ index_bulk_checkin
+
+As the code is written today index_bulk_checkin only accepts blobs.
+Remove the enum object_type parameter and rename index_bulk_checkin to
+index_blob_bulk_checkin, index_stream to index_blob_stream,
+deflate_to_pack to deflate_blob_to_pack, stream_to_pack to
+stream_blob_to_pack, to make this explicit.
+
+Not supporting commits, tags, or trees has no downside as it is not
+currently supported now, and commits, tags, and trees being smaller by
+design do not have the problem that the problem that index_bulk_checkin
+was built to solve.
+
+Before we start adding code to support the hash function transition
+supporting additional objects types in index_bulk_checkin has no real
+additional cost, just an extra function parameter to know what the
+object type is.  Once we begin the hash function transition this is not
+the case.
+
+The hash function transition document specifies that a repository with
+compatObjectFormat enabled will compute and store both the SHA-1 and
+SHA-256 hash of every object in the repository.
+
+What makes this a challenge is that it is not just an additional hash
+over the same object.  Instead the hash function transition document
+specifies that the compatibility hash (specified with
+compatObjectFormat) be computed over the equivalent object that another
+git repository whose storage hash (specified with objectFormat) would
+store.  When comparing equivalent repositories built with different
+storage hash functions, the oids embedded in objects used to refer to
+other objects differ and the location of signatures within objects
+differ.
+
+As blob objects have neither oids referring to other objects nor stored
+signatures their storage hash and their compatibility hash are computed
+over the same object.
+
+The other kinds of objects: trees, commits, and tags, all store oids
+referring to other objects.  Signatures are stored in commit and tag
+objects.  As oids and the tags to store signatures are not the same size
+in repositories built with different storage hashes the size of the
+equivalent objects are also different.
+
+A version of index_bulk_checkin that supports more than just blobs when
+computing both the SHA-1 and the SHA-256 of every object added would
+need a different, and more expensive structure.  The structure is more
+expensive because it would be required to temporarily buffering the
+equivalent object the compatibility hash needs to be computed over.
+
+A temporary object is needed, because before a hash over an object can
+computed it's object header needs to be computed.  One of the members of
+the object header is the entire size of the object.  To know the size of
+an equivalent object an entire pass over the original object needs to be
+made, as trees, commits, and tags are composed of a variable number of
+variable sized pieces.  Unfortunately there is no formula to compute the
+size of an equivalent object from just the size of the original object.
+
+Avoid all of those future complications by limiting index_bulk_checkin
+to only work on blobs.
+
+Inspired-by: brian m. carlson <sandals@crustytoothpaste.net>
+Signed-off-by: "Eric W. Biederman" <ebiederm@xmission.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bulk-checkin.c | 35 +++++++++++++++++------------------
+ bulk-checkin.h |  6 +++---
+ object-file.c  | 12 ++++++------
+ 3 files changed, 26 insertions(+), 27 deletions(-)
+
+diff --git a/bulk-checkin.c b/bulk-checkin.c
+index 73bff3a23d..223562b4e7 100644
+--- a/bulk-checkin.c
++++ b/bulk-checkin.c
+@@ -155,10 +155,10 @@ static int already_written(struct bulk_checkin_packfile *state, struct object_id
+  * status before calling us just in case we ask it to call us again
+  * with a new pack.
+  */
+-static int stream_to_pack(struct bulk_checkin_packfile *state,
+-			  git_hash_ctx *ctx, off_t *already_hashed_to,
+-			  int fd, size_t size, enum object_type type,
+-			  const char *path, unsigned flags)
++static int stream_blob_to_pack(struct bulk_checkin_packfile *state,
++			       git_hash_ctx *ctx, off_t *already_hashed_to,
++			       int fd, size_t size, const char *path,
++			       unsigned flags)
+ {
+ 	git_zstream s;
+ 	unsigned char ibuf[16384];
+@@ -170,7 +170,7 @@ static int stream_to_pack(struct bulk_checkin_packfile *state,
+ 
+ 	git_deflate_init(&s, pack_compression_level);
+ 
+-	hdrlen = encode_in_pack_object_header(obuf, sizeof(obuf), type, size);
++	hdrlen = encode_in_pack_object_header(obuf, sizeof(obuf), OBJ_BLOB, size);
+ 	s.next_out = obuf + hdrlen;
+ 	s.avail_out = sizeof(obuf) - hdrlen;
+ 
+@@ -247,11 +247,10 @@ static void prepare_to_stream(struct bulk_checkin_packfile *state,
+ 		die_errno("unable to write pack header");
+ }
+ 
+-static int deflate_to_pack(struct bulk_checkin_packfile *state,
+-			   struct object_id *result_oid,
+-			   int fd, size_t size,
+-			   enum object_type type, const char *path,
+-			   unsigned flags)
++static int deflate_blob_to_pack(struct bulk_checkin_packfile *state,
++				struct object_id *result_oid,
++				int fd, size_t size,
++				const char *path, unsigned flags)
+ {
+ 	off_t seekback, already_hashed_to;
+ 	git_hash_ctx ctx;
+@@ -265,7 +264,7 @@ static int deflate_to_pack(struct bulk_checkin_packfile *state,
+ 		return error("cannot find the current offset");
+ 
+ 	header_len = format_object_header((char *)obuf, sizeof(obuf),
+-					  type, size);
++					  OBJ_BLOB, size);
+ 	the_hash_algo->init_fn(&ctx);
+ 	the_hash_algo->update_fn(&ctx, obuf, header_len);
+ 
+@@ -282,8 +281,8 @@ static int deflate_to_pack(struct bulk_checkin_packfile *state,
+ 			idx->offset = state->offset;
+ 			crc32_begin(state->f);
+ 		}
+-		if (!stream_to_pack(state, &ctx, &already_hashed_to,
+-				    fd, size, type, path, flags))
++		if (!stream_blob_to_pack(state, &ctx, &already_hashed_to,
++					 fd, size, path, flags))
+ 			break;
+ 		/*
+ 		 * Writing this object to the current pack will make
+@@ -350,12 +349,12 @@ void fsync_loose_object_bulk_checkin(int fd, const char *filename)
+ 	}
+ }
+ 
+-int index_bulk_checkin(struct object_id *oid,
+-		       int fd, size_t size, enum object_type type,
+-		       const char *path, unsigned flags)
++int index_blob_bulk_checkin(struct object_id *oid,
++			    int fd, size_t size,
++			    const char *path, unsigned flags)
+ {
+-	int status = deflate_to_pack(&bulk_checkin_packfile, oid, fd, size, type,
+-				     path, flags);
++	int status = deflate_blob_to_pack(&bulk_checkin_packfile, oid, fd, size,
++					  path, flags);
+ 	if (!odb_transaction_nesting)
+ 		flush_bulk_checkin_packfile(&bulk_checkin_packfile);
+ 	return status;
+diff --git a/bulk-checkin.h b/bulk-checkin.h
+index 48fe9a6e91..aa7286a7b3 100644
+--- a/bulk-checkin.h
++++ b/bulk-checkin.h
+@@ -9,9 +9,9 @@
+ void prepare_loose_object_bulk_checkin(void);
+ void fsync_loose_object_bulk_checkin(int fd, const char *filename);
+ 
+-int index_bulk_checkin(struct object_id *oid,
+-		       int fd, size_t size, enum object_type type,
+-		       const char *path, unsigned flags);
++int index_blob_bulk_checkin(struct object_id *oid,
++			    int fd, size_t size,
++			    const char *path, unsigned flags);
+ 
+ /*
+  * Tell the object database to optimize for adding
+diff --git a/object-file.c b/object-file.c
+index 7dc0c4bfbb..7c7afe5793 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -2446,11 +2446,11 @@ static int index_core(struct index_state *istate,
+  * binary blobs, they generally do not want to get any conversion, and
+  * callers should avoid this code path when filters are requested.
+  */
+-static int index_stream(struct object_id *oid, int fd, size_t size,
+-			enum object_type type, const char *path,
+-			unsigned flags)
++static int index_blob_stream(struct object_id *oid, int fd, size_t size,
++			     const char *path,
++			     unsigned flags)
+ {
+-	return index_bulk_checkin(oid, fd, size, type, path, flags);
++	return index_blob_bulk_checkin(oid, fd, size, path, flags);
+ }
+ 
+ int index_fd(struct index_state *istate, struct object_id *oid,
+@@ -2472,8 +2472,8 @@ int index_fd(struct index_state *istate, struct object_id *oid,
+ 		ret = index_core(istate, oid, fd, xsize_t(st->st_size),
+ 				 type, path, flags);
+ 	else
+-		ret = index_stream(oid, fd, xsize_t(st->st_size), type, path,
+-				   flags);
++		ret = index_blob_stream(oid, fd, xsize_t(st->st_size), path,
++					flags);
+ 	close(fd);
+ 	return ret;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

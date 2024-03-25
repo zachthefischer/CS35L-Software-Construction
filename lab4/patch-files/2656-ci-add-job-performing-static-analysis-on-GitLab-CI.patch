@@ -1,0 +1,73 @@
+From cd69c635a1a62b0c8bfdbf221778be8a512ad048 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 28 Dec 2023 12:02:50 +0100
+Subject: [PATCH 2656/2871] ci: add job performing static analysis on GitLab CI
+
+Our GitHub Workflows definitions have a static analysis job that
+runs the following tasks:
+
+  - Coccinelle to check for suggested refactorings.
+
+  - `make hdr-check` to check for missing includes or forward
+    declarations in our header files.
+
+  - `make check-pot` to check our translations for issues.
+
+  - `./ci/check-directional-formatting.bash` to check whether our
+    sources contain any Unicode directional formatting code points.
+
+Add an equivalent job to our GitLab CI definitions.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .gitlab-ci.yml                    | 10 ++++++++++
+ ci/install-docker-dependencies.sh |  7 ++++++-
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index cd98bcb18a..793243421c 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -51,3 +51,13 @@ test:
+     paths:
+       - t/failed-test-artifacts
+     when: on_failure
++
++static-analysis:
++  image: ubuntu:22.04
++  variables:
++    jobname: StaticAnalysis
++  before_script:
++    - ./ci/install-docker-dependencies.sh
++  script:
++    - ./ci/run-static-analysis.sh
++    - ./ci/check-directional-formatting.bash
+diff --git a/ci/install-docker-dependencies.sh b/ci/install-docker-dependencies.sh
+index 48c43f0f90..eb2c9e1eca 100755
+--- a/ci/install-docker-dependencies.sh
++++ b/ci/install-docker-dependencies.sh
+@@ -21,7 +21,7 @@ linux-musl)
+ 		apache2 apache2-http2 apache2-proxy apache2-ssl apache2-webdav apr-util-dbd_sqlite3 \
+ 		bash cvs gnupg perl-cgi perl-dbd-sqlite >/dev/null
+ 	;;
+-linux-*)
++linux-*|StaticAnalysis)
+ 	# Required so that apt doesn't wait for user input on certain packages.
+ 	export DEBIAN_FRONTEND=noninteractive
+ 
+@@ -31,6 +31,11 @@ linux-*)
+ 		perl-modules liberror-perl libauthen-sasl-perl libemail-valid-perl \
+ 		libdbd-sqlite3-perl libio-socket-ssl-perl libnet-smtp-ssl-perl ${CC_PACKAGE:-${CC:-gcc}} \
+ 		apache2 cvs cvsps gnupg libcgi-pm-perl subversion
++
++	if test "$jobname" = StaticAnalysis
++	then
++		apt install -q -y coccinelle
++	fi
+ 	;;
+ pedantic)
+ 	dnf -yq update >/dev/null &&
+-- 
+2.39.3 (Apple Git-145)
+

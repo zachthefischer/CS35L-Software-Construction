@@ -1,0 +1,46 @@
+From 866b43e6442f16d0073ae9ce8d79b6cb1161b1a9 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 29 Jun 2023 13:23:08 +0000
+Subject: [PATCH 1709/2871] do_read_index(): always mark index as initialized
+ unless erroring out
+
+In 913e0e99b6a (unpack_trees(): protect the handcrafted in-core index
+from read_cache(), 2008-08-23) a flag was introduced into the
+`index_state` structure to indicate whether it had been initialized (or
+more correctly: read and parsed).
+
+There was one code path that was not handled, though: when the index
+file does not yet exist (but the `must_exist` parameter is set to 0 to
+indicate that that's okay). In this instance, Git wants to go forward
+with a new, pristine Git index, almost as if the file had existed and
+contained no index entries or extensions.
+
+Since Git wants to handle this situation the same as if an "empty" Git
+index file existed, let's set the `initialized` flag also in that case.
+
+This is necessary to prepare for fixing the bug where the condition
+`cache_nr == 0` is incorrectly used as an indicator that the index was
+already read, and the condition `initialized != 0` needs to be used
+instead.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ read-cache.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/read-cache.c b/read-cache.c
+index 35e5657877..1ac4defff3 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -2330,6 +2330,7 @@ int do_read_index(struct index_state *istate, const char *path, int must_exist)
+ 	if (fd < 0) {
+ 		if (!must_exist && errno == ENOENT) {
+ 			set_new_index_sparsity(istate);
++			istate->initialized = 1;
+ 			return 0;
+ 		}
+ 		die_errno(_("%s: index file open failed"), path);
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,66 @@
+From cb888bb6991bb10bddedf9ddc9651ec25da6137d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 8 Aug 2023 14:50:23 -0400
+Subject: [PATCH 1908/2871] repack: free geometry struct
+
+When the program is ending, we call clear_pack_geometry() to free any
+resources in the pack_geometry struct. But the struct itself is
+allocated on the heap, and leak-checkers will complain about the
+resulting small leak.
+
+This one was marked by Coverity as a "new" leak, though it has existed
+since 0fabafd0b9 (builtin/repack.c: add '--geometric' option,
+2021-02-22). This might be because recent unrelated changes in the file
+confused it about what is new and what is not. But regardless, it is
+worth addressing.
+
+We can fix it easily by free-ing the struct. We'll convert our "clear"
+function to "free", since the allocation happens in the matching init()
+function (though since there is only one call to each, and the struct is
+local to this file, it's mostly academic).
+
+Another option would be to put the struct on the stack rather than the
+heap. However, this gets tricky, as we check the pointer against NULL in
+several places to decide whether we're in geometric mode.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index aea5ca9d44..97051479e4 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -492,15 +492,13 @@ static struct packed_git *get_preferred_pack(struct pack_geometry *geometry)
+ 	return NULL;
+ }
+ 
+-static void clear_pack_geometry(struct pack_geometry *geometry)
++static void free_pack_geometry(struct pack_geometry *geometry)
+ {
+ 	if (!geometry)
+ 		return;
+ 
+ 	free(geometry->pack);
+-	geometry->pack_nr = 0;
+-	geometry->pack_alloc = 0;
+-	geometry->split = 0;
++	free(geometry);
+ }
+ 
+ struct midx_snapshot_ref_data {
+@@ -1228,7 +1226,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 	string_list_clear(&names, 1);
+ 	string_list_clear(&existing_nonkept_packs, 0);
+ 	string_list_clear(&existing_kept_packs, 0);
+-	clear_pack_geometry(geometry);
++	free_pack_geometry(geometry);
+ 
+ 	return ret;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

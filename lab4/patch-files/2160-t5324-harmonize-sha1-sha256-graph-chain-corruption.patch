@@ -1,0 +1,70 @@
+From 2d45710c5d1dc20db0d6c856e9e711dd6a19e18f Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 28 Sep 2023 00:38:47 -0400
+Subject: [PATCH 2160/2871] t5324: harmonize sha1/sha256 graph chain corruption
+
+In t5324.20, we corrupt a hex character 60 bytes into the graph chain
+file. Since the file consists of two hash identifiers, one per line, the
+corruption differs between sha1 and sha256. In a sha1 repository, the
+corruption is on the second line, and in a sha256 repository, it is on
+the first.
+
+We should of course detect the problem with either line. But as the next
+few patches will show (and fix), that is not the case (in fact, we
+currently do not exit non-zero for either line!). And while at the end
+of our series we'll catch all errors, our intermediate states will have
+differing behavior between the two hashes.
+
+Let's make sure we test corruption of both the first and second lines,
+and do so consistently with either hash by choosing offsets which are
+always in the first hash (30 bytes) or in the second (70).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5324-split-commit-graph.sh | 25 ++++++++++++++++++++-----
+ 1 file changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/t/t5324-split-commit-graph.sh b/t/t5324-split-commit-graph.sh
+index 36c4141e67..a9b2428b56 100755
+--- a/t/t5324-split-commit-graph.sh
++++ b/t/t5324-split-commit-graph.sh
+@@ -312,15 +312,30 @@ test_expect_success 'warn on base graph chunk incorrect' '
+ 	)
+ '
+ 
+-test_expect_success 'verify after commit-graph-chain corruption' '
+-	git clone --no-hardlinks . verify-chain &&
++test_expect_success 'verify after commit-graph-chain corruption (base)' '
++	git clone --no-hardlinks . verify-chain-base &&
+ 	(
+-		cd verify-chain &&
+-		corrupt_file "$graphdir/commit-graph-chain" 60 "G" &&
++		cd verify-chain-base &&
++		corrupt_file "$graphdir/commit-graph-chain" 30 "G" &&
+ 		git commit-graph verify 2>test_err &&
+ 		grep -v "^+" test_err >err &&
+ 		test_i18ngrep "invalid commit-graph chain" err &&
+-		corrupt_file "$graphdir/commit-graph-chain" 60 "A" &&
++		corrupt_file "$graphdir/commit-graph-chain" 30 "A" &&
++		git commit-graph verify 2>test_err &&
++		grep -v "^+" test_err >err &&
++		test_i18ngrep "unable to find all commit-graph files" err
++	)
++'
++
++test_expect_success 'verify after commit-graph-chain corruption (tip)' '
++	git clone --no-hardlinks . verify-chain-tip &&
++	(
++		cd verify-chain-tip &&
++		corrupt_file "$graphdir/commit-graph-chain" 70 "G" &&
++		git commit-graph verify 2>test_err &&
++		grep -v "^+" test_err >err &&
++		test_i18ngrep "invalid commit-graph chain" err &&
++		corrupt_file "$graphdir/commit-graph-chain" 70 "A" &&
+ 		git commit-graph verify 2>test_err &&
+ 		grep -v "^+" test_err >err &&
+ 		test_i18ngrep "unable to find all commit-graph files" err
+-- 
+2.39.3 (Apple Git-145)
+

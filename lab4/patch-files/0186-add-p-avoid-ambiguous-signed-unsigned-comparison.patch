@@ -1,0 +1,55 @@
+From 79d266223ab7c253c45ded9552694ca8a4b1f010 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 18 Oct 2022 10:59:03 +0000
+Subject: [PATCH 0186/2871] add -p: avoid ambiguous signed/unsigned comparison
+
+In the interactive `add` operation, users can choose to jump to specific
+hunks, and Git will present the hunk list in that case. To avoid showing
+too many lines at once, only a maximum of 21 hunks are shown, skipping
+the "mode change" pseudo hunk.
+
+The comparison performed to skip the "mode change" pseudo hunk (if any)
+compares a signed integer `i` to the unsigned value `mode_change` (which
+can be 0 or 1 because it is a 1-bit type).
+
+According to section 6.3.1.8 of the C99 standard (see e.g.
+https://www.open-std.org/jtc1/sc22/WG14/www/docs/n1256.pdf), what should
+happen is an automatic conversion of the "lesser" type to the "greater"
+type, but since the types differ in signedness, it is ill-defined what
+is the correct "usual arithmetic conversion".
+
+Which means that Visual C's behavior can (and does) differ from GCC's:
+When compiling Git using the latter, `add -p`'s `goto` command shows no
+hunks by default because it casts a negative start offset to a pretty
+large unsigned value, breaking the "goto hunk" test case in
+`t3701-add-interactive.sh`.
+
+Let's avoid that by converting the unsigned bit explicitly to a signed
+integer.
+
+Note: This is a long-standing bug in the Visual C build of Git, but it
+has never been caught because t3701 is skipped when `NO_PERL` is set,
+which is the case in the `vs-test` jobs of Git's CI runs.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ add-patch.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/add-patch.c b/add-patch.c
+index 509ca04456..3524555e2b 100644
+--- a/add-patch.c
++++ b/add-patch.c
+@@ -1547,7 +1547,7 @@ static int patch_update_file(struct add_p_state *s,
+ 			strbuf_remove(&s->answer, 0, 1);
+ 			strbuf_trim(&s->answer);
+ 			i = hunk_index - DISPLAY_HUNKS_LINES / 2;
+-			if (i < file_diff->mode_change)
++			if (i < (int)file_diff->mode_change)
+ 				i = file_diff->mode_change;
+ 			while (s->answer.len == 0) {
+ 				i = display_hunks(s, file_diff, i);
+-- 
+2.39.3 (Apple Git-145)
+

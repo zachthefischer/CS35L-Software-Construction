@@ -1,0 +1,42 @@
+From 41f98fae0224c2d7043376a9c421b4e0e73cdd82 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:24:04 -0500
+Subject: [PATCH 2503/2871] config: reject bogus values for core.checkstat
+
+If you feed nonsense config like:
+
+  git -c core.checkstat=foobar status
+
+we'll silently ignore the unknown value, rather than reporting an error.
+This goes all the way back to c08e4d5b5c (Enable minimal stat checking,
+2013-01-22).
+
+Detecting and complaining now is technically a backwards-incompatible
+change, but I don't think anybody has any reason to use an invalid value
+here. There are no historical values we'd want to allow for backwards
+compatibility or anything like that. We are better off loudly telling
+the user that their config may not be doing what they expect.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/config.c b/config.c
+index 18085c7e38..d997c55e33 100644
+--- a/config.c
++++ b/config.c
+@@ -1392,6 +1392,9 @@ static int git_default_core_config(const char *var, const char *value,
+ 			check_stat = 1;
+ 		else if (!strcasecmp(value, "minimal"))
+ 			check_stat = 0;
++		else
++			return error(_("invalid value for '%s': '%s'"),
++				     var, value);
+ 	}
+ 
+ 	if (!strcmp(var, "core.quotepath")) {
+-- 
+2.39.3 (Apple Git-145)
+

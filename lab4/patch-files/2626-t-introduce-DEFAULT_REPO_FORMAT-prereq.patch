@@ -1,0 +1,54 @@
+From bb0372c9799915fc3e6c2cf8e17815ce22622acd Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 29 Dec 2023 08:26:26 +0100
+Subject: [PATCH 2626/2871] t: introduce DEFAULT_REPO_FORMAT prereq
+
+A limited number of tests require repositories to have the default
+repository format or otherwise they would fail to run, e.g. because they
+fail to detect the correct hash function. While the hash function is the
+only extension right now that creates problems like this, we are about
+to add a second extension for the ref format.
+
+Introduce a new DEFAULT_REPO_FORMAT prereq that can easily be amended
+whenever we add new format extensions. Next to making any such changes
+easier on us, the prerequisite's name should also help to clarify the
+intent better.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3200-branch.sh | 2 +-
+ t/test-lib.sh     | 4 ++++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/t/t3200-branch.sh b/t/t3200-branch.sh
+index 6a316f081e..de7d3014e4 100755
+--- a/t/t3200-branch.sh
++++ b/t/t3200-branch.sh
+@@ -519,7 +519,7 @@ EOF
+ 
+ mv .git/config .git/config-saved
+ 
+-test_expect_success SHA1 'git branch -m q q2 without config should succeed' '
++test_expect_success DEFAULT_REPO_FORMAT 'git branch -m q q2 without config should succeed' '
+ 	git branch -m q q2 &&
+ 	git branch -m q2 q
+ '
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 876b99562a..dc03f06b8e 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -1936,6 +1936,10 @@ test_lazy_prereq SHA1 '
+ 	esac
+ '
+ 
++test_lazy_prereq DEFAULT_REPO_FORMAT '
++	test_have_prereq SHA1
++'
++
+ # Ensure that no test accidentally triggers a Git command
+ # that runs the actual maintenance scheduler, affecting a user's
+ # system permanently.
+-- 
+2.39.3 (Apple Git-145)
+

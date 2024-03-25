@@ -1,0 +1,39 @@
+From 997eb910a644491b8793ae0459ee2c5d89f239f8 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 18 Sep 2023 18:32:56 -0400
+Subject: [PATCH 2135/2871] fsmonitor/darwin: mark unused parameters in system
+ callback
+
+We pass fsevent_callback() to the system FSEventStreamCreate() function
+as a callback. So we must match the expected function signature, even
+though we don't care about all of the parameters. Mark the unused ones
+to satisfy -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/fsmonitor/fsm-listen-darwin.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/compat/fsmonitor/fsm-listen-darwin.c b/compat/fsmonitor/fsm-listen-darwin.c
+index 36c7e13281..11b56d3ef1 100644
+--- a/compat/fsmonitor/fsm-listen-darwin.c
++++ b/compat/fsmonitor/fsm-listen-darwin.c
+@@ -191,12 +191,12 @@ static void my_add_path(struct fsmonitor_batch *batch, const char *path)
+ }
+ 
+ 
+-static void fsevent_callback(ConstFSEventStreamRef streamRef,
++static void fsevent_callback(ConstFSEventStreamRef streamRef UNUSED,
+ 			     void *ctx,
+ 			     size_t num_of_events,
+ 			     void *event_paths,
+ 			     const FSEventStreamEventFlags event_flags[],
+-			     const FSEventStreamEventId event_ids[])
++			     const FSEventStreamEventId event_ids[] UNUSED)
+ {
+ 	struct fsmonitor_daemon_state *state = ctx;
+ 	struct fsm_listen_data *data = state->listen_data;
+-- 
+2.39.3 (Apple Git-145)
+

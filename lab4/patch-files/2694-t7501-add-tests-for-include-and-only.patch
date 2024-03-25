@@ -1,0 +1,144 @@
+From 4e4f576b0690ba039cc0db40e68ee4143acc9a4c Mon Sep 17 00:00:00 2001
+From: Ghanshyam Thakkar <shyamthakkar001@gmail.com>
+Date: Wed, 17 Jan 2024 21:43:54 +0530
+Subject: [PATCH 2694/2871] t7501: add tests for --include and --only
+
+Add tests for --only (-o) and --include (-i). This include testing
+with or without staged changes for both -i and -o. Also to test
+for committing untracked files with -i, -o and without -i/-o.
+
+Some tests already exist in t7501 for testing --only, however,
+it is only tested in combination with --amend and --allow-empty
+and on to-be-born branch. The addition of these tests check, when
+the pathspec is provided without using -only, that only the files
+matching the pathspec get committed. This behavior is same when
+we provide --only and it is checked by the tests.
+(as --only is the default mode of operation when pathspec is
+provided.)
+
+As for --include, there is no prior test for checking if --include
+also commits staged changes, thus add test for that. Along with
+the tests also document a potential bug, in which, when provided
+with -i and a pathspec that does not match any tracked path,
+commit does not fail if there are staged changes. And when there
+are no staged changes commit fails. However, no error is returned
+to stderr in either of the cases. This is described in the TODO
+comment before the relevent testcase.
+
+And also add a test for checking incompatibilty when using -o and
+-i together.
+
+Thus, these tests belong in t7501 with other similar existing tests,
+as described in the case of --only.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Helped-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: Ghanshyam Thakkar <shyamthakkar001@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7501-commit-basic-functionality.sh | 75 ++++++++++++++++++++++++++-
+ 1 file changed, 74 insertions(+), 1 deletion(-)
+
+diff --git a/t/t7501-commit-basic-functionality.sh b/t/t7501-commit-basic-functionality.sh
+index 3d8500a52e..c169f10458 100755
+--- a/t/t7501-commit-basic-functionality.sh
++++ b/t/t7501-commit-basic-functionality.sh
+@@ -3,7 +3,7 @@
+ # Copyright (c) 2007 Kristian Høgsberg <krh@redhat.com>
+ #
+ 
+-# FIXME: Test the various index usages, -i and -o, test reflog,
++# FIXME: Test the various index usages, test reflog,
+ # signoff
+ 
+ test_description='git commit'
+@@ -92,6 +92,34 @@ test_expect_success '--long fails with nothing to commit' '
+ 	test_must_fail git commit -m initial --long
+ '
+ 
++test_expect_success 'fail to commit untracked file (even with --include/--only)' '
++	echo content >baz &&
++	error="error: pathspec .baz. did not match any file(s) known to git" &&
++
++	test_must_fail git commit -m "baz" baz 2>err &&
++	test_grep -e "$error" err &&
++
++	test_must_fail git commit --only -m "baz" baz 2>err &&
++	test_grep -e "$error" err &&
++
++	# TODO: as for --include, the below command will fail because
++	# nothing is staged. If something was staged, it would not fail
++	# even though the provided pathspec does not match any tracked
++	# path. (However, the untracked paths that match the pathspec are
++	# not committed and only the staged changes get committed.)
++	# In either cases, no error is returned to stderr like in (--only
++	# and without --only/--include) cases. In a similar manner,
++	# "git add -u baz" also does not error out.
++	#
++	# Therefore, the below test is just to document the current behavior
++	# and is not an endorsement to the current behavior, and we may
++	# want to fix this. And when that happens, this test should be
++	# updated accordingly.
++
++	test_must_fail git commit --include -m "baz" baz 2>err &&
++	test_must_be_empty err
++'
++
+ test_expect_success 'setup: non-initial commit' '
+ 	echo bongo bongo bongo >file &&
+ 	git commit -m next -a
+@@ -117,6 +145,51 @@ test_expect_success '--long with stuff to commit returns ok' '
+ 	git commit -m next -a --long
+ '
+ 
++for opt in "" "-o" "--only"
++do
++	test_expect_success 'exclude additional staged changes when given pathspec' '
++		echo content >>file &&
++		echo content >>baz &&
++		git add baz &&
++		git commit $opt -m "file" file &&
++
++		git diff --name-only >actual &&
++		test_must_be_empty actual &&
++
++		test_write_lines baz >expect &&
++		git diff --name-only --cached >actual &&
++		test_cmp expect actual &&
++
++		test_write_lines file >expect &&
++		git diff --name-only HEAD^ HEAD >actual &&
++		test_cmp expect actual
++	'
++done
++
++test_expect_success '-i/--include includes staged changes' '
++	echo content >>file &&
++	echo content >>baz &&
++	git add file &&
++
++	# baz is in the index, therefore, it will be committed
++	git commit --include -m "file and baz" baz  &&
++
++	git diff --name-only HEAD >remaining &&
++	test_must_be_empty remaining &&
++
++	test_write_lines baz file >expect &&
++	git diff --name-only HEAD^ HEAD >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success '--include and --only do not mix' '
++	test_when_finished "git reset --hard" &&
++	echo content >>file &&
++	echo content >>baz &&
++	test_must_fail git commit --include --only -m "file baz" file baz 2>actual &&
++	test_grep -e "fatal: options .-i/--include. and .-o/--only. cannot be used together" actual
++'
++
+ test_expect_success 'commit message from non-existing file' '
+ 	echo more bongo: bongo bongo bongo bongo >file &&
+ 	test_must_fail git commit -F gah -a
+-- 
+2.39.3 (Apple Git-145)
+

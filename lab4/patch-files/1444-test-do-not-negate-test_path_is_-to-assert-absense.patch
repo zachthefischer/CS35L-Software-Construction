@@ -1,0 +1,60 @@
+From b126b65b3381cd8659552b39699b3b3d9a4f5393 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 15 May 2023 19:26:46 -0700
+Subject: [PATCH 1444/2871] test: do not negate test_path_is_* to assert
+ absense
+
+These tests use "! test_path_is_dir" or "! test_path_is_file" to
+ensure that the path is not recursively checked out or "submodule
+update" did not touch the working tree.
+
+Use "test_path_is_missing" to assert that the path does not exist,
+instead of negating test_path_is_* helpers; they are designed to be
+loud in wrong occasions.  Besides, negating "test_path_is_dir" would
+mean we would be happy if a file exists there, which is not the case
+for these tests.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-submodule-update.sh | 2 +-
+ t/t5572-pull-submodule.sh | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/t/lib-submodule-update.sh b/t/lib-submodule-update.sh
+index dee14992c5..9acb0d5d19 100644
+--- a/t/lib-submodule-update.sh
++++ b/t/lib-submodule-update.sh
+@@ -802,7 +802,7 @@ test_submodule_recursing_with_args_common () {
+ 			git branch -t no_submodule origin/no_submodule &&
+ 			$command no_submodule &&
+ 			test_superproject_content origin/no_submodule &&
+-			! test_path_is_dir sub1 &&
++			test_path_is_missing sub1 &&
+ 			test_must_fail git config -f .git/modules/sub1/config core.worktree &&
+ 			test_must_fail git config -f .git/modules/sub1/modules/sub2/config core.worktree
+ 		)
+diff --git a/t/t5572-pull-submodule.sh b/t/t5572-pull-submodule.sh
+index 09097eff3f..4e917bf87d 100755
+--- a/t/t5572-pull-submodule.sh
++++ b/t/t5572-pull-submodule.sh
+@@ -121,7 +121,7 @@ test_expect_success "fetch.recurseSubmodules option triggers recursive fetch (bu
+ 	sub_oid=$(git -C child rev-parse HEAD) &&
+ 	git -C super/sub cat-file -e $sub_oid &&
+ 	# Check that the submodule worktree did not update
+-	! test_path_is_file super/sub/merge_strategy_5.t
++	test_path_is_missing super/sub/merge_strategy_5.t
+ '
+ 
+ test_expect_success "fetch.recurseSubmodules takes precedence over submodule.recurse" '
+@@ -134,7 +134,7 @@ test_expect_success "fetch.recurseSubmodules takes precedence over submodule.rec
+ 	sub_oid=$(git -C child rev-parse HEAD) &&
+ 	git -C super/sub cat-file -e $sub_oid &&
+ 	# Check that the submodule worktree did not update
+-	! test_path_is_file super/sub/merge_strategy_6.t
++	test_path_is_missing super/sub/merge_strategy_6.t
+ '
+ 
+ test_expect_success 'pull --rebase --recurse-submodules (remote superproject submodule changes, local submodule changes)' '
+-- 
+2.39.3 (Apple Git-145)
+

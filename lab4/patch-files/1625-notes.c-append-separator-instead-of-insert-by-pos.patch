@@ -1,0 +1,82 @@
+From b7d87ad53707cb4d9b2c97dd8b5a145e095b6105 Mon Sep 17 00:00:00 2001
+From: Teng Long <dyroneteng@gmail.com>
+Date: Sat, 27 May 2023 15:57:52 +0800
+Subject: [PATCH 1625/2871] notes.c: append separator instead of insert by pos
+
+Rename "insert_separator" to "append_separator" and also remove the
+"postion" argument, this serves two purpose:
+
+The first is that when specifying more than one "-m" ( like "-F", etc)
+to "git notes add" or "git notes append", the order of them matters,
+which means we need to append the each separator and message in turn,
+so we don't have to make the caller specify the position, the "append"
+operation is enough and clear.
+
+The second is that when we execute the "git notes append" subcommand,
+we need to combine the "prev_note" and "current_note" to get the
+final result. Before, we inserted a newline character at the beginning
+of "current_note". Now, we will append a newline to the end of
+"prev_note" instead, this will give the consisitent results.
+
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/notes.c | 21 ++++++++++++---------
+ 1 file changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/notes.c b/builtin/notes.c
+index d8a39fe2d0..b280447923 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -229,13 +229,13 @@ static void write_note_data(struct note_data *d, struct object_id *oid)
+ 	}
+ }
+ 
+-static void insert_separator(struct strbuf *message, size_t pos)
++static void append_separator(struct strbuf *message)
+ {
+ 	size_t sep_len = strlen(separator);
+ 	if (sep_len && separator[sep_len - 1] == '\n')
+-		strbuf_insertstr(message, pos, separator);
++		strbuf_addstr(message, separator);
+ 	else
+-		strbuf_insertf(message, pos, "%s%s", separator, "\n");
++		strbuf_addf(message, "%s%s", separator, "\n");
+ }
+ 
+ static void concat_messages(struct note_data *d)
+@@ -245,7 +245,7 @@ static void concat_messages(struct note_data *d)
+ 	size_t i;
+ 	for (i = 0; i < d->msg_nr ; i++) {
+ 		if (d->buf.len)
+-			insert_separator(&d->buf, d->buf.len);
++			append_separator(&d->buf);
+ 		strbuf_add(&msg, d->messages[i]->buf.buf, d->messages[i]->buf.len);
+ 		strbuf_addbuf(&d->buf, &msg);
+ 		if (d->messages[i]->stripspace)
+@@ -680,14 +680,17 @@ static int append_edit(int argc, const char **argv, const char *prefix)
+ 		/* Append buf to previous note contents */
+ 		unsigned long size;
+ 		enum object_type type;
+-		char *prev_buf = repo_read_object_file(the_repository, note,
+-						       &type, &size);
++		struct strbuf buf = STRBUF_INIT;
++		char *prev_buf = repo_read_object_file(the_repository, note, &type, &size);
+ 
+-		if (d.buf.len && prev_buf && size)
+-			insert_separator(&d.buf, 0);
+ 		if (prev_buf && size)
+-			strbuf_insert(&d.buf, 0, prev_buf, size);
++			strbuf_add(&buf, prev_buf, size);
++		if (d.buf.len && prev_buf && size)
++			append_separator(&buf);
++		strbuf_insert(&d.buf, 0, buf.buf, buf.len);
++
+ 		free(prev_buf);
++		strbuf_release(&buf);
+ 	}
+ 
+ 	if (d.buf.len || allow_empty) {
+-- 
+2.39.3 (Apple Git-145)
+

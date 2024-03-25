@@ -1,0 +1,112 @@
+From aa79636fe70247a19648d73e52a7774536100567 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Mon, 9 Oct 2023 21:58:55 +0000
+Subject: [PATCH 2250/2871] dir.[ch]: add 'follow_symlink' arg to 'get_dtype'
+
+Add a 'follow_symlink' boolean option to 'get_type()'. If 'follow_symlink'
+is enabled, DT_LNK (in addition to DT_UNKNOWN) d_types triggers the
+stat-based d_type resolution, using 'stat' instead of 'lstat' to get the
+type of the followed symlink. Note that symlinks are not followed
+recursively, so a symlink pointing to another symlink will still resolve to
+DT_LNK.
+
+Update callers in 'diagnose.c' to specify 'follow_symlink = 0' to preserve
+current behavior.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diagnose.c |  6 +++---
+ dir.c      | 13 +++++++++----
+ dir.h      |  7 ++++++-
+ 3 files changed, 18 insertions(+), 8 deletions(-)
+
+diff --git a/diagnose.c b/diagnose.c
+index fc4d344bd6..4d096c857f 100644
+--- a/diagnose.c
++++ b/diagnose.c
+@@ -81,7 +81,7 @@ static int count_files(struct strbuf *path)
+ 		return 0;
+ 
+ 	while ((e = readdir_skip_dot_and_dotdot(dir)) != NULL)
+-		if (get_dtype(e, path) == DT_REG)
++		if (get_dtype(e, path, 0) == DT_REG)
+ 			count++;
+ 
+ 	closedir(dir);
+@@ -110,7 +110,7 @@ static void loose_objs_stats(struct strbuf *buf, const char *path)
+ 	base_path_len = count_path.len;
+ 
+ 	while ((e = readdir_skip_dot_and_dotdot(dir)) != NULL)
+-		if (get_dtype(e, &count_path) == DT_DIR &&
++		if (get_dtype(e, &count_path, 0) == DT_DIR &&
+ 		    strlen(e->d_name) == 2 &&
+ 		    !hex_to_bytes(&c, e->d_name, 1)) {
+ 			strbuf_setlen(&count_path, base_path_len);
+@@ -155,7 +155,7 @@ static int add_directory_to_archiver(struct strvec *archiver_args,
+ 
+ 		strbuf_add_absolute_path(&abspath, at_root ? "." : path);
+ 		strbuf_addch(&abspath, '/');
+-		dtype = get_dtype(e, &abspath);
++		dtype = get_dtype(e, &abspath, 0);
+ 
+ 		strbuf_setlen(&buf, len);
+ 		strbuf_addstr(&buf, e->d_name);
+diff --git a/dir.c b/dir.c
+index 5e01af3a25..16fdb03f2a 100644
+--- a/dir.c
++++ b/dir.c
+@@ -2235,19 +2235,24 @@ static int get_index_dtype(struct index_state *istate,
+ 	return DT_UNKNOWN;
+ }
+ 
+-unsigned char get_dtype(struct dirent *e, struct strbuf *path)
++unsigned char get_dtype(struct dirent *e, struct strbuf *path,
++			int follow_symlink)
+ {
+ 	struct stat st;
+ 	unsigned char dtype = DTYPE(e);
+ 	size_t base_path_len;
+ 
+-	if (dtype != DT_UNKNOWN)
++	if (dtype != DT_UNKNOWN && !(follow_symlink && dtype == DT_LNK))
+ 		return dtype;
+ 
+-	/* d_type unknown in dirent, try to fall back on lstat results */
++	/*
++	 * d_type unknown or unfollowed symlink, try to fall back on [l]stat
++	 * results. If [l]stat fails, explicitly set DT_UNKNOWN.
++	 */
+ 	base_path_len = path->len;
+ 	strbuf_addstr(path, e->d_name);
+-	if (lstat(path->buf, &st))
++	if ((follow_symlink && stat(path->buf, &st)) ||
++	    (!follow_symlink && lstat(path->buf, &st)))
+ 		goto cleanup;
+ 
+ 	/* determine d_type from st_mode */
+diff --git a/dir.h b/dir.h
+index 28c630ce80..98aa85fcc0 100644
+--- a/dir.h
++++ b/dir.h
+@@ -368,11 +368,16 @@ struct dirent *readdir_skip_dot_and_dotdot(DIR *dirp);
+  * stat.st_mode using the path to the dirent's containing directory (path) and
+  * the name of the dirent itself.
+  *
++ * If 'follow_symlink' is 1, this function will attempt to follow DT_LNK types
++ * using 'stat'. Links are *not* followed recursively, so a symlink pointing
++ * to another symlink will still resolve to 'DT_LNK'.
++ *
+  * Note that 'path' is assumed to have a trailing slash. It is also modified
+  * in-place during the execution of the function, but is then reverted to its
+  * original value before returning.
+  */
+-unsigned char get_dtype(struct dirent *e, struct strbuf *path);
++unsigned char get_dtype(struct dirent *e, struct strbuf *path,
++			int follow_symlink);
+ 
+ /*Count the number of slashes for string s*/
+ int count_slashes(const char *s);
+-- 
+2.39.3 (Apple Git-145)
+

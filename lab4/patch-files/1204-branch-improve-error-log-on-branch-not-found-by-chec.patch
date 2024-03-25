@@ -1,0 +1,73 @@
+From 4c643fb321db00a9c79e2dcd1fd033681333584b Mon Sep 17 00:00:00 2001
+From: Clement Mabileau <mabileau.clement@gmail.com>
+Date: Wed, 5 Apr 2023 11:43:20 +0000
+Subject: [PATCH 1204/2871] branch: improve error log on branch not found by
+ checking remotes refs
+
+New git users may want to locally delete remote-tracking branches but
+don't really understand how they are distinguished from branches by git.
+Then one may naively try:
+`git branch -d foo/bar` and get a correct error `branch foo/bar not
+found` but hard to understand for a newbie, this patch aims to guide one
+in such case.
+
+when failing to delete a branch with `git branch -d <branch>` because
+of branch not found, try to find a **remote refs** matching `<branch>`
+and if so, add an hint:
+`Did you forget --remote?` to the error message
+
+Signed-off-by: Clement Mabileau <mabileau.clement@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c | 25 +++++++++++++++++++++----
+ 1 file changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index f63fd45edb..5f035dd596 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -216,10 +216,11 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
+ 	struct string_list refs_to_delete = STRING_LIST_INIT_DUP;
+ 	struct string_list_item *item;
+ 	int branch_name_pos;
++	const char *fmt_remotes = "refs/remotes/%s";
+ 
+ 	switch (kinds) {
+ 	case FILTER_REFS_REMOTES:
+-		fmt = "refs/remotes/%s";
++		fmt = fmt_remotes;
+ 		/* For subsequent UI messages */
+ 		remote_branch = 1;
+ 		allowed_interpret = INTERPRET_BRANCH_REMOTE;
+@@ -263,9 +264,25 @@ static int delete_branches(int argc, const char **argv, int force, int kinds,
+ 					| RESOLVE_REF_ALLOW_BAD_NAME,
+ 					&oid, &flags);
+ 		if (!target) {
+-			error(remote_branch
+-			      ? _("remote-tracking branch '%s' not found.")
+-			      : _("branch '%s' not found."), bname.buf);
++			if (remote_branch) {
++				error(_("remote-tracking branch '%s' not found."), bname.buf);
++			} else {
++				char *virtual_name = mkpathdup(fmt_remotes, bname.buf);
++				char *virtual_target = resolve_refdup(virtual_name,
++							RESOLVE_REF_READING
++							| RESOLVE_REF_NO_RECURSE
++							| RESOLVE_REF_ALLOW_BAD_NAME,
++							&oid, &flags);
++				FREE_AND_NULL(virtual_name);
++
++				if (virtual_target)
++					error(_("branch '%s' not found.\n"
++						"Did you forget --remote?"),
++						bname.buf);
++				else
++					error(_("branch '%s' not found."), bname.buf);
++				FREE_AND_NULL(virtual_target);
++			}
+ 			ret = 1;
+ 			continue;
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

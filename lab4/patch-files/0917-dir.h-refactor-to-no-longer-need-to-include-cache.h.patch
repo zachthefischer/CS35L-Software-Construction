@@ -1,0 +1,181 @@
+From ac48adf488794417b1060b5ed2377a9fd4c33c17 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:31 +0000
+Subject: [PATCH 0917/2871] dir.h: refactor to no longer need to include
+ cache.h
+
+Moving a few functions around allows us to make dir.h no longer need to
+include cache.h.  This commit is best viewed with:
+    git log -1 -p --color-moved
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h             | 31 +++++++++++--------------------
+ dir.h               | 16 ++--------------
+ pathspec.h          |  5 +++++
+ statinfo.h          | 24 ++++++++++++++++++++++++
+ trace2/tr2_sysenv.c |  2 +-
+ 5 files changed, 43 insertions(+), 35 deletions(-)
+ create mode 100644 statinfo.h
+
+diff --git a/cache.h b/cache.h
+index d0e105ec58..fdb3125f00 100644
+--- a/cache.h
++++ b/cache.h
+@@ -14,9 +14,11 @@
+ #include "pack-revindex.h"
+ #include "hash.h"
+ #include "path.h"
++#include "pathspec.h"
+ #include "object.h"
+ #include "oid-array.h"
+ #include "repository.h"
++#include "statinfo.h"
+ #include "mem-pool.h"
+ 
+ typedef struct git_zstream {
+@@ -119,26 +121,6 @@ struct cache_header {
+ #define INDEX_FORMAT_LB 2
+ #define INDEX_FORMAT_UB 4
+ 
+-/*
+- * The "cache_time" is just the low 32 bits of the
+- * time. It doesn't matter if it overflows - we only
+- * check it for equality in the 32 bits we save.
+- */
+-struct cache_time {
+-	uint32_t sec;
+-	uint32_t nsec;
+-};
+-
+-struct stat_data {
+-	struct cache_time sd_ctime;
+-	struct cache_time sd_mtime;
+-	unsigned int sd_dev;
+-	unsigned int sd_ino;
+-	unsigned int sd_uid;
+-	unsigned int sd_gid;
+-	unsigned int sd_size;
+-};
+-
+ struct cache_entry {
+ 	struct hashmap_entry ent;
+ 	struct stat_data ce_stat_data;
+@@ -294,6 +276,15 @@ static inline unsigned int canon_mode(unsigned int mode)
+ 	return S_IFGITLINK;
+ }
+ 
++static inline int ce_path_match(struct index_state *istate,
++				const struct cache_entry *ce,
++				const struct pathspec *pathspec,
++				char *seen)
++{
++	return match_pathspec(istate, pathspec, ce->name, ce_namelen(ce), 0, seen,
++			      S_ISDIR(ce->ce_mode) || S_ISGITLINK(ce->ce_mode));
++}
++
+ #define cache_entry_size(len) (offsetof(struct cache_entry,name) + (len) + 1)
+ 
+ #define SOMETHING_CHANGED	(1 << 0) /* unclassified changes go here */
+diff --git a/dir.h b/dir.h
+index 8acfc04418..fc4386ae50 100644
+--- a/dir.h
++++ b/dir.h
+@@ -1,8 +1,9 @@
+ #ifndef DIR_H
+ #define DIR_H
+ 
+-#include "cache.h"
+ #include "hashmap.h"
++#include "pathspec.h"
++#include "statinfo.h"
+ #include "strbuf.h"
+ 
+ /**
+@@ -363,10 +364,6 @@ int count_slashes(const char *s);
+ int simple_length(const char *match);
+ int no_wildcard(const char *string);
+ char *common_prefix(const struct pathspec *pathspec);
+-int match_pathspec(struct index_state *istate,
+-		   const struct pathspec *pathspec,
+-		   const char *name, int namelen,
+-		   int prefix, char *seen, int is_dir);
+ int report_path_error(const char *ps_matched, const struct pathspec *pathspec);
+ int within_depth(const char *name, int namelen, int depth, int max_depth);
+ 
+@@ -533,15 +530,6 @@ int submodule_path_match(struct index_state *istate,
+ 			 const char *submodule_name,
+ 			 char *seen);
+ 
+-static inline int ce_path_match(struct index_state *istate,
+-				const struct cache_entry *ce,
+-				const struct pathspec *pathspec,
+-				char *seen)
+-{
+-	return match_pathspec(istate, pathspec, ce->name, ce_namelen(ce), 0, seen,
+-			      S_ISDIR(ce->ce_mode) || S_ISGITLINK(ce->ce_mode));
+-}
+-
+ static inline int dir_path_match(struct index_state *istate,
+ 				 const struct dir_entry *ent,
+ 				 const struct pathspec *pathspec,
+diff --git a/pathspec.h b/pathspec.h
+index 41f6adfbb4..a5b38e0907 100644
+--- a/pathspec.h
++++ b/pathspec.h
+@@ -171,6 +171,11 @@ int match_pathspec_attrs(struct index_state *istate,
+ 			 const char *name, int namelen,
+ 			 const struct pathspec_item *item);
+ 
++int match_pathspec(struct index_state *istate,
++		   const struct pathspec *pathspec,
++		   const char *name, int namelen,
++		   int prefix, char *seen, int is_dir);
++
+ /*
+  * Determine whether a pathspec will match only entire index entries (non-sparse
+  * files and/or entire sparse directories). If the pathspec has the potential to
+diff --git a/statinfo.h b/statinfo.h
+new file mode 100644
+index 0000000000..e49e3054ea
+--- /dev/null
++++ b/statinfo.h
+@@ -0,0 +1,24 @@
++#ifndef STATINFO_H
++#define STATINFO_H
++
++/*
++ * The "cache_time" is just the low 32 bits of the
++ * time. It doesn't matter if it overflows - we only
++ * check it for equality in the 32 bits we save.
++ */
++struct cache_time {
++	uint32_t sec;
++	uint32_t nsec;
++};
++
++struct stat_data {
++	struct cache_time sd_ctime;
++	struct cache_time sd_mtime;
++	unsigned int sd_dev;
++	unsigned int sd_ino;
++	unsigned int sd_uid;
++	unsigned int sd_gid;
++	unsigned int sd_size;
++};
++
++#endif
+diff --git a/trace2/tr2_sysenv.c b/trace2/tr2_sysenv.c
+index a380dcf910..069786cb92 100644
+--- a/trace2/tr2_sysenv.c
++++ b/trace2/tr2_sysenv.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "tr2_sysenv.h"
+-- 
+2.39.3 (Apple Git-145)
+

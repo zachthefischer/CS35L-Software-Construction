@@ -1,0 +1,65 @@
+From 5d1d62e87540fd43bb16b123c9c73b022cc463e2 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Thu, 9 Mar 2023 11:30:31 -0600
+Subject: [PATCH 1012/2871] test: simplify counts aggregation
+
+When the list of files as input was implemented in 6508eedf67
+(t/aggregate-results: accomodate systems with small max argument list
+length, 2010-06-01), a much simpler solution wasn't considered.
+
+Let's just pass the directory as an argument.
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/t/Makefile | 4 +---
+ t/Makefile                 | 4 +---
+ t/aggregate-results.sh     | 2 +-
+ 3 files changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/contrib/subtree/t/Makefile b/contrib/subtree/t/Makefile
+index 4655e0987b..aa204d43b6 100644
+--- a/contrib/subtree/t/Makefile
++++ b/contrib/subtree/t/Makefile
+@@ -74,9 +74,7 @@ aggregate-results-and-cleanup: $(T)
+ 	$(MAKE) clean
+ 
+ aggregate-results:
+-	for f in '$(TEST_RESULTS_DIRECTORY_SQ)'/t*-*.counts; do \
+-		echo "$$f"; \
+-	done | '$(SHELL_PATH_SQ)' ../../../t/aggregate-results.sh
++	'$(SHELL_PATH_SQ)' ../../../t/aggregate-results.sh '$(TEST_RESULTS_DIRECTORY_SQ)'
+ 
+ valgrind:
+ 	$(MAKE) GIT_TEST_OPTS="$(GIT_TEST_OPTS) --valgrind"
+diff --git a/t/Makefile b/t/Makefile
+index 2c2b252240..6ce79849e1 100644
+--- a/t/Makefile
++++ b/t/Makefile
+@@ -140,9 +140,7 @@ aggregate-results-and-cleanup: $(T)
+ 	$(MAKE) clean
+ 
+ aggregate-results:
+-	for f in '$(TEST_RESULTS_DIRECTORY_SQ)'/t*-*.counts; do \
+-		echo "$$f"; \
+-	done | '$(SHELL_PATH_SQ)' ./aggregate-results.sh
++	'$(SHELL_PATH_SQ)' ./aggregate-results.sh '$(TEST_RESULTS_DIRECTORY_SQ)'
+ 
+ valgrind:
+ 	$(MAKE) GIT_TEST_OPTS="$(GIT_TEST_OPTS) --valgrind"
+diff --git a/t/aggregate-results.sh b/t/aggregate-results.sh
+index 7f2b83bdc8..6e3bcc4aec 100755
+--- a/t/aggregate-results.sh
++++ b/t/aggregate-results.sh
+@@ -8,7 +8,7 @@ broken=0
+ total=0
+ missing_prereq=
+ 
+-while read file
++for file in "$1"/t*-*.counts
+ do
+ 	while read type value
+ 	do
+-- 
+2.39.3 (Apple Git-145)
+

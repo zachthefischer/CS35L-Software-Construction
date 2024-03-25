@@ -1,0 +1,91 @@
+From 8774aa56ad1af286b34e6ac7f1e65c75a4477fdd Mon Sep 17 00:00:00 2001
+From: Kyle Meyer <kyle@kyleam.com>
+Date: Sat, 26 Nov 2022 15:21:23 -0500
+Subject: [PATCH 0447/2871] send-email: relay '-v N' to format-patch
+
+send-email relays unrecognized arguments to its format-patch call.
+Passing '-v N' leads to an error because -v is consumed as
+send-email's --validate.  For example,
+
+  git send-email -v 3 @{u}
+
+fails with
+
+  fatal: ambiguous argument '3': unknown revision or path not in the
+  working tree.  [...]
+
+To prevent this, add the short --reroll-count option to send-email's
+main option list and explicitly provide it to the format-patch call.
+
+There other format-patch options that send-email doesn't relay
+properly, including at least -n, -N, and the diff option -D.  Punt on
+these because dealing with them is more complicated:
+
+ * they would require configuring send-email to not ignore option case
+
+ * send-email makes three GetOptions() calls with different sets of
+   options, the last being the main set of options.  Unlike -v, which
+   is consumed by the last GetOptions call, the -n, -N, and -D options
+   are consumed as abbreviations by the earlier calls.
+
+Signed-off-by: Kyle Meyer <kyle@kyleam.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl   | 9 ++++++++-
+ t/t9001-send-email.sh | 6 ++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 5861e99a6e..07f2a0cbea 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -220,6 +220,10 @@ sub format_2822_time {
+ my $force = 0;
+ my $dump_aliases = 0;
+ 
++# Variables to prevent short format-patch options from being captured
++# as abbreviated send-email options
++my $reroll_count;
++
+ # Handle interactive edition of files.
+ my $multiedit;
+ my $editor;
+@@ -542,6 +546,7 @@ sub config_regexp {
+ 		    "batch-size=i" => \$batch_size,
+ 		    "relogin-delay=i" => \$relogin_delay,
+ 		    "git-completion-helper" => \$git_completion_helper,
++		    "v=s" => \$reroll_count,
+ );
+ $rc = GetOptions(%options);
+ 
+@@ -782,7 +787,9 @@ sub is_format_patch_arg {
+ 	die __("Cannot run git format-patch from outside a repository\n")
+ 		unless $repo;
+ 	require File::Temp;
+-	push @files, $repo->command('format-patch', '-o', File::Temp::tempdir(CLEANUP => 1), @rev_list_opts);
++	push @files, $repo->command('format-patch', '-o', File::Temp::tempdir(CLEANUP => 1),
++				    defined $reroll_count ? ('-v', $reroll_count) : (),
++				    @rev_list_opts);
+ }
+ 
+ @files = handle_backup_files(@files);
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 1130ef21b3..323952a572 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -2334,6 +2334,12 @@ test_expect_success $PREREQ 'test that send-email works outside a repo' '
+ 		"$(pwd)/0001-add-main.patch"
+ '
+ 
++test_expect_success $PREREQ 'send-email relays -v 3 to format-patch' '
++	test_when_finished "rm -f out" &&
++	git send-email --dry-run -v 3 -1 >out &&
++	grep "PATCH v3" out
++'
++
+ test_expect_success $PREREQ 'test that sendmail config is rejected' '
+ 	test_config sendmail.program sendmail &&
+ 	test_must_fail git send-email \
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,62 @@
+From d775365db321c9f05c12809438d3c801d7e445af Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 17:22:15 -0400
+Subject: [PATCH 2059/2871] interpret-trailers: mark unused "unset" parameters
+ in option callbacks
+
+There are a few parse-option callbacks that do not look at their "unset"
+parameters, but also do not set PARSE_OPT_NONEG. At first glance this
+seems like a bug, as we'd ignore "--no-if-exists", etc.
+
+But they do work fine, because when "unset" is true, then "arg" is NULL.
+And all three functions pass "arg" on to helper functions which do the
+right thing with the NULL.
+
+Note that this shortcut would not be correct if any callback used
+PARSE_OPT_NOARG (in which case "arg" would be NULL but "unset" would be
+false). But none of these do.
+
+So the code is fine as-is. But we'll want to mark the unused "unset"
+parameters to quiet -Wunused-parameter. I've also added a comment to
+make this rather subtle situation more explicit.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/interpret-trailers.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/interpret-trailers.c b/builtin/interpret-trailers.c
+index 6aadce6a1e..a110e69f83 100644
+--- a/builtin/interpret-trailers.c
++++ b/builtin/interpret-trailers.c
+@@ -24,20 +24,23 @@ static enum trailer_if_exists if_exists;
+ static enum trailer_if_missing if_missing;
+ 
+ static int option_parse_where(const struct option *opt,
+-			      const char *arg, int unset)
++			      const char *arg, int unset UNUSED)
+ {
++	/* unset implies NULL arg, which is handled in our helper */
+ 	return trailer_set_where(opt->value, arg);
+ }
+ 
+ static int option_parse_if_exists(const struct option *opt,
+-				  const char *arg, int unset)
++				  const char *arg, int unset UNUSED)
+ {
++	/* unset implies NULL arg, which is handled in our helper */
+ 	return trailer_set_if_exists(opt->value, arg);
+ }
+ 
+ static int option_parse_if_missing(const struct option *opt,
+-				   const char *arg, int unset)
++				   const char *arg, int unset UNUSED)
+ {
++	/* unset implies NULL arg, which is handled in our helper */
+ 	return trailer_set_if_missing(opt->value, arg);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,166 @@
+From 91590293298c132e427851616e660e781596c0d8 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 12 Dec 2023 08:00:54 +0100
+Subject: [PATCH 2529/2871] builtin/clone: fix bundle URIs with mismatching
+ object formats
+
+We create the reference database in git-clone(1) quite early before
+connecting to the remote repository. Given that we do not yet know about
+the object format that the remote repository uses at that point in time
+the consequence is that the refdb may be initialized with the wrong
+object format.
+
+This is not a problem in the context of the files backend as we do not
+encode the object format anywhere, and furthermore the only reference
+that we write between initializing the refdb and learning about the
+object format is the "HEAD" symref. It will become a problem though once
+we land the reftable backend, which indeed does require to know about
+the proper object format at the time of creation. We thus need to
+rearrange the logic in git-clone(1) so that we only initialize the refdb
+once we have learned about the actual object format.
+
+As a first step, move listing of remote references to happen earlier,
+which also allow us to set up the hash algorithm of the repository
+earlier now. While we aim to execute this logic as late as possible
+until after most of the setup has happened already, detection of the
+object format and thus later the setup of the reference database must
+happen before any other logic that may spawn Git commands or otherwise
+these Git commands may not recognize the repository as such.
+
+The first Git step where we expect the repository to be fully initalized
+is when we fetch bundles via bundle URIs. Funny enough, the comments
+there also state that "the_repository must match the cloned repo", which
+is indeed not necessarily the case for the hash algorithm right now. So
+in practice it is the right thing to detect the remote's object format
+before downloading bundle URIs anyway, and not doing so causes clones
+with bundle URIs to fail when the local default object format does not
+match the remote repository's format.
+
+Unfortunately though, this creates a new issue: downloading bundles may
+take a long time, so if we list refs beforehand they might've grown
+stale meanwhile. It is not clear how to solve this issue except for a
+second reference listing though after we have downloaded the bundles,
+which may be an expensive thing to do.
+
+Arguably though, it's preferable to have a staleness issue compared to
+being unable to clone a repository altogether.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clone.c             | 48 ++++++++++++++++++-------------------
+ t/t5558-clone-bundle-uri.sh | 18 ++++++++++++++
+ 2 files changed, 41 insertions(+), 25 deletions(-)
+
+diff --git a/builtin/clone.c b/builtin/clone.c
+index c6357af949..d188650881 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -1266,6 +1266,26 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 	if (transport->smart_options && !deepen && !filter_options.choice)
+ 		transport->smart_options->check_self_contained_and_connected = 1;
+ 
++	strvec_push(&transport_ls_refs_options.ref_prefixes, "HEAD");
++	refspec_ref_prefixes(&remote->fetch,
++			     &transport_ls_refs_options.ref_prefixes);
++	if (option_branch)
++		expand_ref_prefix(&transport_ls_refs_options.ref_prefixes,
++				  option_branch);
++	if (!option_no_tags)
++		strvec_push(&transport_ls_refs_options.ref_prefixes,
++			    "refs/tags/");
++
++	refs = transport_get_remote_refs(transport, &transport_ls_refs_options);
++
++	/*
++	 * Now that we know what algorithm the remote side is using, let's set
++	 * ours to the same thing.
++	 */
++	hash_algo = hash_algo_by_ptr(transport_get_hash_algo(transport));
++	initialize_repository_version(hash_algo, 1);
++	repo_set_hash_algo(the_repository, hash_algo);
++
+ 	/*
+ 	 * Before fetching from the remote, download and install bundle
+ 	 * data from the --bundle-uri option.
+@@ -1281,24 +1301,7 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 				bundle_uri);
+ 		else if (has_heuristic)
+ 			git_config_set_gently("fetch.bundleuri", bundle_uri);
+-	}
+-
+-	strvec_push(&transport_ls_refs_options.ref_prefixes, "HEAD");
+-	refspec_ref_prefixes(&remote->fetch,
+-			     &transport_ls_refs_options.ref_prefixes);
+-	if (option_branch)
+-		expand_ref_prefix(&transport_ls_refs_options.ref_prefixes,
+-				  option_branch);
+-	if (!option_no_tags)
+-		strvec_push(&transport_ls_refs_options.ref_prefixes,
+-			    "refs/tags/");
+-
+-	refs = transport_get_remote_refs(transport, &transport_ls_refs_options);
+-
+-	if (refs)
+-		mapped_refs = wanted_peer_refs(refs, &remote->fetch);
+-
+-	if (!bundle_uri) {
++	} else {
+ 		/*
+ 		* Populate transport->got_remote_bundle_uri and
+ 		* transport->bundle_uri. We might get nothing.
+@@ -1319,13 +1322,8 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 		}
+ 	}
+ 
+-		/*
+-		 * Now that we know what algorithm the remote side is using,
+-		 * let's set ours to the same thing.
+-		 */
+-	hash_algo = hash_algo_by_ptr(transport_get_hash_algo(transport));
+-	initialize_repository_version(hash_algo, 1);
+-	repo_set_hash_algo(the_repository, hash_algo);
++	if (refs)
++		mapped_refs = wanted_peer_refs(refs, &remote->fetch);
+ 
+ 	if (mapped_refs) {
+ 		/*
+diff --git a/t/t5558-clone-bundle-uri.sh b/t/t5558-clone-bundle-uri.sh
+index 996a08e90c..1ca5f745e7 100755
+--- a/t/t5558-clone-bundle-uri.sh
++++ b/t/t5558-clone-bundle-uri.sh
+@@ -33,6 +33,15 @@ test_expect_success 'clone with path bundle' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'clone with path bundle and non-default hash' '
++	test_when_finished "rm -rf clone-path-non-default-hash" &&
++	GIT_DEFAULT_HASH=sha256 git clone --bundle-uri="clone-from/B.bundle" \
++		clone-from clone-path-non-default-hash &&
++	git -C clone-path-non-default-hash rev-parse refs/bundles/topic >actual &&
++	git -C clone-from rev-parse topic >expect &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'clone with file:// bundle' '
+ 	git clone --bundle-uri="file://$(pwd)/clone-from/B.bundle" \
+ 		clone-from clone-file &&
+@@ -284,6 +293,15 @@ test_expect_success 'clone HTTP bundle' '
+ 	test_config -C clone-http log.excludedecoration refs/bundle/
+ '
+ 
++test_expect_success 'clone HTTP bundle with non-default hash' '
++	test_when_finished "rm -rf clone-http-non-default-hash" &&
++	GIT_DEFAULT_HASH=sha256 git clone --bundle-uri="$HTTPD_URL/B.bundle" \
++		"$HTTPD_URL/smart/fetch.git" clone-http-non-default-hash &&
++	git -C clone-http-non-default-hash rev-parse refs/bundles/topic >actual &&
++	git -C clone-from rev-parse topic >expect &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'clone bundle list (HTTP, no heuristic)' '
+ 	test_when_finished rm -f trace*.txt &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,30 @@
+From fdc9914c28355a09a55725b2cd1798446b76d615 Mon Sep 17 00:00:00 2001
+From: Jacob Abel <jacobabel@nullpo.dev>
+Date: Fri, 11 Aug 2023 23:39:51 +0000
+Subject: [PATCH 1938/2871] builtin/worktree.c: fix typo in "forgot fetch" msg
+
+Replace misspelled word "overide" with correctly spelled "override".
+
+Reported-By: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Jacob Abel <jacobabel@nullpo.dev>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/worktree.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 5f62084334..2901bfd936 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -691,7 +691,7 @@ static int can_use_remote_refs(const struct add_opts *opts)
+ 		return 1;
+ 	} else if (!opts->force && remote_get(NULL)) {
+ 		die(_("No local or remote refs exist despite at least one remote\n"
+-		      "present, stopping; use 'add -f' to overide or fetch a remote first"));
++		      "present, stopping; use 'add -f' to override or fetch a remote first"));
+ 	}
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,35 @@
+From 083e01275b81eb6105247ec522adf280d99f6b56 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 29 Nov 2022 10:40:38 +0900
+Subject: [PATCH 0457/2871] A bit more before -rc1
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.39.0.txt | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.39.0.txt b/Documentation/RelNotes/2.39.0.txt
+index b0bed89a27..fde4925381 100644
+--- a/Documentation/RelNotes/2.39.0.txt
++++ b/Documentation/RelNotes/2.39.0.txt
+@@ -326,8 +326,17 @@ Fixes since v2.38
+ 
+  * A handful of leaks in the line-log machinery have been plugged.
+ 
++ * The format of a line in /proc/cpuinfo that describes a CPU on s390x
++   looked different from everybody else, and the code in chainlint.pl
++   failed to parse it.
++   (merge 1f51b77f4f ah/chainlint-cpuinfo-parse-fix later to maint).
++
++ * Adjust the GitHub CI to newer ubuntu release.
++   (merge 0d3507f3e7 jx/ci-ubuntu-fix later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 413bc6d20a ds/cmd-main-reorder later to maint).
+    (merge 8d2863e4ed nw/t1002-cleanup later to maint).
+    (merge 7c2dc122f9 rs/list-objects-filter-leakfix later to maint).
+    (merge 288fcb1c94 zk/push-use-bitmaps later to maint).
++   (merge 42db324c0f km/merge-recursive-typofix later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

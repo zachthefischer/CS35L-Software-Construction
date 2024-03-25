@@ -1,0 +1,57 @@
+From 0cac690e1ac5e26ecf2dba0c53ac3824425446b5 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:19 +0000
+Subject: [PATCH 2233/2871] documentation: add missing hyphens
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config.txt        | 2 +-
+ Documentation/config/pack.txt   | 2 +-
+ Documentation/config/status.txt | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/config.txt b/Documentation/config.txt
+index 99affec5a0..b1dba1ae85 100644
+--- a/Documentation/config.txt
++++ b/Documentation/config.txt
+@@ -118,7 +118,7 @@ are:
+ 	pattern, the include condition is met.
+ +
+ The .git location may be auto-discovered, or come from `$GIT_DIR`
+-environment variable. If the repository is auto discovered via a .git
++environment variable. If the repository is auto-discovered via a .git
+ file (e.g. from submodules, or a linked worktree), the .git location
+ would be the final location where the .git directory is, not where the
+ .git file is.
+diff --git a/Documentation/config/pack.txt b/Documentation/config/pack.txt
+index 6308f21e03..f50df9dbce 100644
+--- a/Documentation/config/pack.txt
++++ b/Documentation/config/pack.txt
+@@ -87,7 +87,7 @@ pack.indexVersion::
+ 	larger than 2 GB.
+ +
+ If you have an old Git that does not understand the version 2 `*.idx` file,
+-cloning or fetching over a non native protocol (e.g. "http")
++cloning or fetching over a non-native protocol (e.g. "http")
+ that will copy both `*.pack` file and corresponding `*.idx` file from the
+ other side may give you a repository that cannot be accessed with your
+ older version of Git. If the `*.pack` file is smaller than 2 GB, however,
+diff --git a/Documentation/config/status.txt b/Documentation/config/status.txt
+index f0336938cb..2ff8237f8f 100644
+--- a/Documentation/config/status.txt
++++ b/Documentation/config/status.txt
+@@ -62,7 +62,7 @@ of linkgit:git-status[1] and linkgit:git-commit[1].
+ 
+ status.submoduleSummary::
+ 	Defaults to false.
+-	If this is set to a non zero number or true (identical to -1 or an
++	If this is set to a non-zero number or true (identical to -1 or an
+ 	unlimited number), the submodule summary will be enabled and a
+ 	summary of commits for modified submodules will be shown (see
+ 	--summary-limit option of linkgit:git-submodule[1]). Please note
+-- 
+2.39.3 (Apple Git-145)
+

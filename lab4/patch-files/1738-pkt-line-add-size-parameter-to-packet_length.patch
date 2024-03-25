@@ -1,0 +1,90 @@
+From 3e81b896f769dfdb479363acb00bdc6b076cfd55 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 7 Jul 2023 23:47:55 +0200
+Subject: [PATCH 1738/2871] pkt-line: add size parameter to packet_length()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+hex2chr() takes care not to run over the end of a NUL-terminated string.
+It's used in packet_length(), but both callers of that function pass a
+four-byte buffer, making NUL-checks unnecessary.  packet_length() could
+accidentally be used with a pointer to a buffer of unknown size at new
+call-sites, though, and the compiler wouldn't complain.
+
+Add a size parameter plus check, and remove the NUL-checks by calling
+hexval() directly.  This trades three NUL checks against one size check
+and the ability to report the use of a short buffer at runtime.
+
+If any of the four bytes is NUL or -- more generally -- not a
+hexadecimal digit, then packet_length() still returns a negative value.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pkt-line.c    | 12 ++++++++----
+ pkt-line.h    |  2 +-
+ remote-curl.c |  3 ++-
+ 3 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/pkt-line.c b/pkt-line.c
+index 62b4208b66..fcfa357ccd 100644
+--- a/pkt-line.c
++++ b/pkt-line.c
+@@ -373,10 +373,14 @@ static int get_packet_data(int fd, char **src_buf, size_t *src_size,
+ 	return ret;
+ }
+ 
+-int packet_length(const char lenbuf_hex[4])
++int packet_length(const char lenbuf_hex[4], size_t size)
+ {
+-	int val = hex2chr(lenbuf_hex);
+-	return (val < 0) ? val : (val << 8) | hex2chr(lenbuf_hex + 2);
++	if (size < 4)
++		BUG("buffer too small");
++	return	hexval(lenbuf_hex[0]) << 12 |
++		hexval(lenbuf_hex[1]) <<  8 |
++		hexval(lenbuf_hex[2]) <<  4 |
++		hexval(lenbuf_hex[3]);
+ }
+ 
+ static char *find_packfile_uri_path(const char *buffer)
+@@ -419,7 +423,7 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
+ 		return PACKET_READ_EOF;
+ 	}
+ 
+-	len = packet_length(linelen);
++	len = packet_length(linelen, sizeof(linelen));
+ 
+ 	if (len < 0) {
+ 		if (options & PACKET_READ_GENTLE_ON_READ_ERROR)
+diff --git a/pkt-line.h b/pkt-line.h
+index 7c23a4bfaf..954eec8719 100644
+--- a/pkt-line.h
++++ b/pkt-line.h
+@@ -94,7 +94,7 @@ int packet_read(int fd, char *buffer, unsigned size, int options);
+  * If lenbuf_hex contains non-hex characters, return -1. Otherwise, return the
+  * numeric value of the length header.
+  */
+-int packet_length(const char lenbuf_hex[4]);
++int packet_length(const char lenbuf_hex[4], size_t size);
+ 
+ /*
+  * Read a packetized line into a buffer like the 'packet_read()' function but
+diff --git a/remote-curl.c b/remote-curl.c
+index acf7b2bb40..143318658e 100644
+--- a/remote-curl.c
++++ b/remote-curl.c
+@@ -763,7 +763,8 @@ static void check_pktline(struct check_pktline_state *state, const char *ptr, si
+ 			size -= digits_remaining;
+ 
+ 			if (state->len_filled == 4) {
+-				state->remaining = packet_length(state->len_buf);
++				state->remaining = packet_length(state->len_buf,
++								 sizeof(state->len_buf));
+ 				if (state->remaining < 0) {
+ 					die(_("remote-curl: bad line length character: %.4s"), state->len_buf);
+ 				} else if (state->remaining == 2) {
+-- 
+2.39.3 (Apple Git-145)
+

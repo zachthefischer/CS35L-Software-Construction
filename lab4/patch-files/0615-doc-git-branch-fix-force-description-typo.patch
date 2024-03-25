@@ -1,0 +1,31 @@
+From 27875aeec9859f445f132bd1df745f485aa78826 Mon Sep 17 00:00:00 2001
+From: Kyle Meyer <kyle@kyleam.com>
+Date: Mon, 26 Dec 2022 11:54:41 -0500
+Subject: [PATCH 0615/2871] doc/git-branch: fix --force description typo
+
+Update the description of --force to use '<start-point>' rather than
+'<startpoint>' to match the spelling used everywhere else in the
+git-branch documentation.
+
+Signed-off-by: Kyle Meyer <kyle@kyleam.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-branch.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-branch.txt b/Documentation/git-branch.txt
+index 12c5f84e3b..aa2f78c4c2 100644
+--- a/Documentation/git-branch.txt
++++ b/Documentation/git-branch.txt
+@@ -116,7 +116,7 @@ OPTIONS
+ 
+ -f::
+ --force::
+-	Reset <branchname> to <startpoint>, even if <branchname> exists
++	Reset <branchname> to <start-point>, even if <branchname> exists
+ 	already. Without `-f`, 'git branch' refuses to change an existing branch.
+ 	In combination with `-d` (or `--delete`), allow deleting the
+ 	branch irrespective of its merged status, or whether it even
+-- 
+2.39.3 (Apple Git-145)
+

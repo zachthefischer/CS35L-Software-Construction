@@ -1,0 +1,108 @@
+From aba070683295a20bdf4f49146384984961c794b2 Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Tue, 6 Jun 2023 19:48:42 +0000
+Subject: [PATCH 1573/2871] path: move related function to path
+
+Move path-related function from strbuf.[ch] to path.[ch] so that strbuf
+is focused on string manipulation routines with minimal dependencies.
+
+repository.h is no longer a necessary dependency after moving this
+function out.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ path.c   | 20 ++++++++++++++++++++
+ path.h   |  5 +++++
+ strbuf.c | 21 ---------------------
+ 3 files changed, 25 insertions(+), 21 deletions(-)
+
+diff --git a/path.c b/path.c
+index 7c1cd8182a..e17a2613c5 100644
+--- a/path.c
++++ b/path.c
+@@ -1213,6 +1213,26 @@ int normalize_path_copy(char *dst, const char *src)
+ 	return normalize_path_copy_len(dst, src, NULL);
+ }
+ 
++int strbuf_normalize_path(struct strbuf *src)
++{
++	struct strbuf dst = STRBUF_INIT;
++
++	strbuf_grow(&dst, src->len);
++	if (normalize_path_copy(dst.buf, src->buf) < 0) {
++		strbuf_release(&dst);
++		return -1;
++	}
++
++	/*
++	 * normalize_path does not tell us the new length, so we have to
++	 * compute it by looking for the new NUL it placed
++	 */
++	strbuf_setlen(&dst, strlen(dst.buf));
++	strbuf_swap(src, &dst);
++	strbuf_release(&dst);
++	return 0;
++}
++
+ /*
+  * path = Canonical absolute path
+  * prefixes = string_list containing normalized, absolute paths without
+diff --git a/path.h b/path.h
+index 60e83a49a9..639372edd9 100644
+--- a/path.h
++++ b/path.h
+@@ -191,6 +191,11 @@ const char *remove_leading_path(const char *in, const char *prefix);
+ const char *relative_path(const char *in, const char *prefix, struct strbuf *sb);
+ int normalize_path_copy_len(char *dst, const char *src, int *prefix_len);
+ int normalize_path_copy(char *dst, const char *src);
++/**
++ * Normalize in-place the path contained in the strbuf. If an error occurs,
++ * the contents of "sb" are left untouched, and -1 is returned.
++ */
++int strbuf_normalize_path(struct strbuf *src);
+ int longest_ancestor_length(const char *path, struct string_list *prefixes);
+ char *strip_path_suffix(const char *path, const char *suffix);
+ int daemon_avoid_alias(const char *path);
+diff --git a/strbuf.c b/strbuf.c
+index 80b7e051cd..d5978fee4e 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -3,7 +3,6 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+-#include "repository.h"
+ #include "strbuf.h"
+ #include "string-list.h"
+ #include "utf8.h"
+@@ -1089,26 +1088,6 @@ void strbuf_stripspace(struct strbuf *sb, int skip_comments)
+ 	strbuf_setlen(sb, j);
+ }
+ 
+-int strbuf_normalize_path(struct strbuf *src)
+-{
+-	struct strbuf dst = STRBUF_INIT;
+-
+-	strbuf_grow(&dst, src->len);
+-	if (normalize_path_copy(dst.buf, src->buf) < 0) {
+-		strbuf_release(&dst);
+-		return -1;
+-	}
+-
+-	/*
+-	 * normalize_path does not tell us the new length, so we have to
+-	 * compute it by looking for the new NUL it placed
+-	 */
+-	strbuf_setlen(&dst, strlen(dst.buf));
+-	strbuf_swap(src, &dst);
+-	strbuf_release(&dst);
+-	return 0;
+-}
+-
+ void strbuf_strip_file_from_path(struct strbuf *sb)
+ {
+ 	char *path_sep = find_last_dir_sep(sb->buf);
+-- 
+2.39.3 (Apple Git-145)
+

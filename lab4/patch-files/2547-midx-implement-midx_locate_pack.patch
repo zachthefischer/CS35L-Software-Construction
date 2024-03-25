@@ -1,0 +1,86 @@
+From 307d75bbe6b33267872633173a5d9b5d88b87793 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 14 Dec 2023 17:23:54 -0500
+Subject: [PATCH 2547/2871] midx: implement `midx_locate_pack()`
+
+The multi-pack index API exposes a `midx_contains_pack()` function that
+takes in a string ending in either ".idx" or ".pack" and returns whether
+or not the MIDX contains a given pack corresponding to that string.
+
+There is no corresponding function to locate the position of a pack
+within the MIDX's pack order (sorted lexically by pack filename).
+
+We could add an optional out parameter to `midx_contains_pack()` that is
+filled out with the pack's position when the parameter is non-NULL. To
+minimize the amount of fallout from this change, instead introduce a new
+function by renaming `midx_contains_pack()` to `midx_locate_pack()`,
+adding that output parameter, and then reimplementing
+`midx_contains_pack()` in terms of it.
+
+Future patches will make use of this new function.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c | 13 +++++++++++--
+ midx.h |  5 ++++-
+ 2 files changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index de25612b0c..beaf0c0de4 100644
+--- a/midx.c
++++ b/midx.c
+@@ -428,7 +428,8 @@ static int cmp_idx_or_pack_name(const char *idx_or_pack_name,
+ 	return strcmp(idx_or_pack_name, idx_name);
+ }
+ 
+-int midx_contains_pack(struct multi_pack_index *m, const char *idx_or_pack_name)
++int midx_locate_pack(struct multi_pack_index *m, const char *idx_or_pack_name,
++		     uint32_t *pos)
+ {
+ 	uint32_t first = 0, last = m->num_packs;
+ 
+@@ -439,8 +440,11 @@ int midx_contains_pack(struct multi_pack_index *m, const char *idx_or_pack_name)
+ 
+ 		current = m->pack_names[mid];
+ 		cmp = cmp_idx_or_pack_name(idx_or_pack_name, current);
+-		if (!cmp)
++		if (!cmp) {
++			if (pos)
++				*pos = mid;
+ 			return 1;
++		}
+ 		if (cmp > 0) {
+ 			first = mid + 1;
+ 			continue;
+@@ -451,6 +455,11 @@ int midx_contains_pack(struct multi_pack_index *m, const char *idx_or_pack_name)
+ 	return 0;
+ }
+ 
++int midx_contains_pack(struct multi_pack_index *m, const char *idx_or_pack_name)
++{
++	return midx_locate_pack(m, idx_or_pack_name, NULL);
++}
++
+ int prepare_multi_pack_index_one(struct repository *r, const char *object_dir, int local)
+ {
+ 	struct multi_pack_index *m;
+diff --git a/midx.h b/midx.h
+index b404235db5..89c5aa637e 100644
+--- a/midx.h
++++ b/midx.h
+@@ -70,7 +70,10 @@ struct object_id *nth_midxed_object_oid(struct object_id *oid,
+ 					struct multi_pack_index *m,
+ 					uint32_t n);
+ int fill_midx_entry(struct repository *r, const struct object_id *oid, struct pack_entry *e, struct multi_pack_index *m);
+-int midx_contains_pack(struct multi_pack_index *m, const char *idx_or_pack_name);
++int midx_contains_pack(struct multi_pack_index *m,
++		       const char *idx_or_pack_name);
++int midx_locate_pack(struct multi_pack_index *m, const char *idx_or_pack_name,
++		     uint32_t *pos);
+ int prepare_multi_pack_index_one(struct repository *r, const char *object_dir, int local);
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

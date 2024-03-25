@@ -1,0 +1,30 @@
+From fd3ba590d87145628f8ec9b00d800c652418954b Mon Sep 17 00:00:00 2001
+From: Wesley Schwengle <wesleys@opperschaap.net>
+Date: Wed, 9 Aug 2023 21:21:05 -0400
+Subject: [PATCH 1918/2871] git-push.txt: fix grammar
+
+While working on a blog post and using grammarly it suggested this
+change.
+
+Signed-off-by: Wesley Schwengle <wesleys@opperschaap.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-push.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-push.txt b/Documentation/git-push.txt
+index 5bb1d5aae2..dd559a0bcb 100644
+--- a/Documentation/git-push.txt
++++ b/Documentation/git-push.txt
+@@ -37,7 +37,7 @@ the default `<refspec>` by consulting `remote.*.push` configuration,
+ and if it is not found, honors `push.default` configuration to decide
+ what to push (See linkgit:git-config[1] for the meaning of `push.default`).
+ 
+-When neither the command-line nor the configuration specify what to
++When neither the command-line nor the configuration specifies what to
+ push, the default behavior is used, which corresponds to the `simple`
+ value for `push.default`: the current branch is pushed to the
+ corresponding upstream branch, but as a safety measure, the push is
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,35 @@
+From 03f72a4ed8b0d9f379db80749150a13b3ad1f2cd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 29 Jan 2024 22:08:23 +0100
+Subject: [PATCH 2780/2871] t0080: mark as leak-free
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This test is leak-free since it was added in e137fe3b29 (unit tests: add
+TAP unit test framework, 2023-11-09)
+
+Let's mark it as leak-free to make sure it stays that way (and to reduce
+noise when looking for other leak-free scripts after we fix some leaks).
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0080-unit-test-output.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/t0080-unit-test-output.sh b/t/t0080-unit-test-output.sh
+index 961b54b06c..6657c114a3 100755
+--- a/t/t0080-unit-test-output.sh
++++ b/t/t0080-unit-test-output.sh
+@@ -2,6 +2,7 @@
+ 
+ test_description='Test the output of the unit test framework'
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ test_expect_success 'TAP output from unit tests' '
+-- 
+2.39.3 (Apple Git-145)
+

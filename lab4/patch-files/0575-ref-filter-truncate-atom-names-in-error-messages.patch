@@ -1,0 +1,107 @@
+From 1955ef10edf3c888dcb237728c81dd6e81df4960 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 14 Dec 2022 11:23:53 -0500
+Subject: [PATCH 0575/2871] ref-filter: truncate atom names in error messages
+
+If you pass a bogus argument to %(refname), you may end up with a
+message like this:
+
+  $ git for-each-ref --format='%(refname:foo)'
+  fatal: unrecognized %(refname:foo) argument: foo
+
+which is confusing. It should just say:
+
+  fatal: unrecognized %(refname) argument: foo
+
+which is clearer, and is consistent with most other atom parsers. Those
+other parsers do not have the same problem because they pass the atom
+name from a string literal in the parser function. But because the
+parser for %(refname) also handles %(upstream) and %(push), it instead
+uses atom->name, which includes the arguments. The oid atom parser which
+handles %(tree), %(parent), etc suffers from the same problem.
+
+It seems like the cleanest fix would be for atom->name to be _just_ the
+name, since there's already a separate "args" field. But since that
+field is also used for other things, we can't change it easily (e.g.,
+it's how we find things in the used_atoms array, and clearly %(refname)
+and %(refname:short) are not the same thing).
+
+Instead, we'll teach our error_bad_arg() function to stop at the first
+":". This is a little hacky, as we're effectively re-parsing the name,
+but the format is simple enough to do this as a one-liner, and this
+localizes the change to the error-reporting code.
+
+We'll give the same treatment to err_no_arg(). None of its callers use
+this atom->name trick, but it's worth future-proofing it while we're
+here.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c            | 12 ++++++++----
+ t/t6300-for-each-ref.sh |  6 ++++++
+ 2 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index 271d619da9..f40bc4d9c9 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -230,13 +230,17 @@ static int strbuf_addf_ret(struct strbuf *sb, int ret, const char *fmt, ...)
+ 
+ static int err_no_arg(struct strbuf *sb, const char *name)
+ {
+-	strbuf_addf(sb, _("%%(%s) does not take arguments"), name);
++	size_t namelen = strchrnul(name, ':') - name;
++	strbuf_addf(sb, _("%%(%.*s) does not take arguments"),
++		    (int)namelen, name);
+ 	return -1;
+ }
+ 
+ static int err_bad_arg(struct strbuf *sb, const char *name, const char *arg)
+ {
+-	strbuf_addf(sb, _("unrecognized %%(%s) argument: %s"), name, arg);
++	size_t namelen = strchrnul(name, ':') - name;
++	strbuf_addf(sb, _("unrecognized %%(%.*s) argument: %s"),
++		    (int)namelen, name, arg);
+ 	return -1;
+ }
+ 
+@@ -274,7 +278,7 @@ static int refname_atom_parser_internal(struct refname_atom *atom, const char *a
+ 		if (strtol_i(arg, 10, &atom->rstrip))
+ 			return strbuf_addf_ret(err, -1, _("Integer value expected refname:rstrip=%s"), arg);
+ 	} else
+-		return strbuf_addf_ret(err, -1, _("unrecognized %%(%s) argument: %s"), name, arg);
++		return err_bad_arg(err, name, arg);
+ 	return 0;
+ }
+ 
+@@ -471,7 +475,7 @@ static int oid_atom_parser(struct ref_format *format, struct used_atom *atom,
+ 		if (atom->u.oid.length < MINIMUM_ABBREV)
+ 			atom->u.oid.length = MINIMUM_ABBREV;
+ 	} else
+-		return strbuf_addf_ret(err, -1, _("unrecognized %%(%s) argument: %s"), atom->name, arg);
++		return err_bad_arg(err, atom->name, arg);
+ 	return 0;
+ }
+ 
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 010ba5a2cb..2ae1fc721b 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1254,6 +1254,12 @@ test_expect_success 'subject atom rejects unknown arguments' '
+ 	test_cmp expect err
+ '
+ 
++test_expect_success 'refname atom rejects unknown arguments' '
++	test_must_fail git for-each-ref --format="%(refname:foo)" 2>err &&
++	echo "fatal: unrecognized %(refname) argument: foo" >expect &&
++	test_cmp expect err
++'
++
+ test_expect_success 'trailer parsing not fooled by --- line' '
+ 	git commit --allow-empty -F - <<-\EOF &&
+ 	this is the subject
+-- 
+2.39.3 (Apple Git-145)
+

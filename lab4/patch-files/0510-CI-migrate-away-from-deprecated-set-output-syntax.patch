@@ -1,0 +1,54 @@
+From f115c96e7a837b324283dee113d6ad8798954827 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Wed, 7 Dec 2022 02:49:18 +0100
+Subject: [PATCH 0510/2871] CI: migrate away from deprecated "set-output"
+ syntax
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+As noted in [1] and the warnings the CI itself is spewing echoing
+outputs to stdout is deprecated, and they should be written to
+"$GITHUB_OUTPUT" instead.
+
+1. https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/l10n.yml | 4 ++--
+ .github/workflows/main.yml | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/.github/workflows/l10n.yml b/.github/workflows/l10n.yml
+index 27f72f0ff3..f7ea0f00a4 100644
+--- a/.github/workflows/l10n.yml
++++ b/.github/workflows/l10n.yml
+@@ -23,8 +23,8 @@ jobs:
+             base=${{ github.event.before }}
+             head=${{ github.event.after }}
+           fi
+-          echo "::set-output name=base::$base"
+-          echo "::set-output name=head::$head"
++          echo base=$base >>$GITHUB_OUTPUT
++          echo head=$head >>$GITHUB_OUTPUT
+       - name: Run partial clone
+         run: |
+           git -c init.defaultBranch=master init --bare .
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 831f4df56c..912fe14c6e 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -34,7 +34,7 @@ jobs:
+           then
+             enabled=no
+           fi
+-          echo "::set-output name=enabled::$enabled"
++          echo "enabled=$enabled" >>$GITHUB_OUTPUT
+       - name: skip if the commit or tree was already tested
+         id: skip-if-redundant
+         uses: actions/github-script@v3
+-- 
+2.39.3 (Apple Git-145)
+

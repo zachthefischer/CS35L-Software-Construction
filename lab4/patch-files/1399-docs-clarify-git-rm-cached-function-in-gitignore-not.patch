@@ -1,0 +1,33 @@
+From 0c5308af30f7f3a810aa64e74152a8df7c81e87c Mon Sep 17 00:00:00 2001
+From: Sohom Datta <sohom.datta@learner.manipal.edu>
+Date: Wed, 3 May 2023 21:46:40 +0000
+Subject: [PATCH 1399/2871] docs: clarify git rm --cached function in gitignore
+ note
+
+Explain to users that the step to untrack a file will not also prevent them
+from getting added in the future.
+
+Signed-off-by: Sohom Datta <sohom.datta@learner.manipal.edu>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitignore.txt | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/gitignore.txt b/Documentation/gitignore.txt
+index f2738b10db..4c17f2356c 100644
+--- a/Documentation/gitignore.txt
++++ b/Documentation/gitignore.txt
+@@ -146,7 +146,9 @@ The purpose of gitignore files is to ensure that certain files
+ not tracked by Git remain untracked.
+ 
+ To stop tracking a file that is currently tracked, use
+-'git rm --cached'.
++'git rm --cached' to remove the file from the index. The filename
++can then be added to the `.gitignore` file to stop the file from
++being reintroduced in later commits.
+ 
+ Git does not follow symbolic links when accessing a `.gitignore` file in
+ the working tree. This keeps behavior consistent when the file is
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,58 @@
+From dada38646ade5041948bbe49ec21e0f2ad674109 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 15 Dec 2023 12:32:44 -0800
+Subject: [PATCH 2573/2871] docs: AUTO_MERGE is not that special
+
+A handful of manual pages called AUTO_MERGE a "special ref", but
+there is nothing special about it.  It merely is yet another
+pseudoref.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-diff.txt    | 2 +-
+ Documentation/git-merge.txt   | 2 +-
+ Documentation/user-manual.txt | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-diff.txt b/Documentation/git-diff.txt
+index 08087ffad5..c065f023ec 100644
+--- a/Documentation/git-diff.txt
++++ b/Documentation/git-diff.txt
+@@ -103,7 +103,7 @@ Just in case you are doing something exotic, it should be
+ noted that all of the <commit> in the above description, except
+ in the `--merge-base` case and in the last two forms that use `..`
+ notations, can be any <tree>. A tree of interest is the one pointed to
+-by the special ref `AUTO_MERGE`, which is written by the 'ort' merge
++by the ref named `AUTO_MERGE`, which is written by the 'ort' merge
+ strategy upon hitting merge conflicts (see linkgit:git-merge[1]).
+ Comparing the working tree with `AUTO_MERGE` shows changes you've made
+ so far to resolve textual conflicts (see the examples below).
+diff --git a/Documentation/git-merge.txt b/Documentation/git-merge.txt
+index e8ab340319..3e9557a44b 100644
+--- a/Documentation/git-merge.txt
++++ b/Documentation/git-merge.txt
+@@ -196,7 +196,7 @@ happens:
+    can inspect the stages with `git ls-files -u`).  The working
+    tree files contain the result of the merge operation; i.e. 3-way
+    merge results with familiar conflict markers `<<<` `===` `>>>`.
+-5. A special ref `AUTO_MERGE` is written, pointing to a tree
++5. A ref named `AUTO_MERGE` is written, pointing to a tree
+    corresponding to the current content of the working tree (including
+    conflict markers for textual conflicts).  Note that this ref is only
+    written when the 'ort' merge strategy is used (the default).
+diff --git a/Documentation/user-manual.txt b/Documentation/user-manual.txt
+index d8dbe6b56d..5d32ff2384 100644
+--- a/Documentation/user-manual.txt
++++ b/Documentation/user-manual.txt
+@@ -1344,7 +1344,7 @@ $ git diff --theirs file.txt	# same as the above.
+ -------------------------------------------------
+ 
+ When using the 'ort' merge strategy (the default), before updating the working
+-tree with the result of the merge, Git writes a special ref named AUTO_MERGE
++tree with the result of the merge, Git writes a ref named AUTO_MERGE
+ reflecting the state of the tree it is about to write. Conflicted paths with
+ textual conflicts that could not be automatically merged are written to this
+ tree with conflict markers, just as in the working tree. AUTO_MERGE can thus be
+-- 
+2.39.3 (Apple Git-145)
+

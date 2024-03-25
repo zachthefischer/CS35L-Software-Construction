@@ -1,0 +1,61 @@
+From 2f2729f3a4626838fce294a0cec4e525c5f4be39 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 25 Sep 2023 11:20:35 +0000
+Subject: [PATCH 2394/2871] cmake: use test names instead of full paths
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The primary purpose of Git's CMake definition is to allow developing Git
+in Visual Studio. As part of that, the CTest feature allows running
+individual test scripts conveniently in Visual Studio's Test Explorer.
+
+However, this Test Explorer's design targets object-oriented languages
+and therefore expects the test names in the form
+`<namespace>.<class>.<testname>`. And since we specify the full path
+of the test scripts instead, including the ugly `/.././t/` part, these
+dots confuse the Test Explorer and it uses a large part of the path as
+"namespace".
+
+Let's just use `t.suite.<name>` instead. This presents the tests in
+Visual Studio's Test Explorer in the following form by default (i.e.
+unless the user changes the view via the "Group by" menu):
+
+	◢ ◈ git
+	 ◢ ◈ t
+	  ◢ ◈ suite
+	     ◈ t0000-basic
+	     ◈ t0001-init
+	     ◈ t0002-gitfile
+	     [...]
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/buildsystems/CMakeLists.txt | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/buildsystems/CMakeLists.txt b/contrib/buildsystems/CMakeLists.txt
+index 54bdf5f3fe..356f068cac 100644
+--- a/contrib/buildsystems/CMakeLists.txt
++++ b/contrib/buildsystems/CMakeLists.txt
+@@ -1106,13 +1106,14 @@ file(GLOB test_scripts "${CMAKE_SOURCE_DIR}/t/t[0-9]*.sh")
+ 
+ #test
+ foreach(tsh ${test_scripts})
+-	add_test(NAME ${tsh}
++	string(REGEX REPLACE ".*/(.*)\\.sh" "\\1" test_name ${tsh})
++	add_test(NAME "t.suite.${test_name}"
+ 		COMMAND ${SH_EXE} ${tsh} --no-bin-wrappers --no-chain-lint -vx
+ 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/t)
+ endforeach()
+ 
+ # This test script takes an extremely long time and is known to time out even
+ # on fast machines because it requires in excess of one hour to run
+-set_tests_properties("${CMAKE_SOURCE_DIR}/t/t7112-reset-submodule.sh" PROPERTIES TIMEOUT 4000)
++set_tests_properties("t.suite.t7112-reset-submodule" PROPERTIES TIMEOUT 4000)
+ 
+ endif()#BUILD_TESTING
+-- 
+2.39.3 (Apple Git-145)
+

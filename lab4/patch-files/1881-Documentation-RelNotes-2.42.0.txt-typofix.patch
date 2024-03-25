@@ -1,0 +1,29 @@
+From 955c2b1c6ad736a685fcb7cab1c079a9c7cc18c8 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 1 Aug 2023 14:20:18 -0400
+Subject: [PATCH 1881/2871] Documentation/RelNotes/2.42.0.txt: typofix
+
+Fix a typo introduced in aa9166bcc0 (The ninth batch, 2023-07-08).
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.42.0.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/RelNotes/2.42.0.txt b/Documentation/RelNotes/2.42.0.txt
+index dd73b28d19..1105b148c8 100644
+--- a/Documentation/RelNotes/2.42.0.txt
++++ b/Documentation/RelNotes/2.42.0.txt
+@@ -171,7 +171,7 @@ Fixes since v2.41
+    been corrected.
+    (merge a096a889f4 jk/cherry-pick-revert-status later to maint).
+ 
+- * A few places failed to differenciate the case where the index is
++ * A few places failed to differentiate the case where the index is
+    truly empty (nothing added) and we haven't yet read from the
+    on-disk index file, which have been corrected.
+    (merge 2ee045eea1 js/empty-index-fixes later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

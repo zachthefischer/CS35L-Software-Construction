@@ -1,0 +1,71 @@
+From 98aaeb2f775949faac4840ba90b10d8cc328a71b Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:46 +0000
+Subject: [PATCH 1684/2871] completion: complete --diff-merges, its options and
+ --no-diff-merges
+
+The flags --[no-]diff-merges only make sense for 'git log' and 'git
+show', so add a new variable __git_log_show_options for options only
+relevant to these two commands, and add them there. Also add
+__git_diff_merges_opts and list the accepted values for --diff-merges,
+and use it in _git_log and _git_show.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 5b8e7b810c..8688f7c433 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2040,6 +2040,12 @@ __git_log_shortlog_options="
+ 	--author= --committer= --grep=
+ 	--all-match --invert-grep
+ "
++# Options accepted by log and show
++__git_log_show_options="
++	--diff-merges --diff-merges= --no-diff-merges
++"
++
++__git_diff_merges_opts="off none on first-parent 1 separate m combined c dense-combined cc remerge r"
+ 
+ __git_log_pretty_formats="oneline short medium full fuller reference email raw format: tformat: mboxrd"
+ __git_log_date_formats="relative iso8601 iso8601-strict rfc2822 short local default human raw unix auto: format:"
+@@ -2096,11 +2102,16 @@ _git_log ()
+ 		__gitcomp "sorted unsorted" "" "${cur##--no-walk=}"
+ 		return
+ 		;;
++	--diff-merges=*)
++                __gitcomp "$__git_diff_merges_opts" "" "${cur##--diff-merges=}"
++                return
++                ;;
+ 	--*)
+ 		__gitcomp "
+ 			$__git_log_common_options
+ 			$__git_log_shortlog_options
+ 			$__git_log_gitk_options
++			$__git_log_show_options
+ 			--root --topo-order --date-order --reverse
+ 			--follow --full-diff
+ 			--abbrev-commit --no-abbrev-commit --abbrev=
+@@ -3015,10 +3026,15 @@ _git_show ()
+ 		__gitcomp "$__git_ws_error_highlight_opts" "" "${cur##--ws-error-highlight=}"
+ 		return
+ 		;;
++	--diff-merges=*)
++                __gitcomp "$__git_diff_merges_opts" "" "${cur##--diff-merges=}"
++                return
++                ;;
+ 	--*)
+ 		__gitcomp "--pretty= --format= --abbrev-commit --no-abbrev-commit
+ 			--oneline --show-signature
+ 			--expand-tabs --expand-tabs= --no-expand-tabs
++			$__git_log_show_options
+ 			$__git_diff_common_options
+ 			"
+ 		return
+-- 
+2.39.3 (Apple Git-145)
+

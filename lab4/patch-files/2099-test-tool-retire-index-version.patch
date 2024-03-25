@@ -1,0 +1,140 @@
+From 83708f80fc5fc7202df0bf3c0951f85d31249fe3 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 12 Sep 2023 12:32:35 -0700
+Subject: [PATCH 2099/2871] test-tool: retire "index-version"
+
+As "git update-index --show-index-version" can do the same thing,
+the 'index-version' subcommand in the test-tool lost its reason to
+exist.  Remove it and replace its use with the end-user facing
+'git update-index --show-index-version'.
+
+Helped-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile                              |  1 -
+ t/helper/test-index-version.c         | 15 ---------------
+ t/helper/test-tool.c                  |  1 -
+ t/helper/test-tool.h                  |  1 -
+ t/t1600-index.sh                      |  2 +-
+ t/t1700-split-index.sh                |  2 +-
+ t/t2104-update-index-skip-worktree.sh |  6 +++---
+ 7 files changed, 5 insertions(+), 23 deletions(-)
+ delete mode 100644 t/helper/test-index-version.c
+
+diff --git a/Makefile b/Makefile
+index e440728c24..5323c76aa0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -808,7 +808,6 @@ TEST_BUILTINS_OBJS += test-hash-speed.o
+ TEST_BUILTINS_OBJS += test-hash.o
+ TEST_BUILTINS_OBJS += test-hashmap.o
+ TEST_BUILTINS_OBJS += test-hexdump.o
+-TEST_BUILTINS_OBJS += test-index-version.o
+ TEST_BUILTINS_OBJS += test-json-writer.o
+ TEST_BUILTINS_OBJS += test-lazy-init-name-hash.o
+ TEST_BUILTINS_OBJS += test-match-trees.o
+diff --git a/t/helper/test-index-version.c b/t/helper/test-index-version.c
+deleted file mode 100644
+index a06c45c1f8..0000000000
+--- a/t/helper/test-index-version.c
++++ /dev/null
+@@ -1,15 +0,0 @@
+-#include "test-tool.h"
+-#include "cache.h"
+-
+-int cmd__index_version(int argc UNUSED, const char **argv UNUSED)
+-{
+-	struct cache_header hdr;
+-	int version;
+-
+-	memset(&hdr,0,sizeof(hdr));
+-	if (read(0, &hdr, sizeof(hdr)) != sizeof(hdr))
+-		return 0;
+-	version = ntohl(hdr.hdr_version);
+-	printf("%d\n", version);
+-	return 0;
+-}
+diff --git a/t/helper/test-tool.c b/t/helper/test-tool.c
+index abe8a785eb..621ac3dd10 100644
+--- a/t/helper/test-tool.c
++++ b/t/helper/test-tool.c
+@@ -38,7 +38,6 @@ static struct test_cmd cmds[] = {
+ 	{ "hashmap", cmd__hashmap },
+ 	{ "hash-speed", cmd__hash_speed },
+ 	{ "hexdump", cmd__hexdump },
+-	{ "index-version", cmd__index_version },
+ 	{ "json-writer", cmd__json_writer },
+ 	{ "lazy-init-name-hash", cmd__lazy_init_name_hash },
+ 	{ "match-trees", cmd__match_trees },
+diff --git a/t/helper/test-tool.h b/t/helper/test-tool.h
+index ea2672436c..a641c3a81d 100644
+--- a/t/helper/test-tool.h
++++ b/t/helper/test-tool.h
+@@ -32,7 +32,6 @@ int cmd__getcwd(int argc, const char **argv);
+ int cmd__hashmap(int argc, const char **argv);
+ int cmd__hash_speed(int argc, const char **argv);
+ int cmd__hexdump(int argc, const char **argv);
+-int cmd__index_version(int argc, const char **argv);
+ int cmd__json_writer(int argc, const char **argv);
+ int cmd__lazy_init_name_hash(int argc, const char **argv);
+ int cmd__match_trees(int argc, const char **argv);
+diff --git a/t/t1600-index.sh b/t/t1600-index.sh
+index 9368d82f7d..62e7fd1596 100755
+--- a/t/t1600-index.sh
++++ b/t/t1600-index.sh
+@@ -118,7 +118,7 @@ test_index_version () {
+ 		fi &&
+ 		git add a &&
+ 		echo $EXPECTED_OUTPUT_VERSION >expect &&
+-		test-tool index-version <.git/index >actual &&
++		git update-index --show-index-version >actual &&
+ 		test_cmp expect actual
+ 	)
+ }
+diff --git a/t/t1700-split-index.sh b/t/t1700-split-index.sh
+index b4ab166369..a7b7263b35 100755
+--- a/t/t1700-split-index.sh
++++ b/t/t1700-split-index.sh
+@@ -43,7 +43,7 @@ test_expect_success 'enable split index' '
+ 	git config splitIndex.maxPercentChange 100 &&
+ 	git update-index --split-index &&
+ 	test-tool dump-split-index .git/index >actual &&
+-	indexversion=$(test-tool index-version <.git/index) &&
++	indexversion=$(git update-index --show-index-version) &&
+ 
+ 	# NEEDSWORK: Stop hard-coding checksums.
+ 	if test "$indexversion" = "4"
+diff --git a/t/t2104-update-index-skip-worktree.sh b/t/t2104-update-index-skip-worktree.sh
+index b8686aabd3..0bab134d71 100755
+--- a/t/t2104-update-index-skip-worktree.sh
++++ b/t/t2104-update-index-skip-worktree.sh
+@@ -39,7 +39,7 @@ test_expect_success 'setup' '
+ '
+ 
+ test_expect_success 'index is at version 2' '
+-	test "$(test-tool index-version < .git/index)" = 2
++	test "$(git update-index --show-index-version)" = 2
+ '
+ 
+ test_expect_success 'update-index --skip-worktree' '
+@@ -48,7 +48,7 @@ test_expect_success 'update-index --skip-worktree' '
+ '
+ 
+ test_expect_success 'index is at version 3 after having some skip-worktree entries' '
+-	test "$(test-tool index-version < .git/index)" = 3
++	test "$(git update-index --show-index-version)" = 3
+ '
+ 
+ test_expect_success 'ls-files -t' '
+@@ -61,7 +61,7 @@ test_expect_success 'update-index --no-skip-worktree' '
+ '
+ 
+ test_expect_success 'index version is back to 2 when there is no skip-worktree entry' '
+-	test "$(test-tool index-version < .git/index)" = 2
++	test "$(git update-index --show-index-version)" = 2
+ '
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

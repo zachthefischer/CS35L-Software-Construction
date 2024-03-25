@@ -1,0 +1,248 @@
+From 738e5245fa423fc43495e2e17e053365dc6b2fc0 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 12 Oct 2022 12:52:33 +0000
+Subject: [PATCH 0087/2871] bundle-uri: parse bundle list in config format
+
+When a bundle provider wants to operate independently from a Git remote,
+they want to provide a single, consistent URI that users can use in
+their 'git clone --bundle-uri' commands. At this point, the Git client
+expects that URI to be a single bundle that can be unbundled and used to
+bootstrap the rest of the clone from the Git server. This single bundle
+cannot be re-used to assist with future incremental fetches.
+
+To allow for the incremental fetch case, teach Git to understand a
+bundle list that could be advertised at an independent bundle URI. Such
+a bundle list is likely to be inspected by human readers, even if only
+by the bundle provider creating the list. For this reason, we can take
+our expected "key=value" pairs and instead format them using Git config
+format.
+
+Create bundle_uri_parse_config_format() to parse a file in config format
+and convert that into a 'struct bundle_list' filled with its
+understanding of the contents.
+
+Be careful to use error_action CONFIG_ERROR_ERROR when calling
+git_config_from_file_with_options() because the default action for
+git_config_from_file() is to die() on a parsing error.  The current
+warning isn't particularly helpful if it arises to a user, but it will
+be made more verbose at a higher layer later.
+
+Update 'test-tool bundle-uri' to take this config file format as input.
+It uses a filename instead of stdin because there is no existing way to
+parse a FILE pointer in the config machinery. Using
+git_config_from_mem() is overly complicated and more likely to introduce
+bugs than this simpler version.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c                | 27 ++++++++++++++++++++
+ bundle-uri.h                |  9 +++++++
+ t/helper/test-bundle-uri.c  | 49 +++++++++++++++++++++++++++---------
+ t/t5750-bundle-uri-parse.sh | 50 +++++++++++++++++++++++++++++++++++++
+ 4 files changed, 123 insertions(+), 12 deletions(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index c02e7f62eb..3d44ec2b1e 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -173,6 +173,33 @@ static int bundle_list_update(const char *key, const char *value,
+ 	return 0;
+ }
+ 
++static int config_to_bundle_list(const char *key, const char *value, void *data)
++{
++	struct bundle_list *list = data;
++	return bundle_list_update(key, value, list);
++}
++
++int bundle_uri_parse_config_format(const char *uri,
++				   const char *filename,
++				   struct bundle_list *list)
++{
++	int result;
++	struct config_options opts = {
++		.error_action = CONFIG_ERROR_ERROR,
++	};
++
++	result = git_config_from_file_with_options(config_to_bundle_list,
++						   filename, list,
++						   &opts);
++
++	if (!result && list->mode == BUNDLE_MODE_NONE) {
++		warning(_("bundle list at '%s' has no mode"), uri);
++		result = 1;
++	}
++
++	return result;
++}
++
+ static char *find_temp_filename(void)
+ {
+ 	int fd;
+diff --git a/bundle-uri.h b/bundle-uri.h
+index 0e56ab2ae5..bc13d4c992 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -62,6 +62,15 @@ int for_all_bundles_in_list(struct bundle_list *list,
+ struct FILE;
+ void print_bundle_list(FILE *fp, struct bundle_list *list);
+ 
++/**
++ * A bundle URI may point to a bundle list where the key=value
++ * pairs are provided in config file format. This method is
++ * exposed publicly for testing purposes.
++ */
++int bundle_uri_parse_config_format(const char *uri,
++				   const char *filename,
++				   struct bundle_list *list);
++
+ /**
+  * Fetch data from the given 'uri' and unbundle the bundle data found
+  * based on that information.
+diff --git a/t/helper/test-bundle-uri.c b/t/helper/test-bundle-uri.c
+index 0329c56544..25afd39342 100644
+--- a/t/helper/test-bundle-uri.c
++++ b/t/helper/test-bundle-uri.c
+@@ -4,12 +4,21 @@
+ #include "strbuf.h"
+ #include "string-list.h"
+ 
+-static int cmd__bundle_uri_parse(int argc, const char **argv)
++enum input_mode {
++	KEY_VALUE_PAIRS,
++	CONFIG_FILE,
++};
++
++static int cmd__bundle_uri_parse(int argc, const char **argv, enum input_mode mode)
+ {
+ 	const char *key_value_usage[] = {
+ 		"test-tool bundle-uri parse-key-values <input>",
+ 		NULL
+ 	};
++	const char *config_usage[] = {
++		"test-tool bundle-uri parse-config <input>",
++		NULL
++	};
+ 	const char **usage = key_value_usage;
+ 	struct option options[] = {
+ 		OPT_END(),
+@@ -19,21 +28,35 @@ static int cmd__bundle_uri_parse(int argc, const char **argv)
+ 	int err = 0;
+ 	FILE *fp;
+ 
+-	argc = parse_options(argc, argv, NULL, options, usage, 0);
+-	if (argc != 1)
+-		goto usage;
++	if (mode == CONFIG_FILE)
++		usage = config_usage;
++
++	argc = parse_options(argc, argv, NULL, options, usage,
++			     PARSE_OPT_STOP_AT_NON_OPTION);
+ 
+ 	init_bundle_list(&list);
+-	fp = fopen(argv[0], "r");
+-	if (!fp)
+-		die("failed to open '%s'", argv[0]);
+ 
+-	while (strbuf_getline(&sb, fp) != EOF) {
+-		if (bundle_uri_parse_line(&list, sb.buf))
+-			err = error("bad line: '%s'", sb.buf);
++	switch (mode) {
++	case KEY_VALUE_PAIRS:
++		if (argc != 1)
++			goto usage;
++		fp = fopen(argv[0], "r");
++		if (!fp)
++			die("failed to open '%s'", argv[0]);
++		while (strbuf_getline(&sb, fp) != EOF) {
++			if (bundle_uri_parse_line(&list, sb.buf))
++				err = error("bad line: '%s'", sb.buf);
++		}
++		fclose(fp);
++		break;
++
++	case CONFIG_FILE:
++		if (argc != 1)
++			goto usage;
++		err = bundle_uri_parse_config_format("<uri>", argv[0], &list);
++		break;
+ 	}
+ 	strbuf_release(&sb);
+-	fclose(fp);
+ 
+ 	print_bundle_list(stdout, &list);
+ 
+@@ -62,7 +85,9 @@ int cmd__bundle_uri(int argc, const char **argv)
+ 		goto usage;
+ 
+ 	if (!strcmp(argv[1], "parse-key-values"))
+-		return cmd__bundle_uri_parse(argc - 1, argv + 1);
++		return cmd__bundle_uri_parse(argc - 1, argv + 1, KEY_VALUE_PAIRS);
++	if (!strcmp(argv[1], "parse-config"))
++		return cmd__bundle_uri_parse(argc - 1, argv + 1, CONFIG_FILE);
+ 	error("there is no test-tool bundle-uri tool '%s'", argv[1]);
+ 
+ usage:
+diff --git a/t/t5750-bundle-uri-parse.sh b/t/t5750-bundle-uri-parse.sh
+index fd142a66ad..c2fe3f9c5a 100755
+--- a/t/t5750-bundle-uri-parse.sh
++++ b/t/t5750-bundle-uri-parse.sh
+@@ -118,4 +118,54 @@ test_expect_success 'bundle_uri_parse_line() parsing edge cases: duplicate lines
+ 	test_cmp_config_output expect actual
+ '
+ 
++test_expect_success 'parse config format: just URIs' '
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++	[bundle "one"]
++		uri = http://example.com/bundle.bdl
++	[bundle "two"]
++		uri = https://example.com/bundle.bdl
++	[bundle "three"]
++		uri = file:///usr/share/git/bundle.bdl
++	EOF
++
++	test-tool bundle-uri parse-config expect >actual 2>err &&
++	test_must_be_empty err &&
++	test_cmp_config_output expect actual
++'
++
++test_expect_success 'parse config format edge cases: empty key or value' '
++	cat >in1 <<-\EOF &&
++	= bogus-value
++	EOF
++
++	cat >err1 <<-EOF &&
++	error: bad config line 1 in file in1
++	EOF
++
++	cat >expect <<-\EOF &&
++	[bundle]
++		version = 1
++		mode = all
++	EOF
++
++	test_must_fail test-tool bundle-uri parse-config in1 >actual 2>err &&
++	test_cmp err1 err &&
++	test_cmp_config_output expect actual &&
++
++	cat >in2 <<-\EOF &&
++	bogus-key =
++	EOF
++
++	cat >err2 <<-EOF &&
++	error: bad config line 1 in file in2
++	EOF
++
++	test_must_fail test-tool bundle-uri parse-config in2 >actual 2>err &&
++	test_cmp err2 err &&
++	test_cmp_config_output expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

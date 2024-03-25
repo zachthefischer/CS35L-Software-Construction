@@ -1,0 +1,62 @@
+From d8f416bbb87c2218ee5e43ec44ab8574a93fe423 Mon Sep 17 00:00:00 2001
+From: Josh Steadmon <steadmon@google.com>
+Date: Thu, 9 Nov 2023 10:50:44 -0800
+Subject: [PATCH 2390/2871] ci: run unit tests in CI
+
+Run unit tests in both Cirrus and GitHub CI. For sharded CI instances
+(currently just Windows on GitHub), run only on the first shard. This is
+OK while we have only a single unit test executable, but we may wish to
+distribute tests more evenly when we add new unit tests in the future.
+
+We may also want to add more status output in our unit test framework,
+so that we can do similar post-processing as in
+ci/lib.sh:handle_failed_tests().
+
+Signed-off-by: Josh Steadmon <steadmon@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .cirrus.yml               | 2 +-
+ ci/run-build-and-tests.sh | 2 ++
+ ci/run-test-slice.sh      | 5 +++++
+ 3 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/.cirrus.yml b/.cirrus.yml
+index 4860bebd32..b6280692d2 100644
+--- a/.cirrus.yml
++++ b/.cirrus.yml
+@@ -19,4 +19,4 @@ freebsd_12_task:
+   build_script:
+     - su git -c gmake
+   test_script:
+-    - su git -c 'gmake test'
++    - su git -c 'gmake DEFAULT_UNIT_TEST_TARGET=unit-tests-prove test unit-tests'
+diff --git a/ci/run-build-and-tests.sh b/ci/run-build-and-tests.sh
+index a18b13a41d..6c166b02a8 100755
+--- a/ci/run-build-and-tests.sh
++++ b/ci/run-build-and-tests.sh
+@@ -49,6 +49,8 @@ if test -n "$run_tests"
+ then
+ 	group "Run tests" make test ||
+ 	handle_failed_tests
++	group "Run unit tests" \
++		make DEFAULT_UNIT_TEST_TARGET=unit-tests-prove unit-tests
+ fi
+ check_unignored_build_artifacts
+ 
+diff --git a/ci/run-test-slice.sh b/ci/run-test-slice.sh
+index a3c67956a8..ae8094382f 100755
+--- a/ci/run-test-slice.sh
++++ b/ci/run-test-slice.sh
+@@ -15,4 +15,9 @@ group "Run tests" make --quiet -C t T="$(cd t &&
+ 	tr '\n' ' ')" ||
+ handle_failed_tests
+ 
++# We only have one unit test at the moment, so run it in the first slice
++if [ "$1" == "0" ] ; then
++	group "Run unit tests" make --quiet -C t unit-tests-prove
++fi
++
+ check_unignored_build_artifacts
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,57 @@
+From 8a4e8f6a67e7fc97048d4666eec38399b88e0e3b Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 26 Dec 2022 11:42:31 +0900
+Subject: [PATCH 0614/2871] The second batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index 73a7cdb0bc..bd40d35422 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -27,6 +27,8 @@ Performance, Internal Implementation, Development Support etc.
+  * The pack-bitmap machinery is taught to log the paths of redundant
+    bitmap(s) to trace2 instead of stderr.
+ 
++ * Use the SHA1DC implementation on macOS, just like other platforms,
++   by default.
+ 
+ 
+ Fixes since v2.39
+@@ -58,6 +60,19 @@ Fixes since v2.39
+  * Correct pthread API usage.
+    (merge 786e67611d sx/pthread-error-check-fix later to maint).
+ 
++ * The code to auto-correct a misspelt subcommand unnecessarily called
++   into git_default_config() from the early config codepath, which was
++   a no-no.  This has bee corrected.
++   (merge 0918d08887 sg/help-autocorrect-config-fix later to maint).
++
++ * "git http-fetch" (which is rarely used) forgot to identify itself
++   in the trace2 output.
++   (merge 7abb43cbc8 jt/http-fetch-trace2-report-name later to maint).
++
++ * The output from "git diff --stat" on an unmerged path lost the
++   terminating LF in Git 2.39, which has been corrected.
++   (merge 209d9cb011 pg/diff-stat-unmerged-regression-fix later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 77e04b2ed4 rs/t4205-do-not-exit-in-test-script later to maint).
+    (merge faebba436e rs/plug-pattern-list-leak-in-lof later to maint).
+@@ -67,3 +82,10 @@ Fixes since v2.39
+    (merge 500317ae03 js/t3920-shell-and-or-fix later to maint).
+    (merge 86325d36e6 rs/t3920-crlf-eating-grep-fix later to maint).
+    (merge cfbd173ccb rj/branch-copy-and-rename later to maint).
++   (merge c25d9e529d jk/unused-post-2.39 later to maint).
++   (merge a31cfe3283 jk/server-supports-v2-cleanup later to maint).
++   (merge a658e881c1 rs/am-parse-options-cleanup later to maint).
++   (merge 4cb39fcf19 rs/clear-commit-marks-cleanup later to maint).
++   (merge b07a819c05 rs/reflog-expiry-cleanup later to maint).
++   (merge d422d06167 rs/clarify-error-in-write-loose-object later to maint).
++   (merge 92cb135855 sk/remove-duplicate-includes later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

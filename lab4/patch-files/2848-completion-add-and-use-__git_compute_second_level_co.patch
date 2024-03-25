@@ -1,0 +1,186 @@
+From 6e32f718ffa2e1358f3c34dafb9ed0dc8e479781 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Sat, 10 Feb 2024 18:32:23 +0000
+Subject: [PATCH 2848/2871] completion: add and use
+ __git_compute_second_level_config_vars_for_section
+
+In a previous commit we removed some hardcoded config variable names from
+function __git_complete_config_variable_name in the completion script by
+introducing a new function,
+__git_compute_first_level_config_vars_for_section.
+
+The remaining hardcoded config variables are "second level"
+configuration variables, meaning 'branch.<name>.upstream',
+'remote.<name>.url', etc. where <name> is a user-defined name.
+
+Making use of the new existing --config flag to 'git help', add a new
+function, __git_compute_second_level_config_vars_for_section. This
+function takes as argument a config section name and computes the
+corresponding second-level config variables, i.e. those that contain a
+'<' which indicates the start of a placeholder. Note that as in
+__git_compute_first_level_config_vars_for_section added previsouly, we
+use indirect expansion instead of associative arrays to stay compatible
+with Bash 3 on which macOS is stuck for licensing reasons.
+
+As explained in the previous commit, we use the existing pattern in the
+completion script of using global variables to cache the list of
+variables for each section.
+
+Use this new function and the variables it defines in
+__git_complete_config_variable_name to remove hardcoded config
+variables, and add a test to verify the new function.  Use a single
+'case' for all sections with second-level variables names, since the
+code for each of them is now exactly the same.
+
+Adjust the name of a test added in a previous commit to reflect that it
+now tests the added function.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 71 ++++++++------------------
+ t/t9902-completion.sh                  |  2 +-
+ 2 files changed, 22 insertions(+), 51 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 57a8da7ca1..87678a5bb3 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2596,6 +2596,13 @@ __git_compute_config_vars ()
+ 	__git_config_vars="$(git help --config-for-completion)"
+ }
+ 
++__git_config_vars_all=
++__git_compute_config_vars_all ()
++{
++	test -n "$__git_config_vars_all" ||
++	__git_config_vars_all="$(git --no-pager help --config)"
++}
++
+ __git_compute_first_level_config_vars_for_section ()
+ {
+ 	local section="$1"
+@@ -2605,6 +2612,15 @@ __git_compute_first_level_config_vars_for_section ()
+ 	printf -v "__git_first_level_config_vars_for_section_${section}" %s "$(echo "$__git_config_vars" | grep -E "^${section}\.[a-z]" | awk -F. '{print $2}')"
+ }
+ 
++__git_compute_second_level_config_vars_for_section ()
++{
++	local section="$1"
++	__git_compute_config_vars_all
++	local this_section="__git_second_level_config_vars_for_section_${section}"
++	test -n "${!this_section}" ||
++	printf -v "__git_second_level_config_vars_for_section_${section}" %s "$(echo "$__git_config_vars_all" | grep -E "^${section}\.<" | awk -F. '{print $3}')"
++}
++
+ __git_config_sections=
+ __git_compute_config_sections ()
+ {
+@@ -2749,10 +2765,13 @@ __git_complete_config_variable_name ()
+ 	done
+ 
+ 	case "$cur_" in
+-	branch.*.*)
++	branch.*.*|guitool.*.*|difftool.*.*|man.*.*|mergetool.*.*|remote.*.*|submodule.*.*|url.*.*)
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_##*.}"
+-		__gitcomp "remote pushRemote merge mergeOptions rebase" "$pfx" "$cur_" "$sfx"
++		local section="${pfx%.*.}"
++		__git_compute_second_level_config_vars_for_section "${section}"
++		local this_section="__git_second_level_config_vars_for_section_${section}"
++		__gitcomp "${!this_section}" "$pfx" "$cur_" "$sfx"
+ 		return
+ 		;;
+ 	branch.*)
+@@ -2765,33 +2784,6 @@ __git_complete_config_variable_name ()
+ 		__gitcomp_nl_append "${!this_section}" "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
+-	guitool.*.*)
+-		local pfx="${cur_%.*}."
+-		cur_="${cur_##*.}"
+-		__gitcomp "
+-			argPrompt cmd confirm needsFile noConsole noRescan
+-			prompt revPrompt revUnmerged title
+-			" "$pfx" "$cur_" "$sfx"
+-		return
+-		;;
+-	difftool.*.*)
+-		local pfx="${cur_%.*}."
+-		cur_="${cur_##*.}"
+-		__gitcomp "cmd path" "$pfx" "$cur_" "$sfx"
+-		return
+-		;;
+-	man.*.*)
+-		local pfx="${cur_%.*}."
+-		cur_="${cur_##*.}"
+-		__gitcomp "cmd path" "$pfx" "$cur_" "$sfx"
+-		return
+-		;;
+-	mergetool.*.*)
+-		local pfx="${cur_%.*}."
+-		cur_="${cur_##*.}"
+-		__gitcomp "cmd path trustExitCode" "$pfx" "$cur_" "$sfx"
+-		return
+-		;;
+ 	pager.*)
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_#*.}"
+@@ -2799,15 +2791,6 @@ __git_complete_config_variable_name ()
+ 		__gitcomp_nl "$__git_all_commands" "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
+-	remote.*.*)
+-		local pfx="${cur_%.*}."
+-		cur_="${cur_##*.}"
+-		__gitcomp "
+-			url proxy fetch push mirror skipDefaultUpdate
+-			receivepack uploadpack tagOpt pushurl
+-			" "$pfx" "$cur_" "$sfx"
+-		return
+-		;;
+ 	remote.*)
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_#*.}"
+@@ -2818,12 +2801,6 @@ __git_complete_config_variable_name ()
+ 		__gitcomp_nl_append "${!this_section}" "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
+-	submodule.*.*)
+-		local pfx="${cur_%.*}."
+-		cur_="${cur_##*.}"
+-		__gitcomp "url update branch fetchRecurseSubmodules ignore active" "$pfx" "$cur_" "$sfx"
+-		return
+-		;;
+ 	submodule.*)
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_#*.}"
+@@ -2834,12 +2811,6 @@ __git_complete_config_variable_name ()
+ 		__gitcomp_nl_append "${!this_section}" "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
+-	url.*.*)
+-		local pfx="${cur_%.*}."
+-		cur_="${cur_##*.}"
+-		__gitcomp "insteadOf pushInsteadOf" "$pfx" "$cur_" "$sfx"
+-		return
+-		;;
+ 	*.*)
+ 		__git_compute_config_vars
+ 		__gitcomp "$__git_config_vars" "" "$cur_" "$sfx"
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index 8600b9e0dd..64031a9eff 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -2601,7 +2601,7 @@ test_expect_success 'git config - variable name - submodule and __git_compute_fi
+ 	EOF
+ '
+ 
+-test_expect_success 'git config - variable name - submodule names' '
++test_expect_success 'git config - variable name - __git_compute_second_level_config_vars_for_section' '
+ 	test_completion "git config submodule.sub." <<-\EOF
+ 	submodule.sub.url Z
+ 	submodule.sub.update Z
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,105 @@
+From 4416b86c6b34dad64b556bb1eb6711d5e6595a48 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 17 Jun 2023 22:44:00 +0200
+Subject: [PATCH 1618/2871] strbuf: simplify strbuf_expand_literal_cb()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Now that strbuf_expand_literal_cb() is no longer used as a callback,
+drop its "_cb" name suffix and unused context parameter.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-files.c | 2 +-
+ builtin/ls-tree.c  | 2 +-
+ pretty.c           | 4 ++--
+ strbuf.c           | 4 +---
+ strbuf.h           | 6 ++----
+ 5 files changed, 7 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/ls-files.c b/builtin/ls-files.c
+index 03bf5771b4..0b00bd5d0f 100644
+--- a/builtin/ls-files.c
++++ b/builtin/ls-files.c
+@@ -274,7 +274,7 @@ static void show_ce_fmt(struct repository *repo, const struct cache_entry *ce,
+ 
+ 		if (skip_prefix(format, "%", &format))
+ 			strbuf_addch(&sb, '%');
+-		else if ((len = strbuf_expand_literal_cb(&sb, format, NULL)))
++		else if ((len = strbuf_expand_literal(&sb, format)))
+ 			format += len;
+ 		else if (*format != '(')
+ 			die(_("bad ls-files format: element '%s' "
+diff --git a/builtin/ls-tree.c b/builtin/ls-tree.c
+index 8460d20257..a90f3c81a0 100644
+--- a/builtin/ls-tree.c
++++ b/builtin/ls-tree.c
+@@ -108,7 +108,7 @@ static int show_tree_fmt(const struct object_id *oid, struct strbuf *base,
+ 
+ 		if (skip_prefix(format, "%", &format))
+ 			strbuf_addch(&sb, '%');
+-		else if ((len = strbuf_expand_literal_cb(&sb, format, NULL)))
++		else if ((len = strbuf_expand_literal(&sb, format)))
+ 			format += len;
+ 		else if (*format != '(')
+ 			die(_("bad ls-tree format: element '%s' "
+diff --git a/pretty.c b/pretty.c
+index cffbf32987..4c08f9856b 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1262,7 +1262,7 @@ static struct strbuf *expand_separator(struct strbuf *sb,
+ 
+ 		if (skip_prefix(format, "%", &format))
+ 			strbuf_addch(sb, '%');
+-		else if ((len = strbuf_expand_literal_cb(sb, format, NULL)))
++		else if ((len = strbuf_expand_literal(sb, format)))
+ 			format += len;
+ 		else
+ 			strbuf_addch(sb, '%');
+@@ -1395,7 +1395,7 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
+ 	char **slot;
+ 
+ 	/* these are independent of the commit */
+-	res = strbuf_expand_literal_cb(sb, placeholder, NULL);
++	res = strbuf_expand_literal(sb, placeholder);
+ 	if (res)
+ 		return res;
+ 
+diff --git a/strbuf.c b/strbuf.c
+index c3d1cee616..55a3cfa5cf 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -427,9 +427,7 @@ int strbuf_expand_step(struct strbuf *sb, const char **formatp)
+ 	return 1;
+ }
+ 
+-size_t strbuf_expand_literal_cb(struct strbuf *sb,
+-				const char *placeholder,
+-				void *context UNUSED)
++size_t strbuf_expand_literal(struct strbuf *sb, const char *placeholder)
+ {
+ 	int ch;
+ 
+diff --git a/strbuf.h b/strbuf.h
+index 95e50e243e..b1eab015f0 100644
+--- a/strbuf.h
++++ b/strbuf.h
+@@ -320,11 +320,9 @@ const char *strbuf_join_argv(struct strbuf *buf, int argc,
+ /**
+  * Used with `strbuf_expand_step` to expand the literals %n and %x
+  * followed by two hexadecimal digits. Returns the number of recognized
+- * characters. The context argument is ignored.
++ * characters.
+  */
+-size_t strbuf_expand_literal_cb(struct strbuf *sb,
+-				const char *placeholder,
+-				void *context);
++size_t strbuf_expand_literal(struct strbuf *sb, const char *placeholder);
+ 
+ /**
+  * If the string pointed to by `formatp` contains a percent sign ("%"),
+-- 
+2.39.3 (Apple Git-145)
+

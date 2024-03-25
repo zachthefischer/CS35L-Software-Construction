@@ -1,0 +1,98 @@
+From f034bb1cad862a678030cdf0ae833636f9d7dbca Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 6 Jan 2023 06:05:00 -0500
+Subject: [PATCH 0630/2871] diff: drop "name" parameter from
+ prepare_temp_file()
+
+The prepare_temp_file() function takes a diff_filespec as well as a
+filename. But it is almost certainly an error to pass in a name that
+isn't the filespec's "path" parameter, since that is the only thing that
+reliably tells us how to find the content (and indeed, this was the
+source of a recently-fixed bug).
+
+So let's drop the redundant "name" parameter and just use one->path
+throughout the function. This simplifies the interface a little bit, and
+makes it impossible for calling code to get it wrong.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 21 ++++++++++-----------
+ 1 file changed, 10 insertions(+), 11 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index 330f090f6a..3117fce39b 100644
+--- a/diff.c
++++ b/diff.c
+@@ -4213,7 +4213,6 @@ static void prep_temp_blob(struct index_state *istate,
+ }
+ 
+ static struct diff_tempfile *prepare_temp_file(struct repository *r,
+-					       const char *name,
+ 					       struct diff_filespec *one)
+ {
+ 	struct diff_tempfile *temp = claim_diff_tempfile();
+@@ -4231,18 +4230,18 @@ static struct diff_tempfile *prepare_temp_file(struct repository *r,
+ 
+ 	if (!S_ISGITLINK(one->mode) &&
+ 	    (!one->oid_valid ||
+-	     reuse_worktree_file(r->index, name, &one->oid, 1))) {
++	     reuse_worktree_file(r->index, one->path, &one->oid, 1))) {
+ 		struct stat st;
+-		if (lstat(name, &st) < 0) {
++		if (lstat(one->path, &st) < 0) {
+ 			if (errno == ENOENT)
+ 				goto not_a_valid_file;
+-			die_errno("stat(%s)", name);
++			die_errno("stat(%s)", one->path);
+ 		}
+ 		if (S_ISLNK(st.st_mode)) {
+ 			struct strbuf sb = STRBUF_INIT;
+-			if (strbuf_readlink(&sb, name, st.st_size) < 0)
+-				die_errno("readlink(%s)", name);
+-			prep_temp_blob(r->index, name, temp, sb.buf, sb.len,
++			if (strbuf_readlink(&sb, one->path, st.st_size) < 0)
++				die_errno("readlink(%s)", one->path);
++			prep_temp_blob(r->index, one->path, temp, sb.buf, sb.len,
+ 				       (one->oid_valid ?
+ 					&one->oid : null_oid()),
+ 				       (one->oid_valid ?
+@@ -4251,7 +4250,7 @@ static struct diff_tempfile *prepare_temp_file(struct repository *r,
+ 		}
+ 		else {
+ 			/* we can borrow from the file in the work tree */
+-			temp->name = name;
++			temp->name = one->path;
+ 			if (!one->oid_valid)
+ 				oid_to_hex_r(temp->hex, null_oid());
+ 			else
+@@ -4269,7 +4268,7 @@ static struct diff_tempfile *prepare_temp_file(struct repository *r,
+ 	else {
+ 		if (diff_populate_filespec(r, one, NULL))
+ 			die("cannot read data blob for %s", one->path);
+-		prep_temp_blob(r->index, name, temp,
++		prep_temp_blob(r->index, one->path, temp,
+ 			       one->data, one->size,
+ 			       &one->oid, one->mode);
+ 	}
+@@ -4280,7 +4279,7 @@ static void add_external_diff_name(struct repository *r,
+ 				   struct strvec *argv,
+ 				   struct diff_filespec *df)
+ {
+-	struct diff_tempfile *temp = prepare_temp_file(r, df->path, df);
++	struct diff_tempfile *temp = prepare_temp_file(r, df);
+ 	strvec_push(argv, temp->name);
+ 	strvec_push(argv, temp->hex);
+ 	strvec_push(argv, temp->mode);
+@@ -7034,7 +7033,7 @@ static char *run_textconv(struct repository *r,
+ 	struct strbuf buf = STRBUF_INIT;
+ 	int err = 0;
+ 
+-	temp = prepare_temp_file(r, spec->path, spec);
++	temp = prepare_temp_file(r, spec);
+ 	strvec_push(&child.args, pgm);
+ 	strvec_push(&child.args, temp->name);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

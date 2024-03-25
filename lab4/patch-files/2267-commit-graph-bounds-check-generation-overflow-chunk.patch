@@ -1,0 +1,104 @@
+From ee6a7924124b2a9030da55c94a27829e410b3b64 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 17:05:47 -0400
+Subject: [PATCH 2267/2871] commit-graph: bounds-check generation overflow
+ chunk
+
+If the generation entry in a commit-graph doesn't fit, we instead insert
+an offset into a generation overflow chunk. But since we don't record
+the size of the chunk, we may read outside the chunk if the offset we
+find on disk is malicious or corrupted.
+
+We can't check the size of the chunk up-front; it will vary based on how
+many entries need overflow. So instead, we'll do a bounds-check before
+accessing the chunk memory. Unfortunately there is no error-return from
+this function, so we'll just have to die(), which is what it does for
+other forms of corruption.
+
+As with other cases, we can drop the st_mult() call, since we know our
+bounds-checked value will fit within a size_t.
+
+Before this patch, the test here actually "works" because we read
+garbage data from the next chunk. And since that garbage data happens
+not to provide a generation number which changes the output, it appears
+to work. We could construct a case that actually segfaults or produces
+wrong output, but it would be a bit tricky. For our purposes its
+sufficient to check that we've detected the bounds error.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c                     | 10 +++++++---
+ commit-graph.h                     |  1 +
+ t/t5328-commit-graph-64bit-time.sh | 10 ++++++++++
+ 3 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index ca26870d1b..f446e76c28 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -451,8 +451,9 @@ struct commit_graph *parse_commit_graph(struct repo_settings *s,
+ 	if (s->commit_graph_generation_version >= 2) {
+ 		read_chunk(cf, GRAPH_CHUNKID_GENERATION_DATA,
+ 			   graph_read_generation_data, graph);
+-		pair_chunk_unsafe(cf, GRAPH_CHUNKID_GENERATION_DATA_OVERFLOW,
+-			&graph->chunk_generation_data_overflow);
++		pair_chunk(cf, GRAPH_CHUNKID_GENERATION_DATA_OVERFLOW,
++			   &graph->chunk_generation_data_overflow,
++			   &graph->chunk_generation_data_overflow_size);
+ 
+ 		if (graph->chunk_generation_data)
+ 			graph->read_generation_data = 1;
+@@ -896,7 +897,10 @@ static void fill_commit_graph_info(struct commit *item, struct commit_graph *g,
+ 				die(_("commit-graph requires overflow generation data but has none"));
+ 
+ 			offset_pos = offset ^ CORRECTED_COMMIT_DATE_OFFSET_OVERFLOW;
+-			graph_data->generation = item->date + get_be64(g->chunk_generation_data_overflow + st_mult(8, offset_pos));
++			if (g->chunk_generation_data_overflow_size / sizeof(uint64_t) <= offset_pos)
++				die(_("commit-graph overflow generation data is too small"));
++			graph_data->generation = item->date +
++				get_be64(g->chunk_generation_data_overflow + sizeof(uint64_t) * offset_pos);
+ 		} else
+ 			graph_data->generation = item->date + offset;
+ 	} else
+diff --git a/commit-graph.h b/commit-graph.h
+index e4248ea05d..b373f15802 100644
+--- a/commit-graph.h
++++ b/commit-graph.h
+@@ -94,6 +94,7 @@ struct commit_graph {
+ 	const unsigned char *chunk_commit_data;
+ 	const unsigned char *chunk_generation_data;
+ 	const unsigned char *chunk_generation_data_overflow;
++	size_t chunk_generation_data_overflow_size;
+ 	const unsigned char *chunk_extra_edges;
+ 	size_t chunk_extra_edges_size;
+ 	const unsigned char *chunk_base_graphs;
+diff --git a/t/t5328-commit-graph-64bit-time.sh b/t/t5328-commit-graph-64bit-time.sh
+index e9c521c061..e5ff3e07ad 100755
+--- a/t/t5328-commit-graph-64bit-time.sh
++++ b/t/t5328-commit-graph-64bit-time.sh
+@@ -10,6 +10,7 @@ then
+ fi
+ 
+ . "$TEST_DIRECTORY"/lib-commit-graph.sh
++. "$TEST_DIRECTORY/lib-chunk.sh"
+ 
+ UNIX_EPOCH_ZERO="@0 +0000"
+ FUTURE_DATE="@4147483646 +0000"
+@@ -72,4 +73,13 @@ test_expect_success 'single commit with generation data exceeding UINT32_MAX' '
+ 	git -C repo-uint32-max commit-graph verify
+ '
+ 
++test_expect_success 'reader notices out-of-bounds generation overflow' '
++	graph=.git/objects/info/commit-graph &&
++	test_when_finished "rm -rf $graph" &&
++	git commit-graph write --reachable &&
++	corrupt_chunk_file $graph GDO2 clear &&
++	test_must_fail git log 2>err &&
++	grep "commit-graph overflow generation data is too small" err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

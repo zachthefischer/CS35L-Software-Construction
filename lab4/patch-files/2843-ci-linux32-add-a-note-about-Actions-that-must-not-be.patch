@@ -1,0 +1,52 @@
+From 20e0ff883514216f5737a721443ee0dd59dbf68f Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Sun, 11 Feb 2024 12:11:29 +0000
+Subject: [PATCH 2843/2871] ci(linux32): add a note about Actions that must not
+ be updated
+
+The Docker container used by the `linux32` job comes without Node.js,
+and therefore the `actions/checkout` and `actions/upload-artifact`
+Actions cannot be upgraded to the latest versions (because they use
+Node.js).
+
+One time too many, I accidentally tried to update them, where
+`actions/checkout` at least fails immediately, but the
+`actions/upload-artifact` step is only used when any test fails, and
+therefore the CI run usually passes even though that Action was updated
+to a version that is incompatible with the Docker container in which
+this job runs.
+
+So let's add a big fat warning, mainly for my own benefit, to avoid
+running into the very same issue over and over again.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index ec25f6f99d..7bacb322e4 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -344,7 +344,7 @@ jobs:
+     steps:
+     - uses: actions/checkout@v4
+       if: matrix.vector.jobname != 'linux32'
+-    - uses: actions/checkout@v1
++    - uses: actions/checkout@v1 # cannot be upgraded because Node.js Actions aren't supported in this container
+       if: matrix.vector.jobname == 'linux32'
+     - run: ci/install-docker-dependencies.sh
+     - run: ci/run-build-and-tests.sh
+@@ -359,7 +359,7 @@ jobs:
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != '' && matrix.vector.jobname == 'linux32'
+-      uses: actions/upload-artifact@v1
++      uses: actions/upload-artifact@v1 # cannot be upgraded because Node.js Actions aren't supported in this container
+       with:
+         name: failed-tests-${{matrix.vector.jobname}}
+         path: ${{env.FAILED_TEST_ARTIFACTS}}
+-- 
+2.39.3 (Apple Git-145)
+

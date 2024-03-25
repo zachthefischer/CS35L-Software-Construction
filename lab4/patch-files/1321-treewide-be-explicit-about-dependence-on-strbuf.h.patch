@@ -1,0 +1,181 @@
+From 69a63fe663874716d2b5bf49b90c550f8279358e Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:08 +0000
+Subject: [PATCH 1321/2871] treewide: be explicit about dependence on strbuf.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ color.c                       | 1 +
+ common-main.c                 | 1 +
+ credential.c                  | 1 +
+ date.c                        | 1 +
+ ll-merge.c                    | 1 +
+ split-index.c                 | 1 +
+ t/helper/test-mergesort.c     | 1 +
+ t/helper/test-oid-array.c     | 1 +
+ t/helper/test-oidtree.c       | 1 +
+ t/helper/test-parse-options.c | 1 +
+ t/helper/test-string-list.c   | 1 +
+ wrapper.c                     | 1 +
+ ws.c                          | 1 +
+ 13 files changed, 13 insertions(+)
+
+diff --git a/color.c b/color.c
+index 6031998d3e..f8a25ca807 100644
+--- a/color.c
++++ b/color.c
+@@ -5,6 +5,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "pager.h"
++#include "strbuf.h"
+ 
+ static int git_use_color_default = GIT_COLOR_AUTO;
+ int color_stdout_is_tty = -1;
+diff --git a/common-main.c b/common-main.c
+index f319317353..601a875e2f 100644
+--- a/common-main.c
++++ b/common-main.c
+@@ -3,6 +3,7 @@
+ #include "gettext.h"
+ #include "attr.h"
+ #include "setup.h"
++#include "strbuf.h"
+ #include "trace2.h"
+ 
+ /*
+diff --git a/credential.c b/credential.c
+index e6417bf880..42194efc9e 100644
+--- a/credential.c
++++ b/credential.c
+@@ -8,6 +8,7 @@
+ #include "url.h"
+ #include "prompt.h"
+ #include "sigchain.h"
++#include "strbuf.h"
+ #include "urlmatch.h"
+ #include "git-compat-util.h"
+ 
+diff --git a/date.c b/date.c
+index e944c8905a..bc030da012 100644
+--- a/date.c
++++ b/date.c
+@@ -8,6 +8,7 @@
+ #include "date.h"
+ #include "gettext.h"
+ #include "pager.h"
++#include "strbuf.h"
+ 
+ /*
+  * This is like mktime, but without normalization of tm_wday and tm_yday.
+diff --git a/ll-merge.c b/ll-merge.c
+index 28bc94c45d..85517e668e 100644
+--- a/ll-merge.c
++++ b/ll-merge.c
+@@ -12,6 +12,7 @@
+ #include "run-command.h"
+ #include "ll-merge.h"
+ #include "quote.h"
++#include "strbuf.h"
+ #include "wrapper.h"
+ 
+ struct ll_merge_driver;
+diff --git a/split-index.c b/split-index.c
+index 5602b74994..3fc4e91485 100644
+--- a/split-index.c
++++ b/split-index.c
+@@ -3,6 +3,7 @@
+ #include "gettext.h"
+ #include "mem-pool.h"
+ #include "split-index.h"
++#include "strbuf.h"
+ #include "ewah/ewok.h"
+ 
+ struct split_index *init_split_index(struct index_state *istate)
+diff --git a/t/helper/test-mergesort.c b/t/helper/test-mergesort.c
+index 737e0c5235..3aabae6c1c 100644
+--- a/t/helper/test-mergesort.c
++++ b/t/helper/test-mergesort.c
+@@ -2,6 +2,7 @@
+ #include "cache.h"
+ #include "mem-pool.h"
+ #include "mergesort.h"
++#include "strbuf.h"
+ 
+ static uint32_t minstd_rand(uint32_t *state)
+ {
+diff --git a/t/helper/test-oid-array.c b/t/helper/test-oid-array.c
+index fd6f73ea03..ea3bf27898 100644
+--- a/t/helper/test-oid-array.c
++++ b/t/helper/test-oid-array.c
+@@ -3,6 +3,7 @@
+ #include "hex.h"
+ #include "oid-array.h"
+ #include "setup.h"
++#include "strbuf.h"
+ 
+ static int print_oid(const struct object_id *oid, void *data)
+ {
+diff --git a/t/helper/test-oidtree.c b/t/helper/test-oidtree.c
+index edcb7e9f44..796c9811e0 100644
+--- a/t/helper/test-oidtree.c
++++ b/t/helper/test-oidtree.c
+@@ -3,6 +3,7 @@
+ #include "hex.h"
+ #include "oidtree.h"
+ #include "setup.h"
++#include "strbuf.h"
+ 
+ static enum cb_next print_oid(const struct object_id *oid, void *data)
+ {
+diff --git a/t/helper/test-parse-options.c b/t/helper/test-parse-options.c
+index 506835521a..20a81a1eb2 100644
+--- a/t/helper/test-parse-options.c
++++ b/t/helper/test-parse-options.c
+@@ -1,6 +1,7 @@
+ #include "test-tool.h"
+ #include "cache.h"
+ #include "parse-options.h"
++#include "strbuf.h"
+ #include "string-list.h"
+ #include "trace2.h"
+ 
+diff --git a/t/helper/test-string-list.c b/t/helper/test-string-list.c
+index 2123dda85b..959f27c74c 100644
+--- a/t/helper/test-string-list.c
++++ b/t/helper/test-string-list.c
+@@ -1,5 +1,6 @@
+ #include "test-tool.h"
+ #include "cache.h"
++#include "strbuf.h"
+ #include "string-list.h"
+ 
+ /*
+diff --git a/wrapper.c b/wrapper.c
+index c130d7518b..e80f83498d 100644
+--- a/wrapper.c
++++ b/wrapper.c
+@@ -5,6 +5,7 @@
+ #include "abspath.h"
+ #include "config.h"
+ #include "gettext.h"
++#include "strbuf.h"
+ #include "trace2.h"
+ #include "wrapper.h"
+ 
+diff --git a/ws.c b/ws.c
+index da3d0e28cb..036ccb8ee9 100644
+--- a/ws.c
++++ b/ws.c
+@@ -5,6 +5,7 @@
+  */
+ #include "cache.h"
+ #include "attr.h"
++#include "strbuf.h"
+ 
+ static struct whitespace_rule {
+ 	const char *rule_name;
+-- 
+2.39.3 (Apple Git-145)
+

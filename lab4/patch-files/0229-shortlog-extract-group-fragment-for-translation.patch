@@ -1,0 +1,35 @@
+From b017d3dae9fe5a5b636b8f7a5235cee2b1b90332 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Oct 2022 14:55:36 -0400
+Subject: [PATCH 0229/2871] shortlog: extract `--group` fragment for
+ translation
+
+The subsequent commit will add another unhandled case in
+`read_from_stdin()` which will want to use the same message as with
+`--group=trailer`.
+
+Extract the "--group=trailer" part from this message so the same
+translation key can be used for both cases.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/shortlog.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/shortlog.c b/builtin/shortlog.c
+index 18f0800c82..d0645769d7 100644
+--- a/builtin/shortlog.c
++++ b/builtin/shortlog.c
+@@ -132,7 +132,7 @@ static void read_from_stdin(struct shortlog *log)
+ 		match = committer_match;
+ 		break;
+ 	case SHORTLOG_GROUP_TRAILER:
+-		die(_("using --group=trailer with stdin is not supported"));
++		die(_("using %s with stdin is not supported"), "--group=trailer");
+ 	default:
+ 		BUG("unhandled shortlog group");
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

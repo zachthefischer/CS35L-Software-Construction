@@ -1,0 +1,79 @@
+From 46262691686d302e77bfaf8e27b7fd3792705aeb Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 29 Nov 2023 08:25:05 +0100
+Subject: [PATCH 2478/2871] t4013: simplify magic parsing and drop "failure"
+
+In t14013, we have various different tests that verify whether certain
+diffs are generated as expected. As much of the logic is the same across
+many of the tests we some common code in there that generates the actual
+test cases for us.
+
+As some diffs are more special than others depending on the command line
+parameters passed to git-diff(1), these tests need to adapt behaviour to
+the specific test case sometimes. This is done via colon-prefixed magic
+commands, of which we currently know "failure" and "noellipses". The
+logic to parse this magic is a bit convoluted though and hard to grasp,
+also due to the rather unnecessary nesting.
+
+Un-nest the cases so that it becomes a bit more straightfoward. The
+logic is further simplified by removing support for the "failure" magic,
+which is not actually used anymore.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4013-diff-various.sh | 27 ++++++++++++---------------
+ 1 file changed, 12 insertions(+), 15 deletions(-)
+
+diff --git a/t/t4013-diff-various.sh b/t/t4013-diff-various.sh
+index 5cc17c2e0d..76b8619e2e 100755
+--- a/t/t4013-diff-various.sh
++++ b/t/t4013-diff-various.sh
+@@ -178,32 +178,29 @@ process_diffs () {
+ V=$(git version | sed -e 's/^git version //' -e 's/\./\\./g')
+ while read magic cmd
+ do
+-	status=success
+ 	case "$magic" in
+ 	'' | '#'*)
+ 		continue ;;
+-	:*)
+-		magic=${magic#:}
++	:noellipses)
++		magic=noellipses
+ 		label="$magic-$cmd"
+-		case "$magic" in
+-		noellipses) ;;
+-		failure)
+-			status=failure
+-			magic=
+-			label="$cmd" ;;
+-		*)
+-			BUG "unknown magic $magic" ;;
+-		esac ;;
++		;;
++	:*)
++		BUG "unknown magic $magic"
++		;;
+ 	*)
+-		cmd="$magic $cmd" magic=
+-		label="$cmd" ;;
++		cmd="$magic $cmd"
++		magic=
++		label="$cmd"
++		;;
+ 	esac
++
+ 	test=$(echo "$label" | sed -e 's|[/ ][/ ]*|_|g')
+ 	pfx=$(printf "%04d" $test_count)
+ 	expect="$TEST_DIRECTORY/t4013/diff.$test"
+ 	actual="$pfx-diff.$test"
+ 
+-	test_expect_$status "git $cmd # magic is ${magic:-(not used)}" '
++	test_expect_success "git $cmd # magic is ${magic:-(not used)}" '
+ 		{
+ 			echo "$ git $cmd"
+ 			case "$magic" in
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,31 @@
+From 022fbb655d371db6382415bcfba5cdf741afeb41 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 12 May 2023 15:09:16 +0000
+Subject: [PATCH 1434/2871] t5583: fix shebang line
+
+The shebang was missing the leading `/` character, resulting in:
+
+    $ ./t5583-push-branches.sh
+    bash: ./t5583-push-branches.sh: cannot execute: required file not found
+
+Add the missing character so the test can run.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5583-push-branches.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t5583-push-branches.sh b/t/t5583-push-branches.sh
+index 29a5c5601b..e7e1b6dab6 100755
+--- a/t/t5583-push-branches.sh
++++ b/t/t5583-push-branches.sh
+@@ -1,4 +1,4 @@
+-#!bin/sh
++#!/bin/sh
+ 
+ test_description='check the consisitency of behavior of --all and --branches'
+ 
+-- 
+2.39.3 (Apple Git-145)
+

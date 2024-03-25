@@ -1,0 +1,71 @@
+From c4b84b137ae7f18ac0fe30e2566725567b90ecca Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 18 Jan 2024 11:22:58 +0100
+Subject: [PATCH 2703/2871] ci: make p4 setup on macOS more robust
+
+When setting up Perforce on macOS we put both `p4` and `p4d` into
+"$HOME/bin". On GitHub CI this directory is indeed contained in the PATH
+environment variable and thus there is no need for additional setup than
+to put the binaries there. But GitLab CI does not do this, and thus our
+Perforce-based tests would be skipped there even though we download the
+binaries.
+
+Refactor the setup code to become more robust by downloading binaries
+into a separate directory which we then manually append to our PATH.
+This matches what we do on Linux-based jobs.
+
+Note that it may seem like we already did append "$HOME/bin" to PATH
+because we're actually removing the lines that adapt PATH. But we only
+ever adapted the PATH variable in "ci/install-dependencies.sh", and
+didn't adapt it when running "ci/run-build-and-test.sh". Consequently,
+the required binaries wouldn't be found during the test run unless the
+CI platform already had the "$HOME/bin" in PATH right from the start.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/install-dependencies.sh | 10 ++++------
+ ci/lib.sh                  |  3 +++
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/ci/install-dependencies.sh b/ci/install-dependencies.sh
+index 4f407530d3..b4e22de3cb 100755
+--- a/ci/install-dependencies.sh
++++ b/ci/install-dependencies.sh
+@@ -37,15 +37,13 @@ macos-*)
+ 	test -z "$BREW_INSTALL_PACKAGES" ||
+ 	brew install $BREW_INSTALL_PACKAGES
+ 	brew link --force gettext
+-	mkdir -p $HOME/bin
+-	(
+-		cd $HOME/bin
++
++	mkdir -p "$P4_PATH"
++	pushd "$P4_PATH"
+ 		wget -q "$P4WHENCE/bin.macosx1015x86_64/helix-core-server.tgz" &&
+ 		tar -xf helix-core-server.tgz &&
+ 		sudo xattr -d com.apple.quarantine p4 p4d 2>/dev/null || true
+-	)
+-	PATH="$PATH:${HOME}/bin"
+-	export PATH
++	popd
+ 
+ 	if test -n "$CC_PACKAGE"
+ 	then
+diff --git a/ci/lib.sh b/ci/lib.sh
+index c749b21366..f631206a44 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -344,6 +344,9 @@ macos-*)
+ 	then
+ 		MAKEFLAGS="$MAKEFLAGS APPLE_COMMON_CRYPTO_SHA1=Yes"
+ 	fi
++
++	P4_PATH="$HOME/custom/p4"
++	export PATH="$P4_PATH:$PATH"
+ 	;;
+ esac
+ 
+-- 
+2.39.3 (Apple Git-145)
+

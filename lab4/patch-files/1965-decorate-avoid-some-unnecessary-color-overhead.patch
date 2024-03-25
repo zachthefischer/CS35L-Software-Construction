@@ -1,0 +1,74 @@
+From b87a9a2c1ef8c39d4fc3d1e28ebb79563d4804be Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Sun, 20 Aug 2023 19:50:05 +0100
+Subject: [PATCH 1965/2871] decorate: avoid some unnecessary color overhead
+
+In format_decorations(), don't obtain color sequences if there are no
+decorations, and don't emit color sequences around empty strings.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ log-tree.c | 25 +++++++++++++++----------
+ 1 file changed, 15 insertions(+), 10 deletions(-)
+
+diff --git a/log-tree.c b/log-tree.c
+index cd12c26c29..7c6d3f1ac3 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -312,10 +312,7 @@ void format_decorations(struct strbuf *sb,
+ {
+ 	const struct name_decoration *decoration;
+ 	const struct name_decoration *current_and_HEAD;
+-	const char *color_commit =
+-		diff_get_color(use_color, DIFF_COMMIT);
+-	const char *color_reset =
+-		decorate_get_color(use_color, DECORATION_NONE);
++	const char *color_commit, *color_reset;
+ 
+ 	const char *prefix = " (";
+ 	const char *suffix = ")";
+@@ -334,6 +331,9 @@ void format_decorations(struct strbuf *sb,
+ 			separator = opts->separator;
+ 	}
+ 
++	color_commit = diff_get_color(use_color, DIFF_COMMIT);
++	color_reset = decorate_get_color(use_color, DECORATION_NONE);
++
+ 	current_and_HEAD = current_pointed_by_HEAD(decoration);
+ 	while (decoration) {
+ 		/*
+@@ -342,9 +342,12 @@ void format_decorations(struct strbuf *sb,
+ 		 * appeared, skipping the entry for current.
+ 		 */
+ 		if (decoration != current_and_HEAD) {
+-			strbuf_addstr(sb, color_commit);
+-			strbuf_addstr(sb, prefix);
+-			strbuf_addstr(sb, color_reset);
++			if (*prefix) {
++				strbuf_addstr(sb, color_commit);
++				strbuf_addstr(sb, prefix);
++				strbuf_addstr(sb, color_reset);
++			}
++
+ 			strbuf_addstr(sb, decorate_get_color(use_color, decoration->type));
+ 			if (decoration->type == DECORATION_REF_TAG)
+ 				strbuf_addstr(sb, "tag: ");
+@@ -364,9 +367,11 @@ void format_decorations(struct strbuf *sb,
+ 		}
+ 		decoration = decoration->next;
+ 	}
+-	strbuf_addstr(sb, color_commit);
+-	strbuf_addstr(sb, suffix);
+-	strbuf_addstr(sb, color_reset);
++	if (*suffix) {
++		strbuf_addstr(sb, color_commit);
++		strbuf_addstr(sb, suffix);
++		strbuf_addstr(sb, color_reset);
++	}
+ }
+ 
+ void show_decorations(struct rev_info *opt, struct commit *commit)
+-- 
+2.39.3 (Apple Git-145)
+

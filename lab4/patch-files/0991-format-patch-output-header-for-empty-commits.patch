@@ -1,0 +1,59 @@
+From 94c4289435605a9c39951ccebaf82f131e07c255 Mon Sep 17 00:00:00 2001
+From: John Keeping <john@keeping.me.uk>
+Date: Fri, 3 Mar 2023 16:03:01 +0000
+Subject: [PATCH 0991/2871] format-patch: output header for empty commits
+
+When formatting an empty commit, it is surprising that a totally empty
+file is generated.  Set the flag to always print the header, matching
+the behaviour of git-log.
+
+Signed-off-by: John Keeping <john@keeping.me.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c           |  1 +
+ t/t4014-format-patch.sh | 10 ++++++++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index a70fba198f..87b4fb2edc 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -2097,6 +2097,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 
+ 	/* Always generate a patch */
+ 	rev.diffopt.output_format |= DIFF_FORMAT_PATCH;
++	rev.always_show_header = 1;
+ 
+ 	rev.zero_commit = zero_commit;
+ 	rev.patch_name_max = fmt_patch_name_max;
+diff --git a/t/t4014-format-patch.sh b/t/t4014-format-patch.sh
+index f3313b8c58..ffc7c60680 100755
+--- a/t/t4014-format-patch.sh
++++ b/t/t4014-format-patch.sh
+@@ -59,6 +59,10 @@ test_expect_success setup '
+ 	test_tick &&
+ 	git commit -m "patchid 3" &&
+ 
++	git checkout -b empty main &&
++	test_tick &&
++	git commit --allow-empty -m "empty commit" &&
++
+ 	git checkout main
+ '
+ 
+@@ -128,6 +132,12 @@ test_expect_success 'replay did not screw up the log message' '
+ 	grep "^Side .* with .* backslash-n" actual
+ '
+ 
++test_expect_success 'format-patch empty commit' '
++	git format-patch --stdout main..empty >empty &&
++	grep "^From " empty >from &&
++	test_line_count = 1 from
++'
++
+ test_expect_success 'extra headers' '
+ 	git config format.headers "To: R E Cipient <rcipient@example.com>
+ " &&
+-- 
+2.39.3 (Apple Git-145)
+

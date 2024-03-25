@@ -1,0 +1,210 @@
+From a8022c5f7b678189135b6caa3fadb3d8ec0c0d48 Mon Sep 17 00:00:00 2001
+From: Michael Strawbridge <michael.strawbridge@amd.com>
+Date: Wed, 19 Apr 2023 16:27:03 -0400
+Subject: [PATCH 1311/2871] send-email: expose header information to
+ git-send-email's sendemail-validate hook
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+To allow further flexibility in the Git hook, the SMTP header
+information of the email which git-send-email intends to send, is now
+passed as the 2nd argument to the sendemail-validate hook.
+
+As an example, this can be useful for acting upon keywords in the
+subject or specific email addresses.
+
+Cc: Luben Tuikov <luben.tuikov@amd.com>
+Cc: Junio C Hamano <gitster@pobox.com>
+Cc: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Acked-by: Luben Tuikov <luben.tuikov@amd.com>
+Signed-off-by: Michael Strawbridge <michael.strawbridge@amd.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/githooks.txt | 27 +++++++++++++++++----
+ git-send-email.perl        | 48 +++++++++++++++++++++++---------------
+ t/t9001-send-email.sh      | 27 +++++++++++++++++++--
+ 3 files changed, 77 insertions(+), 25 deletions(-)
+
+diff --git a/Documentation/githooks.txt b/Documentation/githooks.txt
+index 62908602e7..9896ffafaf 100644
+--- a/Documentation/githooks.txt
++++ b/Documentation/githooks.txt
+@@ -595,10 +595,29 @@ processed by rebase.
+ sendemail-validate
+ ~~~~~~~~~~~~~~~~~~
+ 
+-This hook is invoked by linkgit:git-send-email[1].  It takes a single parameter,
+-the name of the file that holds the e-mail to be sent.  Exiting with a
+-non-zero status causes `git send-email` to abort before sending any
+-e-mails.
++This hook is invoked by linkgit:git-send-email[1].
++
++It takes these command line arguments. They are,
++1. the name of the file which holds the contents of the email to be sent.
++2. The name of the file which holds the SMTP headers of the email.
++
++The SMTP headers are passed in the exact same way as they are passed to the
++user's Mail Transport Agent (MTA). In effect, the email given to the user's
++MTA, is the contents of $2 followed by the contents of $1.
++
++An example of a few common headers is shown below. Take notice of the
++capitalization and multi-line tab structure.
++
++  From: Example <from@example.com>
++  To: to@example.com
++  Cc: cc@example.com,
++	  A <author@example.com>,
++	  One <one@example.com>,
++	  two@example.com
++  Subject: PATCH-STRING
++
++Exiting with a non-zero status causes `git send-email` to abort
++before sending any e-mails.
+ 
+ fsmonitor-watchman
+ ~~~~~~~~~~~~~~~~~~
+diff --git a/git-send-email.perl b/git-send-email.perl
+index e114efe323..10c450ef68 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -792,16 +792,31 @@ sub is_format_patch_arg {
+ 				    @rev_list_opts);
+ }
+ 
+-@files = handle_backup_files(@files);
++if (defined $sender) {
++	$sender =~ s/^\s+|\s+$//g;
++	($sender) = expand_aliases($sender);
++} else {
++	$sender = $repoauthor->() || $repocommitter->() || '';
++}
++
++# $sender could be an already sanitized address
++# (e.g. sendemail.from could be manually sanitized by user).
++# But it's a no-op to run sanitize_address on an already sanitized address.
++$sender = sanitize_address($sender);
++
++$time = time - scalar $#files;
+ 
+ if ($validate) {
+ 	foreach my $f (@files) {
+ 		unless (-p $f) {
++		        pre_process_file($f, 1);
+ 			validate_patch($f, $target_xfer_encoding);
+ 		}
+ 	}
+ }
+ 
++@files = handle_backup_files(@files);
++
+ if (@files) {
+ 	unless ($quiet) {
+ 		print $_,"\n" for (@files);
+@@ -1050,18 +1065,6 @@ sub file_declares_8bit_cte {
+ 	}
+ }
+ 
+-if (defined $sender) {
+-	$sender =~ s/^\s+|\s+$//g;
+-	($sender) = expand_aliases($sender);
+-} else {
+-	$sender = $repoauthor->() || $repocommitter->() || '';
+-}
+-
+-# $sender could be an already sanitized address
+-# (e.g. sendemail.from could be manually sanitized by user).
+-# But it's a no-op to run sanitize_address on an already sanitized address.
+-$sender = sanitize_address($sender);
+-
+ my $to_whom = __("To whom should the emails be sent (if anyone)?");
+ my $prompting = 0;
+ if (!@initial_to && !defined $to_cmd) {
+@@ -1221,10 +1224,6 @@ sub make_message_id {
+ 	#print "new message id = $message_id\n"; # Was useful for debugging
+ }
+ 
+-
+-
+-$time = time - scalar $#files;
+-
+ sub unquote_rfc2047 {
+ 	local ($_) = @_;
+ 	my $charset;
+@@ -2108,10 +2107,21 @@ sub validate_patch {
+ 			chdir($repo->wc_path() or $repo->repo_path())
+ 				or die("chdir: $!");
+ 			local $ENV{"GIT_DIR"} = $repo->repo_path();
++
++			my ($recipients_ref, $to, $date, $gitversion, $cc, $ccline, $header) = gen_header();
++
++			require File::Temp;
++			my ($header_filehandle, $header_filename) = File::Temp::tempfile(
++                            TEMPLATE => ".gitsendemail.header.XXXXXX",
++                            DIR => $repo->repo_path(),
++                            UNLINK => 1,
++                        );
++			print $header_filehandle $header;
++
+ 			my @cmd = ("git", "hook", "run", "--ignore-missing",
+ 				    $hook_name, "--");
+-			my @cmd_msg = (@cmd, "<patch>");
+-			my @cmd_run = (@cmd, $target);
++			my @cmd_msg = (@cmd, "<patch>", "<header>");
++			my @cmd_run = (@cmd, $target, $header_filename);
+ 			$hook_error = system_or_msg(\@cmd_run, undef, "@cmd_msg");
+ 			chdir($cwd_save) or die("chdir: $!");
+ 		}
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 0de83b5d2b..36bb85d6b4 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -540,7 +540,7 @@ test_expect_success $PREREQ "--validate respects relative core.hooksPath path" '
+ 	test_path_is_file my-hooks.ran &&
+ 	cat >expect <<-EOF &&
+ 	fatal: longline.patch: rejected by sendemail-validate hook
+-	fatal: command '"'"'git hook run --ignore-missing sendemail-validate -- <patch>'"'"' died with exit code 1
++	fatal: command '"'"'git hook run --ignore-missing sendemail-validate -- <patch> <header>'"'"' died with exit code 1
+ 	warning: no patches were sent
+ 	EOF
+ 	test_cmp expect actual
+@@ -559,12 +559,35 @@ test_expect_success $PREREQ "--validate respects absolute core.hooksPath path" '
+ 	test_path_is_file my-hooks.ran &&
+ 	cat >expect <<-EOF &&
+ 	fatal: longline.patch: rejected by sendemail-validate hook
+-	fatal: command '"'"'git hook run --ignore-missing sendemail-validate -- <patch>'"'"' died with exit code 1
++	fatal: command '"'"'git hook run --ignore-missing sendemail-validate -- <patch> <header>'"'"' died with exit code 1
+ 	warning: no patches were sent
+ 	EOF
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success $PREREQ "--validate hook supports header argument" '
++	write_script my-hooks/sendemail-validate <<-\EOF &&
++	if test "$#" -ge 2
++	then
++		grep "X-test-header: v1.0" "$2"
++	else
++		echo "No header arg passed"
++		exit 1
++	fi
++	EOF
++	test_config core.hooksPath "my-hooks" &&
++	rm -fr outdir &&
++	git format-patch \
++		--add-header="X-test-header: v1.0" \
++		-n HEAD^1 -o outdir &&
++	git send-email \
++		--dry-run \
++		--to=nobody@example.com \
++		--smtp-server="$(pwd)/fake.sendmail" \
++		--validate \
++		outdir/000?-*.patch
++'
++
+ for enc in 7bit 8bit quoted-printable base64
+ do
+ 	test_expect_success $PREREQ "--transfer-encoding=$enc produces correct header" '
+-- 
+2.39.3 (Apple Git-145)
+

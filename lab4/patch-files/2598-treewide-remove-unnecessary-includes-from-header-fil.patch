@@ -1,0 +1,76 @@
+From 147438e8a0eb31a06cb9aefbf0de8c45e544a4c7 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 23 Dec 2023 17:14:49 +0000
+Subject: [PATCH 2598/2871] treewide: remove unnecessary includes from header
+ files
+
+There are three kinds of unnecessary includes:
+  * includes which aren't directly needed, but which include some other
+    forgotten include
+  * includes which could be replaced by a simple forward declaration of
+    some structs
+  * includes which aren't needed at all
+
+Remove the third kind of include.  Subsequent commits (and a subsequent
+series) will work on removing some of the other kinds of includes.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ fetch-pack.h       | 1 -
+ midx.h             | 1 -
+ ref-filter.h       | 1 -
+ submodule-config.h | 1 -
+ 4 files changed, 4 deletions(-)
+
+diff --git a/fetch-pack.h b/fetch-pack.h
+index 8c7752fc82..6775d26517 100644
+--- a/fetch-pack.h
++++ b/fetch-pack.h
+@@ -2,7 +2,6 @@
+ #define FETCH_PACK_H
+ 
+ #include "string-list.h"
+-#include "run-command.h"
+ #include "protocol.h"
+ #include "list-objects-filter-options.h"
+ #include "oidset.h"
+diff --git a/midx.h b/midx.h
+index a5d98919c8..eb57a37519 100644
+--- a/midx.h
++++ b/midx.h
+@@ -1,7 +1,6 @@
+ #ifndef MIDX_H
+ #define MIDX_H
+ 
+-#include "repository.h"
+ #include "string-list.h"
+ 
+ struct object_id;
+diff --git a/ref-filter.h b/ref-filter.h
+index 1524bc463a..4ecb6ab1c6 100644
+--- a/ref-filter.h
++++ b/ref-filter.h
+@@ -3,7 +3,6 @@
+ 
+ #include "gettext.h"
+ #include "oid-array.h"
+-#include "refs.h"
+ #include "commit.h"
+ #include "string-list.h"
+ #include "strvec.h"
+diff --git a/submodule-config.h b/submodule-config.h
+index 2a37689cc2..e8164cca3e 100644
+--- a/submodule-config.h
++++ b/submodule-config.h
+@@ -2,7 +2,6 @@
+ #define SUBMODULE_CONFIG_CACHE_H
+ 
+ #include "config.h"
+-#include "hashmap.h"
+ #include "submodule.h"
+ #include "strbuf.h"
+ #include "tree-walk.h"
+-- 
+2.39.3 (Apple Git-145)
+

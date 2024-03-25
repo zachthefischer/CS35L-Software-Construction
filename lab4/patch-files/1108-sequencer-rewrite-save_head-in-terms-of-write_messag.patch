@@ -1,0 +1,48 @@
+From 54dbd0933ba9e35a97562bd4224842c3a0362742 Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Thu, 23 Mar 2023 17:22:35 +0100
+Subject: [PATCH 1108/2871] sequencer: rewrite save_head() in terms of
+ write_message()
+
+Saves some code duplication.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c | 20 +-------------------
+ 1 file changed, 1 insertion(+), 19 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index 1c96a75b1e..3ba28a19c1 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -3184,25 +3184,7 @@ static int create_seq_dir(struct repository *r)
+ 
+ static int save_head(const char *head)
+ {
+-	struct lock_file head_lock = LOCK_INIT;
+-	struct strbuf buf = STRBUF_INIT;
+-	int fd;
+-	ssize_t written;
+-
+-	fd = hold_lock_file_for_update(&head_lock, git_path_head_file(), 0);
+-	if (fd < 0)
+-		return error_errno(_("could not lock HEAD"));
+-	strbuf_addf(&buf, "%s\n", head);
+-	written = write_in_full(fd, buf.buf, buf.len);
+-	strbuf_release(&buf);
+-	if (written < 0) {
+-		error_errno(_("could not write to '%s'"), git_path_head_file());
+-		rollback_lock_file(&head_lock);
+-		return -1;
+-	}
+-	if (commit_lock_file(&head_lock) < 0)
+-		return error(_("failed to finalize '%s'"), git_path_head_file());
+-	return 0;
++	return write_message(head, strlen(head), git_path_head_file(), 1);
+ }
+ 
+ static int rollback_is_safe(void)
+-- 
+2.39.3 (Apple Git-145)
+

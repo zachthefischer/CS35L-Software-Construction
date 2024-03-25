@@ -1,0 +1,94 @@
+From 72a9a08283f1b56598d4af5efb8cd178d4150323 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 17:05:14 -0400
+Subject: [PATCH 2258/2871] midx: check size of pack names chunk
+
+We parse the pack-name chunk as a series of NUL-terminated strings. But
+since we don't look at the chunk size, there's nothing to guarantee that
+we don't parse off the end of the chunk (or even off the end of the
+mapped file).
+
+We can record the length, and then as we parse make sure that we never
+walk past it.
+
+The new test exercises the case, though note that it does not actually
+segfault before this patch. It hits a NUL byte somewhere in one of the
+other chunks, and comes up with a garbage pack name. You could construct
+one that reads out-of-bounds (e.g., a PNAM chunk at the end of file),
+but this case is simple and sufficient to check that we detect the
+problem.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c                      | 11 +++++++++--
+ midx.h                      |  1 +
+ t/t5319-multi-pack-index.sh | 11 +++++++++++
+ 3 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index 62e4c03e79..ec585cae1b 100644
+--- a/midx.c
++++ b/midx.c
+@@ -157,7 +157,7 @@ struct multi_pack_index *load_multi_pack_index(const char *object_dir, int local
+ 				   MIDX_HEADER_SIZE, m->num_chunks))
+ 		goto cleanup_fail;
+ 
+-	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_PACKNAMES, &m->chunk_pack_names))
++	if (pair_chunk(cf, MIDX_CHUNKID_PACKNAMES, &m->chunk_pack_names, &m->chunk_pack_names_len))
+ 		die(_("multi-pack-index required pack-name chunk missing or corrupted"));
+ 	if (read_chunk(cf, MIDX_CHUNKID_OIDFANOUT, midx_read_oid_fanout, m))
+ 		die(_("multi-pack-index required OID fanout chunk missing or corrupted"));
+@@ -176,9 +176,16 @@ struct multi_pack_index *load_multi_pack_index(const char *object_dir, int local
+ 
+ 	cur_pack_name = (const char *)m->chunk_pack_names;
+ 	for (i = 0; i < m->num_packs; i++) {
++		const char *end;
++		size_t avail = m->chunk_pack_names_len -
++				(cur_pack_name - (const char *)m->chunk_pack_names);
++
+ 		m->pack_names[i] = cur_pack_name;
+ 
+-		cur_pack_name += strlen(cur_pack_name) + 1;
++		end = memchr(cur_pack_name, '\0', avail);
++		if (!end)
++			die(_("multi-pack-index pack-name chunk is too short"));
++		cur_pack_name = end + 1;
+ 
+ 		if (i && strcmp(m->pack_names[i], m->pack_names[i - 1]) <= 0)
+ 			die(_("multi-pack-index pack names out of order: '%s' before '%s'"),
+diff --git a/midx.h b/midx.h
+index 5578cd7b83..5b2a7da043 100644
+--- a/midx.h
++++ b/midx.h
+@@ -32,6 +32,7 @@ struct multi_pack_index {
+ 	int local;
+ 
+ 	const unsigned char *chunk_pack_names;
++	size_t chunk_pack_names_len;
+ 	const uint32_t *chunk_oid_fanout;
+ 	const unsigned char *chunk_oid_lookup;
+ 	const unsigned char *chunk_object_offsets;
+diff --git a/t/t5319-multi-pack-index.sh b/t/t5319-multi-pack-index.sh
+index 2722e495b2..0a0ccec8a4 100755
+--- a/t/t5319-multi-pack-index.sh
++++ b/t/t5319-multi-pack-index.sh
+@@ -1083,4 +1083,15 @@ test_expect_success 'reader notices too-small oid lookup chunk' '
+ 	test_cmp expect err
+ '
+ 
++test_expect_success 'reader notices too-small pack names chunk' '
++	# There is no NUL to terminate the name here, so the
++	# chunk is too short.
++	corrupt_chunk PNAM clear 70656666 &&
++	test_must_fail git log 2>err &&
++	cat >expect <<-\EOF &&
++	fatal: multi-pack-index pack-name chunk is too short
++	EOF
++	test_cmp expect err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

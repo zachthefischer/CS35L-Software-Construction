@@ -1,0 +1,567 @@
+From dd781e3856bccd3793122f7f4e604e5a89ae517d Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 10 May 2023 14:34:36 +0200
+Subject: [PATCH 1432/2871] fetch: introduce machine-parseable "porcelain"
+ output format
+
+The output of git-fetch(1) is obviously designed for consumption by
+users, only: we neatly columnize data, we abbreviate reference names, we
+print neat arrows and we don't provide information about actual object
+IDs that have changed. This makes the output format basically unusable
+in the context of scripted invocations of git-fetch(1) that want to
+learn about the exact changes that the command performs.
+
+Introduce a new machine-parseable "porcelain" output format that is
+supposed to fix this shortcoming. This output format is intended to
+provide information about every reference that is about to be updated,
+the old object ID that the reference has been pointing to and the new
+object ID it will be updated to. Furthermore, the output format provides
+the same flags as the human-readable format to indicate basic conditions
+for each reference update like whether it was a fast-forward update, a
+branch deletion, a rejected update or others.
+
+The output format is quite simple:
+
+```
+<flag> <old-object-id> <new-object-id> <local-reference>\n
+```
+
+We assume two conditions which are generally true:
+
+    - The old and new object IDs have fixed known widths and cannot
+      contain spaces.
+
+    - References cannot contain newlines.
+
+With these assumptions, the output format becomes unambiguously
+parseable. Furthermore, given that this output is designed to be
+consumed by scripts, the machine-readable data is printed to stdout
+instead of stderr like the human-readable output is. This is mostly done
+so that other data printed to stderr, like error messages or progress
+meters, don't interfere with the parseable data.
+
+A notable ommission here is that the output format does not include the
+remote from which a reference was fetched, which might be important
+information especially in the context of multi-remote fetches. But as
+such a format would require us to print the remote for every single
+reference update due to parallelizable fetches it feels wasteful for the
+most likely usecase, which is when fetching from a single remote.
+
+In a similar spirit, a second restriction is that this cannot be used
+with `--recurse-submodules`. This is because any reference updates would
+be ambiguous without also printing the repository in which the update
+happens.
+
+Considering that both multi-remote and submodule fetches are user-facing
+features, using them in conjunction with `--porcelain` that is intended
+for scripting purposes is likely not going to be useful in the majority
+of cases. With that in mind these restrictions feel acceptable. If
+usecases for either of these come up in the future though it is easy
+enough to add a new "porcelain-v2" format that adds this information.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/fetch-options.txt |   7 ++
+ Documentation/git-fetch.txt     |   9 ++
+ builtin/fetch.c                 |  88 ++++++++++++++----
+ t/t5574-fetch-output.sh         | 159 ++++++++++++++++++++++++++++++++
+ 4 files changed, 244 insertions(+), 19 deletions(-)
+
+diff --git a/Documentation/fetch-options.txt b/Documentation/fetch-options.txt
+index 622bd84768..41fc7ca3c6 100644
+--- a/Documentation/fetch-options.txt
++++ b/Documentation/fetch-options.txt
+@@ -78,6 +78,13 @@ linkgit:git-config[1].
+ --dry-run::
+ 	Show what would be done, without making any changes.
+ 
++--porcelain::
++	Print the output to standard output in an easy-to-parse format for
++	scripts. See section OUTPUT in linkgit:git-fetch[1] for details.
+++
++This is incompatible with `--recurse-submodules=[yes|on-demand]` and takes
++precedence over the `fetch.output` config option.
++
+ ifndef::git-pull[]
+ --[no-]write-fetch-head::
+ 	Write the list of remote refs fetched in the `FETCH_HEAD`
+diff --git a/Documentation/git-fetch.txt b/Documentation/git-fetch.txt
+index fba66f1460..f123139c58 100644
+--- a/Documentation/git-fetch.txt
++++ b/Documentation/git-fetch.txt
+@@ -204,6 +204,15 @@ representing the status of a single ref. Each line is of the form:
+  <flag> <summary> <from> -> <to> [<reason>]
+ -------------------------------
+ 
++When using `--porcelain`, the output format is intended to be
++machine-parseable. In contrast to the human-readable output formats it
++thus prints to standard output instead of standard error. Each line is
++of the form:
++
++-------------------------------
++<flag> <old-object-id> <new-object-id> <local-reference>
++-------------------------------
++
+ The status of up-to-date refs is shown only if the --verbose option is
+ used.
+ 
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index e3629a7b64..bfe0b25d1b 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -54,6 +54,7 @@ enum display_format {
+ 	DISPLAY_FORMAT_UNKNOWN = 0,
+ 	DISPLAY_FORMAT_FULL,
+ 	DISPLAY_FORMAT_COMPACT,
++	DISPLAY_FORMAT_PORCELAIN,
+ };
+ 
+ struct display_state {
+@@ -756,6 +757,9 @@ static void display_state_init(struct display_state *display_state, struct ref *
+ 		display_state->refcol_width = refcol_width(ref_map,
+ 							   display_state->format == DISPLAY_FORMAT_COMPACT);
+ 		break;
++	case DISPLAY_FORMAT_PORCELAIN:
++		/* We don't need to precompute anything here. */
++		break;
+ 	default:
+ 		BUG("unexpected display format %d", display_state->format);
+ 	}
+@@ -826,8 +830,12 @@ static void print_compact(struct display_state *display_state,
+ static void display_ref_update(struct display_state *display_state, char code,
+ 			       const char *summary, const char *error,
+ 			       const char *remote, const char *local,
++			       const struct object_id *old_oid,
++			       const struct object_id *new_oid,
+ 			       int summary_width)
+ {
++	FILE *f = stderr;
++
+ 	if (verbosity < 0)
+ 		return;
+ 
+@@ -860,12 +868,17 @@ static void display_ref_update(struct display_state *display_state, char code,
+ 
+ 		break;
+ 	}
++	case DISPLAY_FORMAT_PORCELAIN:
++		strbuf_addf(&display_state->buf, "%c %s %s %s", code,
++			    oid_to_hex(old_oid), oid_to_hex(new_oid), local);
++		f = stdout;
++		break;
+ 	default:
+ 		BUG("unexpected display format %d", display_state->format);
+ 	};
+ 	strbuf_addch(&display_state->buf, '\n');
+ 
+-	fputs(display_state->buf.buf, stderr);
++	fputs(display_state->buf.buf, f);
+ }
+ 
+ static int update_local_ref(struct ref *ref,
+@@ -883,7 +896,8 @@ static int update_local_ref(struct ref *ref,
+ 	if (oideq(&ref->old_oid, &ref->new_oid)) {
+ 		if (verbosity > 0)
+ 			display_ref_update(display_state, '=', _("[up to date]"), NULL,
+-					   remote_ref->name, ref->name, summary_width);
++					   remote_ref->name, ref->name,
++					   &ref->old_oid, &ref->new_oid, summary_width);
+ 		return 0;
+ 	}
+ 
+@@ -896,7 +910,8 @@ static int update_local_ref(struct ref *ref,
+ 		 */
+ 		display_ref_update(display_state, '!', _("[rejected]"),
+ 				   _("can't fetch into checked-out branch"),
+-				   remote_ref->name, ref->name, summary_width);
++				   remote_ref->name, ref->name,
++				   &ref->old_oid, &ref->new_oid, summary_width);
+ 		return 1;
+ 	}
+ 
+@@ -907,12 +922,14 @@ static int update_local_ref(struct ref *ref,
+ 			r = s_update_ref("updating tag", ref, transaction, 0);
+ 			display_ref_update(display_state, r ? '!' : 't', _("[tag update]"),
+ 					   r ? _("unable to update local ref") : NULL,
+-					   remote_ref->name, ref->name, summary_width);
++					   remote_ref->name, ref->name,
++					   &ref->old_oid, &ref->new_oid, summary_width);
+ 			return r;
+ 		} else {
+ 			display_ref_update(display_state, '!', _("[rejected]"),
+ 					   _("would clobber existing tag"),
+-					   remote_ref->name, ref->name, summary_width);
++					   remote_ref->name, ref->name,
++					   &ref->old_oid, &ref->new_oid, summary_width);
+ 			return 1;
+ 		}
+ 	}
+@@ -945,7 +962,8 @@ static int update_local_ref(struct ref *ref,
+ 		r = s_update_ref(msg, ref, transaction, 0);
+ 		display_ref_update(display_state, r ? '!' : '*', what,
+ 				   r ? _("unable to update local ref") : NULL,
+-				   remote_ref->name, ref->name, summary_width);
++				   remote_ref->name, ref->name,
++				   &ref->old_oid, &ref->new_oid, summary_width);
+ 		return r;
+ 	}
+ 
+@@ -968,7 +986,8 @@ static int update_local_ref(struct ref *ref,
+ 		r = s_update_ref("fast-forward", ref, transaction, 1);
+ 		display_ref_update(display_state, r ? '!' : ' ', quickref.buf,
+ 				   r ? _("unable to update local ref") : NULL,
+-				   remote_ref->name, ref->name, summary_width);
++				   remote_ref->name, ref->name,
++				   &ref->old_oid, &ref->new_oid, summary_width);
+ 		strbuf_release(&quickref);
+ 		return r;
+ 	} else if (force || ref->force) {
+@@ -980,12 +999,14 @@ static int update_local_ref(struct ref *ref,
+ 		r = s_update_ref("forced-update", ref, transaction, 1);
+ 		display_ref_update(display_state, r ? '!' : '+', quickref.buf,
+ 				   r ? _("unable to update local ref") : _("forced update"),
+-				   remote_ref->name, ref->name, summary_width);
++				   remote_ref->name, ref->name,
++				   &ref->old_oid, &ref->new_oid, summary_width);
+ 		strbuf_release(&quickref);
+ 		return r;
+ 	} else {
+ 		display_ref_update(display_state, '!', _("[rejected]"), _("non-fast-forward"),
+-				   remote_ref->name, ref->name, summary_width);
++				   remote_ref->name, ref->name,
++				   &ref->old_oid, &ref->new_oid, summary_width);
+ 		return 1;
+ 	}
+ }
+@@ -1226,7 +1247,9 @@ static int store_updated_refs(struct display_state *display_state,
+ 				display_ref_update(display_state, '*',
+ 						   *kind ? kind : "branch", NULL,
+ 						   rm->name,
+-						   "FETCH_HEAD", summary_width);
++						   "FETCH_HEAD",
++						   &rm->new_oid, &rm->old_oid,
++						   summary_width);
+ 			}
+ 		}
+ 	}
+@@ -1366,6 +1389,7 @@ static int prune_refs(struct display_state *display_state,
+ 		for (ref = stale_refs; ref; ref = ref->next) {
+ 			display_ref_update(display_state, '-', _("[deleted]"), NULL,
+ 					   _("(none)"), ref->name,
++					   &ref->new_oid, &ref->old_oid,
+ 					   summary_width);
+ 			warn_dangling_symref(stderr, dangling_msg, ref->name);
+ 		}
+@@ -1798,7 +1822,8 @@ static int add_remote_or_group(const char *name, struct string_list *list)
+ 	return 1;
+ }
+ 
+-static void add_options_to_argv(struct strvec *argv)
++static void add_options_to_argv(struct strvec *argv,
++				enum display_format format)
+ {
+ 	if (dry_run)
+ 		strvec_push(argv, "--dry-run");
+@@ -1834,6 +1859,8 @@ static void add_options_to_argv(struct strvec *argv)
+ 		strvec_push(argv, "--ipv6");
+ 	if (!write_fetch_head)
+ 		strvec_push(argv, "--no-write-fetch-head");
++	if (format == DISPLAY_FORMAT_PORCELAIN)
++		strvec_pushf(argv, "--porcelain");
+ }
+ 
+ /* Fetch multiple remotes in parallel */
+@@ -1842,6 +1869,7 @@ struct parallel_fetch_state {
+ 	const char **argv;
+ 	struct string_list *remotes;
+ 	int next, result;
++	enum display_format format;
+ };
+ 
+ static int fetch_next_remote(struct child_process *cp,
+@@ -1861,7 +1889,7 @@ static int fetch_next_remote(struct child_process *cp,
+ 	strvec_push(&cp->args, remote);
+ 	cp->git_cmd = 1;
+ 
+-	if (verbosity >= 0)
++	if (verbosity >= 0 && state->format != DISPLAY_FORMAT_PORCELAIN)
+ 		printf(_("Fetching %s\n"), remote);
+ 
+ 	return 1;
+@@ -1893,7 +1921,8 @@ static int fetch_finished(int result, struct strbuf *out,
+ 	return 0;
+ }
+ 
+-static int fetch_multiple(struct string_list *list, int max_children)
++static int fetch_multiple(struct string_list *list, int max_children,
++			  enum display_format format)
+ {
+ 	int i, result = 0;
+ 	struct strvec argv = STRVEC_INIT;
+@@ -1911,10 +1940,10 @@ static int fetch_multiple(struct string_list *list, int max_children)
+ 	strvec_pushl(&argv, "-c", "fetch.bundleURI=",
+ 		     "fetch", "--append", "--no-auto-gc",
+ 		     "--no-write-commit-graph", NULL);
+-	add_options_to_argv(&argv);
++	add_options_to_argv(&argv, format);
+ 
+ 	if (max_children != 1 && list->nr != 1) {
+-		struct parallel_fetch_state state = { argv.v, list, 0, 0 };
++		struct parallel_fetch_state state = { argv.v, list, 0, 0, format };
+ 		const struct run_process_parallel_opts opts = {
+ 			.tr2_category = "fetch",
+ 			.tr2_label = "parallel/fetch",
+@@ -1938,7 +1967,7 @@ static int fetch_multiple(struct string_list *list, int max_children)
+ 
+ 			strvec_pushv(&cmd.args, argv.v);
+ 			strvec_push(&cmd.args, name);
+-			if (verbosity >= 0)
++			if (verbosity >= 0 && format != DISPLAY_FORMAT_PORCELAIN)
+ 				printf(_("Fetching %s\n"), name);
+ 			cmd.git_cmd = 1;
+ 			if (run_command(&cmd)) {
+@@ -2089,6 +2118,7 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 	int fetch_write_commit_graph = -1;
+ 	int stdin_refspecs = 0;
+ 	int negotiate_only = 0;
++	int porcelain = 0;
+ 	int i;
+ 
+ 	struct option builtin_fetch_options[] = {
+@@ -2123,6 +2153,7 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 			    PARSE_OPT_OPTARG, option_fetch_parse_recurse_submodules),
+ 		OPT_BOOL(0, "dry-run", &dry_run,
+ 			 N_("dry run")),
++		OPT_BOOL(0, "porcelain", &porcelain, N_("machine-readable output")),
+ 		OPT_BOOL(0, "write-fetch-head", &write_fetch_head,
+ 			 N_("write fetched references to the FETCH_HEAD file")),
+ 		OPT_BOOL('k', "keep", &keep, N_("keep downloaded pack")),
+@@ -2228,6 +2259,26 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 		fetch_config_from_gitmodules(sfjc, rs);
+ 	}
+ 
++
++	if (porcelain) {
++		switch (recurse_submodules_cli) {
++		case RECURSE_SUBMODULES_OFF:
++		case RECURSE_SUBMODULES_DEFAULT:
++			/*
++			 * Reference updates in submodules would be ambiguous
++			 * in porcelain mode, so we reject this combination.
++			 */
++			recurse_submodules = RECURSE_SUBMODULES_OFF;
++			break;
++
++		default:
++			die(_("options '%s' and '%s' cannot be used together"),
++			    "--porcelain", "--recurse-submodules");
++		}
++
++		config.display_format = DISPLAY_FORMAT_PORCELAIN;
++	}
++
+ 	if (negotiate_only && !negotiation_tip.nr)
+ 		die(_("--negotiate-only needs one or more --negotiation-tip=*"));
+ 
+@@ -2347,10 +2398,9 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 			max_children = fetch_parallel_config;
+ 
+ 		/* TODO should this also die if we have a previous partial-clone? */
+-		result = fetch_multiple(&list, max_children);
++		result = fetch_multiple(&list, max_children, config.display_format);
+ 	}
+ 
+-
+ 	/*
+ 	 * This is only needed after fetch_one(), which does not fetch
+ 	 * submodules by itself.
+@@ -2369,7 +2419,7 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 		if (max_children < 0)
+ 			max_children = fetch_parallel_config;
+ 
+-		add_options_to_argv(&options);
++		add_options_to_argv(&options, config.display_format);
+ 		result = fetch_submodules(the_repository,
+ 					  &options,
+ 					  submodule_prefix,
+diff --git a/t/t5574-fetch-output.sh b/t/t5574-fetch-output.sh
+index 9890f6f381..90e6dcb9a7 100755
+--- a/t/t5574-fetch-output.sh
++++ b/t/t5574-fetch-output.sh
+@@ -61,6 +61,141 @@ test_expect_success 'fetch compact output' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'fetch porcelain output' '
++	test_when_finished "rm -rf porcelain" &&
++
++	# Set up a bunch of references that we can use to demonstrate different
++	# kinds of flag symbols in the output format.
++	MAIN_OLD=$(git rev-parse HEAD) &&
++	git branch "fast-forward" &&
++	git branch "deleted-branch" &&
++	git checkout -b force-updated &&
++	test_commit --no-tag force-update-old &&
++	FORCE_UPDATED_OLD=$(git rev-parse HEAD) &&
++	git checkout main &&
++
++	# Clone and pre-seed the repositories. We fetch references into two
++	# namespaces so that we can test that rejected and force-updated
++	# references are reported properly.
++	refspecs="refs/heads/*:refs/unforced/* +refs/heads/*:refs/forced/*" &&
++	git clone . porcelain &&
++	git -C porcelain fetch origin $refspecs &&
++
++	# Now that we have set up the client repositories we can change our
++	# local references.
++	git branch new-branch &&
++	git branch -d deleted-branch &&
++	git checkout fast-forward &&
++	test_commit --no-tag fast-forward-new &&
++	FAST_FORWARD_NEW=$(git rev-parse HEAD) &&
++	git checkout force-updated &&
++	git reset --hard HEAD~ &&
++	test_commit --no-tag force-update-new &&
++	FORCE_UPDATED_NEW=$(git rev-parse HEAD) &&
++
++	cat >expect <<-EOF &&
++	- $MAIN_OLD $ZERO_OID refs/forced/deleted-branch
++	- $MAIN_OLD $ZERO_OID refs/unforced/deleted-branch
++	  $MAIN_OLD $FAST_FORWARD_NEW refs/unforced/fast-forward
++	! $FORCE_UPDATED_OLD $FORCE_UPDATED_NEW refs/unforced/force-updated
++	* $ZERO_OID $MAIN_OLD refs/unforced/new-branch
++	  $MAIN_OLD $FAST_FORWARD_NEW refs/forced/fast-forward
++	+ $FORCE_UPDATED_OLD $FORCE_UPDATED_NEW refs/forced/force-updated
++	* $ZERO_OID $MAIN_OLD refs/forced/new-branch
++	  $MAIN_OLD $FAST_FORWARD_NEW refs/remotes/origin/fast-forward
++	+ $FORCE_UPDATED_OLD $FORCE_UPDATED_NEW refs/remotes/origin/force-updated
++	* $ZERO_OID $MAIN_OLD refs/remotes/origin/new-branch
++	EOF
++
++	# Execute a dry-run fetch first. We do this to assert that the dry-run
++	# and non-dry-run fetches produces the same output. Execution of the
++	# fetch is expected to fail as we have a rejected reference update.
++	test_must_fail git -C porcelain fetch \
++		--porcelain --dry-run --prune origin $refspecs >actual &&
++	test_cmp expect actual &&
++
++	# And now we perform a non-dry-run fetch.
++	test_must_fail git -C porcelain fetch \
++		--porcelain --prune origin $refspecs >actual 2>stderr &&
++	test_cmp expect actual &&
++	test_must_be_empty stderr
++'
++
++test_expect_success 'fetch porcelain with multiple remotes' '
++	test_when_finished "rm -rf porcelain" &&
++
++	git switch --create multiple-remotes &&
++	git clone . porcelain &&
++	git -C porcelain remote add second-remote "$PWD" &&
++	git -C porcelain fetch second-remote &&
++
++	test_commit --no-tag multi-commit &&
++	old_commit=$(git rev-parse HEAD~) &&
++	new_commit=$(git rev-parse HEAD) &&
++
++	cat >expect <<-EOF &&
++	  $old_commit $new_commit refs/remotes/origin/multiple-remotes
++	  $old_commit $new_commit refs/remotes/second-remote/multiple-remotes
++	EOF
++
++	git -C porcelain fetch --porcelain --all >actual 2>stderr &&
++	test_cmp expect actual &&
++	test_must_be_empty stderr
++'
++
++test_expect_success 'fetch porcelain refuses to work with submodules' '
++	test_when_finished "rm -rf porcelain" &&
++
++	cat >expect <<-EOF &&
++	fatal: options ${SQ}--porcelain${SQ} and ${SQ}--recurse-submodules${SQ} cannot be used together
++	EOF
++
++	git init porcelain &&
++	test_must_fail git -C porcelain fetch --porcelain --recurse-submodules=yes 2>stderr &&
++	test_cmp expect stderr &&
++
++	test_must_fail git -C porcelain fetch --porcelain --recurse-submodules=on-demand 2>stderr &&
++	test_cmp expect stderr
++'
++
++test_expect_success 'fetch porcelain overrides fetch.output config' '
++	test_when_finished "rm -rf porcelain" &&
++
++	git switch --create config-override &&
++	git clone . porcelain &&
++	test_commit new-commit &&
++	old_commit=$(git rev-parse HEAD~) &&
++	new_commit=$(git rev-parse HEAD) &&
++
++	cat >expect <<-EOF &&
++	  $old_commit $new_commit refs/remotes/origin/config-override
++	* $ZERO_OID $new_commit refs/tags/new-commit
++	EOF
++
++	git -C porcelain -c fetch.output=compact fetch --porcelain >stdout 2>stderr &&
++	test_must_be_empty stderr &&
++	test_cmp expect stdout
++'
++
++test_expect_success 'fetch --no-porcelain overrides previous --porcelain' '
++	test_when_finished "rm -rf no-porcelain" &&
++
++	git switch --create no-porcelain &&
++	git clone . no-porcelain &&
++	test_commit --no-tag no-porcelain &&
++	old_commit=$(git rev-parse --short HEAD~) &&
++	new_commit=$(git rev-parse --short HEAD) &&
++
++	cat >expect <<-EOF &&
++	From $(test-tool path-utils real_path .)/.
++	   $old_commit..$new_commit  no-porcelain -> origin/no-porcelain
++	EOF
++
++	git -C no-porcelain fetch --porcelain --no-porcelain >stdout 2>stderr &&
++	test_cmp expect stderr &&
++	test_must_be_empty stdout
++'
++
+ test_expect_success 'fetch output with HEAD' '
+ 	test_when_finished "rm -rf head" &&
+ 	git clone . head &&
+@@ -90,6 +225,30 @@ test_expect_success 'fetch output with HEAD' '
+ 	test_cmp expect actual.err
+ '
+ 
++test_expect_success 'fetch porcelain output with HEAD' '
++	test_when_finished "rm -rf head" &&
++	git clone . head &&
++	COMMIT_ID=$(git rev-parse HEAD) &&
++
++	git -C head fetch --porcelain --dry-run origin HEAD >actual &&
++	cat >expect <<-EOF &&
++	* $ZERO_OID $COMMIT_ID FETCH_HEAD
++	EOF
++	test_cmp expect actual &&
++
++	git -C head fetch --porcelain origin HEAD >actual &&
++	test_cmp expect actual &&
++
++	git -C head fetch --porcelain --dry-run origin HEAD:foo >actual &&
++	cat >expect <<-EOF &&
++	* $ZERO_OID $COMMIT_ID refs/heads/foo
++	EOF
++	test_cmp expect actual &&
++
++	git -C head fetch --porcelain origin HEAD:foo >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'fetch output with object ID' '
+ 	test_when_finished "rm -rf object-id" &&
+ 	git clone . object-id &&
+-- 
+2.39.3 (Apple Git-145)
+

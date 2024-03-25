@@ -1,0 +1,27 @@
+From c5353c455208452b8a0a0c675f39b6bd16a8f35c Mon Sep 17 00:00:00 2001
+From: Vlad-Stefan Harbuz <vlad@vladh.net>
+Date: Sun, 13 Nov 2022 12:48:09 +0000
+Subject: [PATCH 0383/2871] Documentation: fix typo
+
+Signed-off-by: Vlad-Stefan Harbuz <vlad@vladh.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/MyFirstContribution.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/MyFirstContribution.txt b/Documentation/MyFirstContribution.txt
+index 1a4be8ee0a..ccfd0cb5f3 100644
+--- a/Documentation/MyFirstContribution.txt
++++ b/Documentation/MyFirstContribution.txt
+@@ -736,7 +736,7 @@ the {lore}[Git mailing list archive]:
+ 2022-02-21  1:43     ` John Cai
+ 2022-02-21  1:50       ` Taylor Blau
+ 2022-02-23 19:50         ` John Cai
+-2022-02-18 20:00   ` // other replies ellided
++2022-02-18 20:00   ` // other replies elided
+ 2022-02-18 18:40 ` [PATCH 2/3] reflog: call reflog_delete from reflog.c John Cai via GitGitGadget
+ 2022-02-18 19:15   ` Ævar Arnfjörð Bjarmason
+ 2022-02-18 20:26     ` Junio C Hamano
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,33 @@
+From a9ea5296b772b795be1be112e98ff02c95cbe639 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 8 May 2023 15:01:46 -0400
+Subject: [PATCH 1417/2871] t7001: use "ls-files --format" instead of "cut"
+
+Since ls-files recently learned a "--format" option, we can use that
+rather than asking for all of "--stage" and then pulling out the bits we
+want with "cut". That's simpler and avoids two extra processes (one for
+cut, and one for the subshell to hold the intermediate result).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7001-mv.sh | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/t/t7001-mv.sh b/t/t7001-mv.sh
+index ea70419928..2e6a3c0a54 100755
+--- a/t/t7001-mv.sh
++++ b/t/t7001-mv.sh
+@@ -5,8 +5,7 @@ test_description='git mv in subdirs'
+ . "$TEST_DIRECTORY"/lib-diff-data.sh
+ 
+ index_at_path () {
+-	entry=$(git ls-files --stage "$@") &&
+-	echo "$entry" | cut -f 1
++	git ls-files --format='%(objectmode) %(objectname) %(stage)' "$@"
+ }
+ 
+ test_expect_success 'mv -f refreshes updated index entry' '
+-- 
+2.39.3 (Apple Git-145)
+

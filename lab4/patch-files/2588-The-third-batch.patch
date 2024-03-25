@@ -1,0 +1,66 @@
+From 055bb6e9969085777b7fab83e3fee0017654f134 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 20 Dec 2023 10:15:09 -0800
+Subject: [PATCH 2588/2871] The third batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.44.0.txt | 33 +++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.44.0.txt b/Documentation/RelNotes/2.44.0.txt
+index 94609c03cd..b44e88fb15 100644
+--- a/Documentation/RelNotes/2.44.0.txt
++++ b/Documentation/RelNotes/2.44.0.txt
+@@ -15,6 +15,10 @@ UI, Workflows & Features
+  * "git merge-file" learned to take the "--diff-algorithm" option to
+    use algorithm different from the default "myers" diff.
+ 
++ * Command line completion (in contrib/) learned to complete path
++   arguments to the "add/set" subcommands of "git sparse-checkout"
++   better.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -65,8 +69,37 @@ Fixes since v2.43
+    authentication material, which has been corrected.
+    (merge 16fa3eebc0 jh/trace2-redact-auth later to maint).
+ 
++ * The sample pre-commit hook that tries to catch introduction of new
++   paths that use potentially non-portable characters did not notice
++   an existing path getting renamed to such a problematic path, when
++   rename detection was enabled.
++   (merge d9fd71fa2a jp/use-diff-index-in-pre-commit-sample later to maint).
++
++ * The command line parser for the "log" family of commands was too
++   loose when parsing certain numbers, e.g., silently ignoring the
++   extra 'q' in "git log -n 1q" without complaining, which has been
++   tightened up.
++   (merge 71a1e94821 jc/revision-parse-int later to maint).
++
++ * "git $cmd --end-of-options --rev -- --path" for some $cmd failed
++   to interpret "--rev" as a rev, and "--path" as a path.  This was
++   fixed for many programs like "reset" and "checkout".
++   (merge 9385174627 jk/end-of-options later to maint).
++
++ * "git bisect reset" has been taught to clean up state files and refs
++   even when BISECT_START file is gone.
++   (merge daaa03e54c jk/bisect-reset-fix later to maint).
++
++ * Some codepaths did not correctly parse configuration variables
++   specified with valueless "true", which has been corrected.
++   (merge d49cb162fa jk/implicit-true later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 50f1abcff6 js/packfile-h-typofix later to maint).
+    (merge cbf498eb53 jb/reflog-expire-delete-dry-run-options later to maint).
+    (merge 7854bf4960 rs/i18n-cannot-be-used-together later to maint).
+    (merge cd3c28c53a rs/column-leakfix later to maint).
++   (merge 866a1b9026 ps/ref-tests-update-more later to maint).
++   (merge e4299d26d4 mk/doc-gitfile-more later to maint).
++   (merge 792b86283b rs/incompatible-options-messages later to maint).
++   (merge ea8f9494ab jk/config-cleanup later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

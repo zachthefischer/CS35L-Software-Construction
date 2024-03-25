@@ -1,0 +1,104 @@
+From 0e312eaa12c03043b0ef23021a5a820567ee0efd Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:28 +0000
+Subject: [PATCH 1341/2871] diff.h: reduce unnecessary includes
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ attr.c              | 1 +
+ diff.h              | 1 -
+ http-push.c         | 1 +
+ line-log.c          | 1 +
+ pack-bitmap-write.c | 1 +
+ reflog.c            | 1 +
+ tree-diff.c         | 1 +
+ 7 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/attr.c b/attr.c
+index 2d8aeb8b58..ddf2b0cbc2 100644
+--- a/attr.c
++++ b/attr.c
+@@ -20,6 +20,7 @@
+ #include "object-store.h"
+ #include "setup.h"
+ #include "thread-utils.h"
++#include "tree-walk.h"
+ 
+ const char git_attr__true[] = "(builtin)true";
+ const char git_attr__false[] = "\0(builtin)false";
+diff --git a/diff.h b/diff.h
+index 53aeb02a54..69e574f431 100644
+--- a/diff.h
++++ b/diff.h
+@@ -4,7 +4,6 @@
+ #ifndef DIFF_H
+ #define DIFF_H
+ 
+-#include "tree-walk.h"
+ #include "pathspec.h"
+ #include "oidset.h"
+ #include "strbuf.h"
+diff --git a/http-push.c b/http-push.c
+index 3f18498636..866ba243a8 100644
+--- a/http-push.c
++++ b/http-push.c
+@@ -16,6 +16,7 @@
+ #include "sigchain.h"
+ #include "strvec.h"
+ #include "tree.h"
++#include "tree-walk.h"
+ #include "packfile.h"
+ #include "object-store.h"
+ #include "commit-reach.h"
+diff --git a/line-log.c b/line-log.c
+index 10c19daec4..6a7ac312a4 100644
+--- a/line-log.c
++++ b/line-log.c
+@@ -18,6 +18,7 @@
+ #include "setup.h"
+ #include "strvec.h"
+ #include "bloom.h"
++#include "tree-walk.h"
+ 
+ static void range_set_grow(struct range_set *rs, size_t extra)
+ {
+diff --git a/pack-bitmap-write.c b/pack-bitmap-write.c
+index 3d3fd38065..cdffe2ce47 100644
+--- a/pack-bitmap-write.c
++++ b/pack-bitmap-write.c
+@@ -19,6 +19,7 @@
+ #include "prio-queue.h"
+ #include "trace2.h"
+ #include "tree.h"
++#include "tree-walk.h"
+ 
+ struct bitmapped_commit {
+ 	struct commit *commit;
+diff --git a/reflog.c b/reflog.c
+index 57dc7c0d05..ee1bf5d032 100644
+--- a/reflog.c
++++ b/reflog.c
+@@ -5,6 +5,7 @@
+ #include "refs.h"
+ #include "revision.h"
+ #include "tree.h"
++#include "tree-walk.h"
+ #include "worktree.h"
+ 
+ /* Remember to update object flag allocation in object.h */
+diff --git a/tree-diff.c b/tree-diff.c
+index 9ea2dd7a6c..20bb15f38d 100644
+--- a/tree-diff.c
++++ b/tree-diff.c
+@@ -5,6 +5,7 @@
+ #include "diff.h"
+ #include "diffcore.h"
+ #include "tree.h"
++#include "tree-walk.h"
+ 
+ /*
+  * Some mode bits are also used internally for computations.
+-- 
+2.39.3 (Apple Git-145)
+

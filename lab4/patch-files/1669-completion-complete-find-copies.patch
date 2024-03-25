@@ -1,0 +1,26 @@
+From 2f677ad3482e2d99e143292a724483737343b343 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:31 +0000
+Subject: [PATCH 1669/2871] completion: complete --find-copies
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 6af04932a0..dd6e12ad8f 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1740,6 +1740,7 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--color-moved --color-moved= --no-color-moved
+ 			--color-moved-ws= --no-color-moved-ws
+ 			--full-index --binary --abbrev --diff-filter=
++			--find-copies
+ 			--find-copies-harder --ignore-cr-at-eol
+ 			--text --ignore-space-at-eol --ignore-space-change
+ 			--ignore-all-space --ignore-blank-lines --exit-code
+-- 
+2.39.3 (Apple Git-145)
+

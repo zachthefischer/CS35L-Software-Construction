@@ -1,0 +1,57 @@
+From d2ec87a684e2f9cd1f0c653620a00d74ad5ee2ce Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 1 Jan 2023 22:14:12 +0100
+Subject: [PATCH 0648/2871] add DUP_ARRAY
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a macro for allocating and populating a shallow copy of an array.
+It is intended to replace a sequence like this:
+
+   ALLOC_ARRAY(dst, n);
+   COPY_ARRAY(dst, src, n);
+
+With the less repetitve:
+
+   DUP_ARRAY(dst, src, n);
+
+It checks whether the types of source and destination are compatible to
+ensure the copy can be used safely.
+
+An easier alternative would be to only consider the source and return
+a void pointer, that could be used like this:
+
+   dst = ARRAY_DUP(src, n);
+
+That would be more versatile, as it could be used in declarations as
+well.  Making it type-safe would require the use of typeof_unqual from
+C23, though.
+
+So use the safe and compatible variant for now.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-compat-util.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/git-compat-util.h b/git-compat-util.h
+index e81bb14fc9..44abb240ae 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -1115,6 +1115,11 @@ static inline void move_array(void *dst, const void *src, size_t n, size_t size)
+ 		memmove(dst, src, st_mult(size, n));
+ }
+ 
++#define DUP_ARRAY(dst, src, n) do { \
++	size_t dup_array_n_ = (n); \
++	COPY_ARRAY(ALLOC_ARRAY((dst), dup_array_n_), (src), dup_array_n_); \
++} while (0)
++
+ /*
+  * These functions help you allocate structs with flex arrays, and copy
+  * the data directly into the array. For example, if you had:
+-- 
+2.39.3 (Apple Git-145)
+

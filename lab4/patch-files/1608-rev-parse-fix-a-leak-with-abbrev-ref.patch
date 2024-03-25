@@ -1,0 +1,61 @@
+From 05e717d556e5e1c7cdf69c7375d19bef226fc0dc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 17 Jun 2023 08:40:43 +0200
+Subject: [PATCH 1608/2871] rev-parse: fix a leak with --abbrev-ref
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+To handle "--abbrev-ref" we use shorten_unambiguous_ref().  This
+function takes a refname and returns a shortened refname, which is a
+newly allocated string that needs to be freed.
+
+Unfortunately, the refname variable is reused to receive the shortened
+one.  Therefore, we lose the original refname, which needs to be freed
+as well, producing a leak.
+
+This leak can be reviewed with:
+
+   $ for a in {1..10}; do git branch foo_${a}; done
+   $ git rev-parse --abbrev-ref refs/heads/foo_{1..10}
+
+   Direct leak of 171 byte(s) in 10 object(s) allocated from:
+       ... in xstrdup wrapper.c
+       ... in expand_ref refs.c
+       ... in repo_dwim_ref refs.c
+       ... in show_rev builtin/rev-parse.c
+       ... in cmd_rev_parse builtin/rev-parse.c
+       ... in run_builtin git.c
+
+We have this leak since a45d34691e (rev-parse: --abbrev-ref option to
+shorten ref name, 2009-04-13) when "--abbrev-ref" was introduced.
+
+Let's fix it.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rev-parse.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/rev-parse.c b/builtin/rev-parse.c
+index 852e49e340..d2eb239a08 100644
+--- a/builtin/rev-parse.c
++++ b/builtin/rev-parse.c
+@@ -156,9 +156,12 @@ static void show_rev(int type, const struct object_id *oid, const char *name)
+ 				 */
+ 				break;
+ 			case 1: /* happy */
+-				if (abbrev_ref)
++				if (abbrev_ref) {
++					char *old = full;
+ 					full = shorten_unambiguous_ref(full,
+ 						abbrev_ref_strict);
++					free(old);
++				}
+ 				show_with_type(type, full);
+ 				break;
+ 			default: /* ambiguous */
+-- 
+2.39.3 (Apple Git-145)
+

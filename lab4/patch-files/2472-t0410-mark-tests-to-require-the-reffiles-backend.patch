@@ -1,0 +1,43 @@
+From 54087dd32be83c47599f39d3a40259e251ed2b8a Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 29 Nov 2023 08:24:40 +0100
+Subject: [PATCH 2472/2871] t0410: mark tests to require the reffiles backend
+
+Two of our tests in t0410 verify whether partial clones end up with the
+correct repository format version and extensions. These checks require
+the reffiles backend because every other backend would by necessity bump
+the repository format version to be at least 1.
+
+Mark the tests accordingly.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0410-partial-clone.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t0410-partial-clone.sh b/t/t0410-partial-clone.sh
+index 5b7bee888d..6b6424b3df 100755
+--- a/t/t0410-partial-clone.sh
++++ b/t/t0410-partial-clone.sh
+@@ -49,7 +49,7 @@ test_expect_success 'convert shallow clone to partial clone' '
+ 	test_cmp_config -C client 1 core.repositoryformatversion
+ '
+ 
+-test_expect_success SHA1 'convert to partial clone with noop extension' '
++test_expect_success SHA1,REFFILES 'convert to partial clone with noop extension' '
+ 	rm -fr server client &&
+ 	test_create_repo server &&
+ 	test_commit -C server my_commit 1 &&
+@@ -60,7 +60,7 @@ test_expect_success SHA1 'convert to partial clone with noop extension' '
+ 	git -C client fetch --unshallow --filter="blob:none"
+ '
+ 
+-test_expect_success SHA1 'converting to partial clone fails with unrecognized extension' '
++test_expect_success SHA1,REFFILES 'converting to partial clone fails with unrecognized extension' '
+ 	rm -fr server client &&
+ 	test_create_repo server &&
+ 	test_commit -C server my_commit 1 &&
+-- 
+2.39.3 (Apple Git-145)
+

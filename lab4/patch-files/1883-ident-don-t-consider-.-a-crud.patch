@@ -1,0 +1,99 @@
+From 1c04cb0744d2acdcaebc77b0e78c47efbba67fd5 Mon Sep 17 00:00:00 2001
+From: "brian m. carlson" <sandals@crustytoothpaste.net>
+Date: Wed, 2 Aug 2023 09:49:32 -0700
+Subject: [PATCH 1883/2871] ident: don't consider '.' a crud
+
+When we process a user's name (as in user.name), we strip all
+leading and trailing crud from it.  Right now, we consider a dot
+a crud character, and strip it off.
+
+However, this is unsuitable for many personal names because humans
+frequently have abbreviated suffixes, such as "Jr." or "Sr." at the end
+of their names, and this corrupts them.  Some other users may wish to
+use an abbreviated name or initial, which will pose a problem especially
+in cultures that write the family name first, followed by the personal
+name.
+
+Since the current approach causes lots of practical problems, let's
+avoid it by no longer considering a dot to be crud.
+
+Note that "." in the name forces the entire name to be quoted to
+please mailers, but stripping "." only at the beginning and the end
+does not help a name with "." in the middle (like "brian m. carlson")
+so this change will not make it much worse.  A name like "Given
+Family, Jr." that did not have to be quoted now would need to be, in
+order to be placed on the e-mail headers, though.
+
+This is based on a weather-balloon patch by Jeff King sent in Aug 2021
+https://lore.kernel.org/git/YSKm8Q8nyTavQaox@coredump.intra.peff.net/
+
+Signed-off-by: brian m. carlson <sandals@crustytoothpaste.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ident.c                       |  1 -
+ t/t4203-mailmap.sh            |  4 ++--
+ t/t7518-ident-corner-cases.sh | 11 ++++++++++-
+ 3 files changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/ident.c b/ident.c
+index 8fad92d700..8d490df7d5 100644
+--- a/ident.c
++++ b/ident.c
+@@ -203,7 +203,6 @@ void reset_ident_date(void)
+ static int crud(unsigned char c)
+ {
+ 	return  c <= 32  ||
+-		c == '.' ||
+ 		c == ',' ||
+ 		c == ':' ||
+ 		c == ';' ||
+diff --git a/t/t4203-mailmap.sh b/t/t4203-mailmap.sh
+index fa7f987284..2016132f51 100755
+--- a/t/t4203-mailmap.sh
++++ b/t/t4203-mailmap.sh
+@@ -466,7 +466,7 @@ test_expect_success 'gitmailmap(5) example output: example #1' '
+ 	Author Jane Doe <jane@laptop.(none)> maps to Jane Doe <jane@laptop.(none)>
+ 	Committer C O Mitter <committer@example.com> maps to C O Mitter <committer@example.com>
+ 
+-	Author Jane D <jane@desktop.(none)> maps to Jane Doe <jane@desktop.(none)>
++	Author Jane D. <jane@desktop.(none)> maps to Jane Doe <jane@desktop.(none)>
+ 	Committer C O Mitter <committer@example.com> maps to C O Mitter <committer@example.com>
+ 	EOF
+ 	git -C doc log --reverse --pretty=format:"Author %an <%ae> maps to %aN <%aE>%nCommitter %cn <%ce> maps to %cN <%cE>%n" >actual &&
+@@ -494,7 +494,7 @@ test_expect_success 'gitmailmap(5) example output: example #2' '
+ 	Author Jane Doe <jane@laptop.(none)> maps to Jane Doe <jane@example.com>
+ 	Committer C O Mitter <committer@example.com> maps to C O Mitter <committer@example.com>
+ 
+-	Author Jane D <jane@desktop.(none)> maps to Jane Doe <jane@example.com>
++	Author Jane D. <jane@desktop.(none)> maps to Jane Doe <jane@example.com>
+ 	Committer C O Mitter <committer@example.com> maps to C O Mitter <committer@example.com>
+ 	EOF
+ 	git -C doc log --reverse --pretty=format:"Author %an <%ae> maps to %aN <%aE>%nCommitter %cn <%ce> maps to %cN <%cE>%n" >actual &&
+diff --git a/t/t7518-ident-corner-cases.sh b/t/t7518-ident-corner-cases.sh
+index fffdb6ff2e..9ab2ae2f3b 100755
+--- a/t/t7518-ident-corner-cases.sh
++++ b/t/t7518-ident-corner-cases.sh
+@@ -20,10 +20,19 @@ test_expect_success 'empty name and missing email' '
+ '
+ 
+ test_expect_success 'commit rejects all-crud name' '
+-	test_must_fail env GIT_AUTHOR_NAME=" .;<>" \
++	test_must_fail env GIT_AUTHOR_NAME=" ,;<>" \
+ 		git commit --allow-empty -m foo
+ '
+ 
++test_expect_success 'commit does not strip trailing dot' '
++	author_name="Pat Doe Jr." &&
++	env GIT_AUTHOR_NAME="$author_name" \
++		git commit --allow-empty -m foo &&
++	git log -1 --format=%an >actual &&
++	echo "$author_name" >expected &&
++	test_cmp actual expected
++'
++
+ # We must test the actual error message here, as an unwanted
+ # auto-detection could fail for other reasons.
+ test_expect_success 'empty configured name does not auto-detect' '
+-- 
+2.39.3 (Apple Git-145)
+

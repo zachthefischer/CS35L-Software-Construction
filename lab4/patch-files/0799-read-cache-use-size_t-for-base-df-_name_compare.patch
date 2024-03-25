@@ -1,0 +1,74 @@
+From 1b4a38d741a4f256c76ae5bffd3c8a52e05927b2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 5 Feb 2023 11:36:28 +0100
+Subject: [PATCH 0799/2871] read-cache: use size_t for {base,df}_name_compare()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Support names of any length in base_name_compare() and df_name_compare()
+by using size_t for their length parameters.  They pass the length on to
+memcmp(3), which also takes it as a size_t.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h      |  6 ++++--
+ read-cache.c | 13 +++++++------
+ 2 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 07d40b0964..dfa014c3c2 100644
+--- a/cache.h
++++ b/cache.h
+@@ -1609,8 +1609,10 @@ int repo_interpret_branch_name(struct repository *r,
+ 
+ int validate_headref(const char *ref);
+ 
+-int base_name_compare(const char *name1, int len1, int mode1, const char *name2, int len2, int mode2);
+-int df_name_compare(const char *name1, int len1, int mode1, const char *name2, int len2, int mode2);
++int base_name_compare(const char *name1, size_t len1, int mode1,
++		      const char *name2, size_t len2, int mode2);
++int df_name_compare(const char *name1, size_t len1, int mode1,
++		    const char *name2, size_t len2, int mode2);
+ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2);
+ int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2);
+ 
+diff --git a/read-cache.c b/read-cache.c
+index 46f5e497b1..8d7770f46c 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -488,11 +488,11 @@ int ie_modified(struct index_state *istate,
+ 	return 0;
+ }
+ 
+-int base_name_compare(const char *name1, int len1, int mode1,
+-		      const char *name2, int len2, int mode2)
++int base_name_compare(const char *name1, size_t len1, int mode1,
++		      const char *name2, size_t len2, int mode2)
+ {
+ 	unsigned char c1, c2;
+-	int len = len1 < len2 ? len1 : len2;
++	size_t len = len1 < len2 ? len1 : len2;
+ 	int cmp;
+ 
+ 	cmp = memcmp(name1, name2, len);
+@@ -517,11 +517,12 @@ int base_name_compare(const char *name1, int len1, int mode1,
+  * This is used by routines that want to traverse the git namespace
+  * but then handle conflicting entries together when possible.
+  */
+-int df_name_compare(const char *name1, int len1, int mode1,
+-		    const char *name2, int len2, int mode2)
++int df_name_compare(const char *name1, size_t len1, int mode1,
++		    const char *name2, size_t len2, int mode2)
+ {
+-	int len = len1 < len2 ? len1 : len2, cmp;
+ 	unsigned char c1, c2;
++	size_t len = len1 < len2 ? len1 : len2;
++	int cmp;
+ 
+ 	cmp = memcmp(name1, name2, len);
+ 	if (cmp)
+-- 
+2.39.3 (Apple Git-145)
+

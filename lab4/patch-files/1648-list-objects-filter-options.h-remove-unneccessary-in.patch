@@ -1,0 +1,27 @@
+From 768122900f7af84c2536fd9cb9d205f8ad774322 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:34:01 +0000
+Subject: [PATCH 1648/2871] list-objects-filter-options.h: remove unneccessary
+ include
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ list-objects-filter-options.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/list-objects-filter-options.h b/list-objects-filter-options.h
+index f620612586..55fab8563d 100644
+--- a/list-objects-filter-options.h
++++ b/list-objects-filter-options.h
+@@ -3,7 +3,6 @@
+ 
+ #include "gettext.h"
+ #include "object.h"
+-#include "string-list.h"
+ #include "strbuf.h"
+ 
+ struct option;
+-- 
+2.39.3 (Apple Git-145)
+

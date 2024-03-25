@@ -1,0 +1,85 @@
+From 3771d002571f6fc796ff3f54e9d5b875826e62ed Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:16 +0000
+Subject: [PATCH 2230/2871] documentation: fix choice of article
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config.txt                  | 2 +-
+ Documentation/diff-generate-patch.txt     | 2 +-
+ Documentation/howto/maintain-git.txt      | 2 +-
+ Documentation/pretty-options.txt          | 2 +-
+ Documentation/technical/bitmap-format.txt | 2 +-
+ 5 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/config.txt b/Documentation/config.txt
+index 9273c7f1c6..99affec5a0 100644
+--- a/Documentation/config.txt
++++ b/Documentation/config.txt
+@@ -103,7 +103,7 @@ was found.  See below for examples.
+ Conditional includes
+ ~~~~~~~~~~~~~~~~~~~~
+ 
+-You can conditionally include a config file from another by setting a
++You can conditionally include a config file from another by setting an
+ `includeIf.<condition>.path` variable to the name of the file to be
+ included.
+ 
+diff --git a/Documentation/diff-generate-patch.txt b/Documentation/diff-generate-patch.txt
+index 65e0b1646e..4b307cb51b 100644
+--- a/Documentation/diff-generate-patch.txt
++++ b/Documentation/diff-generate-patch.txt
+@@ -156,7 +156,7 @@ format, `/dev/null` is used to signal created or deleted
+ files.
+ +
+ However, if the --combined-all-paths option is provided, instead of a
+-two-line from-file/to-file you get a N+1 line from-file/to-file header,
++two-line from-file/to-file you get an N+1 line from-file/to-file header,
+ where N is the number of parents in the merge commit:
+ 
+        --- a/file
+diff --git a/Documentation/howto/maintain-git.txt b/Documentation/howto/maintain-git.txt
+index 29c473e5e0..013014bbef 100644
+--- a/Documentation/howto/maintain-git.txt
++++ b/Documentation/howto/maintain-git.txt
+@@ -411,7 +411,7 @@ Preparing a "merge-fix"
+ 
+ A merge of two topics may not textually conflict but still have
+ conflict at the semantic level. A classic example is for one topic
+-to rename an variable and all its uses, while another topic adds a
++to rename a variable and all its uses, while another topic adds a
+ new use of the variable under its old name. When these two topics
+ are merged together, the reference to the variable newly added by
+ the latter topic will still use the old name in the result.
+diff --git a/Documentation/pretty-options.txt b/Documentation/pretty-options.txt
+index 335395b727..15c6f2705d 100644
+--- a/Documentation/pretty-options.txt
++++ b/Documentation/pretty-options.txt
+@@ -73,7 +73,7 @@ environment overrides). See linkgit:git-config[1] for more details.
+ With an optional '<ref>' argument, use the ref to find the notes
+ to display.  The ref can specify the full refname when it begins
+ with `refs/notes/`; when it begins with `notes/`, `refs/` and otherwise
+-`refs/notes/` is prefixed to form a full name of the ref.
++`refs/notes/` is prefixed to form the full name of the ref.
+ +
+ Multiple --notes options can be combined to control which notes are
+ being displayed. Examples: "--notes=foo" will show only notes from
+diff --git a/Documentation/technical/bitmap-format.txt b/Documentation/technical/bitmap-format.txt
+index 687c58cebc..f761828f10 100644
+--- a/Documentation/technical/bitmap-format.txt
++++ b/Documentation/technical/bitmap-format.txt
+@@ -126,7 +126,7 @@ Each entry contains the following:
+ 	** {empty}
+ 	1-byte XOR-offset: ::
+ 	    The xor offset used to compress this bitmap. For an entry
+-	    in position `x`, a XOR offset of `y` means that the actual
++	    in position `x`, an XOR offset of `y` means that the actual
+ 	    bitmap representing this commit is composed by XORing the
+ 	    bitmap for this entry with the bitmap in entry `x-y` (i.e.
+ 	    the bitmap `y` entries before this one).
+-- 
+2.39.3 (Apple Git-145)
+

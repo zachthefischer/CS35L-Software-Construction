@@ -1,0 +1,67 @@
+From 3c3d0c4242d834c49d77da321425819c175df61c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 17 Jun 2023 22:40:57 +0200
+Subject: [PATCH 1614/2871] pretty: factor out expand_separator()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Deduplicate the code for setting the options "separator" and
+"key_value_separator" by moving it into a new helper function,
+expand_separator().
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pretty.c | 27 +++++++++++++--------------
+ 1 file changed, 13 insertions(+), 14 deletions(-)
+
+diff --git a/pretty.c b/pretty.c
+index 0bb938021b..d2df561a05 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1250,6 +1250,17 @@ static int format_trailer_match_cb(const struct strbuf *key, void *ud)
+ 	return 0;
+ }
+ 
++static struct strbuf *expand_separator(struct strbuf *sb,
++				       const char *argval, size_t arglen)
++{
++	char *fmt = xstrndup(argval, arglen);
++
++	strbuf_reset(sb);
++	strbuf_expand(sb, fmt, strbuf_expand_literal_cb, NULL);
++	free(fmt);
++	return sb;
++}
++
+ int format_set_trailers_options(struct process_trailer_options *opts,
+ 				struct string_list *filter_list,
+ 				struct strbuf *sepbuf,
+@@ -1278,21 +1289,9 @@ int format_set_trailers_options(struct process_trailer_options *opts,
+ 			opts->filter_data = filter_list;
+ 			opts->only_trailers = 1;
+ 		} else if (match_placeholder_arg_value(*arg, "separator", arg, &argval, &arglen)) {
+-			char *fmt;
+-
+-			strbuf_reset(sepbuf);
+-			fmt = xstrndup(argval, arglen);
+-			strbuf_expand(sepbuf, fmt, strbuf_expand_literal_cb, NULL);
+-			free(fmt);
+-			opts->separator = sepbuf;
++			opts->separator = expand_separator(sepbuf, argval, arglen);
+ 		} else if (match_placeholder_arg_value(*arg, "key_value_separator", arg, &argval, &arglen)) {
+-			char *fmt;
+-
+-			strbuf_reset(kvsepbuf);
+-			fmt = xstrndup(argval, arglen);
+-			strbuf_expand(kvsepbuf, fmt, strbuf_expand_literal_cb, NULL);
+-			free(fmt);
+-			opts->key_value_separator = kvsepbuf;
++			opts->key_value_separator = expand_separator(kvsepbuf, argval, arglen);
+ 		} else if (!match_placeholder_bool_arg(*arg, "only", arg, &opts->only_trailers) &&
+ 			   !match_placeholder_bool_arg(*arg, "unfold", arg, &opts->unfold) &&
+ 			   !match_placeholder_bool_arg(*arg, "keyonly", arg, &opts->key_only) &&
+-- 
+2.39.3 (Apple Git-145)
+

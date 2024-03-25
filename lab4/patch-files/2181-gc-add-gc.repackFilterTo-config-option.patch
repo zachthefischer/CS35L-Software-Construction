@@ -1,0 +1,113 @@
+From 9b96046b9239589756cde8fbcbafe05ac7ec4611 Mon Sep 17 00:00:00 2001
+From: Christian Couder <christian.couder@gmail.com>
+Date: Mon, 2 Oct 2023 18:55:04 +0200
+Subject: [PATCH 2181/2871] gc: add `gc.repackFilterTo` config option
+
+A previous commit implemented the `gc.repackFilter` config option
+to specify a filter that should be used by `git gc` when
+performing repacks.
+
+Another previous commit has implemented
+`git repack --filter-to=<dir>` to specify the location of the
+packfile containing filtered out objects when using a filter.
+
+Let's implement the `gc.repackFilterTo` config option to specify
+that location in the config when `gc.repackFilter` is used.
+
+Now when `git gc` will perform a repack with a <dir> configured
+through this option and not empty, the repack process will be
+passed a corresponding `--filter-to=<dir>` argument.
+
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/gc.txt | 11 +++++++++++
+ builtin/gc.c                |  4 ++++
+ t/t6500-gc.sh               | 13 ++++++++++++-
+ 3 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/config/gc.txt b/Documentation/config/gc.txt
+index 2153bde7ac..466466d6cc 100644
+--- a/Documentation/config/gc.txt
++++ b/Documentation/config/gc.txt
+@@ -150,6 +150,17 @@ gc.repackFilter::
+ 	objects into a separate packfile.  See the
+ 	`--filter=<filter-spec>` option of linkgit:git-repack[1].
+ 
++gc.repackFilterTo::
++	When repacking and using a filter, see `gc.repackFilter`, the
++	specified location will be used to create the packfile
++	containing the filtered out objects. **WARNING:** The
++	specified location should be accessible, using for example the
++	Git alternates mechanism, otherwise the repo could be
++	considered corrupt by Git as it migh not be able to access the
++	objects in that packfile. See the `--filter-to=<dir>` option
++	of linkgit:git-repack[1] and the `objects/info/alternates`
++	section of linkgit:gitrepository-layout[5].
++
+ gc.rerereResolved::
+ 	Records of conflicted merge you resolved earlier are
+ 	kept for this many days when 'git rerere gc' is run.
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 98148e98fe..68ca8d45bf 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -62,6 +62,7 @@ static const char *gc_log_expire = "1.day.ago";
+ static const char *prune_expire = "2.weeks.ago";
+ static const char *prune_worktrees_expire = "3.months.ago";
+ static char *repack_filter;
++static char *repack_filter_to;
+ static unsigned long big_pack_threshold;
+ static unsigned long max_delta_cache_size = DEFAULT_DELTA_CACHE_SIZE;
+ 
+@@ -172,6 +173,7 @@ static void gc_config(void)
+ 	git_config_get_ulong("pack.deltacachesize", &max_delta_cache_size);
+ 
+ 	git_config_get_string("gc.repackfilter", &repack_filter);
++	git_config_get_string("gc.repackfilterto", &repack_filter_to);
+ 
+ 	git_config(git_default_config, NULL);
+ }
+@@ -361,6 +363,8 @@ static void add_repack_all_option(struct string_list *keep_pack)
+ 
+ 	if (repack_filter && *repack_filter)
+ 		strvec_pushf(&repack, "--filter=%s", repack_filter);
++	if (repack_filter_to && *repack_filter_to)
++		strvec_pushf(&repack, "--filter-to=%s", repack_filter_to);
+ }
+ 
+ static void add_repack_incremental_option(void)
+diff --git a/t/t6500-gc.sh b/t/t6500-gc.sh
+index 232e403b66..e412cf8daf 100755
+--- a/t/t6500-gc.sh
++++ b/t/t6500-gc.sh
+@@ -203,7 +203,6 @@ test_expect_success 'one of gc.reflogExpire{Unreachable,}=never does not skip "e
+ '
+ 
+ test_expect_success 'gc.repackFilter launches repack with a filter' '
+-	test_when_finished "rm -rf bare.git" &&
+ 	git clone --no-local --bare . bare.git &&
+ 
+ 	git -C bare.git -c gc.cruftPacks=false gc &&
+@@ -215,6 +214,18 @@ test_expect_success 'gc.repackFilter launches repack with a filter' '
+ 	grep -E "^trace: (built-in|exec|run_command): git repack .* --filter=blob:none ?.*" trace.out
+ '
+ 
++test_expect_success 'gc.repackFilterTo store filtered out objects' '
++	test_when_finished "rm -rf bare.git filtered.git" &&
++
++	git init --bare filtered.git &&
++	git -C bare.git -c gc.repackFilter=blob:none \
++		-c gc.repackFilterTo=../filtered.git/objects/pack/pack \
++		-c repack.writeBitmaps=false -c gc.cruftPacks=false gc &&
++
++	test_stdout_line_count = 1 ls bare.git/objects/pack/*.pack &&
++	test_stdout_line_count = 1 ls filtered.git/objects/pack/*.pack
++'
++
+ prepare_cruft_history () {
+ 	test_commit base &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

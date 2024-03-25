@@ -1,0 +1,92 @@
+From e72171f085e48ed9292809815bf70b6e685b73c6 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 31 Jan 2023 13:29:09 +0000
+Subject: [PATCH 0760/2871] bundle: test unbundling with incomplete history
+
+When verifying a bundle, Git checks first that all prerequisite commits
+exist in the object store, then adds an additional check: those
+prerequisite commits must be reachable from references in the
+repository.
+
+This check is stronger than what is checked for refs being added during
+'git fetch', which simply guarantees that the new refs have a complete
+history up to the point where it intersects with the current reachable
+history.
+
+However, we also do not have any tests that check the behavior under
+this condition. Create a test that demonstrates its behavior.
+
+In order to construct a broken history, perform a shallow clone of a
+repository with a linear history, but whose default branch ('base') has
+a single commit, so dropping the shallow markers leaves a complete
+history from that reference. However, the 'tip' reference adds a
+shallow commit whose parent is missing in the cloned repository. Trying
+to unbundle a bundle with the 'tip' as a prerequisite will succeed past
+the object store check and move into the reachability check.
+
+The two errors that are reported are of this form:
+
+  error: Could not read <missing-commit>
+  fatal: Failed to traverse parents of commit <present-commit>
+
+These messages are not particularly helpful for the person running the
+unbundle command, but they do prevent the command from succeeding.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6020-bundle-misc.sh | 40 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+diff --git a/t/t6020-bundle-misc.sh b/t/t6020-bundle-misc.sh
+index 833205125a..26cf5fa008 100755
+--- a/t/t6020-bundle-misc.sh
++++ b/t/t6020-bundle-misc.sh
+@@ -559,4 +559,44 @@ test_expect_success 'cloning from filtered bundle has useful error' '
+ 	grep "cannot clone from filtered bundle" err
+ '
+ 
++test_expect_success 'verify catches unreachable, broken prerequisites' '
++	test_when_finished rm -rf clone-from clone-to &&
++	git init clone-from &&
++	(
++		cd clone-from &&
++		git checkout -b base &&
++		test_commit A &&
++		git checkout -b tip &&
++		git commit --allow-empty -m "will drop by shallow" &&
++		git commit --allow-empty -m "will keep by shallow" &&
++		git commit --allow-empty -m "for bundle, not clone" &&
++		git bundle create tip.bundle tip~1..tip &&
++		git reset --hard HEAD~1 &&
++		git checkout base
++	) &&
++	BAD_OID=$(git -C clone-from rev-parse tip~1) &&
++	TIP_OID=$(git -C clone-from rev-parse tip) &&
++	git clone --depth=1 --no-single-branch \
++		"file://$(pwd)/clone-from" clone-to &&
++	(
++		cd clone-to &&
++
++		# Set up broken history by removing shallow markers
++		git update-ref -d refs/remotes/origin/tip &&
++		rm .git/shallow &&
++
++		# Verify should fail
++		test_must_fail git bundle verify \
++			../clone-from/tip.bundle 2>err &&
++		grep "Could not read $BAD_OID" err &&
++		grep "Failed to traverse parents of commit $TIP_OID" err &&
++
++		# Unbundling should fail
++		test_must_fail git bundle unbundle \
++			../clone-from/tip.bundle 2>err &&
++		grep "Could not read $BAD_OID" err &&
++		grep "Failed to traverse parents of commit $TIP_OID" err
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

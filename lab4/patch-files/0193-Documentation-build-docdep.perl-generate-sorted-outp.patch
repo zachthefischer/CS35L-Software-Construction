@@ -1,0 +1,56 @@
+From 3dc6b4e027266c7b7334920ca9be3162327325f7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?SZEDER=20G=C3=A1bor?= <szeder.dev@gmail.com>
+Date: Fri, 21 Oct 2022 12:29:50 +0200
+Subject: [PATCH 0193/2871] Documentation/build-docdep.perl: generate sorted
+ output
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+To make sure that our manpages are rebuilt when any of the included
+source files change and only the affected manpages are rebuilt,
+'build-docdep.perl' scans our documentation source files for include
+directives, and outputs 'make' dependencies to be included by
+'Documentation/Makefile'.  This script relies on Perl's hash data
+structures, and generates its output while iterating over them, and
+since hashes in Perl are very much unordered, the output varies
+greatly from run to run, both the order of targets and the order of
+dependencies of each target.
+
+This lack of ordering doesn't matter for 'make', because it cares
+neither about the order of targets in a Makefile nor about the order
+of a target's dependencies.  However, it does matter to developers
+looking into build issues potentially involving these generated
+dependencies, as it's rather hard to tell whether there are any
+relevant (i.e. not order-only) changes among the dependencies compared
+to the previous run.
+
+So let's make 'build-docdep.perl's output stable and ordered by
+sorting the keys of the hashes before iterating over them.
+
+Signed-off-by: SZEDER Gábor <szeder.dev@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/build-docdep.perl | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/build-docdep.perl b/Documentation/build-docdep.perl
+index ba4205e030..1b3ac8fdd9 100755
+--- a/Documentation/build-docdep.perl
++++ b/Documentation/build-docdep.perl
+@@ -38,9 +38,10 @@
+     }
+ }
+ 
+-while (my ($text, $included) = each %include) {
++foreach my $text (sort keys %include) {
++    my $included = $include{$text};
+     if (! exists $included{$text} &&
+ 	(my $base = $text) =~ s/\.txt$//) {
+-	print "$base.html $base.xml : ", join(" ", keys %$included), "\n";
++	print "$base.html $base.xml : ", join(" ", sort keys %$included), "\n";
+     }
+ }
+-- 
+2.39.3 (Apple Git-145)
+

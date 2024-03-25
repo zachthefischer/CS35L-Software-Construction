@@ -1,0 +1,225 @@
+From 461fec41fa79803c367ccaf11f713d6c67ba709f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=90o=C3=A0n=20Tr=E1=BA=A7n=20C=C3=B4ng=20Danh?=
+ <congdanhqx@gmail.com>
+Date: Thu, 10 Nov 2022 23:36:39 +0700
+Subject: [PATCH 0364/2871] bisect run: keep some of the post-v2.30.0 output
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Preceding commits fixed output and behavior regressions in
+d1bbbe45df8 (bisect--helper: reimplement `bisect_run` shell function
+in C, 2021-09-13), which did not claim to be changing the output of
+"git bisect run".
+
+But some of the output it emitted was subjectively better, so once
+we've asserted that we're back on v2.29.0 behavior, let's change some
+of it back:
+
+- We now quote the arguments again, but omit the first " " when
+  printing the "running" line.
+- Ditto for other cases where we emitted the argument
+- We say "found first bad commit" again, not just "run success"
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Based-on-patch-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/bisect--helper.c    | 24 ++++++++--------
+ t/t6030-bisect-porcelain.sh | 55 +++++++++++++++++++++++++++++++------
+ 2 files changed, 58 insertions(+), 21 deletions(-)
+
+diff --git a/builtin/bisect--helper.c b/builtin/bisect--helper.c
+index 05cab468e3..180c2faa7f 100644
+--- a/builtin/bisect--helper.c
++++ b/builtin/bisect--helper.c
+@@ -1141,17 +1141,17 @@ static int get_first_good(const char *refname UNUSED,
+ 	return 1;
+ }
+ 
+-static int do_bisect_run(const char *command, const char *unquoted_cmd)
++static int do_bisect_run(const char *command)
+ {
+ 	struct child_process cmd = CHILD_PROCESS_INIT;
+ 
+-	printf(_("running %s\n"), unquoted_cmd);
++	printf(_("running %s\n"), command);
+ 	cmd.use_shell = 1;
+ 	strvec_push(&cmd.args, command);
+ 	return run_command(&cmd);
+ }
+ 
+-static int verify_good(const struct bisect_terms *terms, const char *command, const char *unquoted_cmd)
++static int verify_good(const struct bisect_terms *terms, const char *command)
+ {
+ 	int rc;
+ 	enum bisect_error res;
+@@ -1171,7 +1171,7 @@ static int verify_good(const struct bisect_terms *terms, const char *command, co
+ 	if (res != BISECT_OK)
+ 		return -1;
+ 
+-	rc = do_bisect_run(command, unquoted_cmd);
++	rc = do_bisect_run(command);
+ 
+ 	res = bisect_checkout(&current_rev, no_checkout);
+ 	if (res != BISECT_OK)
+@@ -1184,7 +1184,6 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ {
+ 	int res = BISECT_OK;
+ 	struct strbuf command = STRBUF_INIT;
+-	struct strbuf unquoted = STRBUF_INIT;
+ 	const char *new_state;
+ 	int temporary_stdout_fd, saved_stdout;
+ 	int is_first_run = 1;
+@@ -1198,9 +1197,9 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ 	}
+ 
+ 	sq_quote_argv(&command, argv);
+-	strbuf_join_argv(&unquoted, argc, argv,' ');
++	strbuf_ltrim(&command);
+ 	while (1) {
+-		res = do_bisect_run(command.buf, unquoted.buf);
++		res = do_bisect_run(command.buf);
+ 
+ 		/*
+ 		 * Exit code 126 and 127 can either come from the shell
+@@ -1210,11 +1209,11 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ 		 * missing or non-executable script.
+ 		 */
+ 		if (is_first_run && (res == 126 || res == 127)) {
+-			int rc = verify_good(terms, command.buf, unquoted.buf);
++			int rc = verify_good(terms, command.buf);
+ 			is_first_run = 0;
+ 			if (rc < 0) {
+-				error(_("unable to verify '%s' on good"
+-					" revision"), unquoted.buf);
++				error(_("unable to verify %s on good"
++					" revision"), command.buf);
+ 				res = BISECT_FAILED;
+ 				break;
+ 			}
+@@ -1228,7 +1227,7 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ 
+ 		if (res < 0 || 128 <= res) {
+ 			error(_("bisect run failed: exit code %d from"
+-				" '%s' is < 0 or >= 128"), res, unquoted.buf);
++				" %s is < 0 or >= 128"), res, command.buf);
+ 			break;
+ 		}
+ 
+@@ -1265,7 +1264,7 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ 			puts(_("bisect run success"));
+ 			res = BISECT_OK;
+ 		} else if (res == BISECT_INTERNAL_SUCCESS_1ST_BAD_FOUND) {
+-			puts(_("bisect run success"));
++			puts(_("bisect found first bad commit"));
+ 			res = BISECT_OK;
+ 		} else if (res) {
+ 			error(_("bisect run failed: 'bisect-state %s'"
+@@ -1276,7 +1275,6 @@ static int bisect_run(struct bisect_terms *terms, const char **argv, int argc)
+ 		break;
+ 	}
+ 
+-	strbuf_release(&unquoted);
+ 	strbuf_release(&command);
+ 	return res;
+ }
+diff --git a/t/t6030-bisect-porcelain.sh b/t/t6030-bisect-porcelain.sh
+index a3dc5c8140..34fd45a48e 100755
+--- a/t/t6030-bisect-porcelain.sh
++++ b/t/t6030-bisect-porcelain.sh
+@@ -288,9 +288,9 @@ test_bisect_run_args () {
+ test_expect_success 'git bisect run: args, stdout and stderr with no arguments' "
+ 	test_bisect_run_args <<-'EOF_ARGS' 6<<-EOF_OUT 7<<-'EOF_ERR'
+ 	EOF_ARGS
+-	running ./run.sh
++	running './run.sh'
+ 	$HASH4 is the first bad commit
+-	bisect run success
++	bisect found first bad commit
+ 	EOF_OUT
+ 	EOF_ERR
+ "
+@@ -299,9 +299,9 @@ test_expect_success 'git bisect run: args, stdout and stderr: "--" argument' "
+ 	test_bisect_run_args -- <<-'EOF_ARGS' 6<<-EOF_OUT 7<<-'EOF_ERR'
+ 	<-->
+ 	EOF_ARGS
+-	running ./run.sh --
++	running './run.sh' '--'
+ 	$HASH4 is the first bad commit
+-	bisect run success
++	bisect found first bad commit
+ 	EOF_OUT
+ 	EOF_ERR
+ "
+@@ -313,9 +313,9 @@ test_expect_success 'git bisect run: args, stdout and stderr: "--log foo --no-lo
+ 	<--no-log>
+ 	<bar>
+ 	EOF_ARGS
+-	running ./run.sh --log foo --no-log bar
++	running './run.sh' '--log' 'foo' '--no-log' 'bar'
+ 	$HASH4 is the first bad commit
+-	bisect run success
++	bisect found first bad commit
+ 	EOF_OUT
+ 	EOF_ERR
+ "
+@@ -324,13 +324,52 @@ test_expect_success 'git bisect run: args, stdout and stderr: "--bisect-start" a
+ 	test_bisect_run_args --bisect-start <<-'EOF_ARGS' 6<<-EOF_OUT 7<<-'EOF_ERR'
+ 	<--bisect-start>
+ 	EOF_ARGS
+-	running ./run.sh --bisect-start
++	running './run.sh' '--bisect-start'
+ 	$HASH4 is the first bad commit
+-	bisect run success
++	bisect found first bad commit
+ 	EOF_OUT
+ 	EOF_ERR
+ "
+ 
++test_expect_success 'git bisect run: negative exit code' "
++	write_script fail.sh <<-'EOF' &&
++	exit 255
++	EOF
++	cat <<-'EOF' >expect &&
++	bisect run failed: exit code -1 from './fail.sh' is < 0 or >= 128
++	EOF
++	test_when_finished 'git bisect reset' &&
++	git bisect start &&
++	git bisect good $HASH1 &&
++	git bisect bad $HASH4 &&
++	! git bisect run ./fail.sh 2>err &&
++	sed -En 's/.*(bisect.*code) (-?[0-9]+) (from.*)/\1 -1 \3/p' err >actual &&
++	test_cmp expect actual
++"
++
++test_expect_failure 'git bisect run: unable to verify on good' "
++	write_script fail.sh <<-'EOF' &&
++	head=\$(git rev-parse --verify HEAD)
++	good=\$(git rev-parse --verify $HASH1)
++	if test "\$head" = "\$good"
++	then
++		exit 255
++	else
++		exit 127
++	fi
++	EOF
++	cat <<-'EOF' >expect &&
++	unable to verify './fail.sh' on good revision
++	EOF
++	test_when_finished 'git bisect reset' &&
++	git bisect start &&
++	git bisect good $HASH1 &&
++	git bisect bad $HASH4 &&
++	! git bisect run ./fail.sh 2>err &&
++	sed -n 's/.*\(unable to verify.*\)/\1/p' err >actual &&
++	test_cmp expect actual
++"
++
+ # We want to automatically find the commit that
+ # added "Another" into hello.
+ test_expect_success '"git bisect run" simple case' '
+-- 
+2.39.3 (Apple Git-145)
+

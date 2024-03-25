@@ -1,0 +1,214 @@
+From 1c02840008b61676373f3703696dc0c07e6eff7d Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:32 +0000
+Subject: [PATCH 0918/2871] object-store.h: move struct object_info from
+ cache.h
+
+Move struct object_info, and a few related #define's from cache.h to
+object-store.h.
+
+A surprising effect of this change is that replace-object.h, which
+includes object-store.h, now needs to directly include cache.h since
+that is where read_replace_refs is declared and that variable is used
+in one of its inline functions.  The next commit will move that
+declaration and fix that unfortunate new direct inclusion of cache.h.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-blobs.c    |   2 +-
+ object-store.h   | 128 +++++++++++++++++++++++------------------------
+ protocol-caps.c  |   1 +
+ replace-object.h |   1 +
+ 4 files changed, 67 insertions(+), 65 deletions(-)
+
+diff --git a/merge-blobs.c b/merge-blobs.c
+index 8138090f81..aedcab8113 100644
+--- a/merge-blobs.c
++++ b/merge-blobs.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "run-command.h"
+ #include "xdiff-interface.h"
+ #include "ll-merge.h"
+diff --git a/object-store.h b/object-store.h
+index 1a713d89d7..82201ec3e7 100644
+--- a/object-store.h
++++ b/object-store.h
+@@ -1,7 +1,7 @@
+ #ifndef OBJECT_STORE_H
+ #define OBJECT_STORE_H
+ 
+-#include "cache.h"
++#include "object.h"
+ #include "oidmap.h"
+ #include "list.h"
+ #include "oid-array.h"
+@@ -284,6 +284,69 @@ int pretend_object_file(void *, unsigned long, enum object_type,
+ 
+ int force_object_loose(const struct object_id *oid, time_t mtime);
+ 
++struct object_info {
++	/* Request */
++	enum object_type *typep;
++	unsigned long *sizep;
++	off_t *disk_sizep;
++	struct object_id *delta_base_oid;
++	struct strbuf *type_name;
++	void **contentp;
++
++	/* Response */
++	enum {
++		OI_CACHED,
++		OI_LOOSE,
++		OI_PACKED,
++		OI_DBCACHED
++	} whence;
++	union {
++		/*
++		 * struct {
++		 * 	... Nothing to expose in this case
++		 * } cached;
++		 * struct {
++		 * 	... Nothing to expose in this case
++		 * } loose;
++		 */
++		struct {
++			struct packed_git *pack;
++			off_t offset;
++			unsigned int is_delta;
++		} packed;
++	} u;
++};
++
++/*
++ * Initializer for a "struct object_info" that wants no items. You may
++ * also memset() the memory to all-zeroes.
++ */
++#define OBJECT_INFO_INIT { 0 }
++
++/* Invoke lookup_replace_object() on the given hash */
++#define OBJECT_INFO_LOOKUP_REPLACE 1
++/* Allow reading from a loose object file of unknown/bogus type */
++#define OBJECT_INFO_ALLOW_UNKNOWN_TYPE 2
++/* Do not retry packed storage after checking packed and loose storage */
++#define OBJECT_INFO_QUICK 8
++/*
++ * Do not attempt to fetch the object if missing (even if fetch_is_missing is
++ * nonzero).
++ */
++#define OBJECT_INFO_SKIP_FETCH_OBJECT 16
++/*
++ * This is meant for bulk prefetching of missing blobs in a partial
++ * clone. Implies OBJECT_INFO_SKIP_FETCH_OBJECT and OBJECT_INFO_QUICK
++ */
++#define OBJECT_INFO_FOR_PREFETCH (OBJECT_INFO_SKIP_FETCH_OBJECT | OBJECT_INFO_QUICK)
++
++/* Die if object corruption (not just an object being missing) was detected. */
++#define OBJECT_INFO_DIE_IF_CORRUPT 32
++
++int oid_object_info_extended(struct repository *r,
++			     const struct object_id *,
++			     struct object_info *, unsigned flags);
++
+ /*
+  * Open the loose object at path, check its hash, and return the contents,
+  * use the "oi" argument to assert things about the object, or e.g. populate its
+@@ -381,69 +444,6 @@ static inline void obj_read_unlock(void)
+ 		pthread_mutex_unlock(&obj_read_mutex);
+ }
+ 
+-struct object_info {
+-	/* Request */
+-	enum object_type *typep;
+-	unsigned long *sizep;
+-	off_t *disk_sizep;
+-	struct object_id *delta_base_oid;
+-	struct strbuf *type_name;
+-	void **contentp;
+-
+-	/* Response */
+-	enum {
+-		OI_CACHED,
+-		OI_LOOSE,
+-		OI_PACKED,
+-		OI_DBCACHED
+-	} whence;
+-	union {
+-		/*
+-		 * struct {
+-		 * 	... Nothing to expose in this case
+-		 * } cached;
+-		 * struct {
+-		 * 	... Nothing to expose in this case
+-		 * } loose;
+-		 */
+-		struct {
+-			struct packed_git *pack;
+-			off_t offset;
+-			unsigned int is_delta;
+-		} packed;
+-	} u;
+-};
+-
+-/*
+- * Initializer for a "struct object_info" that wants no items. You may
+- * also memset() the memory to all-zeroes.
+- */
+-#define OBJECT_INFO_INIT { 0 }
+-
+-/* Invoke lookup_replace_object() on the given hash */
+-#define OBJECT_INFO_LOOKUP_REPLACE 1
+-/* Allow reading from a loose object file of unknown/bogus type */
+-#define OBJECT_INFO_ALLOW_UNKNOWN_TYPE 2
+-/* Do not retry packed storage after checking packed and loose storage */
+-#define OBJECT_INFO_QUICK 8
+-/*
+- * Do not attempt to fetch the object if missing (even if fetch_is_missing is
+- * nonzero).
+- */
+-#define OBJECT_INFO_SKIP_FETCH_OBJECT 16
+-/*
+- * This is meant for bulk prefetching of missing blobs in a partial
+- * clone. Implies OBJECT_INFO_SKIP_FETCH_OBJECT and OBJECT_INFO_QUICK
+- */
+-#define OBJECT_INFO_FOR_PREFETCH (OBJECT_INFO_SKIP_FETCH_OBJECT | OBJECT_INFO_QUICK)
+-
+-/* Die if object corruption (not just an object being missing) was detected. */
+-#define OBJECT_INFO_DIE_IF_CORRUPT 32
+-
+-int oid_object_info_extended(struct repository *r,
+-			     const struct object_id *,
+-			     struct object_info *, unsigned flags);
+-
+ /*
+  * Iterate over the files in the loose-object parts of the object
+  * directory "path", triggering the following callbacks:
+diff --git a/protocol-caps.c b/protocol-caps.c
+index f9bc2a8b90..874bc815b4 100644
+--- a/protocol-caps.c
++++ b/protocol-caps.c
+@@ -5,6 +5,7 @@
+ #include "pkt-line.h"
+ #include "strvec.h"
+ #include "hash.h"
++#include "hex.h"
+ #include "object.h"
+ #include "object-store.h"
+ #include "string-list.h"
+diff --git a/replace-object.h b/replace-object.h
+index 3fbc32eb7b..3c92ae9461 100644
+--- a/replace-object.h
++++ b/replace-object.h
+@@ -1,6 +1,7 @@
+ #ifndef REPLACE_OBJECT_H
+ #define REPLACE_OBJECT_H
+ 
++#include "cache.h"
+ #include "oidmap.h"
+ #include "repository.h"
+ #include "object-store.h"
+-- 
+2.39.3 (Apple Git-145)
+

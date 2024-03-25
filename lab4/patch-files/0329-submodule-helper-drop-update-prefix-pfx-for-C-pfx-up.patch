@@ -1,0 +1,60 @@
+From 1b6e2001c7fd96214b1fe2f910fad5cbb60b607a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 8 Nov 2022 15:10:39 +0100
+Subject: [PATCH 0329/2871] submodule--helper: drop "update --prefix <pfx>" for
+ "-C <pfx> update"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 29a5e9e1ffe (submodule--helper update-clone: learn --init,
+2022-03-04) we've been passing "-C <prefix>" from "git-submodule.sh"
+whenever we pass "--prefix <prefix>", so the latter is redundant to
+the former. Let's drop the "--prefix" option.
+
+Suggested-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/submodule--helper.c | 4 +---
+ git-submodule.sh            | 1 -
+ 2 files changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/builtin/submodule--helper.c b/builtin/submodule--helper.c
+index fefedcf809..03d1b58aca 100644
+--- a/builtin/submodule--helper.c
++++ b/builtin/submodule--helper.c
+@@ -2643,9 +2643,6 @@ static int module_update(int argc, const char **argv, const char *prefix)
+ 			 N_("traverse submodules recursively")),
+ 		OPT_BOOL('N', "no-fetch", &opt.nofetch,
+ 			 N_("don't fetch new objects from the remote site")),
+-		OPT_STRING(0, "prefix", &opt.prefix,
+-			   N_("path"),
+-			   N_("path into the working tree")),
+ 		OPT_SET_INT(0, "checkout", &opt.update_default,
+ 			N_("use the 'checkout' update strategy (default)"),
+ 			SM_UPDATE_CHECKOUT),
+@@ -2701,6 +2698,7 @@ static int module_update(int argc, const char **argv, const char *prefix)
+ 	}
+ 
+ 	opt.filter_options = &filter_options;
++	opt.prefix = prefix;
+ 
+ 	if (opt.update_default)
+ 		opt.update_strategy.type = opt.update_default;
+diff --git a/git-submodule.sh b/git-submodule.sh
+index d359f17137..9a50f2e912 100755
+--- a/git-submodule.sh
++++ b/git-submodule.sh
+@@ -343,7 +343,6 @@ cmd_update()
+ 		${recursive:+--recursive} \
+ 		${init:+--init} \
+ 		${nofetch:+--no-fetch} \
+-		${wt_prefix:+--prefix "$wt_prefix"} \
+ 		${rebase:+--rebase} \
+ 		${merge:+--merge} \
+ 		${checkout:+--checkout} \
+-- 
+2.39.3 (Apple Git-145)
+

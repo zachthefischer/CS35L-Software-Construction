@@ -1,0 +1,60 @@
+From ae49066982fff5cab5f29422dc12421803cacfe2 Mon Sep 17 00:00:00 2001
+From: Mark Levedahl <mlevedahl@gmail.com>
+Date: Mon, 26 Jun 2023 12:53:02 -0400
+Subject: [PATCH 1986/2871] git gui Makefile - remove Cygwin modifications
+
+git-gui's Makefile hardcodes the absolute Windows path of git-gui's libraries
+into git-gui, destroying the ability to package git-gui on one machine and
+distribute to others. The intent is to do this only if a non-Cygwin Tcl/Tk is
+installed, but the test for this is wrong with the unix/X11 Tcl/Tk shipped
+since 2012. Also, Cygwin does not support a non-Cygwin Tcl/Tk.
+
+The Cygwin git maintainer disables this code, so this code is definitely
+not in use in the Cygwin distribution.
+
+The simplest fix is to just delete the Cygwin specific code,
+allowing the Makefile to work out of the box on Cygwin. Do so.
+
+Signed-off-by: Mark Levedahl <mlevedahl@gmail.com>
+Acked-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Pratyush Yadav <me@yadavpratyush.com>
+---
+ Makefile | 21 +++------------------
+ 1 file changed, 3 insertions(+), 18 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index a0d5a4b28e..3f80435436 100644
+--- a/Makefile
++++ b/Makefile
+@@ -138,25 +138,10 @@ GITGUI_SCRIPT   := $$0
+ GITGUI_RELATIVE :=
+ GITGUI_MACOSXAPP :=
+ 
+-ifeq ($(uname_O),Cygwin)
+-	GITGUI_SCRIPT := `cygpath --windows --absolute "$(GITGUI_SCRIPT)"`
+-
+-	# Is this a Cygwin Tcl/Tk binary?  If so it knows how to do
+-	# POSIX path translation just like cygpath does and we must
+-	# keep libdir in POSIX format so Cygwin packages of git-gui
+-	# work no matter where the user installs them.
+-	#
+-	ifeq ($(shell echo 'puts [file normalize /]' | '$(TCL_PATH_SQ)'),$(shell cygpath --mixed --absolute /))
+-		gg_libdir_sed_in := $(gg_libdir)
+-	else
+-		gg_libdir_sed_in := $(shell cygpath --windows --absolute "$(gg_libdir)")
+-	endif
+-else
+-	ifeq ($(exedir),$(gg_libdir))
+-		GITGUI_RELATIVE := 1
+-	endif
+-	gg_libdir_sed_in := $(gg_libdir)
++ifeq ($(exedir),$(gg_libdir))
++	GITGUI_RELATIVE := 1
+ endif
++gg_libdir_sed_in := $(gg_libdir)
+ ifeq ($(uname_S),Darwin)
+ 	ifeq ($(shell test -d $(TKFRAMEWORK) && echo y),y)
+ 		GITGUI_MACOSXAPP := YesPlease
+-- 
+2.39.3 (Apple Git-145)
+

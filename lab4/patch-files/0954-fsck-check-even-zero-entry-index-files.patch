@@ -1,0 +1,53 @@
+From 8d3e7eac529b42319622692028b45670bdff8835 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sun, 26 Feb 2023 17:29:43 -0500
+Subject: [PATCH 0954/2871] fsck: check even zero-entry index files
+
+In fb64ca526a (fsck: check index files in all worktrees, 2023-02-24), we
+swapped out a call to vanilla repo_read_index() for a series of
+read_index_from() calls, one per worktree. The code for the latter was
+copied from add_index_objects_to_pending(), which checks for a positive
+return value from the index reading function, and we do the same here in
+fsck now.
+
+But this is probably the wrong thing. I had interpreted the check as
+"don't operate on the index struct if there was an error". But in
+reality, if there is an error then the index-reading code will simply
+die (which admittedly is not great for fsck, but that is not a new
+problem).
+
+The return value here is actually the number of entries read. So it
+makes sense for add_index_objects_to_pending() to ignore a zero-entry
+index (there is nothing to add). But for fsck, we would still want to
+check any extensions, etc (though presumably it is unlikely to have them
+in an empty index, I don't think it's impossible).
+
+So we should ignore the return value from read_index_from() entirely.
+This matches the behavior before fb64ca526a, when we ignored the return
+value from repo_read_index().
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsck.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/fsck.c b/builtin/fsck.c
+index 1b032eebb1..64614b43b2 100644
+--- a/builtin/fsck.c
++++ b/builtin/fsck.c
+@@ -1007,9 +1007,8 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
+ 			 * while we're examining the index.
+ 			 */
+ 			path = xstrdup(worktree_git_path(wt, "index"));
+-			if (read_index_from(&istate, path,
+-					    get_worktree_git_dir(wt)) > 0)
+-				fsck_index(&istate, path, wt->is_current);
++			read_index_from(&istate, path, get_worktree_git_dir(wt));
++			fsck_index(&istate, path, wt->is_current);
+ 			discard_index(&istate);
+ 			free(path);
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

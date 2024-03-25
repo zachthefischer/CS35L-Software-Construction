@@ -1,0 +1,43 @@
+From e4299d26d4bee3120429d49baa320a406fbfe07c Mon Sep 17 00:00:00 2001
+From: Marcel Krause <mk+copyleft@pimpmybyte.de>
+Date: Tue, 28 Nov 2023 07:55:58 +0100
+Subject: [PATCH 2471/2871] doc: make the gitfile syntax easier to discover
+
+Signed-off-by: Marcel Krause <mk+copyleft@pimpmybyte.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitrepository-layout.txt | 4 +++-
+ Documentation/glossary-content.txt     | 2 ++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/gitrepository-layout.txt b/Documentation/gitrepository-layout.txt
+index 1a2ef4c150..949cd8a31e 100644
+--- a/Documentation/gitrepository-layout.txt
++++ b/Documentation/gitrepository-layout.txt
+@@ -23,7 +23,9 @@ A Git repository comes in two different flavours:
+ 
+ *Note*: Also you can have a plain text file `.git` at the root of
+ your working tree, containing `gitdir: <path>` to point at the real
+-directory that has the repository.  This mechanism is often used for
++directory that has the repository.
++This mechanism is called a 'gitfile' and is usually managed via the
++`git submodule` and `git worktree` commands. It is often used for
+ a working tree of a submodule checkout, to allow you in the
+ containing superproject to `git checkout` a branch that does not
+ have the submodule.  The `checkout` has to remove the entire
+diff --git a/Documentation/glossary-content.txt b/Documentation/glossary-content.txt
+index 5a537268e2..3f912e7bb2 100644
+--- a/Documentation/glossary-content.txt
++++ b/Documentation/glossary-content.txt
+@@ -184,6 +184,8 @@ current branch integrates with) obviously do not work, as there is no
+ [[def_gitfile]]gitfile::
+ 	A plain file `.git` at the root of a working tree that
+ 	points at the directory that is the real repository.
++	For proper use see linkgit:git-worktree[1] or linkgit:git-submodule[1].
++	For syntax see linkgit:gitrepository-layout[5].
+ 
+ [[def_grafts]]grafts::
+ 	Grafts enables two otherwise different lines of development to be joined
+-- 
+2.39.3 (Apple Git-145)
+

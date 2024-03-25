@@ -1,0 +1,44 @@
+From f8bc75a55e877e3f3e71c36eae6e1ee8710e5a84 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Tue, 18 Apr 2023 01:00:47 -0600
+Subject: [PATCH 1307/2871] doc: git-checkout: trivial callout cleanup
+
+The callouts are directly tied to the listing above, remove spaces to
+make it clear they are one and the same.
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-checkout.txt | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/Documentation/git-checkout.txt b/Documentation/git-checkout.txt
+index 6bb32ab460..8ddeec63dd 100644
+--- a/Documentation/git-checkout.txt
++++ b/Documentation/git-checkout.txt
+@@ -483,14 +483,11 @@ $ git checkout -b foo  # or "git switch -c foo"  <1>
+ $ git branch foo                                 <2>
+ $ git tag foo                                    <3>
+ ------------
+-
+ <1> creates a new branch `foo`, which refers to commit `f`, and then
+     updates `HEAD` to refer to branch `foo`. In other words, we'll no longer
+     be in detached `HEAD` state after this command.
+-
+ <2> similarly creates a new branch `foo`, which refers to commit `f`,
+     but leaves `HEAD` detached.
+-
+ <3> creates a new tag `foo`, which refers to commit `f`,
+     leaving `HEAD` detached.
+ 
+@@ -529,7 +526,6 @@ $ git checkout master~2 Makefile  <2>
+ $ rm -f hello.c
+ $ git checkout hello.c            <3>
+ ------------
+-+
+ <1> switch branch
+ <2> take a file out of another commit
+ <3> restore `hello.c` from the index
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,44 @@
+From 14d569b1a75647855bf1cf094ec7c5a4f837129e Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 18 Oct 2023 16:35:06 -0700
+Subject: [PATCH 2291/2871] am: align placeholder for --whitespace option with
+ apply
+
+`git am` passes the value given to its `--whitespace` option through
+to the underlying `git apply`, and the value is called <action> over
+there.  Fix the documentation for the command that calls the value
+<option> to say <action> instead.
+
+Note that the option help given by `git am -h` already calls the
+value <action>, so there is no need to make a matching change there.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-am.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-am.txt b/Documentation/git-am.txt
+index 0c1dfb3c98..de3d5dde99 100644
+--- a/Documentation/git-am.txt
++++ b/Documentation/git-am.txt
+@@ -12,7 +12,7 @@ SYNOPSIS
+ 'git am' [--signoff] [--keep] [--[no-]keep-cr] [--[no-]utf8] [--no-verify]
+ 	 [--[no-]3way] [--interactive] [--committer-date-is-author-date]
+ 	 [--ignore-date] [--ignore-space-change | --ignore-whitespace]
+-	 [--whitespace=<option>] [-C<n>] [-p<n>] [--directory=<dir>]
++	 [--whitespace=<action>] [-C<n>] [-p<n>] [--directory=<dir>]
+ 	 [--exclude=<path>] [--include=<path>] [--reject] [-q | --quiet]
+ 	 [--[no-]scissors] [-S[<keyid>]] [--patch-format=<format>]
+ 	 [--quoted-cr=<action>]
+@@ -116,7 +116,7 @@ include::rerere-options.txt[]
+ 
+ --ignore-space-change::
+ --ignore-whitespace::
+---whitespace=<option>::
++--whitespace=<action>::
+ -C<n>::
+ -p<n>::
+ --directory=<dir>::
+-- 
+2.39.3 (Apple Git-145)
+

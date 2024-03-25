@@ -1,0 +1,158 @@
+From 2e8af499ff6e166a5f54f18cf3d1fa8f5d9bde38 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 27 Mar 2023 00:33:02 +0200
+Subject: [PATCH 1115/2871] branch: test for failures while renaming branches
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When we introduced replace_each_worktree_head_symref() in 70999e9cec
+(branch -m: update all per-worktree HEADs, 2016-03-27), we implemented a
+best effort approach.
+
+If we are asked to rename a branch that is simultaneously checked out in
+multiple worktrees, we try to update all of those worktrees.  If we fail
+updating any of them, we die() as a signal that something has gone
+wrong.  However, at this point, the branch ref has already been renamed
+and also updated the HEADs of the successfully updated worktrees.
+Despite returning an error, we do not try to rollback those changes.
+
+Let's add a test to notice if we change this behavior in the future.
+
+In next commits we will change replace_each_worktree_head_symref() to
+work more closely with its only caller, copy_or_rename_branch().  Let's
+move the former closer to its caller, to facilitate those changes.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c          | 27 ---------------------------
+ branch.h          |  8 --------
+ builtin/branch.c  | 32 ++++++++++++++++++++++++++++++++
+ t/t3200-branch.sh | 15 +++++++++++++++
+ 4 files changed, 47 insertions(+), 35 deletions(-)
+
+diff --git a/branch.c b/branch.c
+index e5614b53b3..f64062be71 100644
+--- a/branch.c
++++ b/branch.c
+@@ -830,30 +830,3 @@ void die_if_checked_out(const char *branch, int ignore_current_worktree)
+ 
+ 	free_worktrees(worktrees);
+ }
+-
+-int replace_each_worktree_head_symref(const char *oldref, const char *newref,
+-				      const char *logmsg)
+-{
+-	int ret = 0;
+-	struct worktree **worktrees = get_worktrees();
+-	int i;
+-
+-	for (i = 0; worktrees[i]; i++) {
+-		struct ref_store *refs;
+-
+-		if (worktrees[i]->is_detached)
+-			continue;
+-		if (!worktrees[i]->head_ref)
+-			continue;
+-		if (strcmp(oldref, worktrees[i]->head_ref))
+-			continue;
+-
+-		refs = get_worktree_ref_store(worktrees[i]);
+-		if (refs_create_symref(refs, "HEAD", newref, logmsg))
+-			ret = error(_("HEAD of working tree %s is not updated"),
+-				    worktrees[i]->path);
+-	}
+-
+-	free_worktrees(worktrees);
+-	return ret;
+-}
+diff --git a/branch.h b/branch.h
+index ef56103c05..30c01aed73 100644
+--- a/branch.h
++++ b/branch.h
+@@ -155,12 +155,4 @@ int read_branch_desc(struct strbuf *, const char *branch_name);
+  */
+ void die_if_checked_out(const char *branch, int ignore_current_worktree);
+ 
+-/*
+- * Update all per-worktree HEADs pointing at the old ref to point the new ref.
+- * This will be used when renaming a branch. Returns 0 if successful, non-zero
+- * otherwise.
+- */
+-int replace_each_worktree_head_symref(const char *oldref, const char *newref,
+-				      const char *logmsg);
+-
+ #endif
+diff --git a/builtin/branch.c b/builtin/branch.c
+index f63fd45edb..c7ace2f2da 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -509,6 +509,38 @@ static void reject_rebase_or_bisect_branch(const char *target)
+ 	free_worktrees(worktrees);
+ }
+ 
++/*
++ * Update all per-worktree HEADs pointing at the old ref to point the new ref.
++ * This will be used when renaming a branch. Returns 0 if successful, non-zero
++ * otherwise.
++ */
++static int replace_each_worktree_head_symref(const char *oldref, const char *newref,
++					     const char *logmsg)
++{
++	int ret = 0;
++	struct worktree **worktrees = get_worktrees();
++	int i;
++
++	for (i = 0; worktrees[i]; i++) {
++		struct ref_store *refs;
++
++		if (worktrees[i]->is_detached)
++			continue;
++		if (!worktrees[i]->head_ref)
++			continue;
++		if (strcmp(oldref, worktrees[i]->head_ref))
++			continue;
++
++		refs = get_worktree_ref_store(worktrees[i]);
++		if (refs_create_symref(refs, "HEAD", newref, logmsg))
++			ret = error(_("HEAD of working tree %s is not updated"),
++				    worktrees[i]->path);
++	}
++
++	free_worktrees(worktrees);
++	return ret;
++}
++
+ static void copy_or_rename_branch(const char *oldname, const char *newname, int copy, int force)
+ {
+ 	struct strbuf oldref = STRBUF_INIT, newref = STRBUF_INIT, logmsg = STRBUF_INIT;
+diff --git a/t/t3200-branch.sh b/t/t3200-branch.sh
+index 5a169b68d6..6b8b59f15e 100755
+--- a/t/t3200-branch.sh
++++ b/t/t3200-branch.sh
+@@ -239,6 +239,21 @@ test_expect_success 'git branch -M baz bam should succeed when baz is checked ou
+ 	git worktree prune
+ '
+ 
++test_expect_success 'git branch -M fails if updating any linked working tree fails' '
++	git worktree add -b baz bazdir1 &&
++	git worktree add -f bazdir2 baz &&
++	touch .git/worktrees/bazdir1/HEAD.lock &&
++	test_must_fail git branch -M baz bam &&
++	test $(git -C bazdir2 rev-parse --abbrev-ref HEAD) = bam &&
++	git branch -M bam baz &&
++	rm .git/worktrees/bazdir1/HEAD.lock &&
++	touch .git/worktrees/bazdir2/HEAD.lock &&
++	test_must_fail git branch -M baz bam &&
++	test $(git -C bazdir1 rev-parse --abbrev-ref HEAD) = bam &&
++	rm -rf bazdir1 bazdir2 &&
++	git worktree prune
++'
++
+ test_expect_success 'git branch -M baz bam should succeed within a worktree in which baz is checked out' '
+ 	git checkout -b baz &&
+ 	git worktree add -f bazdir baz &&
+-- 
+2.39.3 (Apple Git-145)
+

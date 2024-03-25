@@ -1,0 +1,110 @@
+From a0f83e777660dbf7d9526c05d94fc920e459aed9 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 6 Jan 2023 06:03:57 -0500
+Subject: [PATCH 0628/2871] diff: use filespec path to set up tempfiles for
+ ext-diff
+
+When we're going to run an external diff, we have to make the contents
+of the pre- and post-images available either by dumping them to a
+tempfile, or by pointing at a valid file in the worktree. The logic of
+this is all handled by prepare_temp_file(), and we just pass in the
+filename and the diff_filespec.
+
+But there's a gotcha here. The "filename" we have is a logical filename
+and not necessarily a path on disk or in the repository. This matters in
+at least one case: when using "--relative", we may have a name like
+"foo", even though the file content is found at "subdir/foo". As a
+result, we look for the wrong path, fail to find "foo", and claim that
+the file has been deleted (passing "/dev/null" to the external diff,
+rather than the correct worktree path).
+
+We can fix this by passing the pathname from the diff_filespec, which
+should always be a full repository path (and that's what we want even if
+reusing a worktree file, since we're always operating from the top-level
+of the working tree).
+
+The breakage seems to go all the way back to cd676a5136 (diff
+--relative: output paths as relative to the current subdirectory,
+2008-02-12). As far as I can tell, before then "name" would always have
+been the same as the filespec's "path".
+
+There are two related cases I looked at that aren't buggy:
+
+  1. the only other caller of prepare_temp_file() is run_textconv(). But
+     it always passes the filespec's path field, so it's OK.
+
+  2. I wondered if file renames/copies might cause similar confusion.
+     But they don't, because run_external_diff() receives two names in
+     that case: "name" and "other", which correspond to the two sides of
+     the diff. And we did correctly pass "other" when handling the
+     post-image side. Barring the use of "--relative", that would always
+     match "two->path", the path of the second filespec (and the rename
+     destination).
+
+So the only bug is just the interaction with external diff drivers and
+--relative.
+
+Reported-by: Carl Baldwin <carl@ecbaldwin.net>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                   |  2 +-
+ t/t4045-diff-relative.sh | 29 +++++++++++++++++++++++++++++
+ 2 files changed, 30 insertions(+), 1 deletion(-)
+
+diff --git a/diff.c b/diff.c
+index 1054a4b732..c78ea27033 100644
+--- a/diff.c
++++ b/diff.c
+@@ -4281,7 +4281,7 @@ static void add_external_diff_name(struct repository *r,
+ 				   const char *name,
+ 				   struct diff_filespec *df)
+ {
+-	struct diff_tempfile *temp = prepare_temp_file(r, name, df);
++	struct diff_tempfile *temp = prepare_temp_file(r, df->path, df);
+ 	strvec_push(argv, temp->name);
+ 	strvec_push(argv, temp->hex);
+ 	strvec_push(argv, temp->mode);
+diff --git a/t/t4045-diff-relative.sh b/t/t4045-diff-relative.sh
+index fab351b48a..5e1bbb57e7 100755
+--- a/t/t4045-diff-relative.sh
++++ b/t/t4045-diff-relative.sh
+@@ -162,6 +162,35 @@ check_diff_relative_option subdir file2 true --no-relative --relative
+ check_diff_relative_option . file2 false --no-relative --relative=subdir
+ check_diff_relative_option . file2 true --no-relative --relative=subdir
+ 
++test_expect_success 'external diff with --relative' '
++	test_when_finished "git reset --hard" &&
++	echo changed >file1 &&
++	echo changed >subdir/file2 &&
++
++	write_script mydiff <<-\EOF &&
++	# hacky pretend diff; the goal here is just to make sure we got
++	# passed sensible input that we _could_ diff, without relying on
++	# the specific output of a system diff tool.
++	echo "diff a/$1 b/$1" &&
++	echo "--- a/$1" &&
++	echo "+++ b/$1" &&
++	echo "@@ -1 +0,0 @@" &&
++	sed "s/^/-/" "$2" &&
++	sed "s/^/+/" "$5"
++	EOF
++
++	cat >expect <<-\EOF &&
++	diff a/file2 b/file2
++	--- a/file2
++	+++ b/file2
++	@@ -1 +0,0 @@
++	-other content
++	+changed
++	EOF
++	GIT_EXTERNAL_DIFF=./mydiff git diff --relative=subdir >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'setup diff --relative unmerged' '
+ 	test_commit zero file0 &&
+ 	test_commit base subdir/file0 &&
+-- 
+2.39.3 (Apple Git-145)
+

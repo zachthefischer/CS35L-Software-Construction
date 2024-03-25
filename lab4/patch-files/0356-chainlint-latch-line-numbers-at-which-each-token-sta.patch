@@ -1,0 +1,130 @@
+From bf42f0a030da98dd02bb95109121c24ed3684ac8 Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Fri, 11 Nov 2022 07:34:53 +0000
+Subject: [PATCH 0356/2871] chainlint: latch line numbers at which each token
+ starts and ends
+
+When chainlint detects problems in a test, it prints out the name of the
+test script, the name of the problematic test, and a copy of the test
+definition with "?!FOO?!" annotations inserted at the locations where
+problems were detected. Taken together this information is sufficient
+for the test author to identify the problematic code in the original
+test definition. However, in a lengthy script or a lengthy test
+definition, the author may still end up using the editor's search
+feature to home in on the exact problem location.
+
+To further assist the test author, an upcoming change will display line
+numbers along with the annotated test definition, thus allowing the
+author to jump directly to each problematic line. As preparation,
+upgrade Lexer to latch the line numbers at which each token starts and
+ends, and return that information with the token itself.
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/chainlint.pl | 25 +++++++++++++++++--------
+ 1 file changed, 17 insertions(+), 8 deletions(-)
+
+diff --git a/t/chainlint.pl b/t/chainlint.pl
+index 0ee5cc3643..67c2c5ebee 100755
+--- a/t/chainlint.pl
++++ b/t/chainlint.pl
+@@ -67,6 +67,7 @@ sub new {
+ 	bless {
+ 		parser => $parser,
+ 		buff => $s,
++		lineno => 1,
+ 		heretags => []
+ 	} => $class;
+ }
+@@ -97,7 +98,9 @@ sub scan_op {
+ sub scan_sqstring {
+ 	my $self = shift @_;
+ 	${$self->{buff}} =~ /\G([^']*'|.*\z)/sgc;
+-	return "'" . $1;
++	my $s = $1;
++	$self->{lineno} += () = $s =~ /\n/sg;
++	return "'" . $s;
+ }
+ 
+ sub scan_dqstring {
+@@ -115,7 +118,7 @@ sub scan_dqstring {
+ 		if ($c eq '\\') {
+ 			$s .= '\\', last unless $$b =~ /\G(.)/sgc;
+ 			$c = $1;
+-			next if $c eq "\n"; # line splice
++			$self->{lineno}++, next if $c eq "\n"; # line splice
+ 			# backslash escapes only $, `, ", \ in dq-string
+ 			$s .= '\\' unless $c =~ /^[\$`"\\]$/;
+ 			$s .= $c;
+@@ -123,6 +126,7 @@ sub scan_dqstring {
+ 		}
+ 		die("internal error scanning dq-string '$c'\n");
+ 	}
++	$self->{lineno} += () = $s =~ /\n/sg;
+ 	return $s;
+ }
+ 
+@@ -137,6 +141,7 @@ sub scan_balanced {
+ 		$depth--;
+ 		last if $depth == 0;
+ 	}
++	$self->{lineno} += () = $s =~ /\n/sg;
+ 	return $s;
+ }
+ 
+@@ -163,8 +168,11 @@ sub swallow_heredocs {
+ 	my $b = $self->{buff};
+ 	my $tags = $self->{heretags};
+ 	while (my $tag = shift @$tags) {
++		my $start = pos($$b);
+ 		my $indent = $tag =~ s/^\t// ? '\\s*' : '';
+ 		$$b =~ /(?:\G|\n)$indent\Q$tag\E(?:\n|\z)/gc;
++		my $body = substr($$b, $start, pos($$b) - $start);
++		$self->{lineno} += () = $body =~ /\n/sg;
+ 	}
+ }
+ 
+@@ -172,11 +180,12 @@ sub scan_token {
+ 	my $self = shift @_;
+ 	my $b = $self->{buff};
+ 	my $token = '';
+-	my $start;
++	my ($start, $startln);
+ RESTART:
++	$startln = $self->{lineno};
+ 	$$b =~ /\G[ \t]+/gc; # skip whitespace (but not newline)
+ 	$start = pos($$b) || 0;
+-	return ["\n", $start, pos($$b)] if $$b =~ /\G#[^\n]*(?:\n|\z)/gc; # comment
++	$self->{lineno}++, return ["\n", $start, pos($$b), $startln, $startln] if $$b =~ /\G#[^\n]*(?:\n|\z)/gc; # comment
+ 	while (1) {
+ 		# slurp up non-special characters
+ 		$token .= $1 if $$b =~ /\G([^\\;&|<>(){}'"\$\s]+)/gc;
+@@ -188,20 +197,20 @@ sub scan_token {
+ 		$token .= $self->scan_sqstring(), next if $c eq "'";
+ 		$token .= $self->scan_dqstring(), next if $c eq '"';
+ 		$token .= $c . $self->scan_dollar(), next if $c eq '$';
+-		$self->swallow_heredocs(), $token = $c, last if $c eq "\n";
++		$self->{lineno}++, $self->swallow_heredocs(), $token = $c, last if $c eq "\n";
+ 		$token = $self->scan_op($c), last if $c =~ /^[;&|<>]$/;
+ 		$token = $c, last if $c =~ /^[(){}]$/;
+ 		if ($c eq '\\') {
+ 			$token .= '\\', last unless $$b =~ /\G(.)/sgc;
+ 			$c = $1;
+-			next if $c eq "\n" && length($token); # line splice
+-			goto RESTART if $c eq "\n"; # line splice
++			$self->{lineno}++, next if $c eq "\n" && length($token); # line splice
++			$self->{lineno}++, goto RESTART if $c eq "\n"; # line splice
+ 			$token .= '\\' . $c;
+ 			next;
+ 		}
+ 		die("internal error scanning character '$c'\n");
+ 	}
+-	return length($token) ? [$token, $start, pos($$b)] : undef;
++	return length($token) ? [$token, $start, pos($$b), $startln, $self->{lineno}] : undef;
+ }
+ 
+ # ShellParser parses POSIX shell scripts (with minor extensions for Bash). It
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,32 @@
+From 46edab516bf04c190cb2e100419dee817d3f33f6 Mon Sep 17 00:00:00 2001
+From: Todd Zullinger <tmz@pobox.com>
+Date: Wed, 15 Nov 2023 12:39:44 -0500
+Subject: [PATCH 2417/2871] send-email: remove stray characters from usage
+
+A few stray single quotes crept into the usage string in a2ce608244
+(send-email docs: add format-patch options, 2021-10-25).  Remove them.
+
+Signed-off-by: Todd Zullinger <tmz@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 897cea6564..85544a18bf 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -28,8 +28,8 @@
+ 
+ sub usage {
+ 	print <<EOT;
+-git send-email' [<options>] <file|directory>
+-git send-email' [<options>] <format-patch options>
++git send-email [<options>] <file|directory>
++git send-email [<options>] <format-patch options>
+ git send-email --dump-aliases
+ 
+   Composing:
+-- 
+2.39.3 (Apple Git-145)
+

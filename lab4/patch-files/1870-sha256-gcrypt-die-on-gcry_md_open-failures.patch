@@ -1,0 +1,32 @@
+From 823839bda1a72c54fe8ac025fb70dd3403c11f46 Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Mon, 31 Jul 2023 12:08:08 +0000
+Subject: [PATCH 1870/2871] sha256/gcrypt: die on gcry_md_open failures
+
+`gcry_md_open' allocates memory and must (like all allocation
+functions) be checked for failure.
+
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sha256/gcrypt.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/sha256/gcrypt.h b/sha256/gcrypt.h
+index 1d06a778af..17a90f1052 100644
+--- a/sha256/gcrypt.h
++++ b/sha256/gcrypt.h
+@@ -9,7 +9,9 @@ typedef gcry_md_hd_t gcrypt_SHA256_CTX;
+ 
+ static inline void gcrypt_SHA256_Init(gcrypt_SHA256_CTX *ctx)
+ {
+-	gcry_md_open(ctx, GCRY_MD_SHA256, 0);
++	gcry_error_t err = gcry_md_open(ctx, GCRY_MD_SHA256, 0);
++	if (err)
++		die("gcry_md_open: %s", gcry_strerror(err));
+ }
+ 
+ static inline void gcrypt_SHA256_Update(gcrypt_SHA256_CTX *ctx, const void *data, size_t len)
+-- 
+2.39.3 (Apple Git-145)
+

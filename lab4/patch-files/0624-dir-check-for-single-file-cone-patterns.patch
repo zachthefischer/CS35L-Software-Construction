@@ -1,0 +1,105 @@
+From 5842710dc28bc7da5a1dc60c06804e39bc5fe4dd Mon Sep 17 00:00:00 2001
+From: William Sprent <williams@unity3d.com>
+Date: Tue, 3 Jan 2023 08:20:59 +0000
+Subject: [PATCH 0624/2871] dir: check for single file cone patterns
+
+The sparse checkout documentation states that the cone mode pattern set
+is limited to patterns that either recursively include directories or
+patterns that match all files in a directory. In the sparse checkout
+file, the former manifest in the form:
+
+    /A/B/C/
+
+while the latter become a pair of patterns either in the form:
+
+    /A/B/
+    !/A/B/*/
+
+or in the special case of matching the toplevel files:
+
+    /*
+    !/*/
+
+The 'add_pattern_to_hashsets()' function contains checks which serve to
+disable cone-mode when non-cone patterns are encountered. However, these
+do not catch when the pattern list attempts to match a single file or
+directory, e.g. a pattern in the form:
+
+    /A/B/C
+
+This causes sparse-checkout to exhibit unexpected behaviour when such a
+pattern is in the sparse-checkout file and cone mode is enabled.
+Concretely, with the pattern like the above, sparse-checkout, in
+non-cone mode, will only include the directory or file located at
+'/A/B/C'. However, with cone mode enabled, sparse-checkout will instead
+just manifest the toplevel files but not any file located at '/A/B/C'.
+
+Relatedly, issues occur when supplying the same kind of filter when
+partial cloning with '--filter=sparse:oid=<oid>'. 'upload-pack' will
+correctly just include the objects that match the non-cone pattern
+matching. Which means that checking out the newly cloned repo with the
+same filter, but with cone mode enabled, fails due to missing objects.
+
+To fix these issues, add a cone mode pattern check that asserts that
+every pattern is either a directory match or the pattern '/*'. Add a
+test to verify the new pattern check and modify another to reflect that
+non-directory patterns are caught earlier.
+
+Signed-off-by: William Sprent <williams@unity3d.com>
+Acked-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ dir.c                              |  7 +++++++
+ t/t1091-sparse-checkout-builtin.sh | 11 ++++++++++-
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/dir.c b/dir.c
+index d604d1bab9..f8a11aa1ec 100644
+--- a/dir.c
++++ b/dir.c
+@@ -732,6 +732,13 @@ static void add_pattern_to_hashsets(struct pattern_list *pl, struct path_pattern
+ 		goto clear_hashmaps;
+ 	}
+ 
++	if (!(given->flags & PATTERN_FLAG_MUSTBEDIR) &&
++	    strcmp(given->pattern, "/*")) {
++		/* Not a cone pattern. */
++		warning(_("unrecognized pattern: '%s'"), given->pattern);
++		goto clear_hashmaps;
++	}
++
+ 	prev = given->pattern;
+ 	cur = given->pattern + 1;
+ 	next = given->pattern + 2;
+diff --git a/t/t1091-sparse-checkout-builtin.sh b/t/t1091-sparse-checkout-builtin.sh
+index b563d6c263..627267be15 100755
+--- a/t/t1091-sparse-checkout-builtin.sh
++++ b/t/t1091-sparse-checkout-builtin.sh
+@@ -238,7 +238,7 @@ test_expect_success 'cone mode: match patterns' '
+ test_expect_success 'cone mode: warn on bad pattern' '
+ 	test_when_finished mv sparse-checkout repo/.git/info/ &&
+ 	cp repo/.git/info/sparse-checkout . &&
+-	echo "!/deep/deeper/*" >>repo/.git/info/sparse-checkout &&
++	echo "!/deep/deeper/*/" >>repo/.git/info/sparse-checkout &&
+ 	git -C repo read-tree -mu HEAD 2>err &&
+ 	test_i18ngrep "unrecognized negative pattern" err
+ '
+@@ -667,6 +667,15 @@ test_expect_success 'pattern-checks: starting "*"' '
+ 	check_read_tree_errors repo "a deep" "disabling cone pattern matching"
+ '
+ 
++test_expect_success 'pattern-checks: non directory pattern' '
++	cat >repo/.git/info/sparse-checkout <<-\EOF &&
++	/deep/deeper1/a
++	EOF
++	check_read_tree_errors repo deep "disabling cone pattern matching" &&
++	check_files repo/deep deeper1 &&
++	check_files repo/deep/deeper1 a
++'
++
+ test_expect_success 'pattern-checks: contained glob characters' '
+ 	for c in "[a]" "\\" "?" "*"
+ 	do
+-- 
+2.39.3 (Apple Git-145)
+

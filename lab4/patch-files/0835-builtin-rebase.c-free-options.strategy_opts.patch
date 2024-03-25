@@ -1,0 +1,35 @@
+From a5350408871c69357cbe805fcfa3cc087cca0908 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Mon, 6 Feb 2023 20:08:12 +0100
+Subject: [PATCH 0835/2871] builtin/rebase.c: free() "options.strategy_opts"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When the "strategy_opts" member was added in ba1905a5fef (builtin
+rebase: add support for custom merge strategies, 2018-09-04) the
+corresponding free() for it at the end of cmd_rebase() wasn't added,
+let's do so.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 41e96f0eb5..6635f10d52 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1850,6 +1850,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	free(options.gpg_sign_opt);
+ 	string_list_clear(&options.exec, 0);
+ 	free(options.strategy);
++	free(options.strategy_opts);
+ 	strbuf_release(&options.git_format_patch_opt);
+ 	free(squash_onto_name);
+ 	free(keep_base_onto_name);
+-- 
+2.39.3 (Apple Git-145)
+

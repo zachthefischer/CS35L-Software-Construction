@@ -1,0 +1,37 @@
+From 061dd722dcc7a0e1f506c426ff6591b0ca8f14b6 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Sun, 26 Mar 2023 22:45:43 +0000
+Subject: [PATCH 1123/2871] unpack-trees: take care to propagate the
+ split-index flag
+
+When copying the `split_index` structure from one index structure to
+another, we need to propagate the `SPLIT_INDEX_ORDERED` flag, too, if it
+is set, otherwise Git might forget to write the shared index when that
+is actually needed.
+
+It just so _happens_ that in many instances when `unpack_trees()` is
+called, the result causes the shared index to be written anyway, but
+there are edge cases when that is not so.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ unpack-trees.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/unpack-trees.c b/unpack-trees.c
+index 90b92114be..ca5e47c77c 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -1916,6 +1916,8 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options
+ 		 * create a new one.
+ 		 */
+ 		o->result.split_index = o->src_index->split_index;
++		if (o->src_index->cache_changed & SPLIT_INDEX_ORDERED)
++			o->result.cache_changed |= SPLIT_INDEX_ORDERED;
+ 		o->result.split_index->refcount++;
+ 	} else {
+ 		o->result.split_index = init_split_index(&o->result);
+-- 
+2.39.3 (Apple Git-145)
+

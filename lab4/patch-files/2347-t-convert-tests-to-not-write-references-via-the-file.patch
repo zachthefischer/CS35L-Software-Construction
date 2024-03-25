@@ -1,0 +1,221 @@
+From 1c6667cb9dab6f90dcc3381676b50b1f131aeda5 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 2 Nov 2023 09:46:45 +0100
+Subject: [PATCH 2347/2871] t: convert tests to not write references via the
+ filesystem
+
+Some of our tests manually create, update or delete references by
+writing the respective new values into the filesystem directly. While
+this works with the current files reference backend, this will break
+once we have a second reference backend implementation in our codebase.
+
+Refactor these tests to instead use git-update-ref(1) or our `ref-store`
+test tool. The latter is required in some cases where safety checks of
+git-update-ref(1) would otherwise reject a reference update.
+
+While at it, refactor some of the tests to schedule the cleanup command
+via `test_when_finished` before modifying the repository.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1400-update-ref.sh         | 17 ++++++++---------
+ t/t1450-fsck.sh               | 26 +++++++++++++-------------
+ t/t3404-rebase-interactive.sh |  2 +-
+ t/t5526-fetch-submodules.sh   |  2 +-
+ 4 files changed, 23 insertions(+), 24 deletions(-)
+
+diff --git a/t/t1400-update-ref.sh b/t/t1400-update-ref.sh
+index 4d66cd7f4a..91cc6dff72 100755
+--- a/t/t1400-update-ref.sh
++++ b/t/t1400-update-ref.sh
+@@ -9,8 +9,6 @@ test_description='Test git update-ref and basic ref logging'
+ Z=$ZERO_OID
+ 
+ m=refs/heads/main
+-n_dir=refs/heads/gu
+-n=$n_dir/fixes
+ outside=refs/foo
+ bare=bare-repo
+ 
+@@ -62,10 +60,10 @@ test_expect_success "delete $m without oldvalue verification" '
+ 	test_must_fail git show-ref --verify -q $m
+ '
+ 
+-test_expect_success "fail to create $n" '
+-	test_when_finished "rm -f .git/$n_dir" &&
+-	touch .git/$n_dir &&
+-	test_must_fail git update-ref $n $A
++test_expect_success "fail to create $n due to file/directory conflict" '
++	test_when_finished "git update-ref -d refs/heads/gu" &&
++	git update-ref refs/heads/gu $A &&
++	test_must_fail git update-ref refs/heads/gu/fixes $A
+ '
+ 
+ test_expect_success "create $m (by HEAD)" '
+@@ -221,16 +219,16 @@ test_expect_success 'delete symref without dereference when the referred ref is
+ '
+ 
+ test_expect_success 'update-ref -d is not confused by self-reference' '
++	test_when_finished "test-tool ref-store main delete-refs REF_NO_DEREF refs/heads/self" &&
+ 	git symbolic-ref refs/heads/self refs/heads/self &&
+-	test_when_finished "rm -f .git/refs/heads/self" &&
+ 	test_path_is_file .git/refs/heads/self &&
+ 	test_must_fail git update-ref -d refs/heads/self &&
+ 	test_path_is_file .git/refs/heads/self
+ '
+ 
+ test_expect_success 'update-ref --no-deref -d can delete self-reference' '
++	test_when_finished "test-tool ref-store main delete-refs REF_NO_DEREF refs/heads/self" &&
+ 	git symbolic-ref refs/heads/self refs/heads/self &&
+-	test_when_finished "rm -f .git/refs/heads/self" &&
+ 	test_path_is_file .git/refs/heads/self &&
+ 	git update-ref --no-deref -d refs/heads/self &&
+ 	test_must_fail git show-ref --verify -q refs/heads/self
+@@ -434,7 +432,8 @@ test_expect_success 'Query "main@{2005-05-28}" (past end of history)' '
+ 	test_i18ngrep -F "warning: log for ref $m unexpectedly ended on $ld" e
+ '
+ 
+-rm -f .git/$m .git/logs/$m expect
++rm -f expect
++git update-ref -d $m
+ 
+ test_expect_success 'creating initial files' '
+ 	test_when_finished rm -f M &&
+diff --git a/t/t1450-fsck.sh b/t/t1450-fsck.sh
+index 10a539158c..f55b539b08 100755
+--- a/t/t1450-fsck.sh
++++ b/t/t1450-fsck.sh
+@@ -15,6 +15,7 @@ test_expect_success setup '
+ 	git config --unset i18n.commitencoding &&
+ 	git checkout HEAD^0 &&
+ 	test_commit B fileB two &&
++	orig_head=$(git rev-parse HEAD) &&
+ 	git tag -d A B &&
+ 	git reflog expire --expire=now --all
+ '
+@@ -115,15 +116,15 @@ test_expect_success 'zlib corrupt loose object output ' '
+ '
+ 
+ test_expect_success 'branch pointing to non-commit' '
+-	git rev-parse HEAD^{tree} >.git/refs/heads/invalid &&
++	tree_oid=$(git rev-parse --verify HEAD^{tree}) &&
+ 	test_when_finished "git update-ref -d refs/heads/invalid" &&
++	test-tool ref-store main update-ref msg refs/heads/invalid $tree_oid $ZERO_OID REF_SKIP_OID_VERIFICATION &&
+ 	test_must_fail git fsck 2>out &&
+ 	test_i18ngrep "not a commit" out
+ '
+ 
+ test_expect_success 'HEAD link pointing at a funny object' '
+-	test_when_finished "mv .git/SAVED_HEAD .git/HEAD" &&
+-	mv .git/HEAD .git/SAVED_HEAD &&
++	test_when_finished "git update-ref HEAD $orig_head" &&
+ 	echo $ZERO_OID >.git/HEAD &&
+ 	# avoid corrupt/broken HEAD from interfering with repo discovery
+ 	test_must_fail env GIT_DIR=.git git fsck 2>out &&
+@@ -131,8 +132,7 @@ test_expect_success 'HEAD link pointing at a funny object' '
+ '
+ 
+ test_expect_success 'HEAD link pointing at a funny place' '
+-	test_when_finished "mv .git/SAVED_HEAD .git/HEAD" &&
+-	mv .git/HEAD .git/SAVED_HEAD &&
++	test_when_finished "git update-ref --no-deref HEAD $orig_head" &&
+ 	echo "ref: refs/funny/place" >.git/HEAD &&
+ 	# avoid corrupt/broken HEAD from interfering with repo discovery
+ 	test_must_fail env GIT_DIR=.git git fsck 2>out &&
+@@ -140,10 +140,9 @@ test_expect_success 'HEAD link pointing at a funny place' '
+ '
+ 
+ test_expect_success 'HEAD link pointing at a funny object (from different wt)' '
+-	test_when_finished "mv .git/SAVED_HEAD .git/HEAD" &&
++	test_when_finished "git update-ref HEAD $orig_head" &&
+ 	test_when_finished "rm -rf .git/worktrees wt" &&
+ 	git worktree add wt &&
+-	mv .git/HEAD .git/SAVED_HEAD &&
+ 	echo $ZERO_OID >.git/HEAD &&
+ 	# avoid corrupt/broken HEAD from interfering with repo discovery
+ 	test_must_fail git -C wt fsck 2>out &&
+@@ -161,7 +160,8 @@ test_expect_success 'other worktree HEAD link pointing at a funny object' '
+ test_expect_success 'other worktree HEAD link pointing at missing object' '
+ 	test_when_finished "rm -rf .git/worktrees other" &&
+ 	git worktree add other &&
+-	echo "Contents missing from repo" | git hash-object --stdin >.git/worktrees/other/HEAD &&
++	object_id=$(echo "Contents missing from repo" | git hash-object --stdin) &&
++	test-tool -C other ref-store main update-ref msg HEAD $object_id "" REF_NO_DEREF,REF_SKIP_OID_VERIFICATION &&
+ 	test_must_fail git fsck 2>out &&
+ 	test_i18ngrep "worktrees/other/HEAD: invalid sha1 pointer" out
+ '
+@@ -391,7 +391,7 @@ test_expect_success 'tag pointing to nonexistent' '
+ 
+ 	tag=$(git hash-object -t tag -w --stdin <invalid-tag) &&
+ 	test_when_finished "remove_object $tag" &&
+-	echo $tag >.git/refs/tags/invalid &&
++	git update-ref refs/tags/invalid $tag &&
+ 	test_when_finished "git update-ref -d refs/tags/invalid" &&
+ 	test_must_fail git fsck --tags >out &&
+ 	test_i18ngrep "broken link" out
+@@ -411,7 +411,7 @@ test_expect_success 'tag pointing to something else than its type' '
+ 
+ 	tag=$(git hash-object -t tag -w --stdin <wrong-tag) &&
+ 	test_when_finished "remove_object $tag" &&
+-	echo $tag >.git/refs/tags/wrong &&
++	git update-ref refs/tags/wrong $tag &&
+ 	test_when_finished "git update-ref -d refs/tags/wrong" &&
+ 	test_must_fail git fsck --tags
+ '
+@@ -428,7 +428,7 @@ test_expect_success 'tag with incorrect tag name & missing tagger' '
+ 
+ 	tag=$(git hash-object --literally -t tag -w --stdin <wrong-tag) &&
+ 	test_when_finished "remove_object $tag" &&
+-	echo $tag >.git/refs/tags/wrong &&
++	git update-ref refs/tags/wrong $tag &&
+ 	test_when_finished "git update-ref -d refs/tags/wrong" &&
+ 	git fsck --tags 2>out &&
+ 
+@@ -452,7 +452,7 @@ test_expect_success 'tag with bad tagger' '
+ 
+ 	tag=$(git hash-object --literally -t tag -w --stdin <wrong-tag) &&
+ 	test_when_finished "remove_object $tag" &&
+-	echo $tag >.git/refs/tags/wrong &&
++	git update-ref refs/tags/wrong $tag &&
+ 	test_when_finished "git update-ref -d refs/tags/wrong" &&
+ 	test_must_fail git fsck --tags 2>out &&
+ 	test_i18ngrep "error in tag .*: invalid author/committer" out
+@@ -471,7 +471,7 @@ test_expect_success 'tag with NUL in header' '
+ 
+ 	tag=$(git hash-object --literally -t tag -w --stdin <tag-NUL-header) &&
+ 	test_when_finished "remove_object $tag" &&
+-	echo $tag >.git/refs/tags/wrong &&
++	git update-ref refs/tags/wrong $tag &&
+ 	test_when_finished "git update-ref -d refs/tags/wrong" &&
+ 	test_must_fail git fsck --tags 2>out &&
+ 	test_i18ngrep "error in tag $tag.*unterminated header: NUL at offset" out
+diff --git a/t/t3404-rebase-interactive.sh b/t/t3404-rebase-interactive.sh
+index 8ea2bf1302..d2a7a91f17 100755
+--- a/t/t3404-rebase-interactive.sh
++++ b/t/t3404-rebase-interactive.sh
+@@ -2160,7 +2160,7 @@ test_expect_success '--update-refs: check failed ref update' '
+ 	# recorded in the update-refs file. We will force-update the
+ 	# "second" ref, but "git branch -f" will not work because of
+ 	# the lock in the update-refs file.
+-	git rev-parse third >.git/refs/heads/second &&
++	git update-ref refs/heads/second third &&
+ 
+ 	test_must_fail git rebase --continue 2>err &&
+ 	grep "update_ref failed for ref '\''refs/heads/second'\''" err &&
+diff --git a/t/t5526-fetch-submodules.sh b/t/t5526-fetch-submodules.sh
+index 26e933f93a..7ab220fa31 100755
+--- a/t/t5526-fetch-submodules.sh
++++ b/t/t5526-fetch-submodules.sh
+@@ -771,7 +771,7 @@ test_expect_success 'fetching submodule into a broken repository' '
+ 	git -C dst fetch --recurse-submodules &&
+ 
+ 	# Break the receiving submodule
+-	rm -f dst/sub/.git/HEAD &&
++	test-tool -C dst/sub ref-store main delete-refs REF_NO_DEREF msg HEAD &&
+ 
+ 	# NOTE: without the fix the following tests will recurse forever!
+ 	# They should terminate with an error.
+-- 
+2.39.3 (Apple Git-145)
+

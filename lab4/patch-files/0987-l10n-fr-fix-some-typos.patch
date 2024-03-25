@@ -1,0 +1,44 @@
+From 90c6ff566efe8acf856e2013e0c7b54263e244ee Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jean-No=C3=ABl=20Avila?= <jn.avila@free.fr>
+Date: Sat, 31 Dec 2022 16:37:33 +0100
+Subject: [PATCH 0987/2871] l10n: fr: fix some typos
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Jean-Noël Avila <jn.avila@free.fr>
+Reported-by: Andrei Rybak <rybak.a.v@gmail.com>
+---
+ po/fr.po | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/po/fr.po b/po/fr.po
+index 67eab9f900..34b52c6ae6 100644
+--- a/po/fr.po
++++ b/po/fr.po
+@@ -79,7 +79,7 @@ msgstr ""
+ "Project-Id-Version: git\n"
+ "Report-Msgid-Bugs-To: Git Mailing List <git@vger.kernel.org>\n"
+ "POT-Creation-Date: 2022-11-30 19:40+0100\n"
+-"PO-Revision-Date: 2022-11-30 19:42+0100\n"
++"PO-Revision-Date: 2022-12-31 15:58+0100\n"
+ "Last-Translator: Cédric Malard <c.malard-git@valdun.net>\n"
+ "Language-Team: Jean-Noël Avila <jn.avila@free.fr>\n"
+ "Language: fr\n"
+@@ -16427,11 +16427,11 @@ msgstr "fsmonitor--daemon n'est pas en cours d'exécution"
+ 
+ #, c-format
+ msgid "could not send '%s' command to fsmonitor--daemon"
+-msgstr "impossible de lancer la commmand '%s' à fsmonitor--daemon"
++msgstr "impossible de lancer la commande '%s' à fsmonitor--daemon"
+ 
+ #, c-format
+ msgid "bare repository '%s' is incompatible with fsmonitor"
+-msgstr "le dépôit nu '%s' est incompatible avec fsmonitor"
++msgstr "le dépôt nu '%s' est incompatible avec fsmonitor"
+ 
+ #, c-format
+ msgid "repository '%s' is incompatible with fsmonitor due to errors"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,35 @@
+From eea7033409a0ed713c78437fc76486983d211e25 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 14 Nov 2022 19:56:07 -0500
+Subject: [PATCH 0385/2871] The twelfth batch
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/RelNotes/2.39.0.txt | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.39.0.txt b/Documentation/RelNotes/2.39.0.txt
+index f21f949475..f9bc29f7d2 100644
+--- a/Documentation/RelNotes/2.39.0.txt
++++ b/Documentation/RelNotes/2.39.0.txt
+@@ -98,6 +98,17 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * Simplify the run-command API.
+ 
++ * Update the actions/github-script dependency in CI to avoid a
++   deprecation warning.
++
++ * Progress on being able to initialize a rev_info struct with a
++   macro.
++
++ * Add trace2 counters to the region to clear skip worktree bits in a
++   sparse checkout.
++
++ * Modernize test script to avoid "test -f" and friends.
++
+ Fixes since v2.38
+ -----------------
+ 
+-- 
+2.39.3 (Apple Git-145)
+

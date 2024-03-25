@@ -1,0 +1,31 @@
+From 8516dac1e1836843dd6a3dbc1d140a8b6d885ecb Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 9 Mar 2023 22:54:06 +0100
+Subject: [PATCH 1026/2871] t0033: GETTEXT_POISON fix
+
+In e47363e5a8bd (t0033: add tests for safe.directory, 2022-04-13), we
+backported a patch onto v2.30.* that was originally based on a much
+newer version. The v2.30.* release train still has the GETTEXT_POISON
+CI job, though, and hence needs `test_i18n*` in its tests.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ t/t0033-safe-directory.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t0033-safe-directory.sh b/t/t0033-safe-directory.sh
+index 239d93f4d2..00c6c51100 100755
+--- a/t/t0033-safe-directory.sh
++++ b/t/t0033-safe-directory.sh
+@@ -9,7 +9,7 @@ export GIT_TEST_ASSUME_DIFFERENT_OWNER
+ 
+ expect_rejected_dir () {
+ 	test_must_fail git status 2>err &&
+-	grep "safe.directory" err
++	test_i18ngrep "safe.directory" err
+ }
+ 
+ test_expect_success 'safe.directory is not set' '
+-- 
+2.39.3 (Apple Git-145)
+

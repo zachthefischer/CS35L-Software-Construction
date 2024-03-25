@@ -1,0 +1,96 @@
+From d3775de0745c975e2d13819a630757b2bbb673c3 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 18 Oct 2022 16:15:33 -0400
+Subject: [PATCH 0182/2871] Makefile: force -O0 when compiling with
+ SANITIZE=leak
+
+Compiling with -O2 can interact badly with LSan's leak-checker, causing
+false positives. Imagine a simplified example like:
+
+  char *str = allocate_some_string();
+  if (some_func(str) < 0)
+          die("bad str");
+  free(str);
+
+The compiler may eliminate "str" as a stack variable, and just leave it
+in a register. The register is preserved through most of the function,
+including across the call to some_func(), since we'd eventually need to
+free it. But because die() is marked with NORETURN, the compiler knows
+that it doesn't need to save registers, and just clobbers it.
+
+When die() eventually exits, the leak-checker runs. It looks in
+registers and on the stack for any reference to the memory allocated by
+str (which would indicate that it's not leaked), but can't find one.  So
+it reports it as a leak.
+
+Neither system is wrong, really. The C standard (mostly section 5.1.2.3)
+defines an abstract machine, and compilers are allowed to modify the
+program as long as the observable behavior of that abstract machine is
+unchanged. Looking at random memory values on the stack is undefined
+behavior, and not something that the optimizer needs to support. But
+there really isn't any other way for a leak checker to work; it
+inherently has to do undefined things like scouring memory for pointers.
+So the two things are inherently at odds with each other. We can't fix
+it by changing the code, because from the perspective of the program
+running in an abstract machine, there is no leak.
+
+This has caused real false positives in the past, like:
+
+  - https://lore.kernel.org/git/patch-v3-5.6-9a44204c4c9-20211022T175227Z-avarab@gmail.com/
+
+  - https://lore.kernel.org/git/Yy4eo6500C0ijhk+@coredump.intra.peff.net/
+
+  - https://lore.kernel.org/git/Y07yeEQu+C7AH7oN@nand.local/
+
+This patch makes those go away by forcing -O0 when compiling with LSan.
+There are a few ways we could do this:
+
+  - we could just teach the linux-leaks CI job to set -O0. That's the
+    smallest change, and means we wouldn't get spurious CI failures. But
+    it doesn't help people looking for leaks manually or in a specific
+    test (and because the problem depends on the vagaries of the
+    optimizer, investigating these can waste a lot of time in
+    head-scratching as the problem comes and goes)
+
+  - we default to -O2 in CFLAGS; we could pull this out to a separate
+    variable ("-O$(O)" or something) and modify "O" when LSan is in use.
+    This is the most flexible, in that you could still build with "make
+    O=2 SANITIZE=leak" if you really wanted to (say, for experimenting).
+    But it would also fail to kick in if the user defines their own
+    CFLAGS variable, which again leads to head-scratching.
+
+  - we can just stick -O0 into BASIC_CFLAGS when enabling LSan. Since
+    this comes after the user-provided CFLAGS, it will override any
+    previous -O setting found there. This is more foolproof, albeit less
+    flexible. If you want to experiment with an optimized leak-checking
+    build, you'll have to put "-O2 -fsanitize=leak" into CFLAGS
+    manually, rather than using our SANITIZE=leak Makefile magic.
+
+Since the final one is the least likely to break in normal use, this
+patch uses that approach.
+
+The resulting build is a little slower, of course, but since LSan is
+already about 2x slower than a regular build, another 10% slowdown isn't
+that big a deal.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Makefile b/Makefile
+index d93ad956e5..85f03c6aed 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1339,6 +1339,7 @@ BASIC_CFLAGS += -DSHA1DC_FORCE_ALIGNED_ACCESS
+ endif
+ ifneq ($(filter leak,$(SANITIZERS)),)
+ BASIC_CFLAGS += -DSUPPRESS_ANNOTATED_LEAKS
++BASIC_CFLAGS += -O0
+ SANITIZE_LEAK = YesCompiledWithIt
+ endif
+ ifneq ($(filter address,$(SANITIZERS)),)
+-- 
+2.39.3 (Apple Git-145)
+

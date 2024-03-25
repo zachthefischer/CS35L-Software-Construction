@@ -1,0 +1,74 @@
+From 10538e2a627b8ab14f977c868f2975a2acb4ed4d Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Oct 2022 14:55:41 -0400
+Subject: [PATCH 0231/2871] shortlog: extract `shortlog_finish_setup()`
+
+Extract a function which finishes setting up the shortlog struct for
+use. The caller in `make_cover_letter()` does not care about trailer
+sorting, so it isn't strictly necessary to add a call there in this
+patch.
+
+But the next patch will add additional functionality to the new
+`shortlog_finish_setup()` function, which the caller in
+`make_cover_letter()` will care about.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c      | 1 +
+ builtin/shortlog.c | 7 ++++++-
+ shortlog.h         | 1 +
+ 3 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index ee19dc5d45..b4d5420217 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1334,6 +1334,7 @@ static void make_cover_letter(struct rev_info *rev, int use_separate_file,
+ 	log.in2 = 4;
+ 	log.file = rev->diffopt.file;
+ 	log.groups = SHORTLOG_GROUP_AUTHOR;
++	shortlog_finish_setup(&log);
+ 	for (i = 0; i < nr; i++)
+ 		shortlog_add_commit(&log, list[i]);
+ 
+diff --git a/builtin/shortlog.c b/builtin/shortlog.c
+index f3b237c5ff..808bae9baa 100644
+--- a/builtin/shortlog.c
++++ b/builtin/shortlog.c
+@@ -381,6 +381,11 @@ void shortlog_init(struct shortlog *log)
+ 	log->format.strdup_strings = 1;
+ }
+ 
++void shortlog_finish_setup(struct shortlog *log)
++{
++	string_list_sort(&log->trailers);
++}
++
+ int cmd_shortlog(int argc, const char **argv, const char *prefix)
+ {
+ 	struct shortlog log = { STRING_LIST_INIT_NODUP };
+@@ -450,7 +455,7 @@ int cmd_shortlog(int argc, const char **argv, const char *prefix)
+ 
+ 	if (!log.groups)
+ 		log.groups = SHORTLOG_GROUP_AUTHOR;
+-	string_list_sort(&log.trailers);
++	shortlog_finish_setup(&log);
+ 
+ 	/* assume HEAD if from a tty */
+ 	if (!nongit && !rev.pending.nr && isatty(0))
+diff --git a/shortlog.h b/shortlog.h
+index 4850a8c30f..28d04f951a 100644
+--- a/shortlog.h
++++ b/shortlog.h
+@@ -33,6 +33,7 @@ struct shortlog {
+ };
+ 
+ void shortlog_init(struct shortlog *log);
++void shortlog_finish_setup(struct shortlog *log);
+ 
+ void shortlog_add_commit(struct shortlog *log, struct commit *commit);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

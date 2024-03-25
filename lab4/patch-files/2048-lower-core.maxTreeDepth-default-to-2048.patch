@@ -1,0 +1,54 @@
+From 4d5693ba05ae0d722ad5a6c0e34296caf6be9b74 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 02:23:20 -0400
+Subject: [PATCH 2048/2871] lower core.maxTreeDepth default to 2048
+
+On my Linux system, all of our recursive tree walking algorithms can run
+up to the 4096 default limit without segfaulting. But not all platforms
+will have stack sizes as generous (nor might even Linux if we kick off a
+recursive walk within a thread).
+
+In particular, several of the tests added in the previous few commits
+fail in our Windows CI environment. Through some guess-and-check
+pushing, I found that 3072 is still too much, but 2048 is OK.
+
+These are obviously vague heuristics, and there is nothing to promise
+that another system might not have trouble at even lower values. But it
+seems unlikely anybody will be too angry about a 2048-depth limit (this
+is close to the default max-pathname limit on Linux even for a
+pathological path like "a/a/a/..."). So let's just lower it.
+
+Some alternatives are:
+
+  - configure separate defaults for Windows versus other platforms.
+
+  - just skip the tests on Windows. This leaves Windows users with the
+    annoying case that they can be crashed by running out of stack
+    space, but there shouldn't be any security implications (they can't
+    go deep enough to hit integer overflow problems).
+
+Since the original default was arbitrary, it seems less confusing to
+just lower it, keeping behavior consistent across platforms.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ environment.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/environment.c b/environment.c
+index 8e25b5ef02..bb3c2a96a3 100644
+--- a/environment.c
++++ b/environment.c
+@@ -81,7 +81,7 @@ int merge_log_config = -1;
+ int precomposed_unicode = -1; /* see probe_utf8_pathname_composition() */
+ unsigned long pack_size_limit_cfg;
+ enum log_refs_config log_all_ref_updates = LOG_REFS_UNSET;
+-int max_allowed_tree_depth = 4096;
++int max_allowed_tree_depth = 2048;
+ 
+ #ifndef PROTECT_HFS_DEFAULT
+ #define PROTECT_HFS_DEFAULT 0
+-- 
+2.39.3 (Apple Git-145)
+

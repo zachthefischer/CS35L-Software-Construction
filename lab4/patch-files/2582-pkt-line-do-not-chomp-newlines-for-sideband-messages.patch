@@ -1,0 +1,108 @@
+From 7033d5479b8a7b8e7c33892f23d106c33c938ff4 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 17 Dec 2023 22:41:38 +0800
+Subject: [PATCH 2582/2871] pkt-line: do not chomp newlines for sideband
+ messages
+
+When calling "packet_read_with_status()" to parse pkt-line encoded
+packets, we can turn on the flag "PACKET_READ_CHOMP_NEWLINE" to chomp
+newline character for each packet for better line matching. But when
+receiving data and progress information using sideband, we should turn
+off the flag "PACKET_READ_CHOMP_NEWLINE" to prevent mangling newline
+characters from data and progress information.
+
+When both the server and the client support "sideband-all" capability,
+we have a dilemma that newline characters in negotiation packets should
+be removed, but the newline characters in the progress information
+should be left intact.
+
+Add new flag "PACKET_READ_USE_SIDEBAND" for "packet_read_with_status()"
+to prevent mangling newline characters in sideband messages.
+
+Helped-by: Jonathan Tan <jonathantanmy@google.com>
+Helped-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pkt-line.c             | 31 +++++++++++++++++++++++++++++--
+ pkt-line.h             |  1 +
+ t/t0070-fundamental.sh |  2 +-
+ 3 files changed, 31 insertions(+), 3 deletions(-)
+
+diff --git a/pkt-line.c b/pkt-line.c
+index 5943777a17..e9061e61a4 100644
+--- a/pkt-line.c
++++ b/pkt-line.c
+@@ -462,8 +462,32 @@ enum packet_read_status packet_read_with_status(int fd, char **src_buffer,
+ 	}
+ 
+ 	if ((options & PACKET_READ_CHOMP_NEWLINE) &&
+-	    len && buffer[len-1] == '\n')
+-		len--;
++	    len && buffer[len-1] == '\n') {
++		if (options & PACKET_READ_USE_SIDEBAND) {
++			int band = *buffer & 0xff;
++			switch (band) {
++			case 1:
++				/* Chomp newline for payload */
++				len--;
++				break;
++			case 2:
++			case 3:
++				/*
++				 * Do not chomp newline for progress and error
++				 * message.
++				 */
++				break;
++			default:
++				/*
++				 * Bad sideband, let's leave it to
++				 * demultiplex_sideband() to catch this error.
++				 */
++				break;
++			}
++		} else {
++			len--;
++		}
++	}
+ 
+ 	buffer[len] = 0;
+ 	if (options & PACKET_READ_REDACT_URI_PATH &&
+@@ -602,6 +626,9 @@ enum packet_read_status packet_reader_read(struct packet_reader *reader)
+ 		return reader->status;
+ 	}
+ 
++	if (reader->use_sideband)
++		reader->options |= PACKET_READ_USE_SIDEBAND;
++
+ 	/*
+ 	 * Consume all progress packets until a primary payload packet is
+ 	 * received
+diff --git a/pkt-line.h b/pkt-line.h
+index be1010d34e..a7ff2e2f18 100644
+--- a/pkt-line.h
++++ b/pkt-line.h
+@@ -85,6 +85,7 @@ void packet_fflush(FILE *f);
+ #define PACKET_READ_DIE_ON_ERR_PACKET    (1u<<2)
+ #define PACKET_READ_GENTLE_ON_READ_ERROR (1u<<3)
+ #define PACKET_READ_REDACT_URI_PATH      (1u<<4)
++#define PACKET_READ_USE_SIDEBAND         (1u<<5)
+ int packet_read(int fd, char *buffer, unsigned size, int options);
+ 
+ /*
+diff --git a/t/t0070-fundamental.sh b/t/t0070-fundamental.sh
+index 275edbf6e7..0d2b7d8d93 100755
+--- a/t/t0070-fundamental.sh
++++ b/t/t0070-fundamental.sh
+@@ -97,7 +97,7 @@ test_expect_success 'unpack-sideband: packet_reader_read() consumes sideband, no
+ 	test_cmp expect-err err
+ '
+ 
+-test_expect_failure 'unpack-sideband: packet_reader_read() consumes sideband, chomp payload' '
++test_expect_success 'unpack-sideband: packet_reader_read() consumes sideband, chomp payload' '
+ 	test_when_finished "rm -f expect-out expect-err" &&
+ 	test-tool pkt-line send-split-sideband >split-sideband &&
+ 	test-tool pkt-line unpack-sideband \
+-- 
+2.39.3 (Apple Git-145)
+

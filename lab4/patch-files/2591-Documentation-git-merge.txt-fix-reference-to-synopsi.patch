@@ -1,0 +1,73 @@
+From dc18ead555dc4d93bed7a72acc503a90a296f7bc Mon Sep 17 00:00:00 2001
+From: Michael Lohmann <mial.lohmann@gmail.com>
+Date: Wed, 20 Dec 2023 22:35:34 +0100
+Subject: [PATCH 2591/2871] Documentation/git-merge.txt: fix reference to
+ synopsis
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+437591a9d738 combined the synopsis of "The second syntax" (meaning `git
+merge --abort`) and "The third syntax" (for `git merge --continue`) into
+this single line:
+
+       git merge (--continue | --abort | --quit)
+
+but it was still referred to when describing the preconditions that have
+to be fulfilled to run the respective actions. In other words:
+References by number are no longer valid after a merge of some of the
+synopses.
+
+Also the previous version of the documentation did not acknowledge that
+`--no-commit` would result in the precondition being fulfilled (thanks
+to Elijah Newren and Junio C Hamano for pointing that out).
+
+This change also groups `--abort` and `--continue` together when
+explaining the prerequisites in order to avoid duplication.
+
+Helped-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Michael Lohmann <mi.al.lohmann@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-merge.txt | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/Documentation/git-merge.txt b/Documentation/git-merge.txt
+index e8ab340319..33ec5c6b19 100644
+--- a/Documentation/git-merge.txt
++++ b/Documentation/git-merge.txt
+@@ -46,21 +46,21 @@ a log message from the user describing the changes. Before the operation,
+     D---E---F---G---H master
+ ------------
+ 
+-The second syntax ("`git merge --abort`") can only be run after the
+-merge has resulted in conflicts. 'git merge --abort' will abort the
+-merge process and try to reconstruct the pre-merge state. However,
+-if there were uncommitted changes when the merge started (and
+-especially if those changes were further modified after the merge
+-was started), 'git merge --abort' will in some cases be unable to
+-reconstruct the original (pre-merge) changes. Therefore:
++A merge stops if there's a conflict that cannot be resolved
++automatically or if `--no-commit` was provided when initiating the
++merge. At that point you can run `git merge --abort` or `git merge
++--continue`.
++
++`git merge --abort` will abort the merge process and try to reconstruct
++the pre-merge state. However, if there were uncommitted changes when the
++merge started (and especially if those changes were further modified
++after the merge was started), `git merge --abort` will in some cases be
++unable to reconstruct the original (pre-merge) changes. Therefore:
+ 
+ *Warning*: Running 'git merge' with non-trivial uncommitted changes is
+ discouraged: while possible, it may leave you in a state that is hard to
+ back out of in the case of a conflict.
+ 
+-The third syntax ("`git merge --continue`") can only be run after the
+-merge has resulted in conflicts.
+-
+ OPTIONS
+ -------
+ :git-merge: 1
+-- 
+2.39.3 (Apple Git-145)
+

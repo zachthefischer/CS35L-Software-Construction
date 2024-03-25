@@ -1,0 +1,86 @@
+From 00057bf14c9269cb26a6b8ba7e8bc9ecd634d22c Mon Sep 17 00:00:00 2001
+From: Jonathan Tan <jonathantanmy@google.com>
+Date: Tue, 4 Oct 2022 14:13:40 -0700
+Subject: [PATCH 0039/2871] promisor-remote: remove a return value
+
+No caller of promisor_remote_get_direct() is checking its return value,
+so remove it.
+
+Not checking the return value means that the user would not know
+whether the failure of reading an object is due to the promisor remote
+not supplying the object or because of local repository corruption, but
+this will be fixed in a subsequent patch.
+
+Signed-off-by: Jonathan Tan <jonathantanmy@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ promisor-remote.c | 12 ++++--------
+ promisor-remote.h | 11 +++++------
+ 2 files changed, 9 insertions(+), 14 deletions(-)
+
+diff --git a/promisor-remote.c b/promisor-remote.c
+index 68f46f5ec7..8b4d650b4c 100644
+--- a/promisor-remote.c
++++ b/promisor-remote.c
+@@ -230,18 +230,17 @@ static int remove_fetched_oids(struct repository *repo,
+ 	return remaining_nr;
+ }
+ 
+-int promisor_remote_get_direct(struct repository *repo,
+-			       const struct object_id *oids,
+-			       int oid_nr)
++void promisor_remote_get_direct(struct repository *repo,
++				const struct object_id *oids,
++				int oid_nr)
+ {
+ 	struct promisor_remote *r;
+ 	struct object_id *remaining_oids = (struct object_id *)oids;
+ 	int remaining_nr = oid_nr;
+ 	int to_free = 0;
+-	int res = -1;
+ 
+ 	if (oid_nr == 0)
+-		return 0;
++		return;
+ 
+ 	promisor_remote_init(repo);
+ 
+@@ -256,12 +255,9 @@ int promisor_remote_get_direct(struct repository *repo,
+ 				continue;
+ 			}
+ 		}
+-		res = 0;
+ 		break;
+ 	}
+ 
+ 	if (to_free)
+ 		free(remaining_oids);
+-
+-	return res;
+ }
+diff --git a/promisor-remote.h b/promisor-remote.h
+index edc45ab0f5..df36eb08ef 100644
+--- a/promisor-remote.h
++++ b/promisor-remote.h
+@@ -39,13 +39,12 @@ static inline int has_promisor_remote(void)
+ 
+ /*
+  * Fetches all requested objects from all promisor remotes, trying them one at
+- * a time until all objects are fetched. Returns 0 upon success, and non-zero
+- * otherwise.
++ * a time until all objects are fetched.
+  *
+- * If oid_nr is 0, this function returns 0 (success) immediately.
++ * If oid_nr is 0, this function returns immediately.
+  */
+-int promisor_remote_get_direct(struct repository *repo,
+-			       const struct object_id *oids,
+-			       int oid_nr);
++void promisor_remote_get_direct(struct repository *repo,
++				const struct object_id *oids,
++				int oid_nr);
+ 
+ #endif /* PROMISOR_REMOTE_H */
+-- 
+2.39.3 (Apple Git-145)
+

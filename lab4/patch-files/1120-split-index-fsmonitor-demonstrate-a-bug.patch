@@ -1,0 +1,168 @@
+From 3704fed5eae8ca2fa20bcf6adb277ee83b012ce0 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Sun, 26 Mar 2023 22:45:40 +0000
+Subject: [PATCH 1120/2871] split-index & fsmonitor: demonstrate a bug
+
+This commit adds a new test case that demonstrates a bug in the
+split-index code that is triggered under certain circumstances when the
+FSMonitor is enabled, and its symptom manifests in the form of one of
+the following error messages:
+
+    BUG: fsmonitor.c:20: fsmonitor_dirty has more entries than the index (2 > 1)
+
+    BUG: unpack-trees.c:776: pos <n> doesn't point to the first entry of <dir>/ in index
+
+    error: invalid path ''
+    error: The following untracked working tree files would be overwritten by reset:
+            initial.t
+
+Which of these error messages appears depends on timing-dependent
+conditions.
+
+Technically the root cause lies with a bug in the split-index code that
+has nothing to do with FSMonitor, but for the sake of this new test case
+it was the easiest way to trigger the bug.
+
+The bug is this: Under specific conditions, Git needs to skip writing
+the "link" extension (which is the index extension containing the
+information pertaining to the split-index). To do that, the `base_oid`
+attribute of the `split_index` structure in the in-memory index is
+zeroed out, and `do_write_index()` specifically checks for a "null"
+`base_oid` to understand that the "link" extension should not be
+written. However, this violates the consistency of the in-memory index
+structure, but that does not cause problems in most cases because the
+process exits without using the in-memory index structure anymore,
+anyway.
+
+But: _When_ the in-memory index is still used (which is the case e.g. in
+`git rebase`), subsequent writes of `the_index` are at risk of writing
+out a bogus index file, one that _should_ have a "link" extension but
+does not. In many cases, the `SPLIT_INDEX_ORDERED` flag _happens_ to be
+set for subsequent writes, forcing the shared index to be written, which
+re-initializes `base_oid` to a non-bogus state, and all is good.
+
+When it is _not_ set, however, all kinds of mayhem ensue, resulting in
+above-mentioned error messages, and often enough putting worktrees in a
+totally broken state where the only recourse is to manually delete the
+`index` and the `index.lock` files and then call `git reset` manually.
+Not something to ask users to do.
+
+The reason why it is comparatively easy to trigger the bug with
+FSMonitor is that there is _another_ bug in the FSMonitor code:
+`mark_fsmonitor_valid()` sets `cache_changed` to 1, i.e. treating that
+variable as a Boolean. But it is a bit field, and 1 happens to be the
+`SOMETHING_CHANGED` bit that forces the "link" extension to be skipped
+when writing the index, among other things.
+
+"Comparatively easy" is a relative term in this context, for sure. The
+essence of how the new test case triggers the bug is as following:
+
+1. The `git rebase` invocation will first reset the worktree to
+   a commit that contains only the `one.t` file, and then execute a
+   rebase script that starts with the following commands (commit hashes
+   skipped):
+
+   label onto
+
+   reset initial
+   pick two
+   label two
+
+   reset two
+   pick three
+   [...]
+
+2. Before executing the `label` command, a split index is written, as
+   well as the shared index.
+
+3. The `reset initial` command in the rebase script writes out a new
+   split index but skips writing the shared index, as intended.
+
+4. The `pick two` command updates the worktree and refreshes the index,
+   marking the `two.t` entry as valid via the FSMonitor, which sets the
+   `SOMETHING_CHANGED` bit in `cache_changed`, which in turn causes the
+   `base_oid` attribute to be zeroed out and a full (non-split) index
+   to be written (making sure _not_ to write the "link" extension).
+
+5. Now, the `reset two` command will leave the worktree alone, but
+   still write out a new split index, not writing the shared index
+   (because `base_oid` is still zeroed out, and there is no index entry
+   update requiring it to be written, either).
+
+6. When it is turn to run `pick three`, the index is read, but it is
+   too short: It only contains a single entry when there should be two,
+   because the "link" extension is missing from the written-out index
+   file.
+
+There are three bugs at play, actually, which will be fixed over the
+course of the next commits:
+
+- The `base_oid` attribute should not be zeroed out to indicate when
+  the "link" extension should not be written, as it puts the in-memory
+  index structure into an inconsistent state.
+
+- The FSMonitor should not overwrite bits in `cache_changed`.
+
+- The `unpack_trees()` function tries to reuse the `split_index`
+  structure from the source index, if any, but does not propagate the
+  `SPLIT_INDEX_ORDERED` flag.
+
+While a fix for the second bug would let this test case pass, there are
+other conditions where the `SOMETHING_CHANGED` bit is set. Therefore,
+the bug that most crucially needs to be fixed is the first one.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7527-builtin-fsmonitor.sh | 37 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+
+diff --git a/t/t7527-builtin-fsmonitor.sh b/t/t7527-builtin-fsmonitor.sh
+index d419085379..cbafdd6960 100755
+--- a/t/t7527-builtin-fsmonitor.sh
++++ b/t/t7527-builtin-fsmonitor.sh
+@@ -1003,4 +1003,41 @@ test_expect_success !UNICODE_COMPOSITION_SENSITIVE 'Unicode nfc/nfd' '
+ 	egrep "^event: nfd/d_${utf8_nfc}/?$" ./unicode.trace
+ '
+ 
++test_expect_failure 'split-index and FSMonitor work well together' '
++	git init split-index &&
++	test_when_finished "git -C \"$PWD/split-index\" \
++		fsmonitor--daemon stop" &&
++	(
++		cd split-index &&
++		git config core.splitIndex true &&
++		# force split-index in most cases
++		git config splitIndex.maxPercentChange 99 &&
++		git config core.fsmonitor true &&
++
++		# Create the following commit topology:
++		#
++		# *   merge three
++		# |\
++		# | * three
++		# * | merge two
++		# |\|
++		# | * two
++		# * | one
++		# |/
++		# * 5a5efd7 initial
++
++		test_commit initial &&
++		test_commit two &&
++		test_commit three &&
++		git reset --hard initial &&
++		test_commit one &&
++		test_tick &&
++		git merge two &&
++		test_tick &&
++		git merge three &&
++
++		git rebase --force-rebase -r one
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

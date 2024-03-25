@@ -1,0 +1,56 @@
+From f4e4756c545359fed7786b11d22f84db61babe21 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Nov 2023 02:25:24 -0500
+Subject: [PATCH 2385/2871] commit-graph: drop verify_commit_graph_lite()
+
+As we've moved all of the checks from this function directly into the
+chunk-reading code used by the caller (and there is only one caller), we
+can just drop it entirely.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 20 --------------------
+ 1 file changed, 20 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index e5f9e75e18..081de1e6e1 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -275,23 +275,6 @@ struct commit_graph *load_commit_graph_one_fd_st(struct repository *r,
+ 	return ret;
+ }
+ 
+-static int verify_commit_graph_lite(struct commit_graph *g)
+-{
+-	/*
+-	 * Basic validation shared between parse_commit_graph()
+-	 * which'll be called every time the graph is used, and the
+-	 * much more expensive verify_commit_graph() used by
+-	 * "commit-graph verify".
+-	 *
+-	 * There should only be very basic checks here to ensure that
+-	 * we don't e.g. segfault in fill_commit_in_graph(), but
+-	 * because this is a very hot codepath nothing that e.g. loops
+-	 * over g->num_commits, or runs a checksum on the commit-graph
+-	 * itself.
+-	 */
+-	return 0;
+-}
+-
+ static int graph_read_oid_fanout(const unsigned char *chunk_start,
+ 				 size_t chunk_size, void *data)
+ {
+@@ -495,9 +478,6 @@ struct commit_graph *parse_commit_graph(struct repo_settings *s,
+ 
+ 	oidread(&graph->oid, graph->data + graph->data_len - graph->hash_len);
+ 
+-	if (verify_commit_graph_lite(graph))
+-		goto free_and_return;
+-
+ 	free_chunkfile(cf);
+ 	return graph;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

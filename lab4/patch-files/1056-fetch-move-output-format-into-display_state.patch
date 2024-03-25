@@ -1,0 +1,74 @@
+From 5cab51ff7156edca8cb9eba30205efa11900e49c Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 20 Mar 2023 13:35:24 +0100
+Subject: [PATCH 1056/2871] fetch: move output format into `display_state`
+
+The git-fetch(1) command supports printing references either in "full"
+or "compact" format depending on the `fetch.ouput` config key. The
+format that is to be used is tracked in a global variable.
+
+De-globalize the variable by moving it into the `display_state`
+structure.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 391959ad3d..6d6146b0f0 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -49,6 +49,7 @@ enum {
+ 
+ struct display_state {
+ 	int refcol_width;
++	int compact_format;
+ };
+ 
+ static int fetch_prune_config = -1; /* unspecified */
+@@ -745,9 +746,7 @@ static int s_update_ref(const char *action,
+ 	return ret;
+ }
+ 
+-static int compact_format;
+-
+-static int refcol_width(const struct ref *ref)
++static int refcol_width(const struct ref *ref, int compact_format)
+ {
+ 	int max, rlen, llen, len;
+ 
+@@ -789,9 +788,9 @@ static void display_state_init(struct display_state *display_state, struct ref *
+ 
+ 	git_config_get_string_tmp("fetch.output", &format);
+ 	if (!strcasecmp(format, "full"))
+-		compact_format = 0;
++		display_state->compact_format = 0;
+ 	else if (!strcasecmp(format, "compact"))
+-		compact_format = 1;
++		display_state->compact_format = 1;
+ 	else
+ 		die(_("invalid value for '%s': '%s'"),
+ 		    "fetch.output", format);
+@@ -805,7 +804,7 @@ static void display_state_init(struct display_state *display_state, struct ref *
+ 		    !strcmp(rm->name, "HEAD"))
+ 			continue;
+ 
+-		width = refcol_width(rm);
++		width = refcol_width(rm, display_state->compact_format);
+ 
+ 		/*
+ 		 * Not precise calculation for compact mode because '*' can
+@@ -887,7 +886,7 @@ static void format_display(struct display_state *display_state,
+ 	width = (summary_width + strlen(summary) - gettext_width(summary));
+ 
+ 	strbuf_addf(display_buffer, "%c %-*s ", code, width, summary);
+-	if (!compact_format)
++	if (!display_state->compact_format)
+ 		print_remote_to_local(display_state, display_buffer, remote, local);
+ 	else
+ 		print_compact(display_state, display_buffer, remote, local);
+-- 
+2.39.3 (Apple Git-145)
+

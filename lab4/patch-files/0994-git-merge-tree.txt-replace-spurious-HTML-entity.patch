@@ -1,0 +1,27 @@
+From f7111175df0fe258784d6f18ee86f019e889676f Mon Sep 17 00:00:00 2001
+From: Andreas Schwab <schwab@linux-m68k.org>
+Date: Sat, 4 Mar 2023 18:00:46 +0100
+Subject: [PATCH 0994/2871] git-merge-tree.txt: replace spurious HTML entity
+
+Signed-off-by: Andreas Schwab <schwab@linux-m68k.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-merge-tree.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-merge-tree.txt b/Documentation/git-merge-tree.txt
+index 04bcc416e6..c0baa3702c 100644
+--- a/Documentation/git-merge-tree.txt
++++ b/Documentation/git-merge-tree.txt
+@@ -103,7 +103,7 @@ This is an integer status followed by a NUL character.  The integer status is:
+ 
+      0: merge had conflicts
+      1: merge was clean
+-     &lt;0: something prevented the merge from running (e.g. access to repository
++     <0: something prevented the merge from running (e.g. access to repository
+ 	 objects denied by filesystem)
+ 
+ [[OIDTLT]]
+-- 
+2.39.3 (Apple Git-145)
+

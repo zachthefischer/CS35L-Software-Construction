@@ -1,0 +1,200 @@
+From e9011b6092411ca802907a1236d3137bf09081b6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=90o=C3=A0n=20Tr=E1=BA=A7n=20C=C3=B4ng=20Danh?=
+ <congdanhqx@gmail.com>
+Date: Thu, 10 Nov 2022 23:36:22 +0700
+Subject: [PATCH 0360/2871] bisect--helper: parse subcommand with
+ OPT_SUBCOMMAND
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+As of it is, we're parsing subcommand with OPT_CMDMODE, which will
+continue to parse more options even if the command has been found.
+
+When we're running "git bisect run" with a command that expecting
+a "--log" or "--no-log" arguments, or one of those "--bisect-..."
+arguments, bisect--helper may mistakenly think those options are
+bisect--helper's option.
+
+We may fix those problems by passing "--" when calling from
+git-bisect.sh, and skip that "--" in bisect--helper. However, it may
+interfere with user's "--".
+
+Let's parse subcommand with OPT_SUBCOMMAND since that API was born for
+this specific use-case.
+
+Reported-by: Lukáš Doktor <ldoktor@redhat.com>
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/bisect--helper.c    | 87 ++++++++-----------------------------
+ git-bisect.sh               | 23 ++--------
+ t/t6030-bisect-porcelain.sh | 10 +++++
+ 3 files changed, 30 insertions(+), 90 deletions(-)
+
+diff --git a/builtin/bisect--helper.c b/builtin/bisect--helper.c
+index 95a5102c3c..3bbe159a8d 100644
+--- a/builtin/bisect--helper.c
++++ b/builtin/bisect--helper.c
+@@ -1390,84 +1390,31 @@ static int cmd_bisect__run(int argc, const char **argv, const char *prefix UNUSE
+ 
+ int cmd_bisect__helper(int argc, const char **argv, const char *prefix)
+ {
+-	enum {
+-		BISECT_RESET = 1,
+-		BISECT_TERMS,
+-		BISECT_START,
+-		BISECT_AUTOSTART,
+-		BISECT_NEXT,
+-		BISECT_STATE,
+-		BISECT_LOG,
+-		BISECT_REPLAY,
+-		BISECT_SKIP,
+-		BISECT_VISUALIZE,
+-		BISECT_RUN,
+-	} cmdmode = 0;
+ 	int res = 0;
++	parse_opt_subcommand_fn *fn = NULL;
+ 	struct option options[] = {
+-		OPT_CMDMODE(0, "bisect-reset", &cmdmode,
+-			 N_("reset the bisection state"), BISECT_RESET),
+-		OPT_CMDMODE(0, "bisect-terms", &cmdmode,
+-			 N_("print out the bisect terms"), BISECT_TERMS),
+-		OPT_CMDMODE(0, "bisect-start", &cmdmode,
+-			 N_("start the bisect session"), BISECT_START),
+-		OPT_CMDMODE(0, "bisect-next", &cmdmode,
+-			 N_("find the next bisection commit"), BISECT_NEXT),
+-		OPT_CMDMODE(0, "bisect-state", &cmdmode,
+-			 N_("mark the state of ref (or refs)"), BISECT_STATE),
+-		OPT_CMDMODE(0, "bisect-log", &cmdmode,
+-			 N_("list the bisection steps so far"), BISECT_LOG),
+-		OPT_CMDMODE(0, "bisect-replay", &cmdmode,
+-			 N_("replay the bisection process from the given file"), BISECT_REPLAY),
+-		OPT_CMDMODE(0, "bisect-skip", &cmdmode,
+-			 N_("skip some commits for checkout"), BISECT_SKIP),
+-		OPT_CMDMODE(0, "bisect-visualize", &cmdmode,
+-			 N_("visualize the bisection"), BISECT_VISUALIZE),
+-		OPT_CMDMODE(0, "bisect-run", &cmdmode,
+-			 N_("use <cmd>... to automatically bisect"), BISECT_RUN),
++		OPT_SUBCOMMAND("reset", &fn, cmd_bisect__reset),
++		OPT_SUBCOMMAND("terms", &fn, cmd_bisect__terms),
++		OPT_SUBCOMMAND("start", &fn, cmd_bisect__start),
++		OPT_SUBCOMMAND("next", &fn, cmd_bisect__next),
++		OPT_SUBCOMMAND("state", &fn, cmd_bisect__state),
++		OPT_SUBCOMMAND("log", &fn, cmd_bisect__log),
++		OPT_SUBCOMMAND("replay", &fn, cmd_bisect__replay),
++		OPT_SUBCOMMAND("skip", &fn, cmd_bisect__skip),
++		OPT_SUBCOMMAND("visualize", &fn, cmd_bisect__visualize),
++		OPT_SUBCOMMAND("view", &fn, cmd_bisect__visualize),
++		OPT_SUBCOMMAND("run", &fn, cmd_bisect__run),
+ 		OPT_END()
+ 	};
+ 	argc = parse_options(argc, argv, prefix, options,
+-			     git_bisect_helper_usage,
+-			     PARSE_OPT_KEEP_DASHDASH | PARSE_OPT_KEEP_UNKNOWN_OPT);
++			     git_bisect_helper_usage, 0);
+ 
+-	if (!cmdmode)
++	if (!fn)
+ 		usage_with_options(git_bisect_helper_usage, options);
++	argc--;
++	argv++;
+ 
+-	switch (cmdmode) {
+-	case BISECT_RESET:
+-		res = cmd_bisect__reset(argc, argv, prefix);
+-		break;
+-	case BISECT_TERMS:
+-		res = cmd_bisect__terms(argc, argv, prefix);
+-		break;
+-	case BISECT_START:
+-		res = cmd_bisect__start(argc, argv, prefix);
+-		break;
+-	case BISECT_NEXT:
+-		res = cmd_bisect__next(argc, argv, prefix);
+-		break;
+-	case BISECT_STATE:
+-		res = cmd_bisect__state(argc, argv, prefix);
+-		break;
+-	case BISECT_LOG:
+-		res = cmd_bisect__log(argc, argv, prefix);
+-		break;
+-	case BISECT_REPLAY:
+-		res = cmd_bisect__replay(argc, argv, prefix);
+-		break;
+-	case BISECT_SKIP:
+-		res = cmd_bisect__skip(argc, argv, prefix);
+-		break;
+-	case BISECT_VISUALIZE:
+-		res = cmd_bisect__visualize(argc, argv, prefix);
+-		break;
+-	case BISECT_RUN:
+-		res = cmd_bisect__run(argc, argv, prefix);
+-		break;
+-	default:
+-		BUG("unknown subcommand %d", cmdmode);
+-	}
++	res = fn(argc, argv, prefix);
+ 
+ 	/*
+ 	 * Handle early success
+diff --git a/git-bisect.sh b/git-bisect.sh
+index 405cf76f2a..dfce4b4f44 100755
+--- a/git-bisect.sh
++++ b/git-bisect.sh
+@@ -57,28 +57,11 @@ case "$#" in
+ 	case "$cmd" in
+ 	help)
+ 		git bisect -h ;;
+-	start)
+-		git bisect--helper --bisect-start "$@" ;;
+ 	bad|good|new|old|"$TERM_BAD"|"$TERM_GOOD")
+-		git bisect--helper --bisect-state "$cmd" "$@" ;;
+-	skip)
+-		git bisect--helper --bisect-skip "$@" || exit;;
+-	next)
+-		# Not sure we want "next" at the UI level anymore.
+-		git bisect--helper --bisect-next "$@" || exit ;;
+-	visualize|view)
+-		git bisect--helper --bisect-visualize "$@" || exit;;
+-	reset)
+-		git bisect--helper --bisect-reset "$@" ;;
+-	replay)
+-		git bisect--helper --bisect-replay "$@" || exit;;
++		git bisect--helper state "$cmd" "$@" ;;
+ 	log)
+-		git bisect--helper --bisect-log || exit ;;
+-	run)
+-		git bisect--helper --bisect-run "$@" || exit;;
+-	terms)
+-		git bisect--helper --bisect-terms "$@" || exit;;
++		git bisect--helper log || exit ;;
+ 	*)
+-		usage ;;
++		git bisect--helper "$cmd" "$@" ;;
+ 	esac
+ esac
+diff --git a/t/t6030-bisect-porcelain.sh b/t/t6030-bisect-porcelain.sh
+index 83931d482f..6dbbe62eb2 100755
+--- a/t/t6030-bisect-porcelain.sh
++++ b/t/t6030-bisect-porcelain.sh
+@@ -266,6 +266,16 @@ test_expect_success '"git bisect run" simple case' '
+ 	git bisect reset
+ '
+ 
++# We want to make sure no arguments has been eaten
++test_expect_success '"git bisect run" simple case' '
++	git bisect start &&
++	git bisect good $HASH1 &&
++	git bisect bad $HASH4 &&
++	git bisect run printf "%s %s\n" reset --bisect-skip >my_bisect_log.txt &&
++	grep -e "reset --bisect-skip" my_bisect_log.txt &&
++	git bisect reset
++'
++
+ # We want to automatically find the commit that
+ # added "Ciao" into hello.
+ test_expect_success '"git bisect run" with more complex "git bisect start"' '
+-- 
+2.39.3 (Apple Git-145)
+

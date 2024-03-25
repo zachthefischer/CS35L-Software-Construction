@@ -1,0 +1,37 @@
+From a26f1fb62bef37865dc18e010f9804172980c682 Mon Sep 17 00:00:00 2001
+From: Justin Tobler <jltobler@gmail.com>
+Date: Thu, 11 Jan 2024 20:24:29 +0000
+Subject: [PATCH 2679/2871] t1401: remove lockfile creation
+
+To create error conditions, some tests set up reference locks by
+directly creating its lockfile. While this works for the files reference
+backend, this approach is incompatible with the reftable backend.
+Refactor the test to create a d/f conflict via git-symbolic-ref(1)
+instead so that the test is reference backend agnostic.
+
+Signed-off-by: Justin Tobler <jltobler@gmail.com>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1401-symbolic-ref.sh | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/t/t1401-symbolic-ref.sh b/t/t1401-symbolic-ref.sh
+index 3241d35917..5c60d6f812 100755
+--- a/t/t1401-symbolic-ref.sh
++++ b/t/t1401-symbolic-ref.sh
+@@ -106,9 +106,8 @@ test_expect_success LONG_REF 'we can parse long symbolic ref' '
+ '
+ 
+ test_expect_success 'symbolic-ref reports failure in exit code' '
+-	test_when_finished "rm -f .git/HEAD.lock" &&
+-	>.git/HEAD.lock &&
+-	test_must_fail git symbolic-ref HEAD refs/heads/whatever
++	# Create d/f conflict to simulate failure.
++	test_must_fail git symbolic-ref refs/heads refs/heads/foo
+ '
+ 
+ test_expect_success 'symbolic-ref writes reflog entry' '
+-- 
+2.39.3 (Apple Git-145)
+

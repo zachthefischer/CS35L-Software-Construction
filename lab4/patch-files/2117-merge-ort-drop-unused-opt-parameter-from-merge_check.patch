@@ -1,0 +1,47 @@
+From 6eb0c0eb7ac23da7d3bc437b7a5c31f628c25531 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 14 Sep 2023 05:40:04 -0400
+Subject: [PATCH 2117/2871] merge-ort: drop unused "opt" parameter from
+ merge_check_renames_reusable()
+
+The merge_options parameter has never been used since the function was
+introduced in 64aceb6d73 (merge-ort: add code to check for whether
+cached renames can be reused, 2021-05-20). In theory some merge options
+might impact our decisions here, but that has never been the case so
+far.
+
+Let's drop it to appease -Wunused-parameter; it would be easy to add
+back later if we need to (there is only one caller).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index 20eefd9b5e..3953c9f745 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -4880,8 +4880,7 @@ static void merge_start(struct merge_options *opt, struct merge_result *result)
+ 	trace2_region_leave("merge", "allocate/init", opt->repo);
+ }
+ 
+-static void merge_check_renames_reusable(struct merge_options *opt,
+-					 struct merge_result *result,
++static void merge_check_renames_reusable(struct merge_result *result,
+ 					 struct tree *merge_base,
+ 					 struct tree *side1,
+ 					 struct tree *side2)
+@@ -5083,7 +5082,7 @@ void merge_incore_nonrecursive(struct merge_options *opt,
+ 
+ 	trace2_region_enter("merge", "merge_start", opt->repo);
+ 	assert(opt->ancestor != NULL);
+-	merge_check_renames_reusable(opt, result, merge_base, side1, side2);
++	merge_check_renames_reusable(result, merge_base, side1, side2);
+ 	merge_start(opt, result);
+ 	/*
+ 	 * Record the trees used in this merge, so if there's a next merge in
+-- 
+2.39.3 (Apple Git-145)
+

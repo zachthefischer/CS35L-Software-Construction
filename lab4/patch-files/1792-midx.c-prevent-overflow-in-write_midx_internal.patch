@@ -1,0 +1,53 @@
+From 2bc764c1d4d1bc12ba7d95ceebb0da54ba381be5 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:46 -0400
+Subject: [PATCH 1792/2871] midx.c: prevent overflow in `write_midx_internal()`
+
+When writing a MIDX, we use the chunk-format API to write out each
+individual chunk of the MIDX. Each chunk of the MIDX is tracked via a
+call to `add_chunk()`, along with the expected size of that chunk.
+
+Guard against overflow when dealing with a MIDX with a large number of
+entries (and consequently, large chunks within the MIDX file itself) to
+avoid corrupting the contents of the MIDX itself.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index 909639eea5..606e3ae79e 100644
+--- a/midx.c
++++ b/midx.c
+@@ -1501,21 +1501,22 @@ static int write_midx_internal(const char *object_dir,
+ 	add_chunk(cf, MIDX_CHUNKID_OIDFANOUT, MIDX_CHUNK_FANOUT_SIZE,
+ 		  write_midx_oid_fanout);
+ 	add_chunk(cf, MIDX_CHUNKID_OIDLOOKUP,
+-		  (size_t)ctx.entries_nr * the_hash_algo->rawsz,
++		  st_mult(ctx.entries_nr, the_hash_algo->rawsz),
+ 		  write_midx_oid_lookup);
+ 	add_chunk(cf, MIDX_CHUNKID_OBJECTOFFSETS,
+-		  (size_t)ctx.entries_nr * MIDX_CHUNK_OFFSET_WIDTH,
++		  st_mult(ctx.entries_nr, MIDX_CHUNK_OFFSET_WIDTH),
+ 		  write_midx_object_offsets);
+ 
+ 	if (ctx.large_offsets_needed)
+ 		add_chunk(cf, MIDX_CHUNKID_LARGEOFFSETS,
+-			(size_t)ctx.num_large_offsets * MIDX_CHUNK_LARGE_OFFSET_WIDTH,
++			st_mult(ctx.num_large_offsets,
++				MIDX_CHUNK_LARGE_OFFSET_WIDTH),
+ 			write_midx_large_offsets);
+ 
+ 	if (flags & (MIDX_WRITE_REV_INDEX | MIDX_WRITE_BITMAP)) {
+ 		ctx.pack_order = midx_pack_order(&ctx);
+ 		add_chunk(cf, MIDX_CHUNKID_REVINDEX,
+-			  ctx.entries_nr * sizeof(uint32_t),
++			  st_mult(ctx.entries_nr, sizeof(uint32_t)),
+ 			  write_midx_revindex);
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

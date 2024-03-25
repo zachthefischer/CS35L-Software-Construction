@@ -1,0 +1,319 @@
+From b7b8f048f567f1dde24874e82227fbf2c64a1aed Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 14 Apr 2023 08:01:45 +0200
+Subject: [PATCH 1256/2871] pack-objects: split out `--stdin-packs` tests into
+ separate file
+
+The test suite for git-pack-objects(1) is quite huge, and we're about to
+add more tests that relate to the `--stdin-packs` option. Split out all
+tests related to this option into a standalone file so that it becomes
+easier to test the feature in isolation.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5300-pack-object.sh        | 135 -------------------------------
+ t/t5331-pack-objects-stdin.sh | 145 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 145 insertions(+), 135 deletions(-)
+ create mode 100755 t/t5331-pack-objects-stdin.sh
+
+diff --git a/t/t5300-pack-object.sh b/t/t5300-pack-object.sh
+index f8a0f309e2..d2ce236d61 100755
+--- a/t/t5300-pack-object.sh
++++ b/t/t5300-pack-object.sh
+@@ -589,141 +589,6 @@ test_expect_success 'prefetch objects' '
+ 	test_line_count = 1 donelines
+ '
+ 
+-test_expect_success 'setup for --stdin-packs tests' '
+-	git init stdin-packs &&
+-	(
+-		cd stdin-packs &&
+-
+-		test_commit A &&
+-		test_commit B &&
+-		test_commit C &&
+-
+-		for id in A B C
+-		do
+-			git pack-objects .git/objects/pack/pack-$id \
+-				--incremental --revs <<-EOF || exit 1
+-			refs/tags/$id
+-			EOF
+-		done &&
+-
+-		ls -la .git/objects/pack
+-	)
+-'
+-
+-test_expect_success '--stdin-packs with excluded packs' '
+-	(
+-		cd stdin-packs &&
+-
+-		PACK_A="$(basename .git/objects/pack/pack-A-*.pack)" &&
+-		PACK_B="$(basename .git/objects/pack/pack-B-*.pack)" &&
+-		PACK_C="$(basename .git/objects/pack/pack-C-*.pack)" &&
+-
+-		git pack-objects test --stdin-packs <<-EOF &&
+-		$PACK_A
+-		^$PACK_B
+-		$PACK_C
+-		EOF
+-
+-		(
+-			git show-index <$(ls .git/objects/pack/pack-A-*.idx) &&
+-			git show-index <$(ls .git/objects/pack/pack-C-*.idx)
+-		) >expect.raw &&
+-		git show-index <$(ls test-*.idx) >actual.raw &&
+-
+-		cut -d" " -f2 <expect.raw | sort >expect &&
+-		cut -d" " -f2 <actual.raw | sort >actual &&
+-		test_cmp expect actual
+-	)
+-'
+-
+-test_expect_success '--stdin-packs is incompatible with --filter' '
+-	(
+-		cd stdin-packs &&
+-		test_must_fail git pack-objects --stdin-packs --stdout \
+-			--filter=blob:none </dev/null 2>err &&
+-		test_i18ngrep "cannot use --filter with --stdin-packs" err
+-	)
+-'
+-
+-test_expect_success '--stdin-packs is incompatible with --revs' '
+-	(
+-		cd stdin-packs &&
+-		test_must_fail git pack-objects --stdin-packs --revs out \
+-			</dev/null 2>err &&
+-		test_i18ngrep "cannot use internal rev list with --stdin-packs" err
+-	)
+-'
+-
+-test_expect_success '--stdin-packs with loose objects' '
+-	(
+-		cd stdin-packs &&
+-
+-		PACK_A="$(basename .git/objects/pack/pack-A-*.pack)" &&
+-		PACK_B="$(basename .git/objects/pack/pack-B-*.pack)" &&
+-		PACK_C="$(basename .git/objects/pack/pack-C-*.pack)" &&
+-
+-		test_commit D && # loose
+-
+-		git pack-objects test2 --stdin-packs --unpacked <<-EOF &&
+-		$PACK_A
+-		^$PACK_B
+-		$PACK_C
+-		EOF
+-
+-		(
+-			git show-index <$(ls .git/objects/pack/pack-A-*.idx) &&
+-			git show-index <$(ls .git/objects/pack/pack-C-*.idx) &&
+-			git rev-list --objects --no-object-names \
+-				refs/tags/C..refs/tags/D
+-
+-		) >expect.raw &&
+-		ls -la . &&
+-		git show-index <$(ls test2-*.idx) >actual.raw &&
+-
+-		cut -d" " -f2 <expect.raw | sort >expect &&
+-		cut -d" " -f2 <actual.raw | sort >actual &&
+-		test_cmp expect actual
+-	)
+-'
+-
+-test_expect_success '--stdin-packs with broken links' '
+-	(
+-		cd stdin-packs &&
+-
+-		# make an unreachable object with a bogus parent
+-		git cat-file -p HEAD >commit &&
+-		sed "s/$(git rev-parse HEAD^)/$(test_oid zero)/" <commit |
+-		git hash-object -w -t commit --stdin >in &&
+-
+-		git pack-objects .git/objects/pack/pack-D <in &&
+-
+-		PACK_A="$(basename .git/objects/pack/pack-A-*.pack)" &&
+-		PACK_B="$(basename .git/objects/pack/pack-B-*.pack)" &&
+-		PACK_C="$(basename .git/objects/pack/pack-C-*.pack)" &&
+-		PACK_D="$(basename .git/objects/pack/pack-D-*.pack)" &&
+-
+-		git pack-objects test3 --stdin-packs --unpacked <<-EOF &&
+-		$PACK_A
+-		^$PACK_B
+-		$PACK_C
+-		$PACK_D
+-		EOF
+-
+-		(
+-			git show-index <$(ls .git/objects/pack/pack-A-*.idx) &&
+-			git show-index <$(ls .git/objects/pack/pack-C-*.idx) &&
+-			git show-index <$(ls .git/objects/pack/pack-D-*.idx) &&
+-			git rev-list --objects --no-object-names \
+-				refs/tags/C..refs/tags/D
+-		) >expect.raw &&
+-		git show-index <$(ls test3-*.idx) >actual.raw &&
+-
+-		cut -d" " -f2 <expect.raw | sort >expect &&
+-		cut -d" " -f2 <actual.raw | sort >actual &&
+-		test_cmp expect actual
+-	)
+-'
+-
+ test_expect_success 'negative window clamps to 0' '
+ 	git pack-objects --progress --window=-1 neg-window <obj-list 2>stderr &&
+ 	check_deltas stderr = 0
+diff --git a/t/t5331-pack-objects-stdin.sh b/t/t5331-pack-objects-stdin.sh
+new file mode 100755
+index 0000000000..d5eece5899
+--- /dev/null
++++ b/t/t5331-pack-objects-stdin.sh
+@@ -0,0 +1,145 @@
++#!/bin/sh
++
++test_description='pack-objects --stdin'
++GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
++export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
++
++TEST_PASSES_SANITIZE_LEAK=true
++. ./test-lib.sh
++
++test_expect_success 'setup for --stdin-packs tests' '
++	git init stdin-packs &&
++	(
++		cd stdin-packs &&
++
++		test_commit A &&
++		test_commit B &&
++		test_commit C &&
++
++		for id in A B C
++		do
++			git pack-objects .git/objects/pack/pack-$id \
++				--incremental --revs <<-EOF || exit 1
++			refs/tags/$id
++			EOF
++		done &&
++
++		ls -la .git/objects/pack
++	)
++'
++
++test_expect_success '--stdin-packs with excluded packs' '
++	(
++		cd stdin-packs &&
++
++		PACK_A="$(basename .git/objects/pack/pack-A-*.pack)" &&
++		PACK_B="$(basename .git/objects/pack/pack-B-*.pack)" &&
++		PACK_C="$(basename .git/objects/pack/pack-C-*.pack)" &&
++
++		git pack-objects test --stdin-packs <<-EOF &&
++		$PACK_A
++		^$PACK_B
++		$PACK_C
++		EOF
++
++		(
++			git show-index <$(ls .git/objects/pack/pack-A-*.idx) &&
++			git show-index <$(ls .git/objects/pack/pack-C-*.idx)
++		) >expect.raw &&
++		git show-index <$(ls test-*.idx) >actual.raw &&
++
++		cut -d" " -f2 <expect.raw | sort >expect &&
++		cut -d" " -f2 <actual.raw | sort >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success '--stdin-packs is incompatible with --filter' '
++	(
++		cd stdin-packs &&
++		test_must_fail git pack-objects --stdin-packs --stdout \
++			--filter=blob:none </dev/null 2>err &&
++		test_i18ngrep "cannot use --filter with --stdin-packs" err
++	)
++'
++
++test_expect_success '--stdin-packs is incompatible with --revs' '
++	(
++		cd stdin-packs &&
++		test_must_fail git pack-objects --stdin-packs --revs out \
++			</dev/null 2>err &&
++		test_i18ngrep "cannot use internal rev list with --stdin-packs" err
++	)
++'
++
++test_expect_success '--stdin-packs with loose objects' '
++	(
++		cd stdin-packs &&
++
++		PACK_A="$(basename .git/objects/pack/pack-A-*.pack)" &&
++		PACK_B="$(basename .git/objects/pack/pack-B-*.pack)" &&
++		PACK_C="$(basename .git/objects/pack/pack-C-*.pack)" &&
++
++		test_commit D && # loose
++
++		git pack-objects test2 --stdin-packs --unpacked <<-EOF &&
++		$PACK_A
++		^$PACK_B
++		$PACK_C
++		EOF
++
++		(
++			git show-index <$(ls .git/objects/pack/pack-A-*.idx) &&
++			git show-index <$(ls .git/objects/pack/pack-C-*.idx) &&
++			git rev-list --objects --no-object-names \
++				refs/tags/C..refs/tags/D
++
++		) >expect.raw &&
++		ls -la . &&
++		git show-index <$(ls test2-*.idx) >actual.raw &&
++
++		cut -d" " -f2 <expect.raw | sort >expect &&
++		cut -d" " -f2 <actual.raw | sort >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success '--stdin-packs with broken links' '
++	(
++		cd stdin-packs &&
++
++		# make an unreachable object with a bogus parent
++		git cat-file -p HEAD >commit &&
++		sed "s/$(git rev-parse HEAD^)/$(test_oid zero)/" <commit |
++		git hash-object -w -t commit --stdin >in &&
++
++		git pack-objects .git/objects/pack/pack-D <in &&
++
++		PACK_A="$(basename .git/objects/pack/pack-A-*.pack)" &&
++		PACK_B="$(basename .git/objects/pack/pack-B-*.pack)" &&
++		PACK_C="$(basename .git/objects/pack/pack-C-*.pack)" &&
++		PACK_D="$(basename .git/objects/pack/pack-D-*.pack)" &&
++
++		git pack-objects test3 --stdin-packs --unpacked <<-EOF &&
++		$PACK_A
++		^$PACK_B
++		$PACK_C
++		$PACK_D
++		EOF
++
++		(
++			git show-index <$(ls .git/objects/pack/pack-A-*.idx) &&
++			git show-index <$(ls .git/objects/pack/pack-C-*.idx) &&
++			git show-index <$(ls .git/objects/pack/pack-D-*.idx) &&
++			git rev-list --objects --no-object-names \
++				refs/tags/C..refs/tags/D
++		) >expect.raw &&
++		git show-index <$(ls test3-*.idx) >actual.raw &&
++
++		cut -d" " -f2 <expect.raw | sort >expect &&
++		cut -d" " -f2 <actual.raw | sort >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

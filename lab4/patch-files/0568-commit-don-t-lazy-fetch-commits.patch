@@ -1,0 +1,64 @@
+From 7e2ad1cda2759a14f7b046c4c82e2418f8af878c Mon Sep 17 00:00:00 2001
+From: Jonathan Tan <jonathantanmy@google.com>
+Date: Wed, 14 Dec 2022 11:17:43 -0800
+Subject: [PATCH 0568/2871] commit: don't lazy-fetch commits
+
+When parsing commits, fail fast when the commit is missing or
+corrupt, instead of attempting to fetch them. This is done by inlining
+repo_read_object_file() and setting the flag that prevents fetching.
+
+This is motivated by a situation in which through a bug (not necessarily
+through Git), there was corruption in the object store of a partial
+clone. In this particular case, the problem was exposed when "git gc"
+tried to expire reflogs, which calls repo_parse_commit(), which triggers
+fetches of the missing commits.
+
+(There are other possible solutions to this problem including passing an
+argument from "git gc" to "git reflog" to inhibit all lazy fetches, but
+I think that this fix is at the wrong level - fixing "git reflog" means
+that this particular command works fine, or so we think (it will fail if
+it somehow needs to read a legitimately missing blob, say, a .gitmodules
+file), but fixing repo_parse_commit() will fix a whole class of bugs.)
+
+Signed-off-by: Jonathan Tan <jonathantanmy@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/commit.c b/commit.c
+index 572301b80a..a02723f06b 100644
+--- a/commit.c
++++ b/commit.c
+@@ -508,6 +508,17 @@ int repo_parse_commit_internal(struct repository *r,
+ 	enum object_type type;
+ 	void *buffer;
+ 	unsigned long size;
++	struct object_info oi = {
++		.typep = &type,
++		.sizep = &size,
++		.contentp = &buffer,
++	};
++	/*
++	 * Git does not support partial clones that exclude commits, so set
++	 * OBJECT_INFO_SKIP_FETCH_OBJECT to fail fast when an object is missing.
++	 */
++	int flags = OBJECT_INFO_LOOKUP_REPLACE | OBJECT_INFO_SKIP_FETCH_OBJECT |
++		OBJECT_INFO_DIE_IF_CORRUPT;
+ 	int ret;
+ 
+ 	if (!item)
+@@ -516,8 +527,8 @@ int repo_parse_commit_internal(struct repository *r,
+ 		return 0;
+ 	if (use_commit_graph && parse_commit_in_graph(r, item))
+ 		return 0;
+-	buffer = repo_read_object_file(r, &item->object.oid, &type, &size);
+-	if (!buffer)
++
++	if (oid_object_info_extended(r, &item->object.oid, &oi, flags) < 0)
+ 		return quiet_on_missing ? -1 :
+ 			error("Could not read %s",
+ 			     oid_to_hex(&item->object.oid));
+-- 
+2.39.3 (Apple Git-145)
+

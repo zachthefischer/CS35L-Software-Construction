@@ -1,0 +1,36 @@
+From 67ceed1f8250c0a721f955e9d17c2d545c922764 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Sat, 15 Apr 2023 19:29:10 +0200
+Subject: [PATCH 1313/2871] gittutorial: drop early mention of origin
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We don't have an origin at this point in the tutorial, so "Your branch
+is up to date" won't actually show up in the output of `git status`.
+
+This line was introduced in 8942821ec0 ("gittutorial: fix output of 'git
+status'", 2014-11-13) in what looks like a mistake -- that commit mostly
+just wanted to remove leading '#' characters.
+
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gittutorial.txt | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/Documentation/gittutorial.txt b/Documentation/gittutorial.txt
+index 0e0b863105..33dd5a2cba 100644
+--- a/Documentation/gittutorial.txt
++++ b/Documentation/gittutorial.txt
+@@ -109,7 +109,6 @@ summary of the situation with 'git status':
+ $ git status
+ On branch master
+ Changes to be committed:
+-Your branch is up to date with 'origin/master'.
+   (use "git restore --staged <file>..." to unstage)
+ 
+ 	modified:   file1
+-- 
+2.39.3 (Apple Git-145)
+

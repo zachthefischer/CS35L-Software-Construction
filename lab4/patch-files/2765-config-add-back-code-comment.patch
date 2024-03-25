@@ -1,0 +1,37 @@
+From 1cb3b92fc6540007c62c300f33b501681dc4f897 Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Sun, 28 Jan 2024 19:31:40 +0100
+Subject: [PATCH 2765/2871] config: add back code comment
+
+c15129b699 (config: factor out global config file retrieval, 2024-01-18)
+was a refactor that moved some of the code in this function to
+`config.c`. However, in the process I managed to drop this code comment
+which explains `$HOME not set`.
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Acked-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/config.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/builtin/config.c b/builtin/config.c
+index 08fe36d499..b55bfae7d6 100644
+--- a/builtin/config.c
++++ b/builtin/config.c
+@@ -710,6 +710,12 @@ int cmd_config(int argc, const char **argv, const char *prefix)
+ 	if (use_global_config) {
+ 		given_config_source.file = git_global_config();
+ 		if (!given_config_source.file)
++			/*
++			 * It is unknown if HOME/.gitconfig exists, so
++			 * we do not know if we should write to XDG
++			 * location; error out even if XDG_CONFIG_HOME
++			 * is set and points at a sane location.
++			 */
+ 			die(_("$HOME not set"));
+ 		given_config_source.scope = CONFIG_SCOPE_GLOBAL;
+ 	} else if (use_system_config) {
+-- 
+2.39.3 (Apple Git-145)
+

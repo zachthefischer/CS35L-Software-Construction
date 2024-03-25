@@ -1,0 +1,161 @@
+From 81effe94682dbfed55171468074db85fa661cc21 Mon Sep 17 00:00:00 2001
+From: Antonin Delpeuch <antonin@delpeuch.eu>
+Date: Wed, 24 Jan 2024 20:09:11 +0000
+Subject: [PATCH 2758/2871] merge-ll: expose revision names to custom drivers
+
+Custom merge drivers need access to the names of the revisions they
+are working on, so that the merge conflict markers they introduce
+can refer to those revisions. The placeholders '%S', '%X' and '%Y'
+are introduced to this end.
+
+Signed-off-by: Antonin Delpeuch <antonin@delpeuch.eu>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitattributes.txt |  9 +++++----
+ merge-ll.c                      | 17 ++++++++++++++---
+ t/t6406-merge-attr.sh           | 16 +++++++++++-----
+ 3 files changed, 30 insertions(+), 12 deletions(-)
+
+diff --git a/Documentation/gitattributes.txt b/Documentation/gitattributes.txt
+index 201bdf5edb..4338d023d9 100644
+--- a/Documentation/gitattributes.txt
++++ b/Documentation/gitattributes.txt
+@@ -1137,11 +1137,11 @@ The `merge.*.name` variable gives the driver a human-readable
+ name.
+ 
+ The `merge.*.driver` variable's value is used to construct a
+-command to run to merge ancestor's version (`%O`), current
++command to run to common ancestor's version (`%O`), current
+ version (`%A`) and the other branches' version (`%B`).  These
+ three tokens are replaced with the names of temporary files that
+ hold the contents of these versions when the command line is
+-built. Additionally, %L will be replaced with the conflict marker
++built. Additionally, `%L` will be replaced with the conflict marker
+ size (see below).
+ 
+ The merge driver is expected to leave the result of the merge in
+@@ -1159,8 +1159,9 @@ When left unspecified, the driver itself is used for both
+ internal merge and the final merge.
+ 
+ The merge driver can learn the pathname in which the merged result
+-will be stored via placeholder `%P`.
+-
++will be stored via placeholder `%P`. The conflict labels to be used
++for the common ancestor, local head and other head can be passed by
++using '%S', '%X' and '%Y` respectively.
+ 
+ `conflict-marker-size`
+ ^^^^^^^^^^^^^^^^^^^^^^
+diff --git a/merge-ll.c b/merge-ll.c
+index 1df58ebaac..5ffb045efb 100644
+--- a/merge-ll.c
++++ b/merge-ll.c
+@@ -185,9 +185,9 @@ static void create_temp(mmfile_t *src, char *path, size_t len)
+ static enum ll_merge_result ll_ext_merge(const struct ll_merge_driver *fn,
+ 			mmbuffer_t *result,
+ 			const char *path,
+-			mmfile_t *orig, const char *orig_name UNUSED,
+-			mmfile_t *src1, const char *name1 UNUSED,
+-			mmfile_t *src2, const char *name2 UNUSED,
++			mmfile_t *orig, const char *orig_name,
++			mmfile_t *src1, const char *name1,
++			mmfile_t *src2, const char *name2,
+ 			const struct ll_merge_options *opts,
+ 			int marker_size)
+ {
+@@ -222,6 +222,12 @@ static enum ll_merge_result ll_ext_merge(const struct ll_merge_driver *fn,
+ 			strbuf_addf(&cmd, "%d", marker_size);
+ 		else if (skip_prefix(format, "P", &format))
+ 			sq_quote_buf(&cmd, path);
++		else if (skip_prefix(format, "S", &format))
++			sq_quote_buf(&cmd, orig_name ? orig_name : "");
++		else if (skip_prefix(format, "X", &format))
++			sq_quote_buf(&cmd, name1 ? name1 : "");
++		else if (skip_prefix(format, "Y", &format))
++			sq_quote_buf(&cmd, name2 ? name2 : "");
+ 		else
+ 			strbuf_addch(&cmd, '%');
+ 	}
+@@ -315,7 +321,12 @@ static int read_merge_config(const char *var, const char *value,
+ 		 *    %B - temporary file name for the other branches' version.
+ 		 *    %L - conflict marker length
+ 		 *    %P - the original path (safely quoted for the shell)
++		 *    %S - the revision for the merge base
++		 *    %X - the revision for our version
++		 *    %Y - the revision for their version
+ 		 *
++		 * If the file is not named indentically in all versions, then each
++		 * revision is joined with the corresponding path, separated by a colon.
+ 		 * The external merge driver should write the results in the
+ 		 * file named by %A, and signal that it has done with zero exit
+ 		 * status.
+diff --git a/t/t6406-merge-attr.sh b/t/t6406-merge-attr.sh
+index 72f8c1722f..156a1efacf 100755
+--- a/t/t6406-merge-attr.sh
++++ b/t/t6406-merge-attr.sh
+@@ -42,11 +42,15 @@ test_expect_success setup '
+ 	#!/bin/sh
+ 
+ 	orig="$1" ours="$2" theirs="$3" exit="$4" path=$5
++	orig_name="$6" our_name="$7" their_name="$8"
+ 	(
+ 		echo "orig is $orig"
+ 		echo "ours is $ours"
+ 		echo "theirs is $theirs"
+ 		echo "path is $path"
++		echo "orig_name is $orig_name"
++		echo "our_name is $our_name"
++		echo "their_name is $their_name"
+ 		echo "=== orig ==="
+ 		cat "$orig"
+ 		echo "=== ours ==="
+@@ -121,7 +125,7 @@ test_expect_success 'custom merge backend' '
+ 
+ 	git reset --hard anchor &&
+ 	git config --replace-all \
+-	merge.custom.driver "./custom-merge %O %A %B 0 %P" &&
++	merge.custom.driver "./custom-merge %O %A %B 0 %P %S %X %Y" &&
+ 	git config --replace-all \
+ 	merge.custom.name "custom merge driver for testing" &&
+ 
+@@ -132,7 +136,8 @@ test_expect_success 'custom merge backend' '
+ 	o=$(git unpack-file main^:text) &&
+ 	a=$(git unpack-file side^:text) &&
+ 	b=$(git unpack-file main:text) &&
+-	sh -c "./custom-merge $o $a $b 0 text" &&
++	base_revid=$(git rev-parse --short main^) &&
++	sh -c "./custom-merge $o $a $b 0 text $base_revid HEAD main" &&
+ 	sed -e 1,3d $a >check-2 &&
+ 	cmp check-1 check-2 &&
+ 	rm -f $o $a $b
+@@ -142,7 +147,7 @@ test_expect_success 'custom merge backend' '
+ 
+ 	git reset --hard anchor &&
+ 	git config --replace-all \
+-	merge.custom.driver "./custom-merge %O %A %B 1 %P" &&
++	merge.custom.driver "./custom-merge %O %A %B 1 %P %S %X %Y" &&
+ 	git config --replace-all \
+ 	merge.custom.name "custom merge driver for testing" &&
+ 
+@@ -159,7 +164,8 @@ test_expect_success 'custom merge backend' '
+ 	o=$(git unpack-file main^:text) &&
+ 	a=$(git unpack-file anchor:text) &&
+ 	b=$(git unpack-file main:text) &&
+-	sh -c "./custom-merge $o $a $b 0 text" &&
++	base_revid=$(git rev-parse --short main^) &&
++	sh -c "./custom-merge $o $a $b 0 text $base_revid HEAD main" &&
+ 	sed -e 1,3d $a >check-2 &&
+ 	cmp check-1 check-2 &&
+ 	sed -e 1,3d -e 4q $a >check-3 &&
+@@ -173,7 +179,7 @@ test_expect_success !WINDOWS 'custom merge driver that is killed with a signal'
+ 
+ 	git reset --hard anchor &&
+ 	git config --replace-all \
+-	merge.custom.driver "./custom-merge %O %A %B 0 %P" &&
++	merge.custom.driver "./custom-merge %O %A %B 0 %P %S %X %Y" &&
+ 	git config --replace-all \
+ 	merge.custom.name "custom merge driver for testing" &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

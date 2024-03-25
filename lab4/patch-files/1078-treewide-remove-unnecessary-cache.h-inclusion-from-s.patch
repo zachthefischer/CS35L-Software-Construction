@@ -1,0 +1,166 @@
+From 4f6728d52d5dc79ce522e92171f984455c04b963 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 21 Mar 2023 06:25:56 +0000
+Subject: [PATCH 1078/2871] treewide: remove unnecessary cache.h inclusion from
+ several sources
+
+A number of files were apparently including cache.h solely to get
+gettext.h.  By making those files explicitly include gettext.h, we can
+already drop the include of cache.h in these files.  On top of that,
+there were some files using cache.h that didn't need to for any reason.
+Remove these unnecessary includes.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/linux/procinfo.c        | 2 +-
+ compat/simple-ipc/ipc-shared.c | 2 +-
+ connected.c                    | 2 +-
+ grep.c                         | 2 +-
+ negotiator/default.c           | 2 +-
+ negotiator/skipping.c          | 2 +-
+ notes-cache.c                  | 2 +-
+ patch-ids.c                    | 2 +-
+ reflog.c                       | 2 +-
+ refs/iterator.c                | 2 +-
+ replace-object.c               | 2 +-
+ t/helper/test-hash.c           | 1 -
+ xdiff-interface.c              | 2 +-
+ 13 files changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/compat/linux/procinfo.c b/compat/linux/procinfo.c
+index bc2f9382a1..4bb2d66227 100644
+--- a/compat/linux/procinfo.c
++++ b/compat/linux/procinfo.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ 
+ #include "strbuf.h"
+ #include "strvec.h"
+diff --git a/compat/simple-ipc/ipc-shared.c b/compat/simple-ipc/ipc-shared.c
+index 1b9d359ab6..e5e1dda8cc 100644
+--- a/compat/simple-ipc/ipc-shared.c
++++ b/compat/simple-ipc/ipc-shared.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "simple-ipc.h"
+ #include "strbuf.h"
+ #include "pkt-line.h"
+diff --git a/connected.c b/connected.c
+index a4c0aece75..669bc4e8d6 100644
+--- a/connected.c
++++ b/connected.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "object-store.h"
+diff --git a/grep.c b/grep.c
+index febb076a7e..bb8796a829 100644
+--- a/grep.c
++++ b/grep.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "grep.h"
+diff --git a/negotiator/default.c b/negotiator/default.c
+index b7e79feaf0..5dd553a1fe 100644
+--- a/negotiator/default.c
++++ b/negotiator/default.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "default.h"
+ #include "../commit.h"
+ #include "../fetch-negotiator.h"
+diff --git a/negotiator/skipping.c b/negotiator/skipping.c
+index 264acf8bbe..4157c4d72f 100644
+--- a/negotiator/skipping.c
++++ b/negotiator/skipping.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "skipping.h"
+ #include "../commit.h"
+ #include "../fetch-negotiator.h"
+diff --git a/notes-cache.c b/notes-cache.c
+index 9dfd251a81..01a918c925 100644
+--- a/notes-cache.c
++++ b/notes-cache.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "notes-cache.h"
+ #include "object-store.h"
+ #include "repository.h"
+diff --git a/patch-ids.c b/patch-ids.c
+index a4473a88fa..19af7bee98 100644
+--- a/patch-ids.c
++++ b/patch-ids.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "diff.h"
+ #include "commit.h"
+ #include "hash-lookup.h"
+diff --git a/reflog.c b/reflog.c
+index d1c3937431..4e121e449d 100644
+--- a/reflog.c
++++ b/reflog.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "object-store.h"
+ #include "reflog.h"
+diff --git a/refs/iterator.c b/refs/iterator.c
+index c9fd0bcaf9..6b680f610e 100644
+--- a/refs/iterator.c
++++ b/refs/iterator.c
+@@ -3,7 +3,7 @@
+  * documentation about the design and use of reference iterators.
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "refs.h"
+ #include "refs/refs-internal.h"
+ #include "iterator.h"
+diff --git a/replace-object.c b/replace-object.c
+index 9e30e0362b..e98825d585 100644
+--- a/replace-object.c
++++ b/replace-object.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "oidmap.h"
+diff --git a/t/helper/test-hash.c b/t/helper/test-hash.c
+index 016248106a..45d829c908 100644
+--- a/t/helper/test-hash.c
++++ b/t/helper/test-hash.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ 
+ int cmd_hash_impl(int ac, const char **av, int algo)
+diff --git a/xdiff-interface.c b/xdiff-interface.c
+index 5baf6ceb94..356356afe7 100644
+--- a/xdiff-interface.c
++++ b/xdiff-interface.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "hex.h"
+ #include "object-store.h"
+-- 
+2.39.3 (Apple Git-145)
+

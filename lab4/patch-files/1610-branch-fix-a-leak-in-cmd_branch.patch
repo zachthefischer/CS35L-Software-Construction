@@ -1,0 +1,67 @@
+From 2935a9783604fec3c7735a791323574354b4b75f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 17 Jun 2023 08:41:22 +0200
+Subject: [PATCH 1610/2871] branch: fix a leak in cmd_branch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In 98e7ab6d42 (for-each-ref: delay parsing of --sort=<atom> options,
+2021-10-20) a new string_list was introduced to accumulate any
+"branch.sort" setting.
+
+That string_list is cleared in ref_sorting_options(), which is only
+called when processing the "--list" sub-command.  Therefore, with other
+sub-command, while having any sort option set, a leak is produced, e.g.:
+
+   $ git config branch.sort invalid_sort_option
+   $ git branch --edit-description
+
+   Direct leak of 384 byte(s) in 1 object(s) allocated from:
+       ... in xrealloc wrapper.c
+       ... in string_list_append_nodup string-list.c
+       ... in string_list_append string-list.c
+       ... in git_branch_config builtin/branch.c
+       ... in configset_iter config.c
+       ... in repo_config config.c
+       ... in git_config config.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+   Indirect leak of 20 byte(s) in 1 object(s) allocated from:
+       ... in xstrdup wrapper.c
+       ... in string_list_append string-list.c
+       ... in git_branch_config builtin/branch.c
+       ... in configset_iter config.c
+       ... in repo_config config.c
+       ... in git_config config.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+We don't have a common clean-up section in cmd_branch().  To avoid
+refactoring, keep the fix simple, and while we find a better solution
+which hopefuly will avoid entirely that string_list, when no sort
+options are needed; let's squelch the leak sanitizer using UNLEAK().
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index e6c2655af6..075e580d22 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -832,6 +832,8 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 	if (list)
+ 		setup_auto_pager("branch", 1);
+ 
++	UNLEAK(sorting_options);
++
+ 	if (delete) {
+ 		if (!argc)
+ 			die(_("branch name required"));
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,121 @@
+From 925360041ca192b5dd052e5c4dceba1418e6678c Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:51 +0000
+Subject: [PATCH 0748/2871] rebase: clarify the OPT_CMDMODE incompatibilities
+
+--edit-todo was documented as being incompatible with any of the options
+for the apply backend.  However, it is also incompatible with any of the
+options for the merge backend, and is incompatible with any options that
+are not backend specific as well.  The same can be said for --continue,
+--skip, --abort, --quit, etc.
+
+This is already somewhat implicitly covered by the synopsis, but since
+"[<options>]" in the first two variants are vague it might be easy to
+miss this.  That might not be a big deal, but since the rebase manpage
+has to spend so much verbiage about incompatibility of options, making
+a separate section for these options that are incompatible with
+everything else seems clearer.  Do that, and remove the needless
+inclusion of --edit-todo in the explicit incompatibility list.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt | 61 +++++++++++++++++++-----------------
+ 1 file changed, 33 insertions(+), 28 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 8a09f12d89..d2b731bd60 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -208,6 +208,39 @@ Alternatively, you can undo the 'git rebase' with
+ 
+     git rebase --abort
+ 
++MODE OPTIONS
++------------
++
++The options in this section cannot be used with any other option,
++including not with each other:
++
++--continue::
++	Restart the rebasing process after having resolved a merge conflict.
++
++--skip::
++	Restart the rebasing process by skipping the current patch.
++
++--abort::
++	Abort the rebase operation and reset HEAD to the original
++	branch. If `<branch>` was provided when the rebase operation was
++	started, then `HEAD` will be reset to `<branch>`. Otherwise `HEAD`
++	will be reset to where it was when the rebase operation was
++	started.
++
++--quit::
++	Abort the rebase operation but `HEAD` is not reset back to the
++	original branch. The index and working tree are also left
++	unchanged as a result. If a temporary stash entry was created
++	using `--autostash`, it will be saved to the stash list.
++
++--edit-todo::
++	Edit the todo list during an interactive rebase.
++
++--show-current-patch::
++	Show the current patch in an interactive rebase or when rebase
++	is stopped because of conflicts. This is the equivalent of
++	`git show REBASE_HEAD`.
++
+ OPTIONS
+ -------
+ --onto <newbase>::
+@@ -249,22 +282,6 @@ See also INCOMPATIBLE OPTIONS below.
+ <branch>::
+ 	Working branch; defaults to `HEAD`.
+ 
+---continue::
+-	Restart the rebasing process after having resolved a merge conflict.
+-
+---abort::
+-	Abort the rebase operation and reset HEAD to the original
+-	branch. If `<branch>` was provided when the rebase operation was
+-	started, then `HEAD` will be reset to `<branch>`. Otherwise `HEAD`
+-	will be reset to where it was when the rebase operation was
+-	started.
+-
+---quit::
+-	Abort the rebase operation but `HEAD` is not reset back to the
+-	original branch. The index and working tree are also left
+-	unchanged as a result. If a temporary stash entry was created
+-	using `--autostash`, it will be saved to the stash list.
+-
+ --apply::
+ 	Use applying strategies to rebase (calling `git-am`
+ 	internally).  This option may become a no-op in the future
+@@ -345,17 +362,6 @@ See also INCOMPATIBLE OPTIONS below.
+ +
+ See also INCOMPATIBLE OPTIONS below.
+ 
+---skip::
+-	Restart the rebasing process by skipping the current patch.
+-
+---edit-todo::
+-	Edit the todo list during an interactive rebase.
+-
+---show-current-patch::
+-	Show the current patch in an interactive rebase or when rebase
+-	is stopped because of conflicts. This is the equivalent of
+-	`git show REBASE_HEAD`.
+-
+ -m::
+ --merge::
+ 	Using merging strategies to rebase (default).
+@@ -651,7 +657,6 @@ are incompatible with the following options:
+  * --no-keep-empty
+  * --empty=
+  * --[no-]reapply-cherry-picks when used without --keep-base
+- * --edit-todo
+  * --update-refs
+  * --root when used without --onto
+ 
+-- 
+2.39.3 (Apple Git-145)
+

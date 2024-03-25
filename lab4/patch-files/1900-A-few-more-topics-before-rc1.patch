@@ -1,0 +1,36 @@
+From a82fb66fed250e16d3010c75404503bea3f0ab61 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 7 Aug 2023 10:18:48 -0700
+Subject: [PATCH 1900/2871] A few more topics before -rc1
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.42.0.txt | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.42.0.txt b/Documentation/RelNotes/2.42.0.txt
+index 0d31aed9f9..f2262f84bf 100644
+--- a/Documentation/RelNotes/2.42.0.txt
++++ b/Documentation/RelNotes/2.42.0.txt
+@@ -38,6 +38,12 @@ UI, Workflows & Features
+    being bisected or rebased.  The message was reworded to say the
+    branch was "in use".
+ 
++ * Tone down the warning on SHA-256 repositories being an experimental
++   curiosity.  We do not have support for them to interoperate with
++   traditional SHA-1 repositories, but at this point, we do not plan
++   to make breaking changes to SHA-256 repositories and there is no
++   longer need for such a strongly phrased warning.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -286,3 +292,5 @@ Fixes since v2.41
+    (merge c95ae3ff9c rs/describe-parseopt-fix later to maint).
+    (merge 36f76d2a25 rs/pack-objects-parseopt-fix later to maint).
+    (merge 30c8c55cbf jc/tree-walk-drop-base-offset later to maint).
++   (merge d089a06421 rs/bundle-parseopt-cleanup later to maint).
++   (merge 823839bda1 ew/sha256-gcrypt-leak-fixes later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

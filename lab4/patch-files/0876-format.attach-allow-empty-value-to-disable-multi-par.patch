@@ -1,0 +1,82 @@
+From 50bebf98d96a6ccf2ca5c76da5dd8afff6933a4c Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 17 Feb 2023 15:33:37 -0800
+Subject: [PATCH 0876/2871] format.attach: allow empty value to disable
+ multi-part messages
+
+When a lower precedence configuration file (e.g. /etc/gitconfig)
+defines format.attach in any way, there was no way to disable it in
+a more specific configuration file (e.g. $HOME/.gitconfig).
+
+Change the behaviour of setting it to an empty string.  It used to
+mean that the result is still a multipart message with only dashes
+used as a multi-part separator, but now it resets the setting to
+the default (which would be to give an inline patch, unless other
+command line options are in effect).
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/format.txt |  3 ++-
+ builtin/log.c                   |  2 ++
+ t/t4014-format-patch.sh         | 18 ++++++++++++++++++
+ 3 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/config/format.txt b/Documentation/config/format.txt
+index 3bd78269e2..73678d88a1 100644
+--- a/Documentation/config/format.txt
++++ b/Documentation/config/format.txt
+@@ -3,7 +3,8 @@ format.attach::
+ 	'format-patch'.  The value can also be a double quoted string
+ 	which will enable attachments as the default and set the
+ 	value as the boundary.  See the --attach option in
+-	linkgit:git-format-patch[1].
++	linkgit:git-format-patch[1].  To countermand an earlier
++	value, set it to an empty string.
+ 
+ format.from::
+ 	Provides the default value for the `--from` option to format-patch.
+diff --git a/builtin/log.c b/builtin/log.c
+index 04412dd9c9..a70fba198f 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1007,6 +1007,8 @@ static int git_format_config(const char *var, const char *value, void *cb)
+ 	if (!strcmp(var, "format.attach")) {
+ 		if (value && *value)
+ 			default_attach = xstrdup(value);
++		else if (value && !*value)
++			FREE_AND_NULL(default_attach);
+ 		else
+ 			default_attach = xstrdup(git_version_string);
+ 		return 0;
+diff --git a/t/t4014-format-patch.sh b/t/t4014-format-patch.sh
+index 012f155e10..f3313b8c58 100755
+--- a/t/t4014-format-patch.sh
++++ b/t/t4014-format-patch.sh
+@@ -2281,6 +2281,24 @@ test_expect_success 'format-patch --attach cover-letter only is non-multipart' '
+ 	test_line_count = 1 output
+ '
+ 
++test_expect_success 'format-patch with format.attach' '
++	test_when_finished "rm -fr patches" &&
++	separator=attachment-separator &&
++	test_config format.attach "$separator" &&
++	filename=$(git format-patch -o patches -1) &&
++	grep "^Content-Type: multipart/.*$separator" "$filename"
++'
++
++test_expect_success 'format-patch with format.attach=disabled' '
++	test_when_finished "rm -fr patches" &&
++	separator=attachment-separator &&
++	test_config_global format.attach "$separator" &&
++	test_config format.attach "" &&
++	filename=$(git format-patch -o patches -1) &&
++	# The output should not even declare content type for text/plain.
++	! grep "^Content-Type: multipart/" "$filename"
++'
++
+ test_expect_success '-c format.mboxrd format-patch' '
+ 	sp=" " &&
+ 	cat >msg <<-INPUT_END &&
+-- 
+2.39.3 (Apple Git-145)
+

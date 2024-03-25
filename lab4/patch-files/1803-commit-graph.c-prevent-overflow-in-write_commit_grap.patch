@@ -1,0 +1,31 @@
+From 588af1bfd3c810e02df1d8adc37e9c43a7f97920 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:38:16 -0400
+Subject: [PATCH 1803/2871] commit-graph.c: prevent overflow in
+ `write_commit_graph()`
+
+In a similar spirit as previous commits, ensure that we don't overflow
+when trying to read an existing OID while writing a new commit-graph.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 8333ce8e04..54697e7a4d 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2454,7 +2454,7 @@ int write_commit_graph(struct object_directory *odb,
+ 		struct commit_graph *g = ctx->r->objects->commit_graph;
+ 		for (i = 0; i < g->num_commits; i++) {
+ 			struct object_id oid;
+-			oidread(&oid, g->chunk_oid_lookup + g->hash_len * i);
++			oidread(&oid, g->chunk_oid_lookup + st_mult(g->hash_len, i));
+ 			oid_array_append(&ctx->oids, &oid);
+ 		}
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

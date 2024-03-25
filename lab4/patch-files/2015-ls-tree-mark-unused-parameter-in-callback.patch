@@ -1,0 +1,33 @@
+From c5cb97cbbf794df9279d408d22ef756504812135 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:19 -0400
+Subject: [PATCH 2015/2871] ls-tree: mark unused parameter in callback
+
+The formatting functions are dispatched from a table of function
+pointers. The "path name only" function unsurprisingly does not need to
+look at its "oid" parameter, but we must mark it as unused to make
+-Wunused-parameter happy.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-tree.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/ls-tree.c b/builtin/ls-tree.c
+index f558db5f3b..209d2dc0d5 100644
+--- a/builtin/ls-tree.c
++++ b/builtin/ls-tree.c
+@@ -241,7 +241,8 @@ static int show_tree_long(const struct object_id *oid, struct strbuf *base,
+ 	return recurse;
+ }
+ 
+-static int show_tree_name_only(const struct object_id *oid, struct strbuf *base,
++static int show_tree_name_only(const struct object_id *oid UNUSED,
++			       struct strbuf *base,
+ 			       const char *pathname, unsigned mode,
+ 			       void *context)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

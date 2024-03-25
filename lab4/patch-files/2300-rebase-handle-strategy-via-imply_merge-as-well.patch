@@ -1,0 +1,43 @@
+From 37e80a24716affc5698822393ad9e09646d0be73 Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Fri, 20 Oct 2023 11:36:53 +0200
+Subject: [PATCH 2300/2871] rebase: handle --strategy via imply_merge() as well
+
+At least after the successive trimming of enum rebase_type mentioned in
+the previous commit, this code did exactly what imply_merge() does, so
+just call it instead.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 13 +------------
+ 1 file changed, 1 insertion(+), 12 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 41853a0b10..ae360b576a 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1490,18 +1490,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 
+ 	if (options.strategy) {
+ 		options.strategy = xstrdup(options.strategy);
+-		switch (options.type) {
+-		case REBASE_APPLY:
+-			die(_("--strategy requires --merge or --interactive"));
+-		case REBASE_MERGE:
+-			/* compatible */
+-			break;
+-		case REBASE_UNSPECIFIED:
+-			options.type = REBASE_MERGE;
+-			break;
+-		default:
+-			BUG("unhandled rebase type (%d)", options.type);
+-		}
++		imply_merge(&options, "--strategy");
+ 	}
+ 
+ 	if (options.root && !options.onto_name)
+-- 
+2.39.3 (Apple Git-145)
+

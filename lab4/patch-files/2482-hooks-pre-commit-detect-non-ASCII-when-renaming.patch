@@ -1,0 +1,34 @@
+From d9fd71fa2a82da40a9b58c4ecbc49aed06cb8953 Mon Sep 17 00:00:00 2001
+From: Julian Prein <druckdev@protonmail.com>
+Date: Thu, 30 Nov 2023 16:13:56 +0000
+Subject: [PATCH 2482/2871] hooks--pre-commit: detect non-ASCII when renaming
+
+When diff.renames is turned on, the diff-filter will not return renamed
+files (or copied ones with diff.renames=copy) and potential non-ASCII
+characters would not be caught by this hook.
+
+Use the plumbing command diff-index instead of the porcelain one to not
+be affected by diff.rename.
+
+Signed-off-by: Julian Prein <druckdev@protonmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ templates/hooks--pre-commit.sample | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/templates/hooks--pre-commit.sample b/templates/hooks--pre-commit.sample
+index e144712c85..29ed5ee486 100755
+--- a/templates/hooks--pre-commit.sample
++++ b/templates/hooks--pre-commit.sample
+@@ -28,7 +28,7 @@ if [ "$allownonascii" != "true" ] &&
+ 	# Note that the use of brackets around a tr range is ok here, (it's
+ 	# even required, for portability to Solaris 10's /usr/bin/tr), since
+ 	# the square bracket bytes happen to fall in the designated range.
+-	test $(git diff --cached --name-only --diff-filter=A -z $against |
++	test $(git diff-index --cached --name-only --diff-filter=A -z $against |
+ 	  LC_ALL=C tr -d '[ -~]\0' | wc -c) != 0
+ then
+ 	cat <<\EOF
+-- 
+2.39.3 (Apple Git-145)
+

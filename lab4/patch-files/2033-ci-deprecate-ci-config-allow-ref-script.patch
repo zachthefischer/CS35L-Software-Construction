@@ -1,0 +1,82 @@
+From edf80d23f1e945646a873dc9a4fa6634dd9e8ae8 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 30 Aug 2023 15:51:32 -0400
+Subject: [PATCH 2033/2871] ci: deprecate ci/config/allow-ref script
+
+Now that we have the CI_BRANCHES mechanism, there is no need for anybody
+to use the ci/config/allow-ref mechanism. In the long run, we can
+hopefully remove it and the whole "config" job, as it consumes CPU and
+adds to the end-to-end latency of the whole workflow. But we don't want
+to do that immediately, as people need time to migrate until the
+CI_BRANCHES change has made it into the workflow file of every branch.
+
+So let's issue a warning, which will appear in the "annotations" section
+below the workflow result in GitHub's web interface. And let's remove
+the sample allow-refs script, as we don't want to encourage anybody to
+use it.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml |  9 ++++++---
+ ci/config/allow-ref.sample | 27 ---------------------------
+ 2 files changed, 6 insertions(+), 30 deletions(-)
+ delete mode 100755 ci/config/allow-ref.sample
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 6ff95355e6..4b5180bfee 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -31,10 +31,13 @@ jobs:
+         name: check whether CI is enabled for ref
+         run: |
+           enabled=yes
+-          if test -x config-repo/ci/config/allow-ref &&
+-             ! config-repo/ci/config/allow-ref '${{ github.ref }}'
++          if test -x config-repo/ci/config/allow-ref
+           then
+-            enabled=no
++            echo "::warning::ci/config/allow-ref is deprecated; use CI_BRANCHES instead"
++            if ! config-repo/ci/config/allow-ref '${{ github.ref }}'
++            then
++              enabled=no
++            fi
+           fi
+ 
+           skip_concurrent=yes
+diff --git a/ci/config/allow-ref.sample b/ci/config/allow-ref.sample
+deleted file mode 100755
+index af0e076f8a..0000000000
+--- a/ci/config/allow-ref.sample
++++ /dev/null
+@@ -1,27 +0,0 @@
+-#!/bin/sh
+-#
+-# Sample script for enabling/disabling GitHub Actions CI runs on
+-# particular refs. By default, CI is run for all branches pushed to
+-# GitHub. You can override this by dropping the ".sample" from the script,
+-# editing it, committing, and pushing the result to the "ci-config" branch of
+-# your repository:
+-#
+-#   git checkout -b ci-config
+-#   cp allow-ref.sample allow-ref
+-#   $EDITOR allow-ref
+-#   git add allow-ref
+-#   git commit -am "implement my ci preferences"
+-#   git push
+-#
+-# This script will then be run when any refs are pushed to that repository. It
+-# gets the fully qualified refname as the first argument, and should exit with
+-# success only for refs for which you want to run CI.
+-
+-case "$1" in
+-# allow one-off tests by pushing to "for-ci" or "for-ci/mybranch"
+-refs/heads/for-ci*) true ;;
+-# always build your integration branch
+-refs/heads/my-integration-branch) true ;;
+-# don't build any other branches or tags
+-*) false ;;
+-esac
+-- 
+2.39.3 (Apple Git-145)
+

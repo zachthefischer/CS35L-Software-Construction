@@ -1,0 +1,30 @@
+From bc62d27d5c2379505436cb8968c153c8b3a25d39 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 15 Dec 2023 12:32:45 -0800
+Subject: [PATCH 2574/2871] docs: MERGE_AUTOSTASH is not that special
+
+A handful of manual pages called MERGE_AUTOSTASH a "special ref",
+but there is nothing special about it.  It merely is yet another
+pseudoref.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/merge-options.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/merge-options.txt b/Documentation/merge-options.txt
+index d8f7cd7ca0..3eaefc4e94 100644
+--- a/Documentation/merge-options.txt
++++ b/Documentation/merge-options.txt
+@@ -191,7 +191,7 @@ endif::git-pull[]
+ --autostash::
+ --no-autostash::
+ 	Automatically create a temporary stash entry before the operation
+-	begins, record it in the special ref `MERGE_AUTOSTASH`
++	begins, record it in the ref `MERGE_AUTOSTASH`
+ 	and apply it after the operation ends.  This means
+ 	that you can run the operation on a dirty worktree.  However, use
+ 	with care: the final stash application after a successful
+-- 
+2.39.3 (Apple Git-145)
+

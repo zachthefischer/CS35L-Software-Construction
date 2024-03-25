@@ -1,0 +1,103 @@
+From 3b8724bce65edea7abba480929457ef794ec753e Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Thu, 18 May 2023 20:03:25 +0000
+Subject: [PATCH 1502/2871] t7101-reset-empty-subdirs: modernize test format
+
+Some tests still use the old format with four spaces indentation.
+Standardize the tests to the new format with tab indentation.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7101-reset-empty-subdirs.sh | 48 +++++++++++++++++-----------------
+ 1 file changed, 24 insertions(+), 24 deletions(-)
+
+diff --git a/t/t7101-reset-empty-subdirs.sh b/t/t7101-reset-empty-subdirs.sh
+index 638bb04e21..89cf98b30c 100755
+--- a/t/t7101-reset-empty-subdirs.sh
++++ b/t/t7101-reset-empty-subdirs.sh
+@@ -10,57 +10,57 @@ TEST_PASSES_SANITIZE_LEAK=true
+ . "$TEST_DIRECTORY"/lib-diff-data.sh
+ 
+ test_expect_success 'creating initial files' '
+-     mkdir path0 &&
+-     COPYING_test_data >path0/COPYING &&
+-     git add path0/COPYING &&
+-     git commit -m add -a
++	mkdir path0 &&
++	COPYING_test_data >path0/COPYING &&
++	git add path0/COPYING &&
++	git commit -m add -a
+ '
+ 
+ test_expect_success 'creating second files' '
+-     mkdir path1 &&
+-     mkdir path1/path2 &&
+-     COPYING_test_data >path1/path2/COPYING &&
+-     COPYING_test_data >path1/COPYING &&
+-     COPYING_test_data >COPYING &&
+-     COPYING_test_data >path0/COPYING-TOO &&
+-     git add path1/path2/COPYING &&
+-     git add path1/COPYING &&
+-     git add COPYING &&
+-     git add path0/COPYING-TOO &&
+-     git commit -m change -a
++	mkdir path1 &&
++	mkdir path1/path2 &&
++	COPYING_test_data >path1/path2/COPYING &&
++	COPYING_test_data >path1/COPYING &&
++	COPYING_test_data >COPYING &&
++	COPYING_test_data >path0/COPYING-TOO &&
++	git add path1/path2/COPYING &&
++	git add path1/COPYING &&
++	git add COPYING &&
++	git add path0/COPYING-TOO &&
++	git commit -m change -a
+ '
+ 
+ test_expect_success 'resetting tree HEAD^' '
+-     git reset --hard HEAD^
++	git reset --hard HEAD^
+ '
+ 
+ test_expect_success 'checking initial files exist after rewind' '
+-     test -d path0 &&
+-     test -f path0/COPYING
++	test -d path0 &&
++	test -f path0/COPYING
+ '
+ 
+ test_expect_success 'checking lack of path1/path2/COPYING' '
+-    ! test -f path1/path2/COPYING
++	! test -f path1/path2/COPYING
+ '
+ 
+ test_expect_success 'checking lack of path1/COPYING' '
+-    ! test -f path1/COPYING
++	! test -f path1/COPYING
+ '
+ 
+ test_expect_success 'checking lack of COPYING' '
+-     ! test -f COPYING
++	! test -f COPYING
+ '
+ 
+ test_expect_success 'checking checking lack of path1/COPYING-TOO' '
+-     ! test -f path0/COPYING-TOO
++	! test -f path0/COPYING-TOO
+ '
+ 
+ test_expect_success 'checking lack of path1/path2' '
+-     ! test -d path1/path2
++	! test -d path1/path2
+ '
+ 
+ test_expect_success 'checking lack of path1' '
+-     ! test -d path1
++	! test -d path1
+ '
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

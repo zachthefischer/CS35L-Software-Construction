@@ -1,0 +1,67 @@
+From 94ad545d47afe2b73dad871635b92956644815f5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Mon, 6 Feb 2023 20:08:10 +0100
+Subject: [PATCH 0833/2871] builtin/rebase.c: fix "options.onto_name" leak
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Similar to the existing "squash_onto_name" added in [1] we need to
+free() the xstrdup()'d "options.onto.name" added for "--keep-base" in
+[2]..
+
+1. 9dba809a69a (builtin rebase: support --root, 2018-09-04)
+2. 414d924beb4 (rebase: teach rebase --keep-base, 2019-08-27)
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c                 | 4 +++-
+ t/t3416-rebase-onto-threedots.sh | 1 +
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 2ec3ae0b42..41e96f0eb5 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1039,6 +1039,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	struct string_list strategy_options = STRING_LIST_INIT_NODUP;
+ 	struct object_id squash_onto;
+ 	char *squash_onto_name = NULL;
++	char *keep_base_onto_name = NULL;
+ 	int reschedule_failed_exec = -1;
+ 	int allow_preemptive_ff = 1;
+ 	int preserve_merges_selected = 0;
+@@ -1675,7 +1676,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 		strbuf_addstr(&buf, options.upstream_name);
+ 		strbuf_addstr(&buf, "...");
+ 		strbuf_addstr(&buf, branch_name);
+-		options.onto_name = xstrdup(buf.buf);
++		options.onto_name = keep_base_onto_name = xstrdup(buf.buf);
+ 	} else if (!options.onto_name)
+ 		options.onto_name = options.upstream_name;
+ 	if (strstr(options.onto_name, "...")) {
+@@ -1851,6 +1852,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	free(options.strategy);
+ 	strbuf_release(&options.git_format_patch_opt);
+ 	free(squash_onto_name);
++	free(keep_base_onto_name);
+ 	string_list_clear(&strategy_options, 0);
+ 	return !!ret;
+ }
+diff --git a/t/t3416-rebase-onto-threedots.sh b/t/t3416-rebase-onto-threedots.sh
+index ea501f2b42..f8c4ed78c9 100755
+--- a/t/t3416-rebase-onto-threedots.sh
++++ b/t/t3416-rebase-onto-threedots.sh
+@@ -5,6 +5,7 @@ test_description='git rebase --onto A...B'
+ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY/lib-rebase.sh"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

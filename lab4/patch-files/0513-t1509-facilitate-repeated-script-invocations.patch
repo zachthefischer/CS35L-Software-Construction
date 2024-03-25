@@ -1,0 +1,42 @@
+From 35c194dc57fc0cfe1381aab2b45d9588766242e1 Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Mon, 21 Nov 2022 03:00:21 +0000
+Subject: [PATCH 0513/2871] t1509: facilitate repeated script invocations
+
+t1509-root-work-tree.sh, which tests behavior of a Git repository
+located at the root `/` directory, refuses to run if it detects the
+presence of an existing repository at `/`. This safeguard ensures that
+it won't clobber a legitimate repository at that location. However,
+because t1509 does a poor job of cleaning up after itself, it runs afoul
+of its own safety check on subsequent runs, which makes it painful to
+run the script repeatedly since each run requires manual cleanup of
+detritus from the previous run.
+
+Address this shortcoming by making t1509 clean up after itself as its
+last action. This is safe since the script can only make it to this
+cleanup action if it did not find a legitimate repository at `/` in the
+first place, so the resources cleaned up here can only have been created
+by the script itself.
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+---
+ t/t1509-root-work-tree.sh | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/t/t1509-root-work-tree.sh b/t/t1509-root-work-tree.sh
+index d041762628..c799f5b6ac 100755
+--- a/t/t1509-root-work-tree.sh
++++ b/t/t1509-root-work-tree.sh
+@@ -256,4 +256,9 @@ test_expect_success 'go to /foo' 'cd /foo'
+ 
+ test_vars 'auto gitdir, root' "/" "" ""
+ 
++test_expect_success 'cleanup root' '
++	rm -rf /.git /refs /objects /info /hooks /branches /foo &&
++	rm -f /HEAD /config /description /expected /ls.expected /me /result
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

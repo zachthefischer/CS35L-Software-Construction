@@ -1,0 +1,92 @@
+From 18ce48918cbbdc5091b57f4883f9fe3795b0ce44 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 17 Dec 2023 22:11:34 +0800
+Subject: [PATCH 2576/2871] fetch: no redundant error message for atomic fetch
+
+If an error occurs during an atomic fetch, a redundant error message
+will appear at the end of do_fetch(). It was introduced in b3a804663c
+(fetch: make `--atomic` flag cover backfilling of tags, 2022-02-17).
+
+Because a failure message is displayed before setting retcode in the
+function do_fetch(), calling error() on the err message at the end of
+this function may result in redundant or empty error message to be
+displayed.
+
+We can remove the redundant error() function, because we know that
+the function ref_transaction_abort() never fails. While we can find a
+common pattern for calling ref_transaction_abort() by running command
+"git grep -A1 ref_transaction_abort", e.g.:
+
+    if (ref_transaction_abort(transaction, &error))
+        error("abort: %s", error.buf);
+
+Following this pattern, we can tolerate the return value of the function
+ref_transaction_abort() being changed in the future. We also delay the
+output of the err message to the end of do_fetch() to reduce redundant
+code. With these changes, the test case "fetch porcelain output
+(atomic)" in t5574 will also be fixed.
+
+Helped-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Acked-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c         | 14 +++++++++-----
+ t/t5574-fetch-output.sh |  2 +-
+ 2 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index fd134ba74d..a284b970ef 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -1651,7 +1651,7 @@ static int do_fetch(struct transport *transport,
+ 	if (atomic_fetch) {
+ 		transaction = ref_transaction_begin(&err);
+ 		if (!transaction) {
+-			retcode = error("%s", err.buf);
++			retcode = -1;
+ 			goto cleanup;
+ 		}
+ 	}
+@@ -1711,7 +1711,6 @@ static int do_fetch(struct transport *transport,
+ 
+ 		retcode = ref_transaction_commit(transaction, &err);
+ 		if (retcode) {
+-			error("%s", err.buf);
+ 			ref_transaction_free(transaction);
+ 			transaction = NULL;
+ 			goto cleanup;
+@@ -1775,9 +1774,14 @@ static int do_fetch(struct transport *transport,
+ 	}
+ 
+ cleanup:
+-	if (retcode && transaction) {
+-		ref_transaction_abort(transaction, &err);
+-		error("%s", err.buf);
++	if (retcode) {
++		if (err.len) {
++			error("%s", err.buf);
++			strbuf_reset(&err);
++		}
++		if (transaction && ref_transaction_abort(transaction, &err) &&
++		    err.len)
++			error("%s", err.buf);
+ 	}
+ 
+ 	display_state_release(&display_state);
+diff --git a/t/t5574-fetch-output.sh b/t/t5574-fetch-output.sh
+index b579364c47..1400ef14cd 100755
+--- a/t/t5574-fetch-output.sh
++++ b/t/t5574-fetch-output.sh
+@@ -90,7 +90,7 @@ test_expect_success 'setup for fetch porcelain output' '
+ 
+ for opt in "" "--atomic"
+ do
+-	test_expect_failure "fetch porcelain output ${opt:+(atomic)}" '
++	test_expect_success "fetch porcelain output ${opt:+(atomic)}" '
+ 		test_when_finished "rm -rf porcelain" &&
+ 
+ 		# Clone and pre-seed the repositories. We fetch references into two
+-- 
+2.39.3 (Apple Git-145)
+

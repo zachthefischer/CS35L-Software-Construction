@@ -1,0 +1,35 @@
+From 86b8254144d48c992cf7e33882cfdc56aaeddbe7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 29 Jan 2024 22:08:27 +0100
+Subject: [PATCH 2777/2871] t5332: mark as leak-free
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This test is leak-free since it was added in af626ac0e0 (pack-bitmap:
+enable reuse from all bitmapped packs, 2023-12-14).
+
+Let's mark it as leak-free to make sure it stays that way (and to reduce
+noise when looking for other leak-free scripts after we fix some leaks).
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5332-multi-pack-reuse.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/t5332-multi-pack-reuse.sh b/t/t5332-multi-pack-reuse.sh
+index 2ba788b042..99145327a6 100755
+--- a/t/t5332-multi-pack-reuse.sh
++++ b/t/t5332-multi-pack-reuse.sh
+@@ -2,6 +2,7 @@
+ 
+ test_description='pack-objects multi-pack reuse'
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-bitmap.sh
+ 
+-- 
+2.39.3 (Apple Git-145)
+

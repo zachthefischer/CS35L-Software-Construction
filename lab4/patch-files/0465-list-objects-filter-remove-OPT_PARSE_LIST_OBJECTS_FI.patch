@@ -1,0 +1,74 @@
+From d4f7036887f54184d666a1096ee96dfb2e9ad881 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 29 Nov 2022 13:26:44 +0100
+Subject: [PATCH 0465/2871] list-objects-filter: remove
+ OPT_PARSE_LIST_OBJECTS_FILTER_INIT()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+OPT_PARSE_LIST_OBJECTS_FILTER_INIT() with a non-NULL second argument
+passes a function pointer via an object pointer, which is undefined.  It
+may work fine on platforms that implement C99 extension J.5.7 (Function
+pointer casts).  Remove the unused macro and avoid the dependency on
+that extension.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ list-objects-filter-options.c |  4 ----
+ list-objects-filter-options.h | 18 ++----------------
+ 2 files changed, 2 insertions(+), 20 deletions(-)
+
+diff --git a/list-objects-filter-options.c b/list-objects-filter-options.c
+index 5339660238..ee01bcd2cc 100644
+--- a/list-objects-filter-options.c
++++ b/list-objects-filter-options.c
+@@ -290,10 +290,6 @@ int opt_parse_list_objects_filter(const struct option *opt,
+ 				  const char *arg, int unset)
+ {
+ 	struct list_objects_filter_options *filter_options = opt->value;
+-	opt_lof_init init = (opt_lof_init)opt->defval;
+-
+-	if (init)
+-		filter_options = init(opt->value);
+ 
+ 	if (unset || !arg)
+ 		list_objects_filter_set_no_filter(filter_options);
+diff --git a/list-objects-filter-options.h b/list-objects-filter-options.h
+index 7eeadab2dd..1fe393f447 100644
+--- a/list-objects-filter-options.h
++++ b/list-objects-filter-options.h
+@@ -111,27 +111,13 @@ void parse_list_objects_filter(
+  * The opt->value to opt_parse_list_objects_filter() is either a
+  * "struct list_objects_filter_option *" when using
+  * OPT_PARSE_LIST_OBJECTS_FILTER().
+- *
+- * Or, if using no "struct option" field is used by the callback,
+- * except the "defval" which is expected to be an "opt_lof_init"
+- * function, which is called with the "opt->value" and must return a
+- * pointer to the ""struct list_objects_filter_option *" to be used.
+- *
+- * The OPT_PARSE_LIST_OBJECTS_FILTER_INIT() can be used e.g. the
+- * "struct list_objects_filter_option" is embedded in a "struct
+- * rev_info", which the "defval" could be tasked with lazily
+- * initializing. See cmd_pack_objects() for an example.
+  */
+ int opt_parse_list_objects_filter(const struct option *opt,
+ 				  const char *arg, int unset);
+-typedef struct list_objects_filter_options *(*opt_lof_init)(void *);
+-#define OPT_PARSE_LIST_OBJECTS_FILTER_INIT(fo, init) \
+-	{ OPTION_CALLBACK, 0, "filter", (fo), N_("args"), \
+-	  N_("object filtering"), 0, opt_parse_list_objects_filter, \
+-	  (intptr_t)(init) }
+ 
+ #define OPT_PARSE_LIST_OBJECTS_FILTER(fo) \
+-	OPT_PARSE_LIST_OBJECTS_FILTER_INIT((fo), NULL)
++	OPT_CALLBACK(0, "filter", (fo), N_("args"), \
++		     N_("object filtering"), opt_parse_list_objects_filter)
+ 
+ /*
+  * Translates abbreviated numbers in the filter's filter_spec into their
+-- 
+2.39.3 (Apple Git-145)
+

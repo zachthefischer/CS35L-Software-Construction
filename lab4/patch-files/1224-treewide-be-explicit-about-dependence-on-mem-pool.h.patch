@@ -1,0 +1,92 @@
+From 5bc07225e5ee8b315289ae26799840721fc0f321 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:41:47 -0700
+Subject: [PATCH 1224/2871] treewide: be explicit about dependence on
+ mem-pool.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/checkout.c        | 1 +
+ cache.h                   | 1 -
+ merge-ort.c               | 1 +
+ read-cache.c              | 1 +
+ split-index.c             | 1 +
+ t/helper/test-mergesort.c | 1 +
+ 6 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index 422ea76840..65988fd8a3 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -15,6 +15,7 @@
+ #include "hook.h"
+ #include "ll-merge.h"
+ #include "lockfile.h"
++#include "mem-pool.h"
+ #include "merge-recursive.h"
+ #include "object-store.h"
+ #include "parse-options.h"
+diff --git a/cache.h b/cache.h
+index 6eac3134a2..66705dd469 100644
+--- a/cache.h
++++ b/cache.h
+@@ -13,7 +13,6 @@
+ #include "object.h"
+ #include "repository.h"
+ #include "statinfo.h"
+-#include "mem-pool.h"
+ 
+ typedef struct git_zstream {
+ 	z_stream z;
+diff --git a/merge-ort.c b/merge-ort.c
+index 9b0b184b13..1008684fbb 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -31,6 +31,7 @@
+ #include "hex.h"
+ #include "entry.h"
+ #include "ll-merge.h"
++#include "mem-pool.h"
+ #include "object-store.h"
+ #include "oid-array.h"
+ #include "promisor-remote.h"
+diff --git a/read-cache.c b/read-cache.c
+index 1b585ce842..4ada6d62b9 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -21,6 +21,7 @@
+ #include "blob.h"
+ #include "environment.h"
+ #include "gettext.h"
++#include "mem-pool.h"
+ #include "resolve-undo.h"
+ #include "run-command.h"
+ #include "strbuf.h"
+diff --git a/split-index.c b/split-index.c
+index c98807c655..5602b74994 100644
+--- a/split-index.c
++++ b/split-index.c
+@@ -1,6 +1,7 @@
+ #include "cache.h"
+ #include "alloc.h"
+ #include "gettext.h"
++#include "mem-pool.h"
+ #include "split-index.h"
+ #include "ewah/ewok.h"
+ 
+diff --git a/t/helper/test-mergesort.c b/t/helper/test-mergesort.c
+index 335e5bb3a9..737e0c5235 100644
+--- a/t/helper/test-mergesort.c
++++ b/t/helper/test-mergesort.c
+@@ -1,5 +1,6 @@
+ #include "test-tool.h"
+ #include "cache.h"
++#include "mem-pool.h"
+ #include "mergesort.h"
+ 
+ static uint32_t minstd_rand(uint32_t *state)
+-- 
+2.39.3 (Apple Git-145)
+

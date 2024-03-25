@@ -1,0 +1,30 @@
+From d530c04e2cfec6fccc9b02936b94df26114d6ec9 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:41:52 -0700
+Subject: [PATCH 1229/2871] treewide: remove cache.h inclusion due to git-zlib
+ changes
+
+This actually only affects http-backend.c, but the git-zlib changes
+are going to be instrumental in pulling out an object-file.h which
+will help with several more files.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http-backend.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/http-backend.c b/http-backend.c
+index d41b3b9e1e..ac146d85c5 100644
+--- a/http-backend.c
++++ b/http-backend.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "environment.h"
+-- 
+2.39.3 (Apple Git-145)
+

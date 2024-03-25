@@ -1,0 +1,29 @@
+From c193e6bbee370a2fc4caae81bf4a2c7be122bc3f Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 16:47:00 -0400
+Subject: [PATCH 0024/2871] t5516: prepare for changing protocol.file.allow
+
+Explicitly cloning over the "file://" protocol in t5516 in preparation
+for merging a security release which will change the default value of
+this configuration to be "user".
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t5516-fetch-push.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/t5516-fetch-push.sh b/t/t5516-fetch-push.sh
+index 4dfb080433..6d5702fd0e 100755
+--- a/t/t5516-fetch-push.sh
++++ b/t/t5516-fetch-push.sh
+@@ -216,6 +216,7 @@ test_expect_success 'push with negotiation proceeds anyway even if negotiation f
+ test_expect_success 'push with negotiation does not attempt to fetch submodules' '
+ 	mk_empty submodule_upstream &&
+ 	test_commit -C submodule_upstream submodule_commit &&
++	test_config_global protocol.file.allow always &&
+ 	git submodule add ./submodule_upstream submodule &&
+ 	mk_empty testrepo &&
+ 	git push testrepo $the_first_commit:refs/remotes/origin/first_commit &&
+-- 
+2.39.3 (Apple Git-145)
+

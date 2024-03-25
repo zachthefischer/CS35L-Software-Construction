@@ -1,0 +1,342 @@
+From 13320ff610b4083341175c4f8e636a1bc52145f5 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Thu, 18 Jan 2024 01:55:15 +0000
+Subject: [PATCH 2697/2871] submodule-config.h: move check_submodule_url
+
+Move 'check_submodule_url' out of 'fsck.c' and into 'submodule-config.h' as
+a public method, similar to 'check_submodule_name'. With the function now
+accessible outside of 'fsck', it can be used in a later commit to extend
+'test-tool submodule' to check the validity of submodule URLs as it does
+with names in the 'check-name' subcommand.
+
+Other than its location, no changes are made to 'check_submodule_url' in
+this patch.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ fsck.c             | 133 --------------------------------------------
+ submodule-config.c | 134 +++++++++++++++++++++++++++++++++++++++++++++
+ submodule-config.h |   3 +
+ 3 files changed, 137 insertions(+), 133 deletions(-)
+
+diff --git a/fsck.c b/fsck.c
+index 6a0bbc5087..129bc0630d 100644
+--- a/fsck.c
++++ b/fsck.c
+@@ -21,7 +21,6 @@
+ #include "packfile.h"
+ #include "submodule-config.h"
+ #include "config.h"
+-#include "credential.h"
+ #include "help.h"
+ 
+ static ssize_t max_tree_entry_len = 4096;
+@@ -1048,138 +1047,6 @@ int fsck_tag_standalone(const struct object_id *oid, const char *buffer,
+ 	return ret;
+ }
+ 
+-static int starts_with_dot_slash(const char *const path)
+-{
+-	return path_match_flags(path, PATH_MATCH_STARTS_WITH_DOT_SLASH |
+-				PATH_MATCH_XPLATFORM);
+-}
+-
+-static int starts_with_dot_dot_slash(const char *const path)
+-{
+-	return path_match_flags(path, PATH_MATCH_STARTS_WITH_DOT_DOT_SLASH |
+-				PATH_MATCH_XPLATFORM);
+-}
+-
+-static int submodule_url_is_relative(const char *url)
+-{
+-	return starts_with_dot_slash(url) || starts_with_dot_dot_slash(url);
+-}
+-
+-/*
+- * Count directory components that a relative submodule URL should chop
+- * from the remote_url it is to be resolved against.
+- *
+- * In other words, this counts "../" components at the start of a
+- * submodule URL.
+- *
+- * Returns the number of directory components to chop and writes a
+- * pointer to the next character of url after all leading "./" and
+- * "../" components to out.
+- */
+-static int count_leading_dotdots(const char *url, const char **out)
+-{
+-	int result = 0;
+-	while (1) {
+-		if (starts_with_dot_dot_slash(url)) {
+-			result++;
+-			url += strlen("../");
+-			continue;
+-		}
+-		if (starts_with_dot_slash(url)) {
+-			url += strlen("./");
+-			continue;
+-		}
+-		*out = url;
+-		return result;
+-	}
+-}
+-/*
+- * Check whether a transport is implemented by git-remote-curl.
+- *
+- * If it is, returns 1 and writes the URL that would be passed to
+- * git-remote-curl to the "out" parameter.
+- *
+- * Otherwise, returns 0 and leaves "out" untouched.
+- *
+- * Examples:
+- *   http::https://example.com/repo.git -> 1, https://example.com/repo.git
+- *   https://example.com/repo.git -> 1, https://example.com/repo.git
+- *   git://example.com/repo.git -> 0
+- *
+- * This is for use in checking for previously exploitable bugs that
+- * required a submodule URL to be passed to git-remote-curl.
+- */
+-static int url_to_curl_url(const char *url, const char **out)
+-{
+-	/*
+-	 * We don't need to check for case-aliases, "http.exe", and so
+-	 * on because in the default configuration, is_transport_allowed
+-	 * prevents URLs with those schemes from being cloned
+-	 * automatically.
+-	 */
+-	if (skip_prefix(url, "http::", out) ||
+-	    skip_prefix(url, "https::", out) ||
+-	    skip_prefix(url, "ftp::", out) ||
+-	    skip_prefix(url, "ftps::", out))
+-		return 1;
+-	if (starts_with(url, "http://") ||
+-	    starts_with(url, "https://") ||
+-	    starts_with(url, "ftp://") ||
+-	    starts_with(url, "ftps://")) {
+-		*out = url;
+-		return 1;
+-	}
+-	return 0;
+-}
+-
+-static int check_submodule_url(const char *url)
+-{
+-	const char *curl_url;
+-
+-	if (looks_like_command_line_option(url))
+-		return -1;
+-
+-	if (submodule_url_is_relative(url) || starts_with(url, "git://")) {
+-		char *decoded;
+-		const char *next;
+-		int has_nl;
+-
+-		/*
+-		 * This could be appended to an http URL and url-decoded;
+-		 * check for malicious characters.
+-		 */
+-		decoded = url_decode(url);
+-		has_nl = !!strchr(decoded, '\n');
+-
+-		free(decoded);
+-		if (has_nl)
+-			return -1;
+-
+-		/*
+-		 * URLs which escape their root via "../" can overwrite
+-		 * the host field and previous components, resolving to
+-		 * URLs like https::example.com/submodule.git and
+-		 * https:///example.com/submodule.git that were
+-		 * susceptible to CVE-2020-11008.
+-		 */
+-		if (count_leading_dotdots(url, &next) > 0 &&
+-		    (*next == ':' || *next == '/'))
+-			return -1;
+-	}
+-
+-	else if (url_to_curl_url(url, &curl_url)) {
+-		struct credential c = CREDENTIAL_INIT;
+-		int ret = 0;
+-		if (credential_from_url_gently(&c, curl_url, 1) ||
+-		    !*c.host)
+-			ret = -1;
+-		credential_clear(&c);
+-		return ret;
+-	}
+-
+-	return 0;
+-}
+-
+ struct fsck_gitmodules_data {
+ 	const struct object_id *oid;
+ 	struct fsck_options *options;
+diff --git a/submodule-config.c b/submodule-config.c
+index 6a48fd12f6..cbec13b3a2 100644
+--- a/submodule-config.c
++++ b/submodule-config.c
+@@ -14,6 +14,8 @@
+ #include "parse-options.h"
+ #include "thread-utils.h"
+ #include "tree-walk.h"
++#include "url.h"
++#include "credential.h"
+ 
+ /*
+  * submodule cache lookup structure
+@@ -228,6 +230,138 @@ int check_submodule_name(const char *name)
+ 	return 0;
+ }
+ 
++static int starts_with_dot_slash(const char *const path)
++{
++	return path_match_flags(path, PATH_MATCH_STARTS_WITH_DOT_SLASH |
++				PATH_MATCH_XPLATFORM);
++}
++
++static int starts_with_dot_dot_slash(const char *const path)
++{
++	return path_match_flags(path, PATH_MATCH_STARTS_WITH_DOT_DOT_SLASH |
++				PATH_MATCH_XPLATFORM);
++}
++
++static int submodule_url_is_relative(const char *url)
++{
++	return starts_with_dot_slash(url) || starts_with_dot_dot_slash(url);
++}
++
++/*
++ * Count directory components that a relative submodule URL should chop
++ * from the remote_url it is to be resolved against.
++ *
++ * In other words, this counts "../" components at the start of a
++ * submodule URL.
++ *
++ * Returns the number of directory components to chop and writes a
++ * pointer to the next character of url after all leading "./" and
++ * "../" components to out.
++ */
++static int count_leading_dotdots(const char *url, const char **out)
++{
++	int result = 0;
++	while (1) {
++		if (starts_with_dot_dot_slash(url)) {
++			result++;
++			url += strlen("../");
++			continue;
++		}
++		if (starts_with_dot_slash(url)) {
++			url += strlen("./");
++			continue;
++		}
++		*out = url;
++		return result;
++	}
++}
++/*
++ * Check whether a transport is implemented by git-remote-curl.
++ *
++ * If it is, returns 1 and writes the URL that would be passed to
++ * git-remote-curl to the "out" parameter.
++ *
++ * Otherwise, returns 0 and leaves "out" untouched.
++ *
++ * Examples:
++ *   http::https://example.com/repo.git -> 1, https://example.com/repo.git
++ *   https://example.com/repo.git -> 1, https://example.com/repo.git
++ *   git://example.com/repo.git -> 0
++ *
++ * This is for use in checking for previously exploitable bugs that
++ * required a submodule URL to be passed to git-remote-curl.
++ */
++static int url_to_curl_url(const char *url, const char **out)
++{
++	/*
++	 * We don't need to check for case-aliases, "http.exe", and so
++	 * on because in the default configuration, is_transport_allowed
++	 * prevents URLs with those schemes from being cloned
++	 * automatically.
++	 */
++	if (skip_prefix(url, "http::", out) ||
++	    skip_prefix(url, "https::", out) ||
++	    skip_prefix(url, "ftp::", out) ||
++	    skip_prefix(url, "ftps::", out))
++		return 1;
++	if (starts_with(url, "http://") ||
++	    starts_with(url, "https://") ||
++	    starts_with(url, "ftp://") ||
++	    starts_with(url, "ftps://")) {
++		*out = url;
++		return 1;
++	}
++	return 0;
++}
++
++int check_submodule_url(const char *url)
++{
++	const char *curl_url;
++
++	if (looks_like_command_line_option(url))
++		return -1;
++
++	if (submodule_url_is_relative(url) || starts_with(url, "git://")) {
++		char *decoded;
++		const char *next;
++		int has_nl;
++
++		/*
++		 * This could be appended to an http URL and url-decoded;
++		 * check for malicious characters.
++		 */
++		decoded = url_decode(url);
++		has_nl = !!strchr(decoded, '\n');
++
++		free(decoded);
++		if (has_nl)
++			return -1;
++
++		/*
++		 * URLs which escape their root via "../" can overwrite
++		 * the host field and previous components, resolving to
++		 * URLs like https::example.com/submodule.git and
++		 * https:///example.com/submodule.git that were
++		 * susceptible to CVE-2020-11008.
++		 */
++		if (count_leading_dotdots(url, &next) > 0 &&
++		    (*next == ':' || *next == '/'))
++			return -1;
++	}
++
++	else if (url_to_curl_url(url, &curl_url)) {
++		struct credential c = CREDENTIAL_INIT;
++		int ret = 0;
++		if (credential_from_url_gently(&c, curl_url, 1) ||
++		    !*c.host)
++			ret = -1;
++		credential_clear(&c);
++		return ret;
++	}
++
++	return 0;
++}
++
+ static int name_and_item_from_var(const char *var, struct strbuf *name,
+ 				  struct strbuf *item)
+ {
+diff --git a/submodule-config.h b/submodule-config.h
+index 2a37689cc2..b5785686f5 100644
+--- a/submodule-config.h
++++ b/submodule-config.h
+@@ -91,6 +91,9 @@ int config_set_in_gitmodules_file_gently(const char *key, const char *value);
+  */
+ int check_submodule_name(const char *name);
+ 
++/* Returns 0 if the URL valid per RFC3986 and -1 otherwise. */
++int check_submodule_url(const char *url);
++
+ /*
+  * Note: these helper functions exist solely to maintain backward
+  * compatibility with 'fetch' and 'update_clone' storing configuration in
+-- 
+2.39.3 (Apple Git-145)
+

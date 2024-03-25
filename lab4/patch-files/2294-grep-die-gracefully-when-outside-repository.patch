@@ -1,0 +1,90 @@
+From b1688ea02df6fdefd5a228a0d52583356d433a99 Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Fri, 20 Oct 2023 18:40:07 +0200
+Subject: [PATCH 2294/2871] grep: die gracefully when outside repository
+
+Die gracefully when `git grep --no-index` is run outside of a Git
+repository and the path is outside the directory tree.
+
+If you are not in a Git repository and say:
+
+    git grep --no-index search ..
+
+You trigger a `BUG`:
+
+    BUG: environment.c:213: git environment hasn't been setup
+    Aborted (core dumped)
+
+Because `..` is a valid path which is treated as a pathspec. Then
+`pathspec` figures out that it is not in the current directory tree. The
+`BUG` is triggered when `pathspec` tries to advise the user about how the
+path is not in the current (non-existing) repository.
+
+Reported-by: ks1322 ks1322 <ks1322@gmail.com>
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pathspec.c      |  7 ++++++-
+ t/t7810-grep.sh | 27 +++++++++++++++++++++++++++
+ 2 files changed, 33 insertions(+), 1 deletion(-)
+
+diff --git a/pathspec.c b/pathspec.c
+index 7f88f1c02b..bb1efe1f39 100644
+--- a/pathspec.c
++++ b/pathspec.c
+@@ -467,7 +467,12 @@ static void init_pathspec_item(struct pathspec_item *item, unsigned flags,
+ 		match = prefix_path_gently(prefix, prefixlen,
+ 					   &prefixlen, copyfrom);
+ 		if (!match) {
+-			const char *hint_path = get_git_work_tree();
++			const char *hint_path;
++
++			if (!have_git_dir())
++				die(_("'%s' is outside the directory tree"),
++				    copyfrom);
++			hint_path = get_git_work_tree();
+ 			if (!hint_path)
+ 				hint_path = get_git_dir();
+ 			die(_("%s: '%s' is outside repository at '%s'"), elt,
+diff --git a/t/t7810-grep.sh b/t/t7810-grep.sh
+index 39d6d713ec..84838c0fe1 100755
+--- a/t/t7810-grep.sh
++++ b/t/t7810-grep.sh
+@@ -1234,6 +1234,33 @@ test_expect_success 'outside of git repository with fallbackToNoIndex' '
+ 	)
+ '
+ 
++test_expect_success 'no repository with path outside $cwd' '
++	test_when_finished rm -fr non &&
++	rm -fr non &&
++	mkdir -p non/git/sub non/tig &&
++	(
++		GIT_CEILING_DIRECTORIES="$(pwd)/non" &&
++		export GIT_CEILING_DIRECTORIES &&
++		cd non/git &&
++		test_expect_code 128 git grep --no-index search .. 2>error &&
++		grep "is outside the directory tree" error
++	) &&
++	(
++		GIT_CEILING_DIRECTORIES="$(pwd)/non" &&
++		export GIT_CEILING_DIRECTORIES &&
++		cd non/git &&
++		test_expect_code 128 git grep --no-index search ../tig 2>error &&
++		grep "is outside the directory tree" error
++	) &&
++	(
++		GIT_CEILING_DIRECTORIES="$(pwd)/non" &&
++		export GIT_CEILING_DIRECTORIES &&
++		cd non/git &&
++		test_expect_code 128 git grep --no-index search ../non 2>error &&
++		grep "no such path in the working tree" error
++	)
++'
++
+ test_expect_success 'inside git repository but with --no-index' '
+ 	rm -fr is &&
+ 	mkdir -p is/git/sub &&
+-- 
+2.39.3 (Apple Git-145)
+

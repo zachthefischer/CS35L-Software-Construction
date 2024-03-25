@@ -1,0 +1,66 @@
+From 0cff86990cbae9d5c8ca78cd09cb58f74828979b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:08:48 -0400
+Subject: [PATCH 0174/2871] apply: mark unused parameters in handlers
+
+In parse_git_diff_header(), we have a table-driven parser that maps
+strings to handler functions. Not all handlers need all of the
+parameters; let's mark the unused ones to appease -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ apply.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/apply.c b/apply.c
+index 2b7cd930ef..fa9a02771c 100644
+--- a/apply.c
++++ b/apply.c
+@@ -892,9 +892,9 @@ static int parse_traditional_patch(struct apply_state *state,
+ 	return 0;
+ }
+ 
+-static int gitdiff_hdrend(struct gitdiff_data *state,
+-			  const char *line,
+-			  struct patch *patch)
++static int gitdiff_hdrend(struct gitdiff_data *state UNUSED,
++			  const char *line UNUSED,
++			  struct patch *patch UNUSED)
+ {
+ 	return 1;
+ }
+@@ -1044,7 +1044,7 @@ static int gitdiff_renamedst(struct gitdiff_data *state,
+ 	return 0;
+ }
+ 
+-static int gitdiff_similarity(struct gitdiff_data *state,
++static int gitdiff_similarity(struct gitdiff_data *state UNUSED,
+ 			      const char *line,
+ 			      struct patch *patch)
+ {
+@@ -1054,7 +1054,7 @@ static int gitdiff_similarity(struct gitdiff_data *state,
+ 	return 0;
+ }
+ 
+-static int gitdiff_dissimilarity(struct gitdiff_data *state,
++static int gitdiff_dissimilarity(struct gitdiff_data *state UNUSED,
+ 				 const char *line,
+ 				 struct patch *patch)
+ {
+@@ -1104,9 +1104,9 @@ static int gitdiff_index(struct gitdiff_data *state,
+  * This is normal for a diff that doesn't change anything: we'll fall through
+  * into the next diff. Tell the parser to break out.
+  */
+-static int gitdiff_unrecognized(struct gitdiff_data *state,
+-				const char *line,
+-				struct patch *patch)
++static int gitdiff_unrecognized(struct gitdiff_data *state UNUSED,
++				const char *line UNUSED,
++				struct patch *patch UNUSED)
+ {
+ 	return 1;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

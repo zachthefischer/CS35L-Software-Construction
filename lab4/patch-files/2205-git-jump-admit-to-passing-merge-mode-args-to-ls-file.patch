@@ -1,0 +1,34 @@
+From a62a7060a50e09089fb63b793b97c4b570993142 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0t=C4=9Bp=C3=A1n=20N=C4=9Bmec?= <stepnem@smrk.net>
+Date: Thu, 5 Oct 2023 11:00:53 +0200
+Subject: [PATCH 2205/2871] git-jump: admit to passing merge mode args to
+ ls-files
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+There's even an example of such usage in the README.
+
+Fixes: 67ba13e5a4b2 ("git-jump: pass "merge" arguments to ls-files")
+Signed-off-by: Štěpán Němec <stepnem@smrk.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/git-jump/git-jump | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/git-jump/git-jump b/contrib/git-jump/git-jump
+index 40c4b0d111..47e0c557e6 100755
+--- a/contrib/git-jump/git-jump
++++ b/contrib/git-jump/git-jump
+@@ -9,7 +9,7 @@ The <mode> parameter is one of:
+ 
+ diff: elements are diff hunks. Arguments are given to diff.
+ 
+-merge: elements are merge conflicts. Arguments are ignored.
++merge: elements are merge conflicts. Arguments are given to ls-files -u.
+ 
+ grep: elements are grep hits. Arguments are given to git grep or, if
+       configured, to the command in `jump.grepCmd`.
+-- 
+2.39.3 (Apple Git-145)
+

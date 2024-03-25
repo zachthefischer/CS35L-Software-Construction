@@ -1,0 +1,120 @@
+From 56adddaa06d376f3977ee91e8a769cd85439d21c Mon Sep 17 00:00:00 2001
+From: Michael Strawbridge <michael.strawbridge@amd.com>
+Date: Wed, 19 Apr 2023 16:27:02 -0400
+Subject: [PATCH 1310/2871] send-email: refactor header generation functions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Split process_file and send_message into easier to use functions.
+Making SMTP header information widely available.
+
+Cc: Luben Tuikov <luben.tuikov@amd.com>
+Cc: Junio C Hamano <gitster@pobox.com>
+Cc: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Acked-by: Luben Tuikov <luben.tuikov@amd.com>
+Signed-off-by: Michael Strawbridge <michael.strawbridge@amd.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl | 49 ++++++++++++++++++++++++++++-----------------
+ 1 file changed, 31 insertions(+), 18 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index fd8cd0d46f..e114efe323 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -1502,16 +1502,7 @@ sub file_name_is_absolute {
+ 	return File::Spec::Functions::file_name_is_absolute($path);
+ }
+ 
+-# Prepares the email, then asks the user what to do.
+-#
+-# If the user chooses to send the email, it's sent and 1 is returned.
+-# If the user chooses not to send the email, 0 is returned.
+-# If the user decides they want to make further edits, -1 is returned and the
+-# caller is expected to call send_message again after the edits are performed.
+-#
+-# If an error occurs sending the email, this just dies.
+-
+-sub send_message {
++sub gen_header {
+ 	my @recipients = unique_email_list(@to);
+ 	@cc = (grep { my $cc = extract_valid_address_or_die($_);
+ 		      not grep { $cc eq $_ || $_ =~ /<\Q${cc}\E>$/ } @recipients
+@@ -1553,6 +1544,22 @@ sub send_message {
+ 	if (@xh) {
+ 		$header .= join("\n", @xh) . "\n";
+ 	}
++	my $recipients_ref = \@recipients;
++	return ($recipients_ref, $to, $date, $gitversion, $cc, $ccline, $header);
++}
++
++# Prepares the email, then asks the user what to do.
++#
++# If the user chooses to send the email, it's sent and 1 is returned.
++# If the user chooses not to send the email, 0 is returned.
++# If the user decides they want to make further edits, -1 is returned and the
++# caller is expected to call send_message again after the edits are performed.
++#
++# If an error occurs sending the email, this just dies.
++
++sub send_message {
++	my ($recipients_ref, $to, $date, $gitversion, $cc, $ccline, $header) = gen_header();
++	my @recipients = @$recipients_ref;
+ 
+ 	my @sendmail_parameters = ('-i', @recipients);
+ 	my $raw_from = $sender;
+@@ -1742,11 +1749,8 @@ sub send_message {
+ $references = $initial_in_reply_to || '';
+ $message_num = 0;
+ 
+-# Prepares the email, prompts the user, sends it out
+-# Returns 0 if an edit was done and the function should be called again, or 1
+-# otherwise.
+-sub process_file {
+-	my ($t) = @_;
++sub pre_process_file {
++	my ($t, $quiet) = @_;
+ 
+ 	open my $fh, "<", $t or die sprintf(__("can't open file %s"), $t);
+ 
+@@ -1900,9 +1904,9 @@ sub process_file {
+ 	}
+ 	close $fh;
+ 
+-	push @to, recipients_cmd("to-cmd", "to", $to_cmd, $t)
++	push @to, recipients_cmd("to-cmd", "to", $to_cmd, $t, $quiet)
+ 		if defined $to_cmd;
+-	push @cc, recipients_cmd("cc-cmd", "cc", $cc_cmd, $t)
++	push @cc, recipients_cmd("cc-cmd", "cc", $cc_cmd, $t, $quiet)
+ 		if defined $cc_cmd && !$suppress_cc{'cccmd'};
+ 
+ 	if ($broken_encoding{$t} && !$has_content_type) {
+@@ -1961,6 +1965,15 @@ sub process_file {
+ 			@initial_to = @to;
+ 		}
+ 	}
++}
++
++# Prepares the email, prompts the user, and sends it out
++# Returns 0 if an edit was done and the function should be called again, or 1
++# on the email being successfully sent out.
++sub process_file {
++	my ($t) = @_;
++
++        pre_process_file($t, $quiet);
+ 
+ 	my $message_was_sent = send_message();
+ 	if ($message_was_sent == -1) {
+@@ -2009,7 +2022,7 @@ sub process_file {
+ # Execute a command (e.g. $to_cmd) to get a list of email addresses
+ # and return a results array
+ sub recipients_cmd {
+-	my ($prefix, $what, $cmd, $file) = @_;
++	my ($prefix, $what, $cmd, $file, $quiet) = @_;
+ 
+ 	my @addresses = ();
+ 	open my $fh, "-|", "$cmd \Q$file\E"
+-- 
+2.39.3 (Apple Git-145)
+

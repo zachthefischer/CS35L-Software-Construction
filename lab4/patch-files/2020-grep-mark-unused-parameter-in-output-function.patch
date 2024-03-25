@@ -1,0 +1,30 @@
+From bcba446228eec5dd371137c141e7ed83cc4caee3 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:27 -0400
+Subject: [PATCH 2020/2871] grep: mark unused parameter in output function
+
+This is a callback used with grep_options.output, but we don't look at
+the grep_opt parameter, as we're just writing the output to stdout.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ grep.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grep.c b/grep.c
+index 0904d55b24..0124eb1960 100644
+--- a/grep.c
++++ b/grep.c
+@@ -17,7 +17,7 @@ static int grep_source_load(struct grep_source *gs);
+ static int grep_source_is_binary(struct grep_source *gs,
+ 				 struct index_state *istate);
+ 
+-static void std_output(struct grep_opt *opt, const void *buf, size_t size)
++static void std_output(struct grep_opt *opt UNUSED, const void *buf, size_t size)
+ {
+ 	fwrite(buf, size, 1, stdout);
+ }
+-- 
+2.39.3 (Apple Git-145)
+

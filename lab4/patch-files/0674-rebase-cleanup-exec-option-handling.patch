@@ -1,0 +1,188 @@
+From e57d2c59377943fed09ec30012634f60788bdfca Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Thu, 12 Jan 2023 16:50:01 +0000
+Subject: [PATCH 0674/2871] rebase: cleanup "--exec" option handling
+
+When handling "--exec" rebase collects the commands into a struct
+string_list, then prepends "exec " to each command creating a multi line
+string and finally splits that string back into a list of commands. This
+is an artifact of the scripted rebase and the need to support "rebase
+--preserve-merges". Now that "--preserve-merges" no-longer exists we can
+cleanup the way the argument is handled. There is no need to add the
+"exec " prefix to the commands as that is added by todo_list_to_strbuf().
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 45 +++++++++++----------------------------------
+ sequencer.c      |  4 ++--
+ 2 files changed, 13 insertions(+), 36 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 1481c5b6a5..a26cc0cfdb 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -113,7 +113,7 @@ struct rebase_options {
+ 	int autostash;
+ 	int committer_date_is_author_date;
+ 	int ignore_date;
+-	char *cmd;
++	struct string_list exec;
+ 	int allow_empty_message;
+ 	int rebase_merges, rebase_cousins;
+ 	char *strategy, *strategy_opts;
+@@ -131,6 +131,7 @@ struct rebase_options {
+ 		.default_backend = "merge",	  	\
+ 		.flags = REBASE_NO_QUIET, 		\
+ 		.git_am_opts = STRVEC_INIT,		\
++		.exec = STRING_LIST_INIT_NODUP,		\
+ 		.git_format_patch_opt = STRBUF_INIT,	\
+ 		.fork_point = -1,			\
+ 	}
+@@ -243,17 +244,6 @@ static int init_basic_state(struct replay_opts *opts, const char *head_name,
+ 	return write_basic_state(opts, head_name, onto, orig_head);
+ }
+ 
+-static void split_exec_commands(const char *cmd, struct string_list *commands)
+-{
+-	if (cmd && *cmd) {
+-		string_list_split(commands, cmd, '\n', -1);
+-
+-		/* rebase.c adds a new line to cmd after every command,
+-		 * so here the last command is always empty */
+-		string_list_remove_empty_items(commands, 0);
+-	}
+-}
+-
+ static int do_interactive_rebase(struct rebase_options *opts, unsigned flags)
+ {
+ 	int ret;
+@@ -261,7 +251,6 @@ static int do_interactive_rebase(struct rebase_options *opts, unsigned flags)
+ 	struct strvec make_script_args = STRVEC_INIT;
+ 	struct todo_list todo_list = TODO_LIST_INIT;
+ 	struct replay_opts replay = get_replay_opts(opts);
+-	struct string_list commands = STRING_LIST_INIT_DUP;
+ 
+ 	if (get_revision_ranges(opts->upstream, opts->onto, &opts->orig_head->object.oid,
+ 				&revisions, &shortrevisions))
+@@ -297,14 +286,12 @@ static int do_interactive_rebase(struct rebase_options *opts, unsigned flags)
+ 						&todo_list))
+ 			BUG("unusable todo list");
+ 
+-		split_exec_commands(opts->cmd, &commands);
+ 		ret = complete_action(the_repository, &replay, flags,
+ 			shortrevisions, opts->onto_name, opts->onto,
+-			&opts->orig_head->object.oid, &commands,
++			&opts->orig_head->object.oid, &opts->exec,
+ 			opts->autosquash, opts->update_refs, &todo_list);
+ 	}
+ 
+-	string_list_clear(&commands, 0);
+ 	free(revisions);
+ 	free(shortrevisions);
+ 	todo_list_release(&todo_list);
+@@ -1032,7 +1019,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	struct object_id branch_base;
+ 	int ignore_whitespace = 0;
+ 	const char *gpg_sign = NULL;
+-	struct string_list exec = STRING_LIST_INIT_NODUP;
+ 	const char *rebase_merges = NULL;
+ 	struct string_list strategy_options = STRING_LIST_INIT_NODUP;
+ 	struct object_id squash_onto;
+@@ -1127,7 +1113,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 			N_("GPG-sign commits"),
+ 			PARSE_OPT_OPTARG, NULL, (intptr_t) "" },
+ 		OPT_AUTOSTASH(&options.autostash),
+-		OPT_STRING_LIST('x', "exec", &exec, N_("exec"),
++		OPT_STRING_LIST('x', "exec", &options.exec, N_("exec"),
+ 				N_("add exec lines after each commit of the "
+ 				   "editable list")),
+ 		OPT_BOOL_F(0, "allow-empty-message",
+@@ -1250,7 +1236,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	if (trace2_is_enabled()) {
+ 		if (is_merge(&options))
+ 			trace2_cmd_mode("interactive");
+-		else if (exec.nr)
++		else if (options.exec.nr)
+ 			trace2_cmd_mode("interactive-exec");
+ 		else
+ 			trace2_cmd_mode(action_names[options.action]);
+@@ -1378,7 +1364,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 
+ 	if ((options.flags & REBASE_INTERACTIVE_EXPLICIT) ||
+ 	    (options.action != ACTION_NONE) ||
+-	    (exec.nr > 0) ||
++	    (options.exec.nr > 0) ||
+ 	    options.autosquash) {
+ 		allow_preemptive_ff = 0;
+ 	}
+@@ -1402,8 +1388,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 		}
+ 	}
+ 
+-	for (i = 0; i < exec.nr; i++)
+-		if (check_exec_cmd(exec.items[i].string))
++	for (i = 0; i < options.exec.nr; i++)
++		if (check_exec_cmd(options.exec.items[i].string))
+ 			exit(1);
+ 
+ 	if (!(options.flags & REBASE_NO_QUIET))
+@@ -1422,17 +1408,9 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	if (gpg_sign)
+ 		options.gpg_sign_opt = xstrfmt("-S%s", gpg_sign);
+ 
+-	if (exec.nr) {
+-		int i;
+-
++	if (options.exec.nr)
+ 		imply_merge(&options, "--exec");
+ 
+-		strbuf_reset(&buf);
+-		for (i = 0; i < exec.nr; i++)
+-			strbuf_addf(&buf, "exec %s\n", exec.items[i].string);
+-		options.cmd = xstrdup(buf.buf);
+-	}
+-
+ 	if (rebase_merges) {
+ 		if (!*rebase_merges)
+ 			; /* default mode; do nothing */
+@@ -1543,7 +1521,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	if (options.empty == EMPTY_UNSPECIFIED) {
+ 		if (options.flags & REBASE_INTERACTIVE_EXPLICIT)
+ 			options.empty = EMPTY_ASK;
+-		else if (exec.nr > 0)
++		else if (options.exec.nr > 0)
+ 			options.empty = EMPTY_KEEP;
+ 		else
+ 			options.empty = EMPTY_DROP;
+@@ -1831,11 +1809,10 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	free(options.head_name);
+ 	strvec_clear(&options.git_am_opts);
+ 	free(options.gpg_sign_opt);
+-	free(options.cmd);
++	string_list_clear(&options.exec, 0);
+ 	free(options.strategy);
+ 	strbuf_release(&options.git_format_patch_opt);
+ 	free(squash_onto_name);
+-	string_list_clear(&exec, 0);
+ 	string_list_clear(&strategy_options, 0);
+ 	return !!ret;
+ }
+diff --git a/sequencer.c b/sequencer.c
+index bcb662e23b..3e4a197289 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -5745,8 +5745,8 @@ static void todo_list_add_exec_commands(struct todo_list *todo_list,
+ 
+ 		base_items[i].command = TODO_EXEC;
+ 		base_items[i].offset_in_buf = base_offset;
+-		base_items[i].arg_offset = base_offset + strlen("exec ");
+-		base_items[i].arg_len = command_len - strlen("exec ");
++		base_items[i].arg_offset = base_offset;
++		base_items[i].arg_len = command_len;
+ 
+ 		base_offset += command_len + 1;
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

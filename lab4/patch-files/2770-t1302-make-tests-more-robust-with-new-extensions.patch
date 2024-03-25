@@ -1,0 +1,95 @@
+From afb99327d07cafd5735392fcd6b0eb07558e53f2 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 29 Jan 2024 12:07:26 +0100
+Subject: [PATCH 2770/2871] t1302: make tests more robust with new extensions
+
+In t1302 we exercise logic around "core.repositoryFormatVersion" and
+extensions. These tests are not particularly robust against extensions
+like the newly introduced "refStorage" extension as we tend to clobber
+the repository's config file. We thus overwrite any extensions that were
+set, which may render the repository inaccessible in case it has to be
+accessed with a non-default ref storage.
+
+Refactor the tests to be more robust:
+
+  - Check the DEFAULT_REPO_FORMAT prereq to determine the expected
+    repository format version. This helps to ensure that we only need to
+    update the prereq in a central place when new extensions are added.
+    Furthermore, this allows us to stop seeding the now-unneeded object
+    ID cache that was only used to figure out the repository version.
+
+  - Use a separate repository to rewrite ".git/config" to test
+    combinations of the repository format version and extensions. This
+    ensures that we don't break the main test repository. While we could
+    rewrite these tests to not overwrite preexisting extensions, it
+    feels cleaner like this so that we can test extensions standalone
+    without interference from the environment.
+
+  - Do not rewrite ".git/config" when exercising the "preciousObjects"
+    extension.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Reviewed-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1302-repo-version.sh | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/t/t1302-repo-version.sh b/t/t1302-repo-version.sh
+index 179474fa65..42caa0d297 100755
+--- a/t/t1302-repo-version.sh
++++ b/t/t1302-repo-version.sh
+@@ -9,10 +9,6 @@ TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ test_expect_success 'setup' '
+-	test_oid_cache <<-\EOF &&
+-	version sha1:0
+-	version sha256:1
+-	EOF
+ 	cat >test.patch <<-\EOF &&
+ 	diff --git a/test.txt b/test.txt
+ 	new file mode 100644
+@@ -28,7 +24,12 @@ test_expect_success 'setup' '
+ '
+ 
+ test_expect_success 'gitdir selection on normal repos' '
+-	test_oid version >expect &&
++	if test_have_prereq DEFAULT_REPO_FORMAT
++	then
++		echo 0
++	else
++		echo 1
++	fi >expect &&
+ 	git config core.repositoryformatversion >actual &&
+ 	git -C test config core.repositoryformatversion >actual2 &&
+ 	test_cmp expect actual &&
+@@ -79,8 +80,13 @@ mkconfig () {
+ 
+ while read outcome version extensions; do
+ 	test_expect_success "$outcome version=$version $extensions" "
+-		mkconfig $version $extensions >.git/config &&
+-		check_${outcome}
++		test_when_finished 'rm -rf extensions' &&
++		git init extensions &&
++		(
++			cd extensions &&
++			mkconfig $version $extensions >.git/config &&
++			check_${outcome}
++		)
+ 	"
+ done <<\EOF
+ allow 0
+@@ -94,7 +100,8 @@ allow 1 noop-v1
+ EOF
+ 
+ test_expect_success 'precious-objects allowed' '
+-	mkconfig 1 preciousObjects >.git/config &&
++	git config core.repositoryFormatVersion 1 &&
++	git config extensions.preciousObjects 1 &&
+ 	check_allow
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

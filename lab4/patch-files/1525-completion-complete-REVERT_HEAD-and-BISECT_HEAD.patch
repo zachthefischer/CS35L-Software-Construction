@@ -1,0 +1,30 @@
+From 1ef3c61b7889e2aa76a8f0d32a88fbc09fca3b8e Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 22 May 2023 19:28:58 +0000
+Subject: [PATCH 1525/2871] completion: complete REVERT_HEAD and BISECT_HEAD
+
+The pseudorefs REVERT_HEAD and BISECT_HEAD are not suggested
+by the __git_refs function. Add them there.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index dc95c34cc8..bcda376735 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -767,7 +767,7 @@ __git_refs ()
+ 			track=""
+ 			;;
+ 		*)
+-			for i in HEAD FETCH_HEAD ORIG_HEAD MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD; do
++			for i in HEAD FETCH_HEAD ORIG_HEAD MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_HEAD; do
+ 				case "$i" in
+ 				$match*|$umatch*)
+ 					if [ -e "$dir/$i" ]; then
+-- 
+2.39.3 (Apple Git-145)
+

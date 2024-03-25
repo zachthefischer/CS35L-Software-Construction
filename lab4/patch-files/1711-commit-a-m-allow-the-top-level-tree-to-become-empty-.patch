@@ -1,0 +1,109 @@
+From 2ee045eea103e8818ffe0c4085fad3f6b535c8d6 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 29 Jun 2023 13:23:10 +0000
+Subject: [PATCH 1711/2871] commit -a -m: allow the top-level tree to become
+ empty again
+
+In 03267e8656c (commit: discard partial cache before (re-)reading it,
+2022-11-08), a memory leak was plugged by discarding any partial index
+before re-reading it.
+
+The problem with this memory leak fix is that it was based on an
+incomplete understanding of the logic introduced in 7168624c353 (Do not
+generate full commit log message if it is not going to be used,
+2007-11-28).
+
+That logic was introduced to add a shortcut when committing without
+editing the commit message interactively. A part of that logic was to
+ensure that the index was read into memory:
+
+	if (!active_nr && read_cache() < 0)
+		die(...)
+
+Translation to English: If the index has not yet been read, read it, and
+if that fails, error out.
+
+That logic was incorrect, though: It used `!active_nr` as an indicator
+that the index was not yet read. Usually this is not a problem because
+in the vast majority of instances, the index contains at least one
+entry.
+
+And it was natural to do it this way because at the time that condition
+was introduced, the `index_state` structure had no explicit flag to
+indicate that it was initialized: This flag was only introduced in
+913e0e99b6a (unpack_trees(): protect the handcrafted in-core index from
+read_cache(), 2008-08-23), but that commit did not adjust the code path
+where no index file was found and a new, pristine index was initialized.
+
+Now, when the index does not contain any entry (which is quite
+common in Git's test suite because it starts quite a many repositories
+from scratch), subsequent calls to `do_read_index()` will mistake the
+index not to be initialized, and read it again unnecessarily.
+
+This is a problem because after initializing the empty index e.g. the
+`cache_tree` in that index could have been initialized before a
+subsequent call to `do_read_index()` wants to ensure an initialized
+index. And if that subsequent call mistakes the index not to have been
+initialized, it would lead to leaked memory.
+
+The correct fix for that memory leak is to adjust the condition so that
+it does not mistake `active_nr == 0` to mean that the index has not yet
+been read.
+
+Using the `initialized` flag instead, we avoid that mistake, and as a
+bonus we can fix a bug at the same time that was introduced by the
+memory leak fix: When deleting all tracked files and then asking `git
+commit -a -m ...` to commit the result, Git would internally update the
+index, then discard and re-read the index undoing the update, and fail
+to commit anything.
+
+This fixes https://github.com/git-for-windows/git/issues/4462
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit.c      |  7 ++-----
+ t/t2200-add-update.sh | 11 +++++++++++
+ 2 files changed, 13 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/commit.c b/builtin/commit.c
+index 985a0445b7..d7ccfa0bfa 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -991,11 +991,8 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
+ 		struct object_id oid;
+ 		const char *parent = "HEAD";
+ 
+-		if (!the_index.cache_nr) {
+-			discard_index(&the_index);
+-			if (repo_read_index(the_repository) < 0)
+-				die(_("Cannot read index"));
+-		}
++		if (!the_index.initialized && repo_read_index(the_repository) < 0)
++			die(_("Cannot read index"));
+ 
+ 		if (amend)
+ 			parent = "HEAD^1";
+diff --git a/t/t2200-add-update.sh b/t/t2200-add-update.sh
+index be394f1131..c01492f33f 100755
+--- a/t/t2200-add-update.sh
++++ b/t/t2200-add-update.sh
+@@ -197,4 +197,15 @@ test_expect_success '"add -u non-existent" should fail' '
+ 	! grep "non-existent" actual
+ '
+ 
++test_expect_success '"commit -a" implies "add -u" if index becomes empty' '
++	git rm -rf \* &&
++	git commit -m clean-slate &&
++	test_commit file1 &&
++	rm file1.t &&
++	test_tick &&
++	git commit -a -m remove &&
++	git ls-tree HEAD: >out &&
++	test_must_be_empty out
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

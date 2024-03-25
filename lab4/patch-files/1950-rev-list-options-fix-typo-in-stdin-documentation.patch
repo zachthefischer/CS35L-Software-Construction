@@ -1,0 +1,33 @@
+From c81f1a167659ce0634fdd1dcdb43c2697b546151 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20=C3=85gren?= <martin.agren@gmail.com>
+Date: Wed, 16 Aug 2023 16:24:36 +0200
+Subject: [PATCH 1950/2871] rev-list-options: fix typo in `--stdin`
+ documentation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+With `--stdin`, we read *from* standard input, not *for*.
+
+Signed-off-by: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/rev-list-options.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/rev-list-options.txt b/Documentation/rev-list-options.txt
+index e6468bf0eb..a4a0cb93b2 100644
+--- a/Documentation/rev-list-options.txt
++++ b/Documentation/rev-list-options.txt
+@@ -237,7 +237,7 @@ endif::git-rev-list[]
+ 
+ --stdin::
+ 	In addition to getting arguments from the command line, read
+-	them for standard input as well. This accepts commits and
++	them from standard input as well. This accepts commits and
+ 	pseudo-options like `--all` and `--glob=`. When a `--` separator
+ 	is seen, the following input is treated as paths and used to
+ 	limit the result.
+-- 
+2.39.3 (Apple Git-145)
+

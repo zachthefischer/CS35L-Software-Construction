@@ -1,0 +1,88 @@
+From b027fb07848bdfd84abdf1d6af2cf5d9e4592ffc Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
+Date: Tue, 3 Oct 2023 20:50:44 +0200
+Subject: [PATCH 2196/2871] t7419: actually test the branch switching
+
+The submodule repo the test set up had the 'topic' branch checked out,
+meaning the repo's default branch (HEAD) is the 'topic' branch.
+
+The following tests then pretended to switch between the default branch
+and the 'topic' branch. This was papered over by continually adding
+commits to the 'topic' branch and checking if the submodule gets updated
+to this new commit.
+
+Return the submodule repo to the 'main' branch after setup so we can
+actually test the switching behavior.
+
+Signed-off-by: Jan Alexander Steffens (heftig) <heftig@archlinux.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7419-submodule-set-branch.sh | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/t/t7419-submodule-set-branch.sh b/t/t7419-submodule-set-branch.sh
+index 232065504c..5ac16d0eb7 100755
+--- a/t/t7419-submodule-set-branch.sh
++++ b/t/t7419-submodule-set-branch.sh
+@@ -11,6 +11,10 @@ as expected.
+ 
+ TEST_PASSES_SANITIZE_LEAK=true
+ TEST_NO_CREATE_REPO=1
++
++GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
++export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
++
+ . ./test-lib.sh
+ 
+ test_expect_success 'setup' '
+@@ -27,7 +31,8 @@ test_expect_success 'submodule config cache setup' '
+ 		git checkout -b topic &&
+ 		echo b >a &&
+ 		git add . &&
+-		git commit -mb
++		git commit -mb &&
++		git checkout main
+ 	) &&
+ 	mkdir super &&
+ 	(cd super &&
+@@ -57,13 +62,12 @@ test_expect_success 'test submodule set-branch --branch' '
+ '
+ 
+ test_expect_success 'test submodule set-branch --default' '
+-	test_commit -C submodule c &&
+ 	(cd super &&
+ 		git submodule set-branch --default submodule &&
+ 		! grep branch .gitmodules &&
+ 		git submodule update --remote &&
+ 		cat <<-\EOF >expect &&
+-		c
++		a
+ 		EOF
+ 		git -C submodule show -s --pretty=%s >actual &&
+ 		test_cmp expect actual
+@@ -71,7 +75,6 @@ test_expect_success 'test submodule set-branch --default' '
+ '
+ 
+ test_expect_success 'test submodule set-branch -b' '
+-	test_commit -C submodule b &&
+ 	(cd super &&
+ 		git submodule set-branch -b topic submodule &&
+ 		grep "branch = topic" .gitmodules &&
+@@ -85,13 +88,12 @@ test_expect_success 'test submodule set-branch -b' '
+ '
+ 
+ test_expect_success 'test submodule set-branch -d' '
+-	test_commit -C submodule d &&
+ 	(cd super &&
+ 		git submodule set-branch -d submodule &&
+ 		! grep branch .gitmodules &&
+ 		git submodule update --remote &&
+ 		cat <<-\EOF >expect &&
+-		d
++		a
+ 		EOF
+ 		git -C submodule show -s --pretty=%s >actual &&
+ 		test_cmp expect actual
+-- 
+2.39.3 (Apple Git-145)
+

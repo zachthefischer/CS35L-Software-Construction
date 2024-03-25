@@ -1,0 +1,145 @@
+From b31e3cc620f926273af9346fbda4ff507f60682e Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 3 Jan 2024 07:22:34 +0100
+Subject: [PATCH 2645/2871] reftable/record: store "val2" hashes as static
+ arrays
+
+Similar to the preceding commit, convert ref records of type "val2" to
+store their object IDs in static arrays instead of allocating them for
+every single record.
+
+We're using the same benchmark as in the preceding commit, with `git
+show-ref --quiet` in a repository with ~350k refs. This time around
+though the effects aren't this huge. Before:
+
+    HEAP SUMMARY:
+        in use at exit: 21,163 bytes in 193 blocks
+      total heap usage: 1,419,040 allocs, 1,418,847 frees, 62,153,868 bytes allocated
+
+After:
+
+    HEAP SUMMARY:
+        in use at exit: 21,163 bytes in 193 blocks
+      total heap usage: 1,410,148 allocs, 1,409,955 frees, 61,976,068 bytes allocated
+
+This is because "val2"-type records are typically only stored for peeled
+tags, and the number of annotated tags in the benchmark repository is
+rather low. Still, it can be seen that this change leads to a reduction
+of allocations overall, even if only a small one.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/readwrite_test.c  | 12 ++++--------
+ reftable/record.c          |  6 ------
+ reftable/record_test.c     |  4 ----
+ reftable/reftable-record.h |  4 ++--
+ 4 files changed, 6 insertions(+), 20 deletions(-)
+
+diff --git a/reftable/readwrite_test.c b/reftable/readwrite_test.c
+index 87b238105c..178766dfa8 100644
+--- a/reftable/readwrite_test.c
++++ b/reftable/readwrite_test.c
+@@ -547,8 +547,6 @@ static void test_table_refs_for(int indexed)
+ 		uint8_t hash[GIT_SHA1_RAWSZ];
+ 		char fill[51] = { 0 };
+ 		char name[100];
+-		uint8_t hash1[GIT_SHA1_RAWSZ];
+-		uint8_t hash2[GIT_SHA1_RAWSZ];
+ 		struct reftable_ref_record ref = { NULL };
+ 
+ 		memset(hash, i, sizeof(hash));
+@@ -558,11 +556,9 @@ static void test_table_refs_for(int indexed)
+ 		name[40] = 0;
+ 		ref.refname = name;
+ 
+-		set_test_hash(hash1, i / 4);
+-		set_test_hash(hash2, 3 + i / 4);
+ 		ref.value_type = REFTABLE_REF_VAL2;
+-		ref.value.val2.value = hash1;
+-		ref.value.val2.target_value = hash2;
++		set_test_hash(ref.value.val2.value, i / 4);
++		set_test_hash(ref.value.val2.target_value, 3 + i / 4);
+ 
+ 		/* 80 bytes / entry, so 3 entries per block. Yields 17
+ 		 */
+@@ -570,8 +566,8 @@ static void test_table_refs_for(int indexed)
+ 		n = reftable_writer_add_ref(w, &ref);
+ 		EXPECT(n == 0);
+ 
+-		if (!memcmp(hash1, want_hash, GIT_SHA1_RAWSZ) ||
+-		    !memcmp(hash2, want_hash, GIT_SHA1_RAWSZ)) {
++		if (!memcmp(ref.value.val2.value, want_hash, GIT_SHA1_RAWSZ) ||
++		    !memcmp(ref.value.val2.target_value, want_hash, GIT_SHA1_RAWSZ)) {
+ 			want_names[want_names_len++] = xstrdup(name);
+ 		}
+ 	}
+diff --git a/reftable/record.c b/reftable/record.c
+index a67a6b4d8a..5c3fbb7b2a 100644
+--- a/reftable/record.c
++++ b/reftable/record.c
+@@ -222,9 +222,7 @@ static void reftable_ref_record_copy_from(void *rec, const void *src_rec,
+ 		memcpy(ref->value.val1, src->value.val1, hash_size);
+ 		break;
+ 	case REFTABLE_REF_VAL2:
+-		ref->value.val2.value = reftable_malloc(hash_size);
+ 		memcpy(ref->value.val2.value, src->value.val2.value, hash_size);
+-		ref->value.val2.target_value = reftable_malloc(hash_size);
+ 		memcpy(ref->value.val2.target_value,
+ 		       src->value.val2.target_value, hash_size);
+ 		break;
+@@ -298,8 +296,6 @@ void reftable_ref_record_release(struct reftable_ref_record *ref)
+ 		reftable_free(ref->value.symref);
+ 		break;
+ 	case REFTABLE_REF_VAL2:
+-		reftable_free(ref->value.val2.target_value);
+-		reftable_free(ref->value.val2.value);
+ 		break;
+ 	case REFTABLE_REF_VAL1:
+ 		break;
+@@ -401,11 +397,9 @@ static int reftable_ref_record_decode(void *rec, struct strbuf key,
+ 			return -1;
+ 		}
+ 
+-		r->value.val2.value = reftable_malloc(hash_size);
+ 		memcpy(r->value.val2.value, in.buf, hash_size);
+ 		string_view_consume(&in, hash_size);
+ 
+-		r->value.val2.target_value = reftable_malloc(hash_size);
+ 		memcpy(r->value.val2.target_value, in.buf, hash_size);
+ 		string_view_consume(&in, hash_size);
+ 		break;
+diff --git a/reftable/record_test.c b/reftable/record_test.c
+index 5c94d26e35..2876db7d27 100644
+--- a/reftable/record_test.c
++++ b/reftable/record_test.c
+@@ -122,11 +122,7 @@ static void test_reftable_ref_record_roundtrip(void)
+ 			set_hash(in.u.ref.value.val1, 1);
+ 			break;
+ 		case REFTABLE_REF_VAL2:
+-			in.u.ref.value.val2.value =
+-				reftable_malloc(GIT_SHA1_RAWSZ);
+ 			set_hash(in.u.ref.value.val2.value, 1);
+-			in.u.ref.value.val2.target_value =
+-				reftable_malloc(GIT_SHA1_RAWSZ);
+ 			set_hash(in.u.ref.value.val2.target_value, 2);
+ 			break;
+ 		case REFTABLE_REF_SYMREF:
+diff --git a/reftable/reftable-record.h b/reftable/reftable-record.h
+index 7f3a0df635..bb6e99acd3 100644
+--- a/reftable/reftable-record.h
++++ b/reftable/reftable-record.h
+@@ -41,8 +41,8 @@ struct reftable_ref_record {
+ 	union {
+ 		unsigned char val1[GIT_MAX_RAWSZ];
+ 		struct {
+-			uint8_t *value; /* first value, malloced hash  */
+-			uint8_t *target_value; /* second value, malloced hash */
++			unsigned char value[GIT_MAX_RAWSZ]; /* first hash  */
++			unsigned char target_value[GIT_MAX_RAWSZ]; /* second hash */
+ 		} val2;
+ 		char *symref; /* referent, malloced 0-terminated string */
+ 	} value;
+-- 
+2.39.3 (Apple Git-145)
+

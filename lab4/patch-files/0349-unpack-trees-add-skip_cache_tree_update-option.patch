@@ -1,0 +1,55 @@
+From 68fcd48bafa1ef51b1ba40a41cb0fcdbad7acce1 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Thu, 10 Nov 2022 19:06:02 +0000
+Subject: [PATCH 0349/2871] unpack-trees: add 'skip_cache_tree_update' option
+
+Add (disabled by default) option to skip the 'cache_tree_update()' at the
+end of 'unpack_trees()'. In many cases, this cache tree update is redundant
+because the caller of 'unpack_trees()' immediately follows it with
+'prime_cache_tree()', rebuilding the entire cache tree from scratch. While
+these operations aren't the most expensive part of operations like 'git
+reset', the duplicate calls still create a minor unnecessary slowdown.
+
+Introduce an option for callers to skip the 'cache_tree_update()' in
+'unpack_trees()' if it is redundant (that is, if 'prime_cache_tree()' is
+called afterwards). At the moment, no 'unpack_trees()' callers use the new
+option; they will be updated in subsequent patches.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ unpack-trees.c | 3 ++-
+ unpack-trees.h | 3 ++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/unpack-trees.c b/unpack-trees.c
+index bae812156c..8a762aa077 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -2043,7 +2043,8 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options
+ 		if (!ret) {
+ 			if (git_env_bool("GIT_TEST_CHECK_CACHE_TREE", 0))
+ 				cache_tree_verify(the_repository, &o->result);
+-			if (!cache_tree_fully_valid(o->result.cache_tree))
++			if (!o->skip_cache_tree_update &&
++			    !cache_tree_fully_valid(o->result.cache_tree))
+ 				cache_tree_update(&o->result,
+ 						  WRITE_TREE_SILENT |
+ 						  WRITE_TREE_REPAIR);
+diff --git a/unpack-trees.h b/unpack-trees.h
+index efb9edfbb2..6ab0d74c84 100644
+--- a/unpack-trees.h
++++ b/unpack-trees.h
+@@ -71,7 +71,8 @@ struct unpack_trees_options {
+ 		     quiet,
+ 		     exiting_early,
+ 		     show_all_errors,
+-		     dry_run;
++		     dry_run,
++		     skip_cache_tree_update;
+ 	enum unpack_trees_reset_type reset;
+ 	const char *prefix;
+ 	int cache_bottom;
+-- 
+2.39.3 (Apple Git-145)
+

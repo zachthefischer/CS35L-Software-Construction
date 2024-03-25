@@ -1,0 +1,51 @@
+From 798cddfa513cec8084c9db2f7ba807dc1c9b3d44 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:26 +0000
+Subject: [PATCH 2240/2871] documentation: add missing quotes
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-quiltimport.txt             | 4 ++--
+ Documentation/technical/parallel-checkout.txt | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-quiltimport.txt b/Documentation/git-quiltimport.txt
+index 70562dc4c0..40e02d92eb 100644
+--- a/Documentation/git-quiltimport.txt
++++ b/Documentation/git-quiltimport.txt
+@@ -38,14 +38,14 @@ OPTIONS
+ 	a patch.  At the time of this writing only missing author
+ 	information is warned about.
+ 
+---author Author Name <Author Email>::
++--author 'Author Name <Author Email>'::
+ 	The author name and email address to use when no author
+ 	information can be found in the patch description.
+ 
+ --patches <dir>::
+ 	The directory to find the quilt patches.
+ +
+-The default for the patch directory is patches
++The default for the patch directory is 'patches'
+ or the value of the `$QUILT_PATCHES` environment
+ variable.
+ 
+diff --git a/Documentation/technical/parallel-checkout.txt b/Documentation/technical/parallel-checkout.txt
+index b5f54dcd45..b4a144e5f4 100644
+--- a/Documentation/technical/parallel-checkout.txt
++++ b/Documentation/technical/parallel-checkout.txt
+@@ -126,7 +126,7 @@ Then, for each assigned item, each worker:
+ 
+ * W5: Writes the result to the file descriptor opened at W2.
+ 
+-* W6: Calls `fstat()` or lstat()` on the just-written path, and sends
++* W6: Calls `fstat()` or `lstat()` on the just-written path, and sends
+   the result back to the main process, together with the end status of
+   the operation and the item's identification number.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

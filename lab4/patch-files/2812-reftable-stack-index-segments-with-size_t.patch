@@ -1,0 +1,131 @@
+From 6d5e80fba2397708671cee6d9c5e394c4c187659 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 6 Feb 2024 07:35:35 +0100
+Subject: [PATCH 2812/2871] reftable/stack: index segments with `size_t`
+
+We use `int`s to index into arrays of segments and track the length of
+them, which is considered to be a code smell in the Git project. Convert
+the code to use `size_t` instead.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c      | 25 +++++++++++--------------
+ reftable/stack.h      |  6 +++---
+ reftable/stack_test.c |  7 +++----
+ 3 files changed, 17 insertions(+), 21 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index 1de2f6751c..5da4ea8141 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -1202,12 +1202,11 @@ int fastlog2(uint64_t sz)
+ 	return l - 1;
+ }
+ 
+-struct segment *sizes_to_segments(int *seglen, uint64_t *sizes, int n)
++struct segment *sizes_to_segments(size_t *seglen, uint64_t *sizes, size_t n)
+ {
+ 	struct segment *segs = reftable_calloc(n, sizeof(*segs));
+-	int next = 0;
+ 	struct segment cur = { 0 };
+-	int i = 0;
++	size_t next = 0, i;
+ 
+ 	if (n == 0) {
+ 		*seglen = 0;
+@@ -1233,29 +1232,27 @@ struct segment *sizes_to_segments(int *seglen, uint64_t *sizes, int n)
+ 	return segs;
+ }
+ 
+-struct segment suggest_compaction_segment(uint64_t *sizes, int n)
++struct segment suggest_compaction_segment(uint64_t *sizes, size_t n)
+ {
+-	int seglen = 0;
+-	struct segment *segs = sizes_to_segments(&seglen, sizes, n);
+ 	struct segment min_seg = {
+ 		.log = 64,
+ 	};
+-	int i = 0;
++	struct segment *segs;
++	size_t seglen = 0, i;
++
++	segs = sizes_to_segments(&seglen, sizes, n);
+ 	for (i = 0; i < seglen; i++) {
+-		if (segment_size(&segs[i]) == 1) {
++		if (segment_size(&segs[i]) == 1)
+ 			continue;
+-		}
+ 
+-		if (segs[i].log < min_seg.log) {
++		if (segs[i].log < min_seg.log)
+ 			min_seg = segs[i];
+-		}
+ 	}
+ 
+ 	while (min_seg.start > 0) {
+-		int prev = min_seg.start - 1;
+-		if (fastlog2(min_seg.bytes) < fastlog2(sizes[prev])) {
++		size_t prev = min_seg.start - 1;
++		if (fastlog2(min_seg.bytes) < fastlog2(sizes[prev]))
+ 			break;
+-		}
+ 
+ 		min_seg.start = prev;
+ 		min_seg.bytes += sizes[prev];
+diff --git a/reftable/stack.h b/reftable/stack.h
+index c1e3efa899..d919455669 100644
+--- a/reftable/stack.h
++++ b/reftable/stack.h
+@@ -32,13 +32,13 @@ struct reftable_stack {
+ int read_lines(const char *filename, char ***lines);
+ 
+ struct segment {
+-	int start, end;
++	size_t start, end;
+ 	int log;
+ 	uint64_t bytes;
+ };
+ 
+ int fastlog2(uint64_t sz);
+-struct segment *sizes_to_segments(int *seglen, uint64_t *sizes, int n);
+-struct segment suggest_compaction_segment(uint64_t *sizes, int n);
++struct segment *sizes_to_segments(size_t *seglen, uint64_t *sizes, size_t n);
++struct segment suggest_compaction_segment(uint64_t *sizes, size_t n);
+ 
+ #endif
+diff --git a/reftable/stack_test.c b/reftable/stack_test.c
+index 289e902146..2d5b24e5c5 100644
+--- a/reftable/stack_test.c
++++ b/reftable/stack_test.c
+@@ -711,7 +711,7 @@ static void test_sizes_to_segments(void)
+ 	uint64_t sizes[] = { 2, 3, 4, 5, 7, 9 };
+ 	/* .................0  1  2  3  4  5 */
+ 
+-	int seglen = 0;
++	size_t seglen = 0;
+ 	struct segment *segs =
+ 		sizes_to_segments(&seglen, sizes, ARRAY_SIZE(sizes));
+ 	EXPECT(segs[2].log == 3);
+@@ -726,7 +726,7 @@ static void test_sizes_to_segments(void)
+ 
+ static void test_sizes_to_segments_empty(void)
+ {
+-	int seglen = 0;
++	size_t seglen = 0;
+ 	struct segment *segs = sizes_to_segments(&seglen, NULL, 0);
+ 	EXPECT(seglen == 0);
+ 	reftable_free(segs);
+@@ -735,8 +735,7 @@ static void test_sizes_to_segments_empty(void)
+ static void test_sizes_to_segments_all_equal(void)
+ {
+ 	uint64_t sizes[] = { 5, 5 };
+-
+-	int seglen = 0;
++	size_t seglen = 0;
+ 	struct segment *segs =
+ 		sizes_to_segments(&seglen, sizes, ARRAY_SIZE(sizes));
+ 	EXPECT(seglen == 1);
+-- 
+2.39.3 (Apple Git-145)
+

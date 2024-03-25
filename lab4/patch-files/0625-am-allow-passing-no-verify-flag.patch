@@ -1,0 +1,141 @@
+From 566902f2db3bdad9be7fb083c713f0d21acf111e Mon Sep 17 00:00:00 2001
+From: Thierry Reding <treding@nvidia.com>
+Date: Wed, 30 Nov 2022 18:28:33 +0100
+Subject: [PATCH 0625/2871] am: allow passing --no-verify flag
+
+The git-am --no-verify flag is analogous to the same flag passed to
+git-commit. It bypasses the pre-applypatch and applypatch-msg hooks
+if they are enabled.
+
+Signed-off-by: Thierry Reding <treding@nvidia.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-am.txt |  8 +++++++-
+ builtin/am.c             | 11 ++++++++---
+ t/t4150-am.sh            | 32 ++++++++++++++++++++++++++++++++
+ 3 files changed, 47 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-am.txt b/Documentation/git-am.txt
+index 326276e51c..0c1dfb3c98 100644
+--- a/Documentation/git-am.txt
++++ b/Documentation/git-am.txt
+@@ -9,7 +9,7 @@ git-am - Apply a series of patches from a mailbox
+ SYNOPSIS
+ --------
+ [verse]
+-'git am' [--signoff] [--keep] [--[no-]keep-cr] [--[no-]utf8]
++'git am' [--signoff] [--keep] [--[no-]keep-cr] [--[no-]utf8] [--no-verify]
+ 	 [--[no-]3way] [--interactive] [--committer-date-is-author-date]
+ 	 [--ignore-date] [--ignore-space-change | --ignore-whitespace]
+ 	 [--whitespace=<option>] [-C<n>] [-p<n>] [--directory=<dir>]
+@@ -138,6 +138,12 @@ include::rerere-options.txt[]
+ --interactive::
+ 	Run interactively.
+ 
++-n::
++--no-verify::
++	By default, the pre-applypatch and applypatch-msg hooks are run.
++	When any of `--no-verify` or `-n` is given, these are bypassed.
++	See also linkgit:githooks[5].
++
+ --committer-date-is-author-date::
+ 	By default the command records the date from the e-mail
+ 	message as the commit author date, and uses the time of
+diff --git a/builtin/am.c b/builtin/am.c
+index 20aea0d248..26ad8a468d 100644
+--- a/builtin/am.c
++++ b/builtin/am.c
+@@ -117,6 +117,7 @@ struct am_state {
+ 
+ 	/* various operating modes and command line options */
+ 	int interactive;
++	int no_verify;
+ 	int threeway;
+ 	int quiet;
+ 	int signoff; /* enum signoff_type */
+@@ -472,10 +473,12 @@ static void am_destroy(const struct am_state *state)
+  */
+ static int run_applypatch_msg_hook(struct am_state *state)
+ {
+-	int ret;
++	int ret = 0;
+ 
+ 	assert(state->msg);
+-	ret = run_hooks_l("applypatch-msg", am_path(state, "final-commit"), NULL);
++
++	if (!state->no_verify)
++		ret = run_hooks_l("applypatch-msg", am_path(state, "final-commit"), NULL);
+ 
+ 	if (!ret) {
+ 		FREE_AND_NULL(state->msg);
+@@ -1640,7 +1643,7 @@ static void do_commit(const struct am_state *state)
+ 	const char *reflog_msg, *author, *committer = NULL;
+ 	struct strbuf sb = STRBUF_INIT;
+ 
+-	if (run_hooks("pre-applypatch"))
++	if (!state->no_verify && run_hooks("pre-applypatch"))
+ 		exit(1);
+ 
+ 	if (write_cache_as_tree(&tree, 0, NULL))
+@@ -2329,6 +2332,8 @@ int cmd_am(int argc, const char **argv, const char *prefix)
+ 	struct option options[] = {
+ 		OPT_BOOL('i', "interactive", &state.interactive,
+ 			N_("run interactively")),
++		OPT_BOOL('n', "no-verify", &state.no_verify,
++			N_("bypass pre-applypatch and applypatch-msg hooks")),
+ 		OPT_HIDDEN_BOOL('b', "binary", &binary,
+ 			N_("historical option -- no-op")),
+ 		OPT_BOOL('3', "3way", &state.threeway,
+diff --git a/t/t4150-am.sh b/t/t4150-am.sh
+index cdad4b6880..50b257e43f 100755
+--- a/t/t4150-am.sh
++++ b/t/t4150-am.sh
+@@ -345,6 +345,21 @@ test_expect_success 'am with failing applypatch-msg hook' '
+ 	test_cmp_rev first HEAD
+ '
+ 
++test_expect_success 'am with failing applypatch-msg hook (no verify)' '
++	rm -fr .git/rebase-apply &&
++	git reset --hard &&
++	git checkout first &&
++	test_hook applypatch-msg <<-\EOF &&
++	echo hook-message >"$1"
++	exit 1
++	EOF
++	git am --no-verify patch1 &&
++	test_path_is_missing .git/rebase-apply &&
++	git diff --exit-code second &&
++	git log -1 --format=format:%B >actual &&
++	test_cmp msg actual
++'
++
+ test_expect_success 'am with pre-applypatch hook' '
+ 	rm -fr .git/rebase-apply &&
+ 	git reset --hard &&
+@@ -374,6 +389,23 @@ test_expect_success 'am with failing pre-applypatch hook' '
+ 	test_cmp_rev first HEAD
+ '
+ 
++test_expect_success 'am with failing pre-applypatch hook (no verify)' '
++	rm -fr .git/rebase-apply &&
++	git reset --hard &&
++	git checkout first &&
++	touch empty-file &&
++	test_hook pre-applypatch <<-\EOF &&
++	rm empty-file
++	exit 1
++	EOF
++	git am --no-verify patch1 &&
++	test_path_is_missing .git/rebase-apply &&
++	test_path_is_file empty-file &&
++	git diff --exit-code second &&
++	git log -1 --format=format:%B >actual &&
++	test_cmp msg actual
++'
++
+ test_expect_success 'am with post-applypatch hook' '
+ 	rm -fr .git/rebase-apply &&
+ 	git reset --hard &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,68 @@
+From 6e210175c786247722bafca4103508421fa7dd30 Mon Sep 17 00:00:00 2001
+From: Shuqi Liang <cheskaqiqi@gmail.com>
+Date: Mon, 8 May 2023 16:21:40 -0400
+Subject: [PATCH 1415/2871] t1092: update a write-tree test
+
+* 'on all' in the title of the test 'write-tree on all' was unclear;
+remove it.
+
+* Add a baseline 'test_all_match git write-tree' before making any
+changes to the index, providing a reference point for the 'write-tree'
+prior to any modifications.
+
+* Add a comparison of the output of 'git status --porcelain=v2' to test
+the working tree after 'write-tree' exits.
+
+* Ensure SKIP_WORKTREE files weren't materialized on disk by using
+"test_path_is_missing".
+
+Signed-off-by: Shuqi Liang <cheskaqiqi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1092-sparse-checkout-compatibility.sh | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index 0c784813f1..3aa6356a85 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -2080,22 +2080,32 @@ test_expect_success 'grep sparse directory within submodules' '
+ 	test_cmp actual expect
+ '
+ 
+-test_expect_success 'write-tree on all' '
++test_expect_success 'write-tree' '
+ 	init_repos &&
+ 
++	test_all_match git write-tree &&
++
+ 	write_script edit-contents <<-\EOF &&
+ 	echo text >>"$1"
+ 	EOF
+ 
++	# make a change inside the sparse cone
+ 	run_on_all ../edit-contents deep/a &&
+-	run_on_all git update-index deep/a &&
++	test_all_match git update-index deep/a &&
+ 	test_all_match git write-tree &&
++	test_all_match git status --porcelain=v2 &&
+ 
++	# make a change outside the sparse cone
+ 	run_on_all mkdir -p folder1 &&
+ 	run_on_all cp a folder1/a &&
+ 	run_on_all ../edit-contents folder1/a &&
+-	run_on_all git update-index folder1/a &&
+-	test_all_match git write-tree
++	test_all_match git update-index folder1/a &&
++	test_all_match git write-tree &&
++	test_all_match git status --porcelain=v2 &&
++
++	# check that SKIP_WORKTREE files are not materialized
++	test_path_is_missing sparse-checkout/folder2/a &&
++	test_path_is_missing sparse-index/folder2/a
+ '
+ 
+ test_expect_success 'sparse-index is not expanded: write-tree' '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,207 @@
+From d88dbaa71864c42df1394be25234d7c187a12f48 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:41:51 -0700
+Subject: [PATCH 1228/2871] git-zlib: move declarations for git-zlib functions
+ from cache.h
+
+Move functions from cache.h for zlib.c into a new header file.  Since
+adding a "zlib.h" would cause issues with the real zlib, rename zlib.c
+to git-zlib.c while we are at it.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile                 |  2 +-
+ archive-tar.c            |  1 +
+ archive-zip.c            |  1 +
+ builtin/unpack-objects.c |  1 +
+ cache.h                  | 25 +------------------------
+ zlib.c => git-zlib.c     |  3 ++-
+ git-zlib.h               | 28 ++++++++++++++++++++++++++++
+ http-backend.c           |  1 +
+ http.h                   |  3 +++
+ 9 files changed, 39 insertions(+), 26 deletions(-)
+ rename zlib.c => git-zlib.c (99%)
+ create mode 100644 git-zlib.h
+
+diff --git a/Makefile b/Makefile
+index 50ee51fde3..0c367881bf 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1036,6 +1036,7 @@ LIB_OBJS += fsmonitor.o
+ LIB_OBJS += fsmonitor-ipc.o
+ LIB_OBJS += fsmonitor-settings.o
+ LIB_OBJS += gettext.o
++LIB_OBJS += git-zlib.o
+ LIB_OBJS += gpg-interface.o
+ LIB_OBJS += graph.o
+ LIB_OBJS += grep.o
+@@ -1196,7 +1197,6 @@ LIB_OBJS += write-or-die.o
+ LIB_OBJS += ws.o
+ LIB_OBJS += wt-status.o
+ LIB_OBJS += xdiff-interface.o
+-LIB_OBJS += zlib.o
+ 
+ BUILTIN_OBJS += builtin/add.o
+ BUILTIN_OBJS += builtin/am.o
+diff --git a/archive-tar.c b/archive-tar.c
+index 497dad0b3a..4cd81d8161 100644
+--- a/archive-tar.c
++++ b/archive-tar.c
+@@ -5,6 +5,7 @@
+ #include "alloc.h"
+ #include "config.h"
+ #include "gettext.h"
++#include "git-zlib.h"
+ #include "hex.h"
+ #include "tar.h"
+ #include "archive.h"
+diff --git a/archive-zip.c b/archive-zip.c
+index e6f5c10a14..ef538a90df 100644
+--- a/archive-zip.c
++++ b/archive-zip.c
+@@ -5,6 +5,7 @@
+ #include "config.h"
+ #include "archive.h"
+ #include "gettext.h"
++#include "git-zlib.h"
+ #include "hex.h"
+ #include "streaming.h"
+ #include "utf8.h"
+diff --git a/builtin/unpack-objects.c b/builtin/unpack-objects.c
+index f2c1323e66..ddbdb3dd22 100644
+--- a/builtin/unpack-objects.c
++++ b/builtin/unpack-objects.c
+@@ -4,6 +4,7 @@
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
++#include "git-zlib.h"
+ #include "hex.h"
+ #include "object-store.h"
+ #include "object.h"
+diff --git a/cache.h b/cache.h
+index 21db5da39a..c06778b69c 100644
+--- a/cache.h
++++ b/cache.h
+@@ -3,6 +3,7 @@
+ 
+ #include "git-compat-util.h"
+ #include "strbuf.h"
++#include "git-zlib.h"
+ #include "hashmap.h"
+ #include "list.h"
+ #include "gettext.h"
+@@ -14,30 +15,6 @@
+ #include "repository.h"
+ #include "statinfo.h"
+ 
+-typedef struct git_zstream {
+-	z_stream z;
+-	unsigned long avail_in;
+-	unsigned long avail_out;
+-	unsigned long total_in;
+-	unsigned long total_out;
+-	unsigned char *next_in;
+-	unsigned char *next_out;
+-} git_zstream;
+-
+-void git_inflate_init(git_zstream *);
+-void git_inflate_init_gzip_only(git_zstream *);
+-void git_inflate_end(git_zstream *);
+-int git_inflate(git_zstream *, int flush);
+-
+-void git_deflate_init(git_zstream *, int level);
+-void git_deflate_init_gzip(git_zstream *, int level);
+-void git_deflate_init_raw(git_zstream *, int level);
+-void git_deflate_end(git_zstream *);
+-int git_deflate_abort(git_zstream *);
+-int git_deflate_end_gently(git_zstream *);
+-int git_deflate(git_zstream *, int flush);
+-unsigned long git_deflate_bound(git_zstream *, unsigned long);
+-
+ #if defined(DT_UNKNOWN) && !defined(NO_D_TYPE_IN_DIRENT)
+ #define DTYPE(de)	((de)->d_type)
+ #else
+diff --git a/zlib.c b/git-zlib.c
+similarity index 99%
+rename from zlib.c
+rename to git-zlib.c
+index d594cba3fc..d43bbeb6da 100644
+--- a/zlib.c
++++ b/git-zlib.c
+@@ -2,7 +2,8 @@
+  * zlib wrappers to make sure we don't silently miss errors
+  * at init time.
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
++#include "git-zlib.h"
+ 
+ static const char *zerr_to_string(int status)
+ {
+diff --git a/git-zlib.h b/git-zlib.h
+new file mode 100644
+index 0000000000..d8a670aff9
+--- /dev/null
++++ b/git-zlib.h
+@@ -0,0 +1,28 @@
++#ifndef GIT_ZLIB_H
++#define GIT_ZLIB_H
++
++typedef struct git_zstream {
++	z_stream z;
++	unsigned long avail_in;
++	unsigned long avail_out;
++	unsigned long total_in;
++	unsigned long total_out;
++	unsigned char *next_in;
++	unsigned char *next_out;
++} git_zstream;
++
++void git_inflate_init(git_zstream *);
++void git_inflate_init_gzip_only(git_zstream *);
++void git_inflate_end(git_zstream *);
++int git_inflate(git_zstream *, int flush);
++
++void git_deflate_init(git_zstream *, int level);
++void git_deflate_init_gzip(git_zstream *, int level);
++void git_deflate_init_raw(git_zstream *, int level);
++void git_deflate_end(git_zstream *);
++int git_deflate_abort(git_zstream *);
++int git_deflate_end_gently(git_zstream *);
++int git_deflate(git_zstream *, int flush);
++unsigned long git_deflate_bound(git_zstream *, unsigned long);
++
++#endif /* GIT_ZLIB_H */
+diff --git a/http-backend.c b/http-backend.c
+index 89aad1b42c..d41b3b9e1e 100644
+--- a/http-backend.c
++++ b/http-backend.c
+@@ -2,6 +2,7 @@
+ #include "alloc.h"
+ #include "config.h"
+ #include "environment.h"
++#include "git-zlib.h"
+ #include "hex.h"
+ #include "repository.h"
+ #include "refs.h"
+diff --git a/http.h b/http.h
+index 77c042706c..783b2b09b8 100644
+--- a/http.h
++++ b/http.h
+@@ -1,7 +1,10 @@
+ #ifndef HTTP_H
+ #define HTTP_H
+ 
++struct packed_git;
++
+ #include "cache.h"
++#include "git-zlib.h"
+ 
+ #include <curl/curl.h>
+ #include <curl/easy.h>
+-- 
+2.39.3 (Apple Git-145)
+

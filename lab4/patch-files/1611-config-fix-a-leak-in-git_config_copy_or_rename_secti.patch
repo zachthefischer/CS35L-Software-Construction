@@ -1,0 +1,63 @@
+From 5e786ed3ee109f166b05916f3f5410f76164f8db Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 17 Jun 2023 08:41:40 +0200
+Subject: [PATCH 1611/2871] config: fix a leak in
+ git_config_copy_or_rename_section_in_file
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A branch can have its configuration spread over several configuration
+sections.  This situation was already foreseen in 52d59cc645 (branch:
+add a --copy (-c) option to go with --move (-m), 2017-06-18) when
+"branch -c" was introduced.
+
+Unfortunately, a leak was also introduced:
+
+   $ git branch foo
+   $ cat >> .git/config <<EOF
+   [branch "foo"]
+   	some-key-a = a value
+   [branch "foo"]
+   	some-key-b = b value
+   [branch "foo"]
+   	some-key-c = c value
+   EOF
+   $ git branch -c foo bar
+
+   Direct leak of 130 byte(s) in 2 object(s) allocated from:
+       ... in xrealloc wrapper.c
+       ... in strbuf_grow strbuf.c
+       ... in strbuf_vaddf strbuf.c
+       ... in strbuf_addf strbuf.c
+       ... in store_create_section config.c
+       ... in git_config_copy_or_rename_section_in_file config.c
+       ... in git_config_copy_section_in_file config.c
+       ... in git_config_copy_section config.c
+       ... in copy_or_rename_branch builtin/branch.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+Let's fix it.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/config.c b/config.c
+index 39a7d7422c..207e4394a3 100644
+--- a/config.c
++++ b/config.c
+@@ -3833,6 +3833,7 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
+ 						output[0] = '\t';
+ 					}
+ 				} else {
++					strbuf_release(&copystr);
+ 					copystr = store_create_section(new_name, &store);
+ 				}
+ 			}
+-- 
+2.39.3 (Apple Git-145)
+

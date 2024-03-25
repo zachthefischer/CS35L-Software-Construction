@@ -1,0 +1,91 @@
+From 2811019f47b7b6f4be256598612c3f574d8c242d Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Thu, 1 Feb 2024 01:38:01 +0000
+Subject: [PATCH 2792/2871] index-pack: test and document
+ --strict=<msg-id>=<severity>...
+
+5d477a334a (fsck (receive-pack): allow demoting errors to warnings,
+2015-06-22) allowed a list of fsck msg to downgrade to be passed to
+--strict. However this is a hidden argument that was not documented nor
+tested. Though it is true that most users would not call this option
+directly, (nor use index-pack for that matter) it is still useful to
+document and test this feature.
+
+Reviewed-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-index-pack.txt |  9 +++++++--
+ builtin/index-pack.c             |  2 +-
+ t/t5300-pack-object.sh           | 22 ++++++++++++++++++++++
+ 3 files changed, 30 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-index-pack.txt b/Documentation/git-index-pack.txt
+index 6486620c3d..694bb9409b 100644
+--- a/Documentation/git-index-pack.txt
++++ b/Documentation/git-index-pack.txt
+@@ -79,8 +79,13 @@ OPTIONS
+ 	to force the version for the generated pack index, and to force
+ 	64-bit index entries on objects located above the given offset.
+ 
+---strict::
+-	Die, if the pack contains broken objects or links.
++--strict[=<msg-id>=<severity>...]::
++	Die, if the pack contains broken objects or links. An optional
++	comma-separated list of `<msg-id>=<severity>` can be passed to change
++	the severity of some possible issues, e.g.,
++	 `--strict="missingEmail=ignore,badTagName=error"`. See the entry for the
++	`fsck.<msg-id>` configuration options in linkgit:git-fsck[1] for more
++	information on the possible values of `<msg-id>` and `<severity>`.
+ 
+ --progress-title::
+ 	For internal use only.
+diff --git a/builtin/index-pack.c b/builtin/index-pack.c
+index dda94a9f46..49a7c53259 100644
+--- a/builtin/index-pack.c
++++ b/builtin/index-pack.c
+@@ -26,7 +26,7 @@
+ #include "setup.h"
+ 
+ static const char index_pack_usage[] =
+-"git index-pack [-v] [-o <index-file>] [--keep | --keep=<msg>] [--[no-]rev-index] [--verify] [--strict] (<pack-file> | --stdin [--fix-thin] [<pack-file>])";
++"git index-pack [-v] [-o <index-file>] [--keep | --keep=<msg>] [--[no-]rev-index] [--verify] [--strict[=<msg-id>=<severity>...]] (<pack-file> | --stdin [--fix-thin] [<pack-file>])";
+ 
+ struct object_entry {
+ 	struct pack_idx_entry idx;
+diff --git a/t/t5300-pack-object.sh b/t/t5300-pack-object.sh
+index d402ec18b7..496fffa0f8 100755
+--- a/t/t5300-pack-object.sh
++++ b/t/t5300-pack-object.sh
+@@ -441,6 +441,28 @@ test_expect_success 'index-pack with --strict' '
+ 	)
+ '
+ 
++test_expect_success 'index-pack with --strict downgrading fsck msgs' '
++	test_when_finished rm -rf strict &&
++	git init strict &&
++	(
++		cd strict &&
++		test_commit first hello &&
++		cat >commit <<-EOF &&
++		tree $(git rev-parse HEAD^{tree})
++		parent $(git rev-parse HEAD)
++		author A U Thor
++		committer A U Thor
++
++		commit: this is a commit with bad emails
++
++		EOF
++		git hash-object --literally -t commit -w --stdin <commit >commit_list &&
++		PACK=$(git pack-objects test <commit_list) &&
++		test_must_fail git index-pack --strict "test-$PACK.pack" &&
++		git index-pack --strict="missingEmail=ignore" "test-$PACK.pack"
++	)
++'
++
+ test_expect_success 'honor pack.packSizeLimit' '
+ 	git config pack.packSizeLimit 3m &&
+ 	packname_10=$(git pack-objects test-10 <obj-list) &&
+-- 
+2.39.3 (Apple Git-145)
+

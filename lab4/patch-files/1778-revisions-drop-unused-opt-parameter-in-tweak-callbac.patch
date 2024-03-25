@@ -1,0 +1,94 @@
+From cc88afad622b8166563cc6bd68de3155ec558ab0 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:44:16 -0400
+Subject: [PATCH 1778/2871] revisions: drop unused "opt" parameter in "tweak"
+ callbacks
+
+The setup_revision_opt struct has a "tweak" function pointer, which can
+be used to adjust parameters after setup_revisions() parses arguments,
+but before it finalizes setup. In addition to the rev_info struct, the
+callback receives a pointer to the setup_revision_opt, as well.
+
+But none of the existing callbacks looks at the extra "opt" parameter,
+leading to -Wunused-parameter warnings.
+
+We could mark it as UNUSED, but instead let's remove it entirely. It's
+conceivable that it could be useful for a callback to have access to the
+"opt" struct. But in the 13 years that this mechanism has existed,
+nobody has used it. So let's just drop it in the name of simplifying.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/diff-tree.c | 2 +-
+ builtin/log.c       | 6 ++----
+ revision.c          | 2 +-
+ revision.h          | 2 +-
+ 4 files changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/diff-tree.c b/builtin/diff-tree.c
+index d62caa6c8b..c9ba35f143 100644
+--- a/builtin/diff-tree.c
++++ b/builtin/diff-tree.c
+@@ -99,7 +99,7 @@ static const char diff_tree_usage[] =
+ "  --root        include the initial commit as diff against /dev/null\n"
+ COMMON_DIFF_OPTIONS_HELP;
+ 
+-static void diff_tree_tweak_rev(struct rev_info *rev, struct setup_revision_opt *opt)
++static void diff_tree_tweak_rev(struct rev_info *rev)
+ {
+ 	if (!rev->diffopt.output_format) {
+ 		if (rev->dense_combined_merges)
+diff --git a/builtin/log.c b/builtin/log.c
+index 1aca560ec3..96b60c1610 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -719,8 +719,7 @@ static int show_tree_object(const struct object_id *oid UNUSED,
+ 	return 0;
+ }
+ 
+-static void show_setup_revisions_tweak(struct rev_info *rev,
+-				       struct setup_revision_opt *opt)
++static void show_setup_revisions_tweak(struct rev_info *rev)
+ {
+ 	if (rev->first_parent_only)
+ 		diff_merges_default_to_first_parent(rev);
+@@ -863,8 +862,7 @@ int cmd_log_reflog(int argc, const char **argv, const char *prefix)
+ 	return cmd_log_deinit(cmd_log_walk(&rev), &rev);
+ }
+ 
+-static void log_setup_revisions_tweak(struct rev_info *rev,
+-				      struct setup_revision_opt *opt)
++static void log_setup_revisions_tweak(struct rev_info *rev)
+ {
+ 	if (rev->diffopt.flags.default_follow_renames &&
+ 	    diff_check_follow_pathspec(&rev->prune_data, 0))
+diff --git a/revision.c b/revision.c
+index d66857ecc0..ea5ab59654 100644
+--- a/revision.c
++++ b/revision.c
+@@ -2971,7 +2971,7 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
+ 	if (!revs->def)
+ 		revs->def = opt ? opt->def : NULL;
+ 	if (opt && opt->tweak)
+-		opt->tweak(revs, opt);
++		opt->tweak(revs);
+ 	if (revs->show_merge)
+ 		prepare_show_merge(revs);
+ 	if (revs->def && !revs->pending.nr && !revs->rev_input_given) {
+diff --git a/revision.h b/revision.h
+index 25776af381..18f49565c2 100644
+--- a/revision.h
++++ b/revision.h
+@@ -428,7 +428,7 @@ void repo_init_revisions(struct repository *r,
+  */
+ struct setup_revision_opt {
+ 	const char *def;
+-	void (*tweak)(struct rev_info *, struct setup_revision_opt *);
++	void (*tweak)(struct rev_info *);
+ 	unsigned int	assume_dashdash:1,
+ 			allow_exclude_promisor_objects:1,
+ 			free_removed_argv_elements:1;
+-- 
+2.39.3 (Apple Git-145)
+

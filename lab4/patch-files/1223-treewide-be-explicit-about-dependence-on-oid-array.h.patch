@@ -1,0 +1,158 @@
+From 6f2d74304335f571374f786537b2efe5aba9f48c Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 03:00:42 +0000
+Subject: [PATCH 1223/2871] treewide: be explicit about dependence on
+ oid-array.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bisect.c     | 1 +
+ builtin/fetch.c      | 1 +
+ builtin/index-pack.c | 1 +
+ builtin/log.c        | 1 +
+ cache.h              | 1 -
+ commit-graph.c       | 1 +
+ diff.c               | 1 +
+ merge-ort.c          | 1 +
+ read-cache.c         | 1 +
+ ref-filter.c         | 1 +
+ upload-pack.c        | 1 +
+ 11 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index 26f07357a0..7dc175c657 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -9,6 +9,7 @@
+ #include "dir.h"
+ #include "strvec.h"
+ #include "run-command.h"
++#include "oid-array.h"
+ #include "prompt.h"
+ #include "quote.h"
+ #include "revision.h"
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index f2b8098775..e093662921 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -12,6 +12,7 @@
+ #include "refspec.h"
+ #include "object-store.h"
+ #include "oidset.h"
++#include "oid-array.h"
+ #include "commit.h"
+ #include "builtin.h"
+ #include "string-list.h"
+diff --git a/builtin/index-pack.c b/builtin/index-pack.c
+index ceb0f120ed..5adfb2521c 100644
+--- a/builtin/index-pack.c
++++ b/builtin/index-pack.c
+@@ -19,6 +19,7 @@
+ #include "packfile.h"
+ #include "pack-revindex.h"
+ #include "object-store.h"
++#include "oid-array.h"
+ #include "replace-object.h"
+ #include "promisor-remote.h"
+ #include "setup.h"
+diff --git a/builtin/log.c b/builtin/log.c
+index 2ce645eee9..094897df23 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -20,6 +20,7 @@
+ #include "revision.h"
+ #include "log-tree.h"
+ #include "builtin.h"
++#include "oid-array.h"
+ #include "tag.h"
+ #include "reflog-walk.h"
+ #include "patch-ids.h"
+diff --git a/cache.h b/cache.h
+index 5f1279454a..6eac3134a2 100644
+--- a/cache.h
++++ b/cache.h
+@@ -11,7 +11,6 @@
+ #include "path.h"
+ #include "pathspec.h"
+ #include "object.h"
+-#include "oid-array.h"
+ #include "repository.h"
+ #include "statinfo.h"
+ #include "mem-pool.h"
+diff --git a/commit-graph.c b/commit-graph.c
+index 1bf673b134..fe9a8b2342 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -12,6 +12,7 @@
+ #include "hash-lookup.h"
+ #include "commit-graph.h"
+ #include "object-store.h"
++#include "oid-array.h"
+ #include "alloc.h"
+ #include "hashmap.h"
+ #include "replace-object.h"
+diff --git a/diff.c b/diff.c
+index 47c1973a50..89cd0b17da 100644
+--- a/diff.c
++++ b/diff.c
+@@ -29,6 +29,7 @@
+ #include "string-list.h"
+ #include "strvec.h"
+ #include "graph.h"
++#include "oid-array.h"
+ #include "packfile.h"
+ #include "parse-options.h"
+ #include "help.h"
+diff --git a/merge-ort.c b/merge-ort.c
+index ad7367179d..9b0b184b13 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -32,6 +32,7 @@
+ #include "entry.h"
+ #include "ll-merge.h"
+ #include "object-store.h"
++#include "oid-array.h"
+ #include "promisor-remote.h"
+ #include "revision.h"
+ #include "strmap.h"
+diff --git a/read-cache.c b/read-cache.c
+index a744eb89e4..1b585ce842 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -15,6 +15,7 @@
+ #include "refs.h"
+ #include "dir.h"
+ #include "object-store.h"
++#include "oid-array.h"
+ #include "tree.h"
+ #include "commit.h"
+ #include "blob.h"
+diff --git a/ref-filter.c b/ref-filter.c
+index df84bb7164..1c6174c8ae 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -7,6 +7,7 @@
+ #include "refs.h"
+ #include "wildmatch.h"
+ #include "object-store.h"
++#include "oid-array.h"
+ #include "repository.h"
+ #include "commit.h"
+ #include "remote.h"
+diff --git a/upload-pack.c b/upload-pack.c
+index 71440c6380..e17545a834 100644
+--- a/upload-pack.c
++++ b/upload-pack.c
+@@ -8,6 +8,7 @@
+ #include "sideband.h"
+ #include "repository.h"
+ #include "object-store.h"
++#include "oid-array.h"
+ #include "tag.h"
+ #include "object.h"
+ #include "commit.h"
+-- 
+2.39.3 (Apple Git-145)
+

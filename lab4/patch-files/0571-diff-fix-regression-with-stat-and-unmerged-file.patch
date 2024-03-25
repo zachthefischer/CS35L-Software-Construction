@@ -1,0 +1,60 @@
+From 209d9cb0114dff72e96d58bb3c27409660f1b45c Mon Sep 17 00:00:00 2001
+From: Peter Grayson <pete@jpgrayson.net>
+Date: Wed, 14 Dec 2022 12:41:51 -0500
+Subject: [PATCH 0571/2871] diff: fix regression with --stat and unmerged file
+
+A regression was introduced in
+
+  12fc4ad89e (diff.c: use utf8_strwidth() to count display width, 2022-09-14)
+
+that causes missing newlines after "Unmerged" entries in `git diff
+--cached --stat` output.
+
+This problem affects v2.39.0-rc0 through v2.39.0.
+
+Add the missing newline along with a new test to cover this
+behavior.
+
+Signed-off-by: Peter Grayson <pete@jpgrayson.net>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                   |  2 +-
+ t/t4046-diff-unmerged.sh | 10 ++++++++++
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/diff.c b/diff.c
+index 2751cae131..7e88d7e27a 100644
+--- a/diff.c
++++ b/diff.c
+@@ -2784,7 +2784,7 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 		else if (file->is_unmerged) {
+ 			strbuf_addf(&out, " %s%s%*s | %*s",
+ 				    prefix, name, padding, "",
+-				    number_width, "Unmerged");
++				    number_width, "Unmerged\n");
+ 			emit_diff_symbol(options, DIFF_SYMBOL_STATS_LINE,
+ 					 out.buf, out.len, 0);
+ 			strbuf_reset(&out);
+diff --git a/t/t4046-diff-unmerged.sh b/t/t4046-diff-unmerged.sh
+index 0ae0cd3a52..ffaf69335f 100755
+--- a/t/t4046-diff-unmerged.sh
++++ b/t/t4046-diff-unmerged.sh
+@@ -86,4 +86,14 @@ test_expect_success 'diff-files -3' '
+ 	test_cmp diff-files-3.expect diff-files-3.actual
+ '
+ 
++test_expect_success 'diff --stat' '
++	for path in $paths
++	do
++		echo " $path | Unmerged" || return 1
++	done >diff-stat.expect &&
++	echo " 0 files changed" >>diff-stat.expect &&
++	git diff --cached --stat >diff-stat.actual &&
++	test_cmp diff-stat.expect diff-stat.actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

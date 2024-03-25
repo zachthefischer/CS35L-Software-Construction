@@ -1,0 +1,32 @@
+From b032a2bfe74e46acc451873ee5ebbf7f61b738ce Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Mon, 1 May 2023 22:02:39 +0200
+Subject: [PATCH 1383/2871] doc: interpret-trailers: use input redirection
+
+Use input redirection instead of invoking cat(1) on a single file. This
+is more straightforward, saves a process, and often makes the line
+shorter.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 4f4eb7a7fc..4ff8be7f2e 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -280,7 +280,7 @@ $ cat msg.txt
+ subject
+ 
+ message
+-$ cat msg.txt | git interpret-trailers --trailer 'sign: Alice <alice@example.com>' --trailer 'sign: Bob <bob@example.com>'
++$ git interpret-trailers --trailer 'sign: Alice <alice@example.com>' --trailer 'sign: Bob <bob@example.com>' <msg.txt
+ subject
+ 
+ message
+-- 
+2.39.3 (Apple Git-145)
+

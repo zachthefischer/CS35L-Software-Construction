@@ -1,0 +1,30 @@
+From a9cad02538a8e0518f000ad99099193d764fe795 Mon Sep 17 00:00:00 2001
+From: Gwyneth Morgan <gwymor@tilde.club>
+Date: Wed, 25 Jan 2023 23:47:27 +0000
+Subject: [PATCH 0752/2871] request-pull: filter out SSH/X.509 tag signatures
+
+git request-pull filters PGP signatures out of the tag message, but not
+SSH or X.509 signatures.
+
+Signed-off-by: Gwyneth Morgan <gwymor@tilde.club>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-request-pull.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/git-request-pull.sh b/git-request-pull.sh
+index 2d0e44656c..01640a044b 100755
+--- a/git-request-pull.sh
++++ b/git-request-pull.sh
+@@ -153,7 +153,7 @@ for you to fetch changes up to %H:
+ if test $(git cat-file -t "$head") = tag
+ then
+ 	git cat-file tag "$head" |
+-	sed -n -e '1,/^$/d' -e '/^-----BEGIN PGP /q' -e p
++	sed -n -e '1,/^$/d' -e '/^-----BEGIN \(PGP\|SSH\|SIGNED\) /q' -e p
+ 	echo
+ 	echo "----------------------------------------------------------------"
+ fi &&
+-- 
+2.39.3 (Apple Git-145)
+

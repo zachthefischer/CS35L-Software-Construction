@@ -1,0 +1,73 @@
+From 3c50c88f426dddd6c4cb1c1ae847a1eddd5eafee Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:31 -0500
+Subject: [PATCH 0937/2871] notes: mark unused callback parameters
+
+for_each_note() requires a callback, but not all callbacks need all of
+the parameters. Likewise, init_notes() takes a callback to implement the
+"combine" strategy, but the "ignore" variant obviously doesn't look at
+its arguments at all. Mark unused parameters as appropriate to silence
+compiler warnings.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/notes.c |  5 +++--
+ notes.c         | 11 ++++++-----
+ 2 files changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/notes.c b/builtin/notes.c
+index 80d9dfd25c..d5713a9fac 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -113,8 +113,9 @@ static void free_note_data(struct note_data *d)
+ }
+ 
+ static int list_each_note(const struct object_id *object_oid,
+-		const struct object_id *note_oid, char *note_path,
+-		void *cb_data)
++			  const struct object_id *note_oid,
++			  char *note_path UNUSED,
++			  void *cb_data UNUSED)
+ {
+ 	printf("%s %s\n", oid_to_hex(note_oid), oid_to_hex(object_oid));
+ 	return 0;
+diff --git a/notes.c b/notes.c
+index f2805d51bb..20af123d91 100644
+--- a/notes.c
++++ b/notes.c
+@@ -752,7 +752,7 @@ static int write_each_non_note_until(const char *note_path,
+ 	return 0;
+ }
+ 
+-static int write_each_note(const struct object_id *object_oid,
++static int write_each_note(const struct object_id *object_oid UNUSED,
+ 		const struct object_id *note_oid, char *note_path,
+ 		void *cb_data)
+ {
+@@ -780,8 +780,9 @@ struct note_delete_list {
+ };
+ 
+ static int prune_notes_helper(const struct object_id *object_oid,
+-		const struct object_id *note_oid, char *note_path,
+-		void *cb_data)
++			      const struct object_id *note_oid UNUSED,
++			      char *note_path UNUSED,
++			      void *cb_data)
+ {
+ 	struct note_delete_list **l = (struct note_delete_list **) cb_data;
+ 	struct note_delete_list *n;
+@@ -848,8 +849,8 @@ int combine_notes_overwrite(struct object_id *cur_oid,
+ 	return 0;
+ }
+ 
+-int combine_notes_ignore(struct object_id *cur_oid,
+-			 const struct object_id *new_oid)
++int combine_notes_ignore(struct object_id *cur_oid UNUSED,
++			 const struct object_id *new_oid UNUSED)
+ {
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

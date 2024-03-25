@@ -1,0 +1,106 @@
+From b388633c5c47bf4fc12560d8b237ec0bd319ba4a Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:14 +0000
+Subject: [PATCH 1327/2871] pkt-line.h: move declarations for pkt-line.c
+ functions from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bundle.c    | 1 +
+ builtin/clone.c     | 1 +
+ builtin/fetch.c     | 1 +
+ builtin/ls-remote.c | 1 +
+ builtin/push.c      | 1 +
+ cache.h             | 3 ---
+ pkt-line.h          | 2 ++
+ 7 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/bundle.c b/builtin/bundle.c
+index e68fc83d94..584d905d96 100644
+--- a/builtin/bundle.c
++++ b/builtin/bundle.c
+@@ -4,6 +4,7 @@
+ #include "setup.h"
+ #include "strvec.h"
+ #include "parse-options.h"
++#include "pkt-line.h"
+ #include "cache.h"
+ #include "bundle.h"
+ 
+diff --git a/builtin/clone.c b/builtin/clone.c
+index 017ebc3faa..fa300f483e 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -39,6 +39,7 @@
+ #include "setup.h"
+ #include "connected.h"
+ #include "packfile.h"
++#include "pkt-line.h"
+ #include "list-objects-filter-options.h"
+ #include "hook.h"
+ #include "bundle.h"
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 61e8ac113b..4fee2a6237 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -29,6 +29,7 @@
+ #include "utf8.h"
+ #include "packfile.h"
+ #include "pager.h"
++#include "pkt-line.h"
+ #include "list-objects-filter-options.h"
+ #include "commit-reach.h"
+ #include "branch.h"
+diff --git a/builtin/ls-remote.c b/builtin/ls-remote.c
+index 11d9424804..7972febf72 100644
+--- a/builtin/ls-remote.c
++++ b/builtin/ls-remote.c
+@@ -3,6 +3,7 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "transport.h"
++#include "pkt-line.h"
+ #include "ref-filter.h"
+ #include "remote.h"
+ #include "refs.h"
+diff --git a/builtin/push.c b/builtin/push.c
+index 6001e4ae0a..7d2b0505aa 100644
+--- a/builtin/push.c
++++ b/builtin/push.c
+@@ -14,6 +14,7 @@
+ #include "remote.h"
+ #include "transport.h"
+ #include "parse-options.h"
++#include "pkt-line.h"
+ #include "submodule.h"
+ #include "submodule-config.h"
+ #include "send-pack.h"
+diff --git a/cache.h b/cache.h
+index b89f4c5980..fde782a96f 100644
+--- a/cache.h
++++ b/cache.h
+@@ -593,9 +593,6 @@ int df_name_compare(const char *name1, size_t len1, int mode1,
+ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2);
+ int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2);
+ 
+-/* pkt-line.c */
+-void packet_trace_identity(const char *prog);
+-
+ /* add */
+ /*
+  * return 0 if success, 1 - if addition of a file failed and
+diff --git a/pkt-line.h b/pkt-line.h
+index 8e9846f315..7c23a4bfaf 100644
+--- a/pkt-line.h
++++ b/pkt-line.h
+@@ -246,4 +246,6 @@ void packet_writer_error(struct packet_writer *writer, const char *fmt, ...);
+ void packet_writer_delim(struct packet_writer *writer);
+ void packet_writer_flush(struct packet_writer *writer);
+ 
++void packet_trace_identity(const char *prog);
++
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

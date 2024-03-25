@@ -1,0 +1,58 @@
+From d6546af75c3cda2815f2e4d5322dd7a41cc0963b Mon Sep 17 00:00:00 2001
+From: "brian m. carlson" <bk2204@github.com>
+Date: Tue, 27 Jun 2023 16:18:56 +0000
+Subject: [PATCH 1689/2871] t: add a function to check executable bit
+
+In line with our other helper functions for paths, let's add a function
+to check whether a path is executable, and if not, print a suitable
+error message.  Document this function, and note that it must only be
+used under the POSIXPERM prerequisite, since it doesn't otherwise work
+on Windows.
+
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/README                | 6 ++++++
+ t/test-lib-functions.sh | 9 +++++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/t/README b/t/README
+index bdfac4cceb..3e155011de 100644
+--- a/t/README
++++ b/t/README
+@@ -1098,6 +1098,12 @@ see test-lib-functions.sh for the full list and their options.
+    the symbolic link in the file system and a part that does; then only
+    the latter part need be protected by a SYMLINKS prerequisite (see below).
+ 
++ - test_path_is_executable
++
++   This tests whether a file is executable and prints an error message
++   if not. This must be used only under the POSIXPERM prerequisite
++   (see below).
++
+  - test_oid_init
+ 
+    This function loads facts and useful object IDs related to the hash
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 6e19ebc922..2ef579edf3 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -901,6 +901,15 @@ test_path_is_symlink () {
+ 	fi
+ }
+ 
++test_path_is_executable () {
++	test "$#" -ne 1 && BUG "1 param"
++	if ! test -x "$1"
++	then
++		echo "$1 is not executable"
++		false
++	fi
++}
++
+ # Check if the directory exists and is empty as expected, barf otherwise.
+ test_dir_is_empty () {
+ 	test "$#" -ne 1 && BUG "1 param"
+-- 
+2.39.3 (Apple Git-145)
+

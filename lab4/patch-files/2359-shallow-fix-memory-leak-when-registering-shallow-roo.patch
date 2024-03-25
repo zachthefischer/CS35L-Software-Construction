@@ -1,0 +1,62 @@
+From 568cc818cc26955eb0b94084d3068caabab1edd7 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 6 Nov 2023 11:45:57 +0100
+Subject: [PATCH 2359/2871] shallow: fix memory leak when registering shallow
+ roots
+
+When registering shallow roots, we unset the list of parents of the
+to-be-registered commit if it's already been parsed. This causes us to
+leak memory though because we never free this list. Fix this.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ shallow.c                       | 4 +++-
+ t/t5311-pack-bitmaps-shallow.sh | 2 ++
+ t/t5530-upload-pack-error.sh    | 1 +
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/shallow.c b/shallow.c
+index 5413719fd4..ac728cdd77 100644
+--- a/shallow.c
++++ b/shallow.c
+@@ -38,8 +38,10 @@ int register_shallow(struct repository *r, const struct object_id *oid)
+ 
+ 	oidcpy(&graft->oid, oid);
+ 	graft->nr_parent = -1;
+-	if (commit && commit->object.parsed)
++	if (commit && commit->object.parsed) {
++		free_commit_list(commit->parents);
+ 		commit->parents = NULL;
++	}
+ 	return register_commit_graft(r, graft, 0);
+ }
+ 
+diff --git a/t/t5311-pack-bitmaps-shallow.sh b/t/t5311-pack-bitmaps-shallow.sh
+index 9dae60f73e..4fe71fe8cd 100755
+--- a/t/t5311-pack-bitmaps-shallow.sh
++++ b/t/t5311-pack-bitmaps-shallow.sh
+@@ -1,6 +1,8 @@
+ #!/bin/sh
+ 
+ test_description='check bitmap operation with shallow repositories'
++
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ # We want to create a situation where the shallow, grafted
+diff --git a/t/t5530-upload-pack-error.sh b/t/t5530-upload-pack-error.sh
+index 7c1460eaa9..de6e14a6c2 100755
+--- a/t/t5530-upload-pack-error.sh
++++ b/t/t5530-upload-pack-error.sh
+@@ -2,6 +2,7 @@
+ 
+ test_description='errors in upload-pack'
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ D=$(pwd)
+-- 
+2.39.3 (Apple Git-145)
+

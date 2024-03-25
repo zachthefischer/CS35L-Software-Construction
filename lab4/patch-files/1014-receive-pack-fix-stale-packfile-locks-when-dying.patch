@@ -1,0 +1,82 @@
+From c55c30669ced6e08b41b3c921f0da200247c9811 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Mar 2023 07:52:10 +0100
+Subject: [PATCH 1014/2871] receive-pack: fix stale packfile locks when dying
+
+When accepting a packfile in git-receive-pack(1), we feed that packfile
+into git-index-pack(1) to generate the packfile index. As the packfile
+would often only contain unreachable objects until the references have
+been updated, concurrently running garbage collection might be tempted
+to delete the packfile right away and thus cause corruption. To fix
+this, we ask git-index-pack(1) to create a `.keep` file before moving
+the packfile into place, which is getting deleted again once all of the
+reference updates have been processed.
+
+Now in production systems we have observed that those `.keep` files are
+sometimes not getting deleted as expected, where the result is that
+repositories tend to grow packfiles that are never deleted over time.
+This seems to be caused by a race when git-receive-pack(1) is killed
+after we have migrated the kept packfile from the quarantine directory
+into the main object database. While this race window is typically small
+it can be extended for example by installing a `proc-receive` hook.
+
+Fix this race by registering the lockfile as a tempfile so that it will
+automatically be removed at exit or when receiving a signal.
+
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index 44bcea3a5b..935c8aa26b 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -2171,7 +2171,7 @@ static const char *parse_pack_header(struct pack_header *hdr)
+ 	}
+ }
+ 
+-static const char *pack_lockfile;
++static struct tempfile *pack_lockfile;
+ 
+ static void push_header_arg(struct strvec *args, struct pack_header *hdr)
+ {
+@@ -2238,6 +2238,7 @@ static const char *unpack(int err_fd, struct shallow_info *si)
+ 			return "unpack-objects abnormal exit";
+ 	} else {
+ 		char hostname[HOST_NAME_MAX + 1];
++		char *lockfile;
+ 
+ 		strvec_pushl(&child.args, "index-pack", "--stdin", NULL);
+ 		push_header_arg(&child.args, &hdr);
+@@ -2267,8 +2268,14 @@ static const char *unpack(int err_fd, struct shallow_info *si)
+ 		status = start_command(&child);
+ 		if (status)
+ 			return "index-pack fork failed";
+-		pack_lockfile = index_pack_lockfile(child.out, NULL);
++
++		lockfile = index_pack_lockfile(child.out, NULL);
++		if (lockfile) {
++			pack_lockfile = register_tempfile(lockfile);
++			free(lockfile);
++		}
+ 		close(child.out);
++
+ 		status = finish_command(&child);
+ 		if (status)
+ 			return "index-pack abnormal exit";
+@@ -2555,8 +2562,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
+ 		use_keepalive = KEEPALIVE_ALWAYS;
+ 		execute_commands(commands, unpack_status, &si,
+ 				 &push_options);
+-		if (pack_lockfile)
+-			unlink_or_warn(pack_lockfile);
++		delete_tempfile(&pack_lockfile);
+ 		sigchain_push(SIGPIPE, SIG_IGN);
+ 		if (report_status_v2)
+ 			report_v2(commands, unpack_status);
+-- 
+2.39.3 (Apple Git-145)
+

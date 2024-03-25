@@ -1,0 +1,128 @@
+From 9dc607f1c29de88bc5194df49cc7f834e528a3e9 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 28 Mar 2023 16:54:13 -0400
+Subject: [PATCH 1168/2871] fast-import: fix file access when run from subdir
+
+In cmd_fast_import(), we ignore the "prefix" argument entirely, even
+though it tells us how we may have changed directory to the root of the
+repository earlier in the process. Which means that if you run it from a
+subdir and point to paths in the filesystem, like:
+
+  cd subdir
+  git fast-import --import-marks=foo <dump
+
+then it will look for "foo" in the root of the repository, not the
+current directory ("subdir/") which the user would have expected.
+
+We can fix this by recording the prefix and using it as appropriate
+whenever we open a file for reading or writing. I found each of these by
+looking for cases where we call fopen() within fast-import.c, so this
+should cover all cases. The new test triggers each one, as well as
+making sure we don't accidentally apply the prefix when --relative-marks
+is in use (since that option interprets some paths as relative to a
+specific directory).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fast-import.c        | 10 ++++++++--
+ t/t9304-fast-import-marks.sh | 29 +++++++++++++++++++++++++++++
+ 2 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/fast-import.c b/builtin/fast-import.c
+index f7548ff4a3..19427e05f1 100644
+--- a/builtin/fast-import.c
++++ b/builtin/fast-import.c
+@@ -176,6 +176,7 @@ static FILE *pack_edges;
+ static unsigned int show_stats = 1;
+ static int global_argc;
+ static const char **global_argv;
++static const char *global_prefix;
+ 
+ /* Memory pools */
+ static struct mem_pool fi_mem_pool = {
+@@ -3246,7 +3247,7 @@ static void parse_alias(void)
+ static char* make_fast_import_path(const char *path)
+ {
+ 	if (!relative_marks_paths || is_absolute_path(path))
+-		return xstrdup(path);
++		return prefix_filename(global_prefix, path);
+ 	return git_pathdup("info/fast-import/%s", path);
+ }
+ 
+@@ -3317,9 +3318,11 @@ static void option_cat_blob_fd(const char *fd)
+ 
+ static void option_export_pack_edges(const char *edges)
+ {
++	char *fn = prefix_filename(global_prefix, edges);
+ 	if (pack_edges)
+ 		fclose(pack_edges);
+-	pack_edges = xfopen(edges, "a");
++	pack_edges = xfopen(fn, "a");
++	free(fn);
+ }
+ 
+ static void option_rewrite_submodules(const char *arg, struct string_list *list)
+@@ -3334,11 +3337,13 @@ static void option_rewrite_submodules(const char *arg, struct string_list *list)
+ 	f++;
+ 	CALLOC_ARRAY(ms, 1);
+ 
++	f = prefix_filename(global_prefix, f);
+ 	fp = fopen(f, "r");
+ 	if (!fp)
+ 		die_errno("cannot read '%s'", f);
+ 	read_mark_file(&ms, fp, insert_oid_entry);
+ 	fclose(fp);
++	free(f);
+ 
+ 	string_list_insert(list, s)->util = ms;
+ }
+@@ -3552,6 +3557,7 @@ int cmd_fast_import(int argc, const char **argv, const char *prefix)
+ 
+ 	global_argc = argc;
+ 	global_argv = argv;
++	global_prefix = prefix;
+ 
+ 	rc_free = mem_pool_alloc(&fi_mem_pool, cmd_save * sizeof(*rc_free));
+ 	for (i = 0; i < (cmd_save - 1); i++)
+diff --git a/t/t9304-fast-import-marks.sh b/t/t9304-fast-import-marks.sh
+index a98ef032d9..410a871c52 100755
+--- a/t/t9304-fast-import-marks.sh
++++ b/t/t9304-fast-import-marks.sh
+@@ -49,4 +49,33 @@ test_expect_success 'import with submodule mapping' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'paths adjusted for relative subdir' '
++	git init deep-dst &&
++	mkdir deep-dst/subdir &&
++	>deep-dst/subdir/empty-marks &&
++	git -C deep-dst/subdir fast-import \
++		--rewrite-submodules-from=sub:../../from \
++		--rewrite-submodules-to=sub:../../to \
++		--import-marks=empty-marks \
++		--export-marks=exported-marks \
++		--export-pack-edges=exported-edges \
++		<dump &&
++	# we do not bother checking resulting repo; we just care that nothing
++	# complained about failing to open files for reading, and that files
++	# for writing were created in the expected spot
++	test_path_is_file deep-dst/subdir/exported-marks &&
++	test_path_is_file deep-dst/subdir/exported-edges
++'
++
++test_expect_success 'relative marks are not affected by subdir' '
++	git init deep-relative &&
++	mkdir deep-relative/subdir &&
++	git -C deep-relative/subdir fast-import \
++		--relative-marks \
++		--export-marks=exported-marks \
++		<dump &&
++	test_path_is_missing deep-relative/subdir/exported-marks &&
++	test_path_is_file deep-relative/.git/info/fast-import/exported-marks
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

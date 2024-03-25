@@ -1,0 +1,248 @@
+From e8e5d294dc6e3b6b32132cc8018d01ce35ad0af0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:40:59 +0200
+Subject: [PATCH 1895/2871] parse-options: show negatability of options in
+ short help
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a "[no-]" prefix to options without the flag PARSE_OPT_NONEG to
+document the fact that you can negate them.
+
+This looks a bit strange for options that already start with "no-", e.g.
+for the option --no-name of git show-branch:
+
+    --[no-]no-name        suppress naming strings
+
+You can actually use --no-no-name as an alias of --name, so the short
+help is not wrong.  If we strip off any of the "no-"s, we lose either
+the ability to see if the remaining one belongs to the documented
+variant or to see if it can be negated.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rev-parse.txt    |  8 +++---
+ contrib/subtree/t/t7900-subtree.sh |  2 +-
+ parse-options.c                    | 10 +++++--
+ t/t0040-parse-options.sh           | 45 +++++++++++++++++-------------
+ t/t1502-rev-parse-parseopt.sh      |  2 +-
+ t/t1502/optionspec-neg.help        |  4 +--
+ t/t1502/optionspec.help            | 32 +++++++++++----------
+ 7 files changed, 58 insertions(+), 45 deletions(-)
+
+diff --git a/Documentation/git-rev-parse.txt b/Documentation/git-rev-parse.txt
+index 6e8ff9ace1..6a4968f68a 100644
+--- a/Documentation/git-rev-parse.txt
++++ b/Documentation/git-rev-parse.txt
+@@ -424,10 +424,10 @@ usage: some-command [<options>] <args>...
+     some-command does foo and bar!
+ 
+     -h, --help            show the help
+-    --foo                 some nifty option --foo
+-    --bar ...             some cool option --bar with an argument
+-    --baz <arg>           another cool option --baz with a named argument
+-    --qux[=<path>]        qux may take a path argument but has meaning by itself
++    --[no-]foo            some nifty option --foo
++    --[no-]bar ...        some cool option --bar with an argument
++    --[no-]baz <arg>      another cool option --baz with a named argument
++    --[no-]qux[=<path>]   qux may take a path argument but has meaning by itself
+ 
+ An option group Header
+     -C[...]               option C with an optional argument
+diff --git a/contrib/subtree/t/t7900-subtree.sh b/contrib/subtree/t/t7900-subtree.sh
+index 341c169eca..49a21dd7c9 100755
+--- a/contrib/subtree/t/t7900-subtree.sh
++++ b/contrib/subtree/t/t7900-subtree.sh
+@@ -71,7 +71,7 @@ test_expect_success 'shows short help text for -h' '
+ 	test_expect_code 129 git subtree -h >out 2>err &&
+ 	test_must_be_empty err &&
+ 	grep -e "^ *or: git subtree pull" out &&
+-	grep -e --annotate out
++	grep -F -e "--[no-]annotate" out
+ '
+ 
+ #
+diff --git a/parse-options.c b/parse-options.c
+index 87c9fae634..b750bf91cd 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -1137,8 +1137,14 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t
+ 		}
+ 		if (opts->long_name && opts->short_name)
+ 			pos += fprintf(outfile, ", ");
+-		if (opts->long_name)
+-			pos += fprintf(outfile, "--%s", opts->long_name);
++		if (opts->long_name) {
++			const char *long_name = opts->long_name;
++			if (opts->flags & PARSE_OPT_NONEG)
++				pos += fprintf(outfile, "--%s", long_name);
++			else
++				pos += fprintf(outfile, "--[no-]%s", long_name);
++		}
++
+ 		if (opts->type == OPTION_NUMBER)
+ 			pos += utf8_fprintf(outfile, _("-NUM"));
+ 
+diff --git a/t/t0040-parse-options.sh b/t/t0040-parse-options.sh
+index e19a199636..1dfc431d52 100755
+--- a/t/t0040-parse-options.sh
++++ b/t/t0040-parse-options.sh
+@@ -13,30 +13,34 @@ usage: test-tool parse-options <options>
+ 
+     A helper function for the parse-options API.
+ 
+-    --yes                 get a boolean
+-    -D, --no-doubt        begins with 'no-'
++    --[no-]yes            get a boolean
++    -D, --[no-]no-doubt   begins with 'no-'
+     -B, --no-fear         be brave
+-    -b, --boolean         increment by one
+-    -4, --or4             bitwise-or boolean with ...0100
+-    --neg-or4             same as --no-or4
++    -b, --[no-]boolean    increment by one
++    -4, --[no-]or4        bitwise-or boolean with ...0100
++    --[no-]neg-or4        same as --no-or4
+ 
+-    -i, --integer <n>     get a integer
++    -i, --[no-]integer <n>
++                          get a integer
+     -j <n>                get a integer, too
+     -m, --magnitude <n>   get a magnitude
+-    --set23               set integer to 23
++    --[no-]set23          set integer to 23
+     --mode1               set integer to 1 (cmdmode option)
+     --mode2               set integer to 2 (cmdmode option)
+-    -L, --length <str>    get length of <str>
+-    -F, --file <file>     set file to <file>
++    -L, --[no-]length <str>
++                          get length of <str>
++    -F, --[no-]file <file>
++                          set file to <file>
+ 
+ String options
+-    -s, --string <string> get a string
+-    --string2 <str>       get another string
+-    --st <st>             get another string (pervert ordering)
++    -s, --[no-]string <string>
++                          get a string
++    --[no-]string2 <str>  get another string
++    --[no-]st <st>        get another string (pervert ordering)
+     -o <str>              get another string
+     --longhelp            help text of this entry
+                           spans multiple lines
+-    --list <str>          add str to list
++    --[no-]list <str>     add str to list
+ 
+ Magic arguments
+     -NUM                  set integer to NUM
+@@ -45,16 +49,17 @@ Magic arguments
+     --no-ambiguous        negative ambiguity
+ 
+ Standard options
+-    --abbrev[=<n>]        use <n> digits to display object names
+-    -v, --verbose         be verbose
+-    -n, --dry-run         dry run
+-    -q, --quiet           be quiet
+-    --expect <string>     expected output in the variable dump
++    --[no-]abbrev[=<n>]   use <n> digits to display object names
++    -v, --[no-]verbose    be verbose
++    -n, --[no-]dry-run    dry run
++    -q, --[no-]quiet      be quiet
++    --[no-]expect <string>
++                          expected output in the variable dump
+ 
+ Alias
+-    -A, --alias-source <string>
++    -A, --[no-]alias-source <string>
+                           get a string
+-    -Z, --alias-target <string>
++    -Z, --[no-]alias-target <string>
+                           alias of --alias-source
+ 
+ EOF
+diff --git a/t/t1502-rev-parse-parseopt.sh b/t/t1502-rev-parse-parseopt.sh
+index 0f7c2db4c0..f0737593c3 100755
+--- a/t/t1502-rev-parse-parseopt.sh
++++ b/t/t1502-rev-parse-parseopt.sh
+@@ -111,7 +111,7 @@ test_expect_success 'test --parseopt help-all output hidden switches' '
+ |
+ |    some-command does foo and bar!
+ |
+-|    --hidden1             A hidden switch
++|    --[no-]hidden1        A hidden switch
+ |
+ |EOF
+ END_EXPECT
+diff --git a/t/t1502/optionspec-neg.help b/t/t1502/optionspec-neg.help
+index 54eba10afc..60ff3cdd00 100644
+--- a/t/t1502/optionspec-neg.help
++++ b/t/t1502/optionspec-neg.help
+@@ -3,8 +3,8 @@ usage: some-command [options] <args>...
+ 
+     some-command does foo and bar!
+ 
+-    --foo                 can be negated
+-    --no-bar              can be positivated
++    --[no-]foo            can be negated
++    --[no-]no-bar         can be positivated
+     --positive-only       cannot be negated
+     --no-negative         cannot be positivated
+ 
+diff --git a/t/t1502/optionspec.help b/t/t1502/optionspec.help
+index 844eac6704..cbdd54d41b 100755
+--- a/t/t1502/optionspec.help
++++ b/t/t1502/optionspec.help
+@@ -4,31 +4,33 @@ usage: some-command [options] <args>...
+     some-command does foo and bar!
+ 
+     -h, --help            show the help
+-    --foo                 some nifty option --foo
+-    --bar ...             some cool option --bar with an argument
+-    -b, --baz             a short and long option
++    --[no-]foo            some nifty option --foo
++    --[no-]bar ...        some cool option --bar with an argument
++    -b, --[no-]baz        a short and long option
+ 
+ An option group Header
+     -C[...]               option C with an optional argument
+-    -d, --data[=...]      short and long option with an optional argument
++    -d, --[no-]data[=...] short and long option with an optional argument
+ 
+ Argument hints
+     -B <arg>              short option required argument
+-    --bar2 <arg>          long option required argument
+-    -e, --fuz <with-space>
++    --[no-]bar2 <arg>     long option required argument
++    -e, --[no-]fuz <with-space>
+                           short and long option required argument
+     -s[<some>]            short option optional argument
+-    --long[=<data>]       long option optional argument
+-    -g, --fluf[=<path>]   short and long option optional argument
+-    --longest <very-long-argument-hint>
++    --[no-]long[=<data>]  long option optional argument
++    -g, --[no-]fluf[=<path>]
++                          short and long option optional argument
++    --[no-]longest <very-long-argument-hint>
+                           a very long argument hint
+-    --pair <key=value>    with an equals sign in the hint
+-    --aswitch             help te=t contains? fl*g characters!`
+-    --bswitch <hint>      hint has trailing tab character
+-    --cswitch             switch has trailing tab character
+-    --short-hint <a>      with a one symbol hint
++    --[no-]pair <key=value>
++                          with an equals sign in the hint
++    --[no-]aswitch        help te=t contains? fl*g characters!`
++    --[no-]bswitch <hint> hint has trailing tab character
++    --[no-]cswitch        switch has trailing tab character
++    --[no-]short-hint <a> with a one symbol hint
+ 
+ Extras
+-    --extra1              line above used to cause a segfault but no longer does
++    --[no-]extra1         line above used to cause a segfault but no longer does
+ 
+ EOF
+-- 
+2.39.3 (Apple Git-145)
+

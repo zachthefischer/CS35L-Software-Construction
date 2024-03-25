@@ -1,0 +1,115 @@
+From 80c928d947c257ef4d9f13c358117d0c1914f71f Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Mon, 20 Mar 2023 11:26:50 +0000
+Subject: [PATCH 1069/2871] commit-graph: simplify compute_generation_numbers()
+
+The previous change introduced the generic algorithm
+compute_reachable_generation_numbers() and used it as the core
+functionality of compute_topological_levels(). Now, use it as the core
+functionality of compute_generation_numbers().
+
+The main difference here is that we use generation version 2, which is
+used in to toggle the logic in compute_generation_from_max() for
+computing the corrected commit date based on the corrected commit dates
+of the parent commits (and the commit date of the current commit). It
+also uses different methods for (get|set)_generation in the vtable in
+order to store and access the value in the correct places.
+
+Co-authored-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 64 +++++++++++++++++---------------------------------
+ 1 file changed, 21 insertions(+), 43 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 4356c8c1f4..d1c98681e8 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -1559,13 +1559,31 @@ static void compute_topological_levels(struct write_commit_graph_context *ctx)
+ 	stop_progress(&ctx->progress);
+ }
+ 
++static timestamp_t get_generation_from_graph_data(struct commit *c, void *data)
++{
++	return commit_graph_data_at(c)->generation;
++}
++
++static void set_generation_v2(struct commit *c, timestamp_t t, void *data)
++{
++	struct commit_graph_data *g = commit_graph_data_at(c);
++	g->generation = (uint32_t)t;
++}
++
+ static void compute_generation_numbers(struct write_commit_graph_context *ctx)
+ {
+ 	int i;
+-	struct commit_list *list = NULL;
++	struct compute_generation_info info = {
++		.r = ctx->r,
++		.commits = &ctx->commits,
++		.get_generation = get_generation_from_graph_data,
++		.set_generation = set_generation_v2,
++		.data = ctx,
++	};
+ 
+ 	if (ctx->report_progress)
+-		ctx->progress = start_delayed_progress(
++		info.progress = ctx->progress
++			      = start_delayed_progress(
+ 					_("Computing commit graph generation numbers"),
+ 					ctx->commits.nr);
+ 
+@@ -1577,47 +1595,7 @@ static void compute_generation_numbers(struct write_commit_graph_context *ctx)
+ 		}
+ 	}
+ 
+-	for (i = 0; i < ctx->commits.nr; i++) {
+-		struct commit *c = ctx->commits.list[i];
+-		timestamp_t corrected_commit_date;
+-
+-		repo_parse_commit(ctx->r, c);
+-		corrected_commit_date = commit_graph_data_at(c)->generation;
+-
+-		display_progress(ctx->progress, i + 1);
+-		if (corrected_commit_date != GENERATION_NUMBER_ZERO)
+-			continue;
+-
+-		commit_list_insert(c, &list);
+-		while (list) {
+-			struct commit *current = list->item;
+-			struct commit_list *parent;
+-			int all_parents_computed = 1;
+-			timestamp_t max_corrected_commit_date = 0;
+-
+-			for (parent = current->parents; parent; parent = parent->next) {
+-				repo_parse_commit(ctx->r, parent->item);
+-				corrected_commit_date = commit_graph_data_at(parent->item)->generation;
+-
+-				if (corrected_commit_date == GENERATION_NUMBER_ZERO) {
+-					all_parents_computed = 0;
+-					commit_list_insert(parent->item, &list);
+-					break;
+-				}
+-
+-				if (corrected_commit_date > max_corrected_commit_date)
+-					max_corrected_commit_date = corrected_commit_date;
+-			}
+-
+-			if (all_parents_computed) {
+-				pop_commit(&list);
+-
+-				if (current->date && current->date > max_corrected_commit_date)
+-					max_corrected_commit_date = current->date - 1;
+-				commit_graph_data_at(current)->generation = max_corrected_commit_date + 1;
+-			}
+-		}
+-	}
++	compute_reachable_generation_numbers(&info, 2);
+ 
+ 	for (i = 0; i < ctx->commits.nr; i++) {
+ 		struct commit *c = ctx->commits.list[i];
+-- 
+2.39.3 (Apple Git-145)
+

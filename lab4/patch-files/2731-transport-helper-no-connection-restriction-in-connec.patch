@@ -1,0 +1,53 @@
+From 4a61faf75d684eb31c23521bc0e3c3cac5fd1553 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 21 Jan 2024 21:15:33 +0800
+Subject: [PATCH 2731/2871] transport-helper: no connection restriction in
+ connect_helper
+
+When commit b236752a (Support remote archive from all smart transports,
+2009-12-09) added "remote archive" support for "smart transports", it
+was for transport that supports the ".connect" method. The
+"connect_helper()" function protected itself from getting called for a
+transport without the method before calling process_connect_service(),
+which only worked with the ".connect" method.
+
+Later, commit edc9caf7 (transport-helper: introduce stateless-connect,
+2018-03-15) added a way for a transport without the ".connect" method
+to establish a "stateless" connection in protocol v2, where
+process_connect_service() was taught to handle the ".stateless_connect"
+method, making the old protection too strict. But commit edc9caf7 forgot
+to adjust this protection accordingly. Even at the time of commit
+b236752a, this protection seemed redundant, since
+process_connect_service() would return 0 if the connection could not be
+established, and connect_helper() would still die() early.
+
+Remove the restriction in connect_helper() and give the function
+process_connect_service() the opportunity to establish a connection
+using ".connect" or ".stateless_connect" for protocol v2. So we can
+connect with a stateless-rpc and do something useful. E.g., in a later
+commit, implements remote archive for a repository over HTTP protocol.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Helped-by: Linus Arver <linusa@google.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ transport-helper.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/transport-helper.c b/transport-helper.c
+index 49811ef176..2e127d24a5 100644
+--- a/transport-helper.c
++++ b/transport-helper.c
+@@ -662,8 +662,6 @@ static int connect_helper(struct transport *transport, const char *name,
+ 
+ 	/* Get_helper so connect is inited. */
+ 	get_helper(transport);
+-	if (!data->connect)
+-		die(_("operation not supported by protocol"));
+ 
+ 	if (!process_connect_service(transport, name, exec))
+ 		die(_("can't connect to subservice %s"), name);
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,36 @@
+From 6e8611e90a629e38da1e7c0e1f986bc6ec23a330 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 30 Aug 2023 12:21:44 -0700
+Subject: [PATCH 2031/2871] The fourth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index 5924a0b6f1..e04b18cbcb 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -46,6 +46,18 @@ Fixes since v2.42
+    the same thing twice.
+    (merge 99fe06cbfd jc/ci-skip-same-commit later to maint).
+ 
++ * The commit-graph verification code that detects mixture of zero and
++   non-zero generation numbers has been updated.
++   (merge db6044d762 tb/commit-graph-verify-fix later to maint).
++
++ * "git diff -w --exit-code" with various options did not work
++   correctly, which is being addressed.
++   (merge a64f8b2595 jc/diff-exit-code-with-w-fixes later to maint).
++
++ * transfer.unpackLimit ought to be used as a fallback, but overrode
++   fetch.unpackLimit and receive.unpackLimit instead.
++   (merge f3d33f8cfe ts/unpacklimit-config-fix later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge fd3ba590d8 ws/git-push-doc-grammofix later to maint).
+    (merge 5f33a843de ds/upload-pack-error-sequence-fix later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

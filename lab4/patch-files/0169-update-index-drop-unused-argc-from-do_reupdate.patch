@@ -1,0 +1,57 @@
+From 827f8305c4d5a0300c669dc57cc2920537bba757 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:04:45 -0400
+Subject: [PATCH 0169/2871] update-index: drop unused argc from do_reupdate()
+
+The parse-options callback for --again soaks up all remaining options by
+manipulating the parse_opt_ctx's argc and argv fields. Even though it
+has to look at both, the actual parsing happens via the do_reupdate()
+helper, which only looks at the argv half (by passing it along to
+parse_pathspec). So that helper doesn't need to see argc at all.
+
+Note that the helper does look at "argv + 1" without confirming that
+argc is greater than 0. We know this is correct because it is skipping
+past the actual "--again" string, which will always be present. However,
+to make what's going on more obvious, let's move that "+1" into the
+caller, which has the matching "-1" when fixing up the ctx's argc/argv.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/update-index.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/update-index.c b/builtin/update-index.c
+index b62249905f..7b0c924d7d 100644
+--- a/builtin/update-index.c
++++ b/builtin/update-index.c
+@@ -732,7 +732,7 @@ static int do_unresolve(int ac, const char **av,
+ 	return err;
+ }
+ 
+-static int do_reupdate(int ac, const char **av,
++static int do_reupdate(const char **paths,
+ 		       const char *prefix)
+ {
+ 	/* Read HEAD and run update-index on paths that are
+@@ -744,7 +744,7 @@ static int do_reupdate(int ac, const char **av,
+ 
+ 	parse_pathspec(&pathspec, 0,
+ 		       PATHSPEC_PREFER_CWD,
+-		       prefix, av + 1);
++		       prefix, paths);
+ 
+ 	if (read_ref("HEAD", &head_oid))
+ 		/* If there is no HEAD, that means it is an initial
+@@ -970,7 +970,7 @@ static enum parse_opt_result reupdate_callback(
+ 
+ 	/* consume remaining arguments. */
+ 	setup_work_tree();
+-	*has_errors = do_reupdate(ctx->argc, ctx->argv, prefix);
++	*has_errors = do_reupdate(ctx->argv + 1, prefix);
+ 	if (*has_errors)
+ 		active_cache_changed = 0;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

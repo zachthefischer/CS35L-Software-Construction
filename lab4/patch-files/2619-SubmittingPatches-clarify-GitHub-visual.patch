@@ -1,0 +1,46 @@
+From 0771a3b55ca137f32567635c1a96222892bd7499 Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Thu, 28 Dec 2023 04:55:22 +0000
+Subject: [PATCH 2619/2871] SubmittingPatches: clarify GitHub visual
+
+GitHub has two general forms for its states, sometimes they're a simple
+colored object (e.g. green check or red x), and sometimes there's also a
+colored container (e.g. green box or red circle) which contains that
+object (e.g. check or x).
+
+That's a lot of words to try to describe things, but in general, the key
+for a failure is that it's recognized as an `x` and that it's associated
+with the color red -- the color of course is problematic for people who
+are red-green color-blind, but that's why they are paired with distinct
+shapes.
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index 94c874ab5e..0665f89f38 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -602,11 +602,11 @@ After the initial setup, CI will run whenever you push new changes
+ to your fork of Git on GitHub.  You can monitor the test state of all your
+ branches here: `https://github.com/<Your GitHub handle>/git/actions/workflows/main.yml`
+ 
+-If a branch did not pass all test cases then it is marked with a red
+-cross. In that case you can click on the failing job and navigate to
+-"ci/run-build-and-tests.sh" and/or "ci/print-test-failures.sh". You
+-can also download "Artifacts" which are tarred (or zipped) archives
+-with test data relevant for debugging.
++If a branch does not pass all test cases then it will be marked with a
++red +x+, instead of a green check. In that case, you can click on the
++failing job and navigate to "ci/run-build-and-tests.sh" and/or
++"ci/print-test-failures.sh". You can also download "Artifacts" which
++are tarred (or zipped) archives with test data relevant for debugging.
+ 
+ Then fix the problem and push your fix to your GitHub fork. This will
+ trigger a new CI build to ensure all tests pass.
+-- 
+2.39.3 (Apple Git-145)
+

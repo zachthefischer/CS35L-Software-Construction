@@ -1,0 +1,52 @@
+From 288fcb1c942d582b915a4c824c6b87a94ae875a7 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Mon, 21 Nov 2022 21:40:40 +0800
+Subject: [PATCH 0433/2871] t5516: fail to run in verbose mode
+
+The test case "push with config push.useBitmap" of t5516 was introduced
+in commit 82f67ee13f (send-pack.c: add config push.useBitmaps,
+2022-06-17). It won't work in verbose mode, e.g.:
+
+    $ sh t5516-fetch-push.sh --run='1,115' -v
+
+This is because "git-push" will run in a tty in this case, and the
+subcommand "git pack-objects" will contain an argument "--progress"
+instead of "-q". Adding a specific option "--quiet" to "git push" will
+get a stable result for t5516.
+
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5516-fetch-push.sh | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/t/t5516-fetch-push.sh b/t/t5516-fetch-push.sh
+index b3734dd2fe..f43203118d 100755
+--- a/t/t5516-fetch-push.sh
++++ b/t/t5516-fetch-push.sh
+@@ -1870,19 +1870,19 @@ test_expect_success 'push with config push.useBitmaps' '
+ 	git checkout main &&
+ 	test_unconfig push.useBitmaps &&
+ 	GIT_TRACE2_EVENT="$PWD/default" \
+-	git push testrepo main:test &&
++	git push --quiet testrepo main:test &&
+ 	test_subcommand git pack-objects --all-progress-implied --revs --stdout \
+ 		--thin --delta-base-offset -q <default &&
+ 
+ 	test_config push.useBitmaps true &&
+ 	GIT_TRACE2_EVENT="$PWD/true" \
+-	git push testrepo main:test2 &&
++	git push --quiet testrepo main:test2 &&
+ 	test_subcommand git pack-objects --all-progress-implied --revs --stdout \
+ 		--thin --delta-base-offset -q <true &&
+ 
+ 	test_config push.useBitmaps false &&
+ 	GIT_TRACE2_EVENT="$PWD/false" \
+-	git push testrepo main:test3 &&
++	git push --quiet testrepo main:test3 &&
+ 	test_subcommand git pack-objects --all-progress-implied --revs --stdout \
+ 		--thin --delta-base-offset -q --no-use-bitmap-index <false
+ '
+-- 
+2.39.3 (Apple Git-145)
+

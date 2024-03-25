@@ -1,0 +1,196 @@
+From f5653856c26efb2ce722148060518817af2ab023 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:50 +0000
+Subject: [PATCH 1637/2871] name-hash.h: move declarations for name-hash.c from
+ cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ apply.c                             |  1 +
+ builtin/mv.c                        |  1 +
+ cache.h                             |  9 ---------
+ dir.c                               |  1 +
+ entry.c                             |  1 +
+ merge-recursive.c                   |  1 +
+ name-hash.c                         |  1 +
+ name-hash.h                         | 16 ++++++++++++++++
+ read-cache.c                        |  1 +
+ sparse-index.c                      |  1 +
+ t/helper/test-lazy-init-name-hash.c |  1 +
+ unpack-trees.c                      |  1 +
+ 12 files changed, 26 insertions(+), 9 deletions(-)
+ create mode 100644 name-hash.h
+
+diff --git a/apply.c b/apply.c
+index 6212ab3a1b..3da33bb88f 100644
+--- a/apply.c
++++ b/apply.c
+@@ -23,6 +23,7 @@
+ #include "xdiff-interface.h"
+ #include "ll-merge.h"
+ #include "lockfile.h"
++#include "name-hash.h"
+ #include "object-name.h"
+ #include "object-file.h"
+ #include "parse-options.h"
+diff --git a/builtin/mv.c b/builtin/mv.c
+index 665bd27448..e058b57465 100644
+--- a/builtin/mv.c
++++ b/builtin/mv.c
+@@ -11,6 +11,7 @@
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
++#include "name-hash.h"
+ #include "object-file.h"
+ #include "pathspec.h"
+ #include "lockfile.h"
+diff --git a/cache.h b/cache.h
+index d31b151506..316904da39 100644
+--- a/cache.h
++++ b/cache.h
+@@ -245,12 +245,6 @@ struct index_state {
+ void index_state_init(struct index_state *istate, struct repository *r);
+ void release_index(struct index_state *istate);
+ 
+-/* Name hashing */
+-int test_lazy_init_name_hash(struct index_state *istate, int try_threaded);
+-void add_name_hash(struct index_state *istate, struct cache_entry *ce);
+-void remove_name_hash(struct index_state *istate, struct cache_entry *ce);
+-void free_name_hash(struct index_state *istate);
+-
+ /* Cache entry creation and cleanup */
+ 
+ /*
+@@ -377,9 +371,6 @@ int repo_index_has_changes(struct repository *repo,
+ 
+ int verify_path(const char *path, unsigned mode);
+ int strcmp_offset(const char *s1, const char *s2, size_t *first_change);
+-int index_dir_exists(struct index_state *istate, const char *name, int namelen);
+-void adjust_dirname_case(struct index_state *istate, char *name);
+-struct cache_entry *index_file_exists(struct index_state *istate, const char *name, int namelen, int igncase);
+ 
+ /*
+  * Searches for an entry defined by name and namelen in the given index.
+diff --git a/dir.c b/dir.c
+index a7469df3ac..029aab36fe 100644
+--- a/dir.c
++++ b/dir.c
+@@ -13,6 +13,7 @@
+ #include "dir.h"
+ #include "environment.h"
+ #include "gettext.h"
++#include "name-hash.h"
+ #include "object-file.h"
+ #include "object-store.h"
+ #include "attr.h"
+diff --git a/entry.c b/entry.c
+index 91a540bd29..7791cc999c 100644
+--- a/entry.c
++++ b/entry.c
+@@ -5,6 +5,7 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
++#include "name-hash.h"
+ #include "streaming.h"
+ #include "submodule.h"
+ #include "symlinks.h"
+diff --git a/merge-recursive.c b/merge-recursive.c
+index 8e87b6386d..b341ba4f38 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -23,6 +23,7 @@
+ #include "ll-merge.h"
+ #include "lockfile.h"
+ #include "match-trees.h"
++#include "name-hash.h"
+ #include "object-file.h"
+ #include "object-name.h"
+ #include "object-store.h"
+diff --git a/name-hash.c b/name-hash.c
+index fb13716e43..52ce47ea39 100644
+--- a/name-hash.c
++++ b/name-hash.c
+@@ -8,6 +8,7 @@
+ #include "cache.h"
+ #include "environment.h"
+ #include "gettext.h"
++#include "name-hash.h"
+ #include "thread-utils.h"
+ #include "trace.h"
+ #include "trace2.h"
+diff --git a/name-hash.h b/name-hash.h
+new file mode 100644
+index 0000000000..b1b4b0fb33
+--- /dev/null
++++ b/name-hash.h
+@@ -0,0 +1,16 @@
++#ifndef NAME_HASH_H
++#define NAME_HASH_H
++
++struct cache_entry;
++struct index_state;
++
++int index_dir_exists(struct index_state *istate, const char *name, int namelen);
++void adjust_dirname_case(struct index_state *istate, char *name);
++struct cache_entry *index_file_exists(struct index_state *istate, const char *name, int namelen, int igncase);
++
++int test_lazy_init_name_hash(struct index_state *istate, int try_threaded);
++void add_name_hash(struct index_state *istate, struct cache_entry *ce);
++void remove_name_hash(struct index_state *istate, struct cache_entry *ce);
++void free_name_hash(struct index_state *istate);
++
++#endif /* NAME_HASH_H */
+diff --git a/read-cache.c b/read-cache.c
+index b99dbfd16b..e1016ae031 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -25,6 +25,7 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "mem-pool.h"
++#include "name-hash.h"
+ #include "object-name.h"
+ #include "resolve-undo.h"
+ #include "revision.h"
+diff --git a/sparse-index.c b/sparse-index.c
+index 886054729e..60451daae8 100644
+--- a/sparse-index.c
++++ b/sparse-index.c
+@@ -2,6 +2,7 @@
+ #include "alloc.h"
+ #include "environment.h"
+ #include "gettext.h"
++#include "name-hash.h"
+ #include "repository.h"
+ #include "sparse-index.h"
+ #include "tree.h"
+diff --git a/t/helper/test-lazy-init-name-hash.c b/t/helper/test-lazy-init-name-hash.c
+index b83a75d19f..6944b7e825 100644
+--- a/t/helper/test-lazy-init-name-hash.c
++++ b/t/helper/test-lazy-init-name-hash.c
+@@ -2,6 +2,7 @@
+ #include "test-tool.h"
+ #include "cache.h"
+ #include "environment.h"
++#include "name-hash.h"
+ #include "parse-options.h"
+ #include "repository.h"
+ #include "setup.h"
+diff --git a/unpack-trees.c b/unpack-trees.c
+index e8c32a40dc..078c53f7a1 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -7,6 +7,7 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
++#include "name-hash.h"
+ #include "tree.h"
+ #include "tree-walk.h"
+ #include "cache-tree.h"
+-- 
+2.39.3 (Apple Git-145)
+

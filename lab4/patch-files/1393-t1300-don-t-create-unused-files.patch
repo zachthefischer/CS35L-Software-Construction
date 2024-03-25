@@ -1,0 +1,56 @@
+From a7cae2905b8c51c564d0307cf9e8f3e53c2769c5 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Mon, 17 Apr 2023 21:10:41 +0200
+Subject: [PATCH 1393/2871] t1300: don't create unused files
+
+Three tests in t1300-config.sh check that "git config --get" barfs when
+syntax errors are present in the config file.  The tests redirect
+standard output and standard error of "git config --get" to files,
+"actual" and "error" correspondingly.  They assert presence of an error
+message in file "error".  However, these tests don't use file "actual"
+for assertions.
+
+Don't redirect standard output of "git config --get" to file "actual" in
+t1300-config.sh to avoid creating unnecessary files.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1300-config.sh | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/t/t1300-config.sh b/t/t1300-config.sh
+index d566729d74..8ac4531c1b 100755
+--- a/t/t1300-config.sh
++++ b/t/t1300-config.sh
+@@ -1575,7 +1575,7 @@ test_expect_success 'barf on syntax error' '
+ 	[section]
+ 	key garbage
+ 	EOF
+-	test_must_fail git config --get section.key >actual 2>error &&
++	test_must_fail git config --get section.key 2>error &&
+ 	test_i18ngrep " line 3 " error
+ '
+ 
+@@ -1585,7 +1585,7 @@ test_expect_success 'barf on incomplete section header' '
+ 	[section
+ 	key = value
+ 	EOF
+-	test_must_fail git config --get section.key >actual 2>error &&
++	test_must_fail git config --get section.key 2>error &&
+ 	test_i18ngrep " line 2 " error
+ '
+ 
+@@ -1595,7 +1595,7 @@ test_expect_success 'barf on incomplete string' '
+ 	[section]
+ 	key = "value string
+ 	EOF
+-	test_must_fail git config --get section.key >actual 2>error &&
++	test_must_fail git config --get section.key 2>error &&
+ 	test_i18ngrep " line 3 " error
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

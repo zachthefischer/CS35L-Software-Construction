@@ -1,0 +1,32 @@
+From 6956015704426f7b636b94cf79a2366ddc4977eb Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 16 Jan 2023 22:04:38 -0500
+Subject: [PATCH 0702/2871] http-push: prefer CURLOPT_UPLOAD to CURLOPT_PUT
+
+The two options do exactly the same thing, but the latter has been
+deprecated and in recent versions of curl may produce a compiler
+warning. Since the UPLOAD form is available everywhere (it was
+introduced in the year 2000 by curl 7.1), we can just switch to it.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http-push.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/http-push.c b/http-push.c
+index 5f4340a36e..1b18e775d0 100644
+--- a/http-push.c
++++ b/http-push.c
+@@ -198,7 +198,7 @@ static void curl_setup_http(CURL *curl, const char *url,
+ 		const char *custom_req, struct buffer *buffer,
+ 		curl_write_callback write_fn)
+ {
+-	curl_easy_setopt(curl, CURLOPT_PUT, 1);
++	curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
+ 	curl_easy_setopt(curl, CURLOPT_URL, url);
+ 	curl_easy_setopt(curl, CURLOPT_INFILE, buffer);
+ 	curl_easy_setopt(curl, CURLOPT_INFILESIZE, buffer->buf.len);
+-- 
+2.39.3 (Apple Git-145)
+

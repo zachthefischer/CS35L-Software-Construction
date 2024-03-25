@@ -1,0 +1,93 @@
+From 868c991155b3392e0b1a6aab8daab89bb93400f4 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 21 Aug 2023 17:34:34 -0400
+Subject: [PATCH 1978/2871] commit-graph: introduce
+ `commit_graph_generation_from_graph()`
+
+In 2ee11f7261 (commit-graph: return generation from memory, 2023-03-20),
+the `commit_graph_generation()` function stopped returning zeros when
+asked to locate the generation number of a given commit.
+
+This was done at the time to prepare for a later change which set
+generation values in memory, meaning that we could no longer rely on
+`graph_pos` alone to tell us whether or not to trust the generation
+number returned by this function.
+
+In 2ee11f7261, it was noted that this change only impacted very old
+commit-graphs, which were written with all commits having generation
+number 0. Indeed, zero is not a valid generation number, so we should
+never expect to see that value outside of the aforementioned case.
+
+The test fallout in 2ee11f7261 indicated that we were no longer able to
+fsck a specific old case of commit-graph corruption, where we see a
+non-zero generation number after having seen a generation number of 0
+earlier.
+
+Introduce a variant of `commit_graph_generation()` which behaves like
+that function did prior to 2ee11f7261, known as
+`commit_graph_generation_from_graph()`. Then use this function in the
+context of `verify_one_commit_graph()`, where we only want to trust the
+values from the graph.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c          | 14 ++++++++++++--
+ t/t5318-commit-graph.sh |  2 +-
+ 2 files changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 0aa1640d15..c68f5c6b3a 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -128,6 +128,16 @@ timestamp_t commit_graph_generation(const struct commit *c)
+ 	return GENERATION_NUMBER_INFINITY;
+ }
+ 
++static timestamp_t commit_graph_generation_from_graph(const struct commit *c)
++{
++	struct commit_graph_data *data =
++		commit_graph_data_slab_peek(&commit_graph_data_slab, c);
++
++	if (!data || data->graph_pos == COMMIT_NOT_FROM_GRAPH)
++		return GENERATION_NUMBER_INFINITY;
++	return data->generation;
++}
++
+ static struct commit_graph_data *commit_graph_data_at(const struct commit *c)
+ {
+ 	unsigned int i, nth_slab;
+@@ -2659,7 +2669,7 @@ static int verify_one_commit_graph(struct repository *r,
+ 					     oid_to_hex(&graph_parents->item->object.oid),
+ 					     oid_to_hex(&odb_parents->item->object.oid));
+ 
+-			generation = commit_graph_generation(graph_parents->item);
++			generation = commit_graph_generation_from_graph(graph_parents->item);
+ 			if (generation > max_generation)
+ 				max_generation = generation;
+ 
+@@ -2671,7 +2681,7 @@ static int verify_one_commit_graph(struct repository *r,
+ 			graph_report(_("commit-graph parent list for commit %s terminates early"),
+ 				     oid_to_hex(&cur_oid));
+ 
+-		if (!commit_graph_generation(graph_commit)) {
++		if (!commit_graph_generation_from_graph(graph_commit)) {
+ 			if (generation_zero == GENERATION_NUMBER_EXISTS)
+ 				graph_report(_("commit-graph has generation number zero for commit %s, but non-zero elsewhere"),
+ 					     oid_to_hex(&cur_oid));
+diff --git a/t/t5318-commit-graph.sh b/t/t5318-commit-graph.sh
+index 4df76173a8..4e70820c74 100755
+--- a/t/t5318-commit-graph.sh
++++ b/t/t5318-commit-graph.sh
+@@ -598,7 +598,7 @@ test_expect_success 'detect incorrect generation number' '
+ 
+ test_expect_success 'detect incorrect generation number' '
+ 	corrupt_graph_and_verify $GRAPH_BYTE_COMMIT_GENERATION "\01" \
+-		"commit-graph generation for commit"
++		"but zero elsewhere"
+ '
+ 
+ test_expect_success 'detect incorrect commit date' '
+-- 
+2.39.3 (Apple Git-145)
+

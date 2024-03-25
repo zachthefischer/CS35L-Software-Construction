@@ -1,0 +1,44 @@
+From ebb6c1660713e7924c14d251aa6297affaabe5f6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=90o=C3=A0n=20Tr=E1=BA=A7n=20C=C3=B4ng=20Danh?=
+ <congdanhqx@gmail.com>
+Date: Thu, 6 Oct 2022 08:32:05 +0700
+Subject: [PATCH 0045/2871] Makefile: clarify runtime relative gitexecdir
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+"git" built with RUNTIME_PREFIX flag turned on could figure out
+gitexecdir and other paths as relative to "git" executable.
+
+However, in the section specifies gitexecdir, RUNTIME_PREFIX wasn't
+mentioned, thus users may wrongly assume that "git" always locates
+gitexecdir as relative path to the executable.
+
+Let's clarify that only "git" built with RUNTIME_PREFIX will locate
+gitexecdir as relative path.
+
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 12be39ac49..3625b63c0b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -504,8 +504,9 @@ GIT-VERSION-FILE: FORCE
+ #   template_dir
+ #   sysconfdir
+ # can be specified as a relative path some/where/else;
+-# this is interpreted as relative to $(prefix) and "git" at
+-# runtime figures out where they are based on the path to the executable.
++# this is interpreted as relative to $(prefix) and "git" built with
++# RUNTIME_PREFIX flag will figure out (at runtime) where they are
++# based on the path to the executable.
+ # Additionally, the following will be treated as relative by "git" if they
+ # begin with "$(prefix)/":
+ #   mandir
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,187 @@
+From 5bbb9251378b0e62bb06e72bda0574e06dee4933 Mon Sep 17 00:00:00 2001
+From: Jeff Hostetler <jeffhost@microsoft.com>
+Date: Mon, 24 Oct 2022 13:41:01 +0000
+Subject: [PATCH 0216/2871] tr2tls: clarify TLS terminology
+
+Reduce or eliminate use of the term "TLS" in the Trace2 code.
+
+The term "TLS" has two popular meanings: "thread-local storage" and
+"transport layer security".  In the Trace2 source, the term is associated
+with the former.  There was concern on the mailing list about it refering
+to the latter.
+
+Update the source and documentation to eliminate the use of the "TLS" term
+or replace it with the phrase "thread-local storage" to reduce ambiguity.
+
+Signed-off-by: Jeff Hostetler <jeffhost@microsoft.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/technical/api-trace2.txt |  8 ++++----
+ trace2.c                               |  2 +-
+ trace2.h                               | 10 +++++-----
+ trace2/tr2_tls.c                       |  6 +++---
+ trace2/tr2_tls.h                       | 18 +++++++++++-------
+ 5 files changed, 24 insertions(+), 20 deletions(-)
+
+diff --git a/Documentation/technical/api-trace2.txt b/Documentation/technical/api-trace2.txt
+index 2afa28bb5a..431d424f9d 100644
+--- a/Documentation/technical/api-trace2.txt
++++ b/Documentation/technical/api-trace2.txt
+@@ -685,8 +685,8 @@ The "exec_id" field is a command-unique id and is only useful if the
+ 
+ `"thread_start"`::
+ 	This event is generated when a thread is started.  It is
+-	generated from *within* the new thread's thread-proc (for TLS
+-	reasons).
++	generated from *within* the new thread's thread-proc (because
++	it needs to access data in the thread's thread-local storage).
+ +
+ ------------
+ {
+@@ -698,7 +698,7 @@ The "exec_id" field is a command-unique id and is only useful if the
+ 
+ `"thread_exit"`::
+ 	This event is generated when a thread exits.  It is generated
+-	from *within* the thread's thread-proc (for TLS reasons).
++	from *within* the thread's thread-proc.
+ +
+ ------------
+ {
+@@ -1206,7 +1206,7 @@ worked on 508 items at offset 2032.  Thread "th04" worked on 508 items
+ at offset 508.
+ +
+ This example also shows that thread names are assigned in a racy manner
+-as each thread starts and allocates TLS storage.
++as each thread starts.
+ 
+ Config (def param) Events::
+ 
+diff --git a/trace2.c b/trace2.c
+index 0c0a11e07d..c1244e45ac 100644
+--- a/trace2.c
++++ b/trace2.c
+@@ -52,7 +52,7 @@ static struct tr2_tgt *tr2_tgt_builtins[] =
+  * Force (rather than lazily) initialize any of the requested
+  * builtin TRACE2 targets at startup (and before we've seen an
+  * actual TRACE2 event call) so we can see if we need to setup
+- * the TR2 and TLS machinery.
++ * private data structures and thread-local storage.
+  *
+  * Return the number of builtin targets enabled.
+  */
+diff --git a/trace2.h b/trace2.h
+index 88d906ea83..af3c11694c 100644
+--- a/trace2.h
++++ b/trace2.h
+@@ -73,8 +73,7 @@ void trace2_initialize_clock(void);
+ /*
+  * Initialize TRACE2 tracing facility if any of the builtin TRACE2
+  * targets are enabled in the system config or the environment.
+- * This includes setting up the Trace2 thread local storage (TLS).
+- * Emits a 'version' message containing the version of git
++ * This emits a 'version' message containing the version of git
+  * and the Trace2 protocol.
+  *
+  * This function should be called from `main()` as early as possible in
+@@ -302,7 +301,8 @@ void trace2_exec_result_fl(const char *file, int line, int exec_id, int code);
+ 
+ /*
+  * Emit a 'thread_start' event.  This must be called from inside the
+- * thread-proc to set up the trace2 TLS data for the thread.
++ * thread-proc to allow the thread to create its own thread-local
++ * storage.
+  *
+  * Thread names should be descriptive, like "preload_index".
+  * Thread names will be decorated with an instance number automatically.
+@@ -315,8 +315,8 @@ void trace2_thread_start_fl(const char *file, int line,
+ 
+ /*
+  * Emit a 'thread_exit' event.  This must be called from inside the
+- * thread-proc to report thread-specific data and cleanup TLS data
+- * for the thread.
++ * thread-proc so that the thread can access and clean up its
++ * thread-local storage.
+  */
+ void trace2_thread_exit_fl(const char *file, int line);
+ 
+diff --git a/trace2/tr2_tls.c b/trace2/tr2_tls.c
+index 7da94aba52..8d2182fbdb 100644
+--- a/trace2/tr2_tls.c
++++ b/trace2/tr2_tls.c
+@@ -69,9 +69,9 @@ struct tr2tls_thread_ctx *tr2tls_get_self(void)
+ 	ctx = pthread_getspecific(tr2tls_key);
+ 
+ 	/*
+-	 * If the thread-proc did not call trace2_thread_start(), we won't
+-	 * have any TLS data associated with the current thread.  Fix it
+-	 * here and silently continue.
++	 * If the current thread's thread-proc did not call
++	 * trace2_thread_start(), then the thread will not have any
++	 * thread-local storage.  Create it now and silently continue.
+ 	 */
+ 	if (!ctx)
+ 		ctx = tr2tls_create_self("unknown", getnanotime() / 1000);
+diff --git a/trace2/tr2_tls.h b/trace2/tr2_tls.h
+index a90bd639d4..1297509fd2 100644
+--- a/trace2/tr2_tls.h
++++ b/trace2/tr2_tls.h
+@@ -3,6 +3,12 @@
+ 
+ #include "strbuf.h"
+ 
++/*
++ * Notice: the term "TLS" refers to "thread-local storage" in the
++ * Trace2 source files.  This usage is borrowed from GCC and Windows.
++ * There is NO relation to "transport layer security".
++ */
++
+ /*
+  * Arbitry limit for thread names for column alignment.
+  */
+@@ -17,9 +23,7 @@ struct tr2tls_thread_ctx {
+ };
+ 
+ /*
+- * Create TLS data for the current thread.  This gives us a place to
+- * put per-thread data, such as thread start time, function nesting
+- * and a per-thread label for our messages.
++ * Create thread-local storage for the current thread.
+  *
+  * We assume the first thread is "main".  Other threads are given
+  * non-zero thread-ids to help distinguish messages from concurrent
+@@ -35,7 +39,7 @@ struct tr2tls_thread_ctx *tr2tls_create_self(const char *thread_name,
+ 					     uint64_t us_thread_start);
+ 
+ /*
+- * Get our TLS data.
++ * Get the thread-local storage pointer of the current thread.
+  */
+ struct tr2tls_thread_ctx *tr2tls_get_self(void);
+ 
+@@ -45,7 +49,7 @@ struct tr2tls_thread_ctx *tr2tls_get_self(void);
+ int tr2tls_is_main_thread(void);
+ 
+ /*
+- * Free our TLS data.
++ * Free the current thread's thread-local storage.
+  */
+ void tr2tls_unset_self(void);
+ 
+@@ -81,12 +85,12 @@ uint64_t tr2tls_region_elasped_self(uint64_t us);
+ uint64_t tr2tls_absolute_elapsed(uint64_t us);
+ 
+ /*
+- * Initialize the tr2 TLS system.
++ * Initialize thread-local storage for Trace2.
+  */
+ void tr2tls_init(void);
+ 
+ /*
+- * Free all tr2 TLS resources.
++ * Free all Trace2 thread-local storage resources.
+  */
+ void tr2tls_release(void);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

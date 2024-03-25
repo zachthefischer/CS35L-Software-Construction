@@ -1,0 +1,95 @@
+From b182658e3ed412e21a472db42ebc37130cee68e0 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 11 Oct 2023 13:37:47 -0700
+Subject: [PATCH 2274/2871] merge: introduce {copy|clear}_merge_options()
+
+When mostly the same set of options are to be used to perform
+multiple merges, one instance of the merge_options structure may
+want to be created and used by copying from the same template
+instance.  We saw such a use recently in "git merge-tree".
+
+Let's make the pattern official by introducing copy_merge_options()
+as a supported way to make a copy of the structure, and also give
+clear_merge_options() to release any resources held by a copied
+instance.  Currently we only make a shallow copy, so the former is a
+mere structure assignment while the latter is a no-op, but this may
+change in the future as the members of merge_options structure
+evolve.
+
+Suggested-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/merge-tree.c |  4 +++-
+ merge-recursive.c    | 16 ++++++++++++++++
+ merge-recursive.h    |  3 +++
+ 3 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/merge-tree.c b/builtin/merge-tree.c
+index 7024b5ce2e..a35e0452d6 100644
+--- a/builtin/merge-tree.c
++++ b/builtin/merge-tree.c
+@@ -425,10 +425,11 @@ static int real_merge(struct merge_tree_options *o,
+ {
+ 	struct commit *parent1, *parent2;
+ 	struct commit_list *merge_bases = NULL;
+-	struct merge_options opt = o->merge_options;
+ 	struct merge_result result = { 0 };
+ 	int show_messages = o->show_messages;
++	struct merge_options opt;
+ 
++	copy_merge_options(&opt, &o->merge_options);
+ 	parent1 = get_merge_parent(branch1);
+ 	if (!parent1)
+ 		help_unknown_ref(branch1, "merge-tree",
+@@ -507,6 +508,7 @@ static int real_merge(struct merge_tree_options *o,
+ 	if (o->use_stdin)
+ 		putchar(line_termination);
+ 	merge_finalize(&opt, &result);
++	clear_merge_options(&opt);
+ 	return !result.clean; /* result.clean < 0 handled above */
+ }
+ 
+diff --git a/merge-recursive.c b/merge-recursive.c
+index 0d7e57e2df..e3beb0801b 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -3912,6 +3912,22 @@ void init_merge_options(struct merge_options *opt,
+ 		opt->buffer_output = 0;
+ }
+ 
++/*
++ * For now, members of merge_options do not need deep copying, but
++ * it may change in the future, in which case we would need to update
++ * this, and also make a matching change to clear_merge_options() to
++ * release the resources held by a copied instance.
++ */
++void copy_merge_options(struct merge_options *dst, struct merge_options *src)
++{
++	*dst = *src;
++}
++
++void clear_merge_options(struct merge_options *opt UNUSED)
++{
++	; /* no-op as our copy is shallow right now */
++}
++
+ int parse_merge_opt(struct merge_options *opt, const char *s)
+ {
+ 	const char *arg;
+diff --git a/merge-recursive.h b/merge-recursive.h
+index b88000e3c2..3d3b3e3c29 100644
+--- a/merge-recursive.h
++++ b/merge-recursive.h
+@@ -55,6 +55,9 @@ struct merge_options {
+ 
+ void init_merge_options(struct merge_options *opt, struct repository *repo);
+ 
++void copy_merge_options(struct merge_options *dst, struct merge_options *src);
++void clear_merge_options(struct merge_options *opt);
++
+ /* parse the option in s and update the relevant field of opt */
+ int parse_merge_opt(struct merge_options *opt, const char *s);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

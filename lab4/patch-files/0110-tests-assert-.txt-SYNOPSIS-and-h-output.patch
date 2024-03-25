@@ -1,0 +1,76 @@
+From e5e6667b489badf6f2a3ae1d2bdc021c8060657c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:38:55 +0200
+Subject: [PATCH 0110/2871] tests: assert *.txt SYNOPSIS and -h output
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a test to assert basic compliance with the CodingGuidelines in the
+SYNOPSIS and builtin -h output. For now we only assert that the "-h"
+output doesn't have "\t" characters, as a very basic syntax check.
+
+Subsequent commits will expand on the checks here as various issues
+are fixed, but let's first add the test scaffolding.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0450-txt-doc-vs-help.sh | 44 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+ create mode 100755 t/t0450-txt-doc-vs-help.sh
+
+diff --git a/t/t0450-txt-doc-vs-help.sh b/t/t0450-txt-doc-vs-help.sh
+new file mode 100755
+index 0000000000..c8820bdd38
+--- /dev/null
++++ b/t/t0450-txt-doc-vs-help.sh
+@@ -0,0 +1,44 @@
++#!/bin/sh
++
++test_description='assert (unbuilt) Documentation/*.txt and -h output'
++
++TEST_PASSES_SANITIZE_LEAK=true
++. ./test-lib.sh
++
++test_expect_success 'setup: list of builtins' '
++	git --list-cmds=builtins >builtins
++'
++
++help_to_synopsis () {
++	builtin="$1" &&
++	out_dir="out/$builtin" &&
++	out="$out_dir/help.synopsis" &&
++	if test -f "$out"
++	then
++		echo "$out" &&
++		return 0
++	fi &&
++	mkdir -p "$out_dir" &&
++	test_expect_code 129 git $builtin -h >"$out.raw" 2>&1 &&
++	sed -n \
++		-e '1,/^$/ {
++			/^$/d;
++			s/^usage: //;
++			s/^ *or: //;
++			p;
++		}' <"$out.raw" >"$out" &&
++	echo "$out"
++}
++
++HT="	"
++
++while read builtin
++do
++	# -h output assertions
++	test_expect_success "$builtin -h output has no \t" '
++		h2s="$(help_to_synopsis "$builtin")" &&
++		! grep "$HT" "$h2s"
++	'
++done <builtins
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

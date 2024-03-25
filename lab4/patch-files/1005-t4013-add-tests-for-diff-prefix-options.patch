@@ -1,0 +1,62 @@
+From 7c03d0db8807d303540297432455adfa1c45b05e Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Mar 2023 01:07:45 -0500
+Subject: [PATCH 1005/2871] t4013: add tests for diff prefix options
+
+We don't have any specific test coverage of diff's various prefix
+options. We do incidentally invoke them in a few places, but it's worth
+having a more thorough set of tests that covers all of the effects we
+expect to see, and that the options kick in at the appropriate times.
+
+This will be especially useful as the next patch adds more options.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4013-diff-various.sh | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/t/t4013-diff-various.sh b/t/t4013-diff-various.sh
+index dfcf3a0aaa..0bc6957989 100755
+--- a/t/t4013-diff-various.sh
++++ b/t/t4013-diff-various.sh
+@@ -616,4 +616,36 @@ test_expect_success 'diff -I<regex>: detect malformed regex' '
+ 	test_i18ngrep "invalid regex given to -I: " error
+ '
+ 
++# check_prefix <patch> <src> <dst>
++# check only lines with paths to avoid dependency on exact oid/contents
++check_prefix () {
++	grep -E '^(diff|---|\+\+\+) ' "$1" >actual.paths &&
++	cat >expect <<-EOF &&
++	diff --git $2 $3
++	--- $2
++	+++ $3
++	EOF
++	test_cmp expect actual.paths
++}
++
++test_expect_success 'diff-files does not respect diff.noprefix' '
++	git -c diff.noprefix diff-files -p >actual &&
++	check_prefix actual a/file0 b/file0
++'
++
++test_expect_success 'diff-files respects --no-prefix' '
++	git diff-files -p --no-prefix >actual &&
++	check_prefix actual file0 file0
++'
++
++test_expect_success 'diff respects diff.noprefix' '
++	git -c diff.noprefix diff >actual &&
++	check_prefix actual file0 file0
++'
++
++test_expect_success 'diff respects diff.mnemonicprefix' '
++	git -c diff.mnemonicprefix diff >actual &&
++	check_prefix actual i/file0 w/file0
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

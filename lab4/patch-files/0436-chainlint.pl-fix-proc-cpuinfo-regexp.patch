@@ -1,0 +1,40 @@
+From 1f51b77f4f3f4d05f249f80713b2969e4069c109 Mon Sep 17 00:00:00 2001
+From: Andreas Hasenack <andreas.hasenack@canonical.com>
+Date: Tue, 22 Nov 2022 20:27:41 +0000
+Subject: [PATCH 0436/2871] chainlint.pl: fix /proc/cpuinfo regexp
+
+29fb2ec3 (chainlint.pl: validate test scripts in parallel,
+2022-09-01) introduced a function that gets the number of cores from
+/proc/cpuinfo on some systems, notably linux.
+
+The regexp it uses (^processor\s*:) fails to match the desired lines in
+the s390x architecture, where they look like this:
+
+    processor 0: version = FF, identification = 148F67, machine = 2964
+
+As a result, on s390x that function returns 0 as the number of cores,
+and the chainlint.pl script exits without doing anything.
+
+Signed-off-by: Andreas Hasenack <andreas.hasenack@canonical.com>
+Acked-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/chainlint.pl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/chainlint.pl b/t/chainlint.pl
+index 976db4b8a0..31cc086f96 100755
+--- a/t/chainlint.pl
++++ b/t/chainlint.pl
+@@ -656,7 +656,7 @@ sub ncores {
+ 	# Windows
+ 	return $ENV{NUMBER_OF_PROCESSORS} if exists($ENV{NUMBER_OF_PROCESSORS});
+ 	# Linux / MSYS2 / Cygwin / WSL
+-	do { local @ARGV='/proc/cpuinfo'; return scalar(grep(/^processor\s*:/, <>)); } if -r '/proc/cpuinfo';
++	do { local @ARGV='/proc/cpuinfo'; return scalar(grep(/^processor[\s\d]*:/, <>)); } if -r '/proc/cpuinfo';
+ 	# macOS & BSD
+ 	return qx/sysctl -n hw.ncpu/ if $^O =~ /(?:^darwin$|bsd)/;
+ 	return 1;
+-- 
+2.39.3 (Apple Git-145)
+

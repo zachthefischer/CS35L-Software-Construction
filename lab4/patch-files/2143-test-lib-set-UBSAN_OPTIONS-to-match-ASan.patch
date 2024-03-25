@@ -1,0 +1,99 @@
+From 252d693797912ddb2684733160170f0408b73274 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 21 Sep 2023 00:18:25 -0400
+Subject: [PATCH 2143/2871] test-lib: set UBSAN_OPTIONS to match ASan
+
+For a long time we have used ASAN_OPTIONS to set abort_on_error. This is
+important because we want to notice detected problems even in programs
+which are expected to fail. But we never did the same for UBSAN_OPTIONS.
+This means that our UBSan test suite runs might silently miss some
+cases.
+
+It also causes a more visible effect, which is that t4058 complains
+about unexpected "fixes" (and this is how I noticed the issue):
+
+  $ make SANITIZE=undefined CC=gcc && (cd t && ./t4058-*)
+  ...
+  ok 8 - git read-tree does not segfault # TODO known breakage vanished
+  ok 9 - reset --hard does not segfault # TODO known breakage vanished
+  ok 10 - git diff HEAD does not segfault # TODO known breakage vanished
+
+The tests themselves aren't that interesting. We have a known bug where
+these programs segfault, and they do when compiled without sanitizers.
+With UBSan, when the test runs:
+
+  test_might_fail git read-tree --reset base
+
+it gets:
+
+  cache-tree.c:935:9: runtime error: member access within misaligned address 0x5a5a5a5a5a5a5a5a for type 'struct cache_entry', which requires 8 byte alignment
+
+So that's garbage memory which would _usually_ cause us to segfault, but
+UBSan catches it and complains first about the alignment. That makes
+sense, but the weird thing is that UBSan then exits instead of aborting,
+so our test_might_fail call considers that an acceptable outcome and the
+test "passes".
+
+Curiously, this historically seems to have aborted, because I've run
+"make test" with UBSan many times (and so did our CI) and we never saw
+the problem. Even more curiously, I see an abort if I use clang with
+ASan and UBSan together, like:
+
+  # this aborts!
+  make SANITIZE=undefined,address CC=clang
+
+But not with just UBSan, and not with both when used with gcc:
+
+  # none of these do
+  make SANITIZE=undefined CC=gcc
+  make SANITIZE=undefined CC=clang
+  make SANITIZE=undefined,address CC=gcc
+
+Likewise moving to older versions of gcc (I tried gcc-11 and gcc-12 on
+my Debian system) doesn't abort. Nor does moving around in Git's
+history. Neither this test nor the relevant code have been touched in a
+while, and going back to v2.41.0 produces the same outcome (even though
+many UBSan CI runs have passed in the meantime).
+
+So _something_ changed on my system (and likely will soon on other
+people's, since this is stock Debian unstable), but I didn't track
+it further. I don't know why it ever aborted in the past, but we
+definitely should be explicit here and tell UBSan what we want to
+happen.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-httpd/apache.conf | 1 +
+ t/test-lib.sh           | 3 +++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/t/lib-httpd/apache.conf b/t/lib-httpd/apache.conf
+index a22d138605..022276a6b9 100644
+--- a/t/lib-httpd/apache.conf
++++ b/t/lib-httpd/apache.conf
+@@ -92,6 +92,7 @@ PassEnv GIT_VALGRIND_OPTIONS
+ PassEnv GNUPGHOME
+ PassEnv ASAN_OPTIONS
+ PassEnv LSAN_OPTIONS
++PassEnv UBSAN_OPTIONS
+ PassEnv GIT_TRACE
+ PassEnv GIT_CONFIG_NOSYSTEM
+ PassEnv GIT_TEST_SIDEBAND_ALL
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 293caf0f20..67ad2318f7 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -89,6 +89,9 @@ prepend_var LSAN_OPTIONS : $GIT_SAN_OPTIONS
+ prepend_var LSAN_OPTIONS : fast_unwind_on_malloc=0
+ export LSAN_OPTIONS
+ 
++prepend_var UBSAN_OPTIONS : $GIT_SAN_OPTIONS
++export UBSAN_OPTIONS
++
+ if test ! -f "$GIT_BUILD_DIR"/GIT-BUILD-OPTIONS
+ then
+ 	echo >&2 'error: GIT-BUILD-OPTIONS missing (has Git been built?).'
+-- 
+2.39.3 (Apple Git-145)
+

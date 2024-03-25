@@ -1,0 +1,43 @@
+From 078c42531e8d6e8c7bfaa1a52dca330f0eef5d94 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 2 Sep 2023 20:38:34 +0200
+Subject: [PATCH 2062/2871] name-rev: use OPT_HIDDEN_BOOL for --peel-tag
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+adfc1857bd (describe: fix --contains when a tag is given as input,
+2013-07-18) added the option --peel-tag, defining it using a positional
+struct option initializer and a comment indicating that it's intended to
+be a hidden OPT_BOOL.  4741edd549 (Remove deprecated OPTION_BOOLEAN for
+parsing arguments, 2013-08-03) added the macro OPT_HIDDEN_BOOL, which
+allows to express this more succinctly.  Use it.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/name-rev.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/name-rev.c b/builtin/name-rev.c
+index c706fa3720..2dd1807c4e 100644
+--- a/builtin/name-rev.c
++++ b/builtin/name-rev.c
+@@ -582,12 +582,8 @@ int cmd_name_rev(int argc, const char **argv, const char *prefix)
+ 		OPT_BOOL(0, "undefined", &allow_undefined, N_("allow to print `undefined` names (default)")),
+ 		OPT_BOOL(0, "always",     &always,
+ 			   N_("show abbreviated commit object as fallback")),
+-		{
+-			/* A Hidden OPT_BOOL */
+-			OPTION_SET_INT, 0, "peel-tag", &peel_tag, NULL,
+-			N_("dereference tags in the input (internal use)"),
+-			PARSE_OPT_NOARG | PARSE_OPT_HIDDEN, NULL, 1,
+-		},
++		OPT_HIDDEN_BOOL(0, "peel-tag", &peel_tag,
++			   N_("dereference tags in the input (internal use)")),
+ 		OPT_END(),
+ 	};
+ 
+-- 
+2.39.3 (Apple Git-145)
+

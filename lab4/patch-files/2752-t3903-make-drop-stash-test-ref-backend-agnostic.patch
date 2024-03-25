@@ -1,0 +1,53 @@
+From 99a294bcdb84152fa3d4868666227c1e49378727 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:58 +0000
+Subject: [PATCH 2752/2871] t3903: make drop stash test ref backend agnostic
+
+In this test, the calls to cut(1) are only used to verify that the
+contents of the reflog entry look as expected. By replacing these with
+git-reflog(1) calls, we can make this test ref-backend agnostic.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3903-stash.sh | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/t/t3903-stash.sh b/t/t3903-stash.sh
+index 34faeac3f1..3319240515 100755
+--- a/t/t3903-stash.sh
++++ b/t/t3903-stash.sh
+@@ -200,7 +200,7 @@ test_expect_success 'drop stash reflog updates refs/stash' '
+ 	test_cmp expect actual
+ '
+ 
+-test_expect_success REFFILES 'drop stash reflog updates refs/stash with rewrite' '
++test_expect_success 'drop stash reflog updates refs/stash with rewrite' '
+ 	git init repo &&
+ 	(
+ 		cd repo &&
+@@ -213,16 +213,16 @@ test_expect_success REFFILES 'drop stash reflog updates refs/stash with rewrite'
+ 	new_oid="$(git -C repo rev-parse stash@{0})" &&
+ 
+ 	cat >expect <<-EOF &&
+-	$(test_oid zero) $old_oid
+-	$old_oid $new_oid
++	$new_oid
++	$old_oid
+ 	EOF
+-	cut -d" " -f1-2 repo/.git/logs/refs/stash >actual &&
++	git -C repo reflog show refs/stash --format=%H >actual &&
+ 	test_cmp expect actual &&
+ 
+ 	git -C repo stash drop stash@{1} &&
+-	cut -d" " -f1-2 repo/.git/logs/refs/stash >actual &&
++	git -C repo reflog show refs/stash --format=%H >actual &&
+ 	cat >expect <<-EOF &&
+-	$(test_oid zero) $new_oid
++	$new_oid
+ 	EOF
+ 	test_cmp expect actual
+ '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,134 @@
+From a3883a6532163f0a53a7b202f32bf8fe565af056 Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Sun, 20 Aug 2023 19:50:04 +0100
+Subject: [PATCH 1964/2871] decorate: refactor format_decorations()
+
+Rename the format_decorations_extended function to format_decorations
+and drop the format_decorations wrapper macro. Pass the prefix, suffix
+and separator strings as a single 'struct format_decorations' pointer
+argument instead of separate arguments. Use default values defined in
+the function when either the struct pointer or any of the struct fields
+are NULL. This is to ease extension with additional options.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ log-tree.c | 23 +++++++++++++++++------
+ log-tree.h | 15 ++++++++-------
+ pretty.c   | 13 ++++++++++---
+ 3 files changed, 35 insertions(+), 16 deletions(-)
+
+diff --git a/log-tree.c b/log-tree.c
+index 208c69cbb7..cd12c26c29 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -303,14 +303,12 @@ static void show_name(struct strbuf *sb, const struct name_decoration *decoratio
+ 
+ /*
+  * The caller makes sure there is no funny color before calling.
+- * format_decorations_extended makes sure the same after return.
++ * format_decorations ensures the same after return.
+  */
+-void format_decorations_extended(struct strbuf *sb,
++void format_decorations(struct strbuf *sb,
+ 			const struct commit *commit,
+ 			int use_color,
+-			const char *prefix,
+-			const char *separator,
+-			const char *suffix)
++			const struct decoration_options *opts)
+ {
+ 	const struct name_decoration *decoration;
+ 	const struct name_decoration *current_and_HEAD;
+@@ -319,10 +317,23 @@ void format_decorations_extended(struct strbuf *sb,
+ 	const char *color_reset =
+ 		decorate_get_color(use_color, DECORATION_NONE);
+ 
++	const char *prefix = " (";
++	const char *suffix = ")";
++	const char *separator = ", ";
++
+ 	decoration = get_name_decoration(&commit->object);
+ 	if (!decoration)
+ 		return;
+ 
++	if (opts) {
++		if (opts->prefix)
++			prefix = opts->prefix;
++		if (opts->suffix)
++			suffix = opts->suffix;
++		if (opts->separator)
++			separator = opts->separator;
++	}
++
+ 	current_and_HEAD = current_pointed_by_HEAD(decoration);
+ 	while (decoration) {
+ 		/*
+@@ -370,7 +381,7 @@ void show_decorations(struct rev_info *opt, struct commit *commit)
+ 	}
+ 	if (!opt->show_decorations)
+ 		return;
+-	format_decorations(&sb, commit, opt->diffopt.use_color);
++	format_decorations(&sb, commit, opt->diffopt.use_color, NULL);
+ 	fputs(sb.buf, opt->diffopt.file);
+ 	strbuf_release(&sb);
+ }
+diff --git a/log-tree.h b/log-tree.h
+index bdb6432815..14898de8ac 100644
+--- a/log-tree.h
++++ b/log-tree.h
+@@ -13,17 +13,18 @@ struct decoration_filter {
+ 	struct string_list *exclude_ref_config_pattern;
+ };
+ 
++struct decoration_options {
++	char *prefix;
++	char *suffix;
++	char *separator;
++};
++
+ int parse_decorate_color_config(const char *var, const char *slot_name, const char *value);
+ int log_tree_diff_flush(struct rev_info *);
+ int log_tree_commit(struct rev_info *, struct commit *);
+ void show_log(struct rev_info *opt);
+-void format_decorations_extended(struct strbuf *sb, const struct commit *commit,
+-			     int use_color,
+-			     const char *prefix,
+-			     const char *separator,
+-			     const char *suffix);
+-#define format_decorations(strbuf, commit, color) \
+-			     format_decorations_extended((strbuf), (commit), (color), " (", ", ", ")")
++void format_decorations(struct strbuf *sb, const struct commit *commit,
++			int use_color, const struct decoration_options *opts);
+ void show_decorations(struct rev_info *opt, struct commit *commit);
+ void log_write_email_headers(struct rev_info *opt, struct commit *commit,
+ 			     const char **extra_headers_p,
+diff --git a/pretty.c b/pretty.c
+index 718530bbab..69b6db3340 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1537,11 +1537,18 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
+ 		strbuf_addstr(sb, get_revision_mark(NULL, commit));
+ 		return 1;
+ 	case 'd':
+-		format_decorations(sb, commit, c->auto_color);
++		format_decorations(sb, commit, c->auto_color, NULL);
+ 		return 1;
+ 	case 'D':
+-		format_decorations_extended(sb, commit, c->auto_color, "", ", ", "");
+-		return 1;
++		{
++			const struct decoration_options opts = {
++				.prefix = "",
++				.suffix = ""
++			};
++
++			format_decorations(sb, commit, c->auto_color, &opts);
++			return 1;
++		}
+ 	case 'S':		/* tag/branch like --source */
+ 		if (!(c->pretty_ctx->rev && c->pretty_ctx->rev->sources))
+ 			return 0;
+-- 
+2.39.3 (Apple Git-145)
+

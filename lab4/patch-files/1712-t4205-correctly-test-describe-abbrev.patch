@@ -1,0 +1,66 @@
+From 1876a5ae152018ca3b03540d319c5fc981fd3061 Mon Sep 17 00:00:00 2001
+From: Kousik Sanagavarapu <five231003@gmail.com>
+Date: Thu, 29 Jun 2023 18:48:08 +0530
+Subject: [PATCH 1712/2871] t4205: correctly test %(describe:abbrev=...)
+
+The pretty format %(describe:abbrev=<number>) tells describe to use
+at least <number> digits of the oid to generate the human-readable
+format of the commit-ish.
+
+There are three things to test here:
+  - Check that we can describe a commit that is not tagged (that is,
+    for example our HEAD is at least one commit ahead of some reachable
+    commit which is tagged) with at least <number> digits of the oid
+    being used for describing it.
+
+  - Check that when using such a commit-ish, we always use at least
+    <number> digits of the oid to describe it.
+
+  - Check that we can describe a tag. This just gives the name of the
+    tag irrespective of abbrev (abbrev doesn't make sense here).
+
+Do this, instead of the current test which only tests the last case.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Mentored-by: Christian Couder <christian.couder@gmail.com>
+Mentored-by: Hariom Verma <hariom18599@gmail.com>
+Signed-off-by: Kousik Sanagavarapu <five231003@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4205-log-pretty-formats.sh | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/t/t4205-log-pretty-formats.sh b/t/t4205-log-pretty-formats.sh
+index 3e7ad9d5de..00037ea9ff 100755
+--- a/t/t4205-log-pretty-formats.sh
++++ b/t/t4205-log-pretty-formats.sh
+@@ -1012,10 +1012,25 @@ test_expect_success '%(describe:tags) vs git describe --tags' '
+ 
+ test_expect_success '%(describe:abbrev=...) vs git describe --abbrev=...' '
+ 	test_when_finished "git tag -d tagname" &&
++
++	# Case 1: We have commits between HEAD and the most recent tag
++	#	  reachable from it
++	test_commit --no-tag file &&
++	git describe --abbrev=15 >expect &&
++	git log -1 --format="%(describe:abbrev=15)" >actual &&
++	test_cmp expect actual &&
++
++	# Make sure the hash used is at least 15 digits long
++	sed -e "s/^.*-g\([0-9a-f]*\)$/\1/" <actual >hexpart &&
++	test 16 -le $(wc -c <hexpart) &&
++
++	# Case 2: We have a tag at HEAD, describe directly gives the
++	#	  name of the tag
+ 	git tag -a -m tagged tagname &&
+ 	git describe --abbrev=15 >expect &&
+ 	git log -1 --format="%(describe:abbrev=15)" >actual &&
+-	test_cmp expect actual
++	test_cmp expect actual &&
++	test tagname = $(cat actual)
+ '
+ 
+ test_expect_success 'log --pretty with space stealing' '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,35 @@
+From d76e0a744d3a8c1713f0e913325cab7da92f01ef Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:38:13 -0400
+Subject: [PATCH 1802/2871] commit-graph.c: prevent overflow in
+ `merge_commit_graph()`
+
+When merging two commit graphs, ensure that we don't attempt to merge
+two graphs which, when combined, have more total commits than the 32-bit
+unsigned maximum.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index d9795e3aa4..8333ce8e04 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2179,6 +2179,11 @@ static void merge_commit_graph(struct write_commit_graph_context *ctx,
+ 	uint32_t i;
+ 	uint32_t offset = g->num_commits_in_base;
+ 
++	if (unsigned_add_overflows(ctx->commits.nr, g->num_commits))
++		die(_("cannot merge graph %s, too many commits: %"PRIuMAX),
++		    oid_to_hex(&g->oid),
++		    (uintmax_t)st_add(ctx->commits.nr, g->num_commits));
++
+ 	ALLOC_GROW(ctx->commits.list, ctx->commits.nr + g->num_commits, ctx->commits.alloc);
+ 
+ 	for (i = 0; i < g->num_commits; i++) {
+-- 
+2.39.3 (Apple Git-145)
+

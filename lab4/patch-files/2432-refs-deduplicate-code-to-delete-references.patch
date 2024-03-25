@@ -1,0 +1,196 @@
+From d6f8e7298254d8291724f9f57648b3ab5f8d3770 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 14 Nov 2023 09:58:46 +0100
+Subject: [PATCH 2432/2871] refs: deduplicate code to delete references
+
+Both the files and the packed-refs reference backends now use the same
+generic transactions-based code to delete references. Let's pull these
+implementations up into `refs_delete_refs()` to deduplicate the code.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs.c                | 48 ++++++++++++++++++++++++++++++++++++++++---
+ refs/files-backend.c  | 46 +----------------------------------------
+ refs/packed-backend.c | 45 +---------------------------------------
+ 3 files changed, 47 insertions(+), 92 deletions(-)
+
+diff --git a/refs.c b/refs.c
+index fcae5dddc6..16bfa21df7 100644
+--- a/refs.c
++++ b/refs.c
+@@ -2599,13 +2599,55 @@ void ref_transaction_for_each_queued_update(struct ref_transaction *transaction,
+ int refs_delete_refs(struct ref_store *refs, const char *logmsg,
+ 		     struct string_list *refnames, unsigned int flags)
+ {
++	struct ref_transaction *transaction;
++	struct strbuf err = STRBUF_INIT;
++	struct string_list_item *item;
++	int ret = 0, failures = 0;
+ 	char *msg;
+-	int retval;
++
++	if (!refnames->nr)
++		return 0;
+ 
+ 	msg = normalize_reflog_message(logmsg);
+-	retval = refs->be->delete_refs(refs, msg, refnames, flags);
++
++	/*
++	 * Since we don't check the references' old_oids, the
++	 * individual updates can't fail, so we can pack all of the
++	 * updates into a single transaction.
++	 */
++	transaction = ref_store_transaction_begin(refs, &err);
++	if (!transaction) {
++		ret = error("%s", err.buf);
++		goto out;
++	}
++
++	for_each_string_list_item(item, refnames) {
++		ret = ref_transaction_delete(transaction, item->string,
++					     NULL, flags, msg, &err);
++		if (ret) {
++			warning(_("could not delete reference %s: %s"),
++				item->string, err.buf);
++			strbuf_reset(&err);
++			failures = 1;
++		}
++	}
++
++	ret = ref_transaction_commit(transaction, &err);
++	if (ret) {
++		if (refnames->nr == 1)
++			error(_("could not delete reference %s: %s"),
++			      refnames->items[0].string, err.buf);
++		else
++			error(_("could not delete references: %s"), err.buf);
++	}
++
++out:
++	if (!ret && failures)
++		ret = -1;
++	ref_transaction_free(transaction);
++	strbuf_release(&err);
+ 	free(msg);
+-	return retval;
++	return ret;
+ }
+ 
+ int delete_refs(const char *msg, struct string_list *refnames,
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index 778d3a96ba..8d28810e67 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -1268,51 +1268,7 @@ static int files_pack_refs(struct ref_store *ref_store,
+ static int files_delete_refs(struct ref_store *ref_store, const char *msg,
+ 			     struct string_list *refnames, unsigned int flags)
+ {
+-	struct ref_transaction *transaction;
+-	struct strbuf err = STRBUF_INIT;
+-	struct string_list_item *item;
+-	int ret = 0, failures = 0;
+-
+-	if (!refnames->nr)
+-		return 0;
+-
+-	/*
+-	 * Since we don't check the references' old_oids, the
+-	 * individual updates can't fail, so we can pack all of the
+-	 * updates into a single transaction.
+-	 */
+-	transaction = ref_store_transaction_begin(ref_store, &err);
+-	if (!transaction) {
+-		ret = error("%s", err.buf);
+-		goto out;
+-	}
+-
+-	for_each_string_list_item(item, refnames) {
+-		ret = ref_transaction_delete(transaction, item->string,
+-					     NULL, flags, msg, &err);
+-		if (ret) {
+-			warning(_("could not delete reference %s: %s"),
+-				item->string, err.buf);
+-			strbuf_reset(&err);
+-			failures = 1;
+-		}
+-	}
+-
+-	ret = ref_transaction_commit(transaction, &err);
+-	if (ret) {
+-		if (refnames->nr == 1)
+-			error(_("could not delete reference %s: %s"),
+-			      refnames->items[0].string, err.buf);
+-		else
+-			error(_("could not delete references: %s"), err.buf);
+-	}
+-
+-out:
+-	if (!ret && failures)
+-		ret = -1;
+-	ref_transaction_free(transaction);
+-	strbuf_release(&err);
+-	return ret;
++	return refs_delete_refs(ref_store, msg, refnames, flags);
+ }
+ 
+ /*
+diff --git a/refs/packed-backend.c b/refs/packed-backend.c
+index 59c78d7941..1589577005 100644
+--- a/refs/packed-backend.c
++++ b/refs/packed-backend.c
+@@ -1691,50 +1691,7 @@ static int packed_initial_transaction_commit(struct ref_store *ref_store UNUSED,
+ static int packed_delete_refs(struct ref_store *ref_store, const char *msg,
+ 			     struct string_list *refnames, unsigned int flags)
+ {
+-	struct packed_ref_store *refs =
+-		packed_downcast(ref_store, REF_STORE_WRITE, "delete_refs");
+-	struct strbuf err = STRBUF_INIT;
+-	struct ref_transaction *transaction;
+-	struct string_list_item *item;
+-	int ret;
+-
+-	(void)refs; /* We need the check above, but don't use the variable */
+-
+-	if (!refnames->nr)
+-		return 0;
+-
+-	/*
+-	 * Since we don't check the references' old_oids, the
+-	 * individual updates can't fail, so we can pack all of the
+-	 * updates into a single transaction.
+-	 */
+-
+-	transaction = ref_store_transaction_begin(ref_store, &err);
+-	if (!transaction)
+-		return -1;
+-
+-	for_each_string_list_item(item, refnames) {
+-		if (ref_transaction_delete(transaction, item->string, NULL,
+-					   flags, msg, &err)) {
+-			warning(_("could not delete reference %s: %s"),
+-				item->string, err.buf);
+-			strbuf_reset(&err);
+-		}
+-	}
+-
+-	ret = ref_transaction_commit(transaction, &err);
+-
+-	if (ret) {
+-		if (refnames->nr == 1)
+-			error(_("could not delete reference %s: %s"),
+-			      refnames->items[0].string, err.buf);
+-		else
+-			error(_("could not delete references: %s"), err.buf);
+-	}
+-
+-	ref_transaction_free(transaction);
+-	strbuf_release(&err);
+-	return ret;
++	return refs_delete_refs(ref_store, msg, refnames, flags);
+ }
+ 
+ static int packed_pack_refs(struct ref_store *ref_store UNUSED,
+-- 
+2.39.3 (Apple Git-145)
+

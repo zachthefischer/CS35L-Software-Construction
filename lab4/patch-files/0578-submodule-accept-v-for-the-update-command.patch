@@ -1,0 +1,35 @@
+From 6f65f847664445b347810bece6eee84c2f39f4ef Mon Sep 17 00:00:00 2001
+From: Sven Strickroth <email@cs-ware.de>
+Date: Sat, 10 Dec 2022 14:06:37 +0100
+Subject: [PATCH 0578/2871] submodule: accept -v for the update command
+
+Since a56771a6 (builtin/pull: respect verbosity settings in
+submodules, 2018-01-25), "git pull -v --recurse-submodules"
+propagates the "-v" to the submodule command, but because the
+latter command does not understand the option, it barfs.
+
+Teach "git submodule update" to accept the option to fix it.
+
+Signed-off-by: Sven Strickroth <email@cs-ware.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-submodule.sh | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/git-submodule.sh b/git-submodule.sh
+index 5e5d21c010..6e372e762b 100755
+--- a/git-submodule.sh
++++ b/git-submodule.sh
+@@ -244,6 +244,9 @@ cmd_update()
+ 		-q|--quiet)
+ 			quiet=1
+ 			;;
++		-v|--verbose)
++			quiet=0
++			;;
+ 		--progress)
+ 			progress=1
+ 			;;
+-- 
+2.39.3 (Apple Git-145)
+

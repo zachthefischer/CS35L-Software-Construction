@@ -1,0 +1,47 @@
+From de8f14e1c01451e751da80fb6309bf4a371b5b2b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 6 Jan 2023 06:04:18 -0500
+Subject: [PATCH 0629/2871] diff: clean up external-diff argv setup
+
+Since the previous commit, setting up the tempfile for an external diff
+uses df->path from the diff_filespec, rather than the logical name. This
+means add_external_diff_name() does not need to take a "name" parameter
+at all, and we can drop it. And that in turn lets us simplify the
+conditional for handling renames (when the "other" name is non-NULL).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 9 +++------
+ 1 file changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index c78ea27033..330f090f6a 100644
+--- a/diff.c
++++ b/diff.c
+@@ -4278,7 +4278,6 @@ static struct diff_tempfile *prepare_temp_file(struct repository *r,
+ 
+ static void add_external_diff_name(struct repository *r,
+ 				   struct strvec *argv,
+-				   const char *name,
+ 				   struct diff_filespec *df)
+ {
+ 	struct diff_tempfile *temp = prepare_temp_file(r, df->path, df);
+@@ -4308,11 +4307,9 @@ static void run_external_diff(const char *pgm,
+ 	strvec_push(&cmd.args, name);
+ 
+ 	if (one && two) {
+-		add_external_diff_name(o->repo, &cmd.args, name, one);
+-		if (!other)
+-			add_external_diff_name(o->repo, &cmd.args, name, two);
+-		else {
+-			add_external_diff_name(o->repo, &cmd.args, other, two);
++		add_external_diff_name(o->repo, &cmd.args, one);
++		add_external_diff_name(o->repo, &cmd.args, two);
++		if (other) {
+ 			strvec_push(&cmd.args, other);
+ 			strvec_push(&cmd.args, xfrm_msg);
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

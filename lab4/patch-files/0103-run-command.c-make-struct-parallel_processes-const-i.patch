@@ -1,0 +1,47 @@
+From e39c9de8607cacee4cc5169c2e014bc59acbbcde Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Wed, 12 Oct 2022 23:02:28 +0200
+Subject: [PATCH 0103/2871] run-command.c: make "struct parallel_processes"
+ const if possible
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a "const" to two "struct parallel_processes" parameters where
+we're not modifying anything in "pp". For kill_children() we'll call
+it from both the signal handler, and from run_processes_parallel()
+itself. Adding a "const" there makes it clear that we don't need to
+modify any state when killing our children.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ run-command.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/run-command.c b/run-command.c
+index 646ea22e39..a72c4295ad 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -1540,7 +1540,7 @@ static int default_task_finished(int result,
+ 	return 0;
+ }
+ 
+-static void kill_children(struct parallel_processes *pp, int signo)
++static void kill_children(const struct parallel_processes *pp, int signo)
+ {
+ 	for (size_t i = 0; i < pp->max_processes; i++)
+ 		if (pp->children[i].state == GIT_CP_WORKING)
+@@ -1698,7 +1698,7 @@ static void pp_buffer_stderr(struct parallel_processes *pp, int output_timeout)
+ 	}
+ }
+ 
+-static void pp_output(struct parallel_processes *pp)
++static void pp_output(const struct parallel_processes *pp)
+ {
+ 	size_t i = pp->output_owner;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,30 @@
+From 008217cb4a11b1bd9d25eda2d412d813cfeacd9f Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Fri, 27 Jan 2023 20:06:01 +0000
+Subject: [PATCH 0755/2871] t: allow 'scalar' in test_must_fail
+
+This will enable scalar tests to use the test_must_fail helper, when
+necessary.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib-functions.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 7992222703..75b8ee95e7 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1016,7 +1016,7 @@ test_must_fail_acceptable () {
+ 	fi
+ 
+ 	case "$1" in
+-	git|__git*|test-tool|test_terminal)
++	git|__git*|scalar|test-tool|test_terminal)
+ 		return 0
+ 		;;
+ 	*)
+-- 
+2.39.3 (Apple Git-145)
+

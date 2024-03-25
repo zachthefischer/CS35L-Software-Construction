@@ -1,0 +1,88 @@
+From 16fb5c54bd91c9714e12c6d742e5a6fd81459b71 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 14 Jan 2023 15:37:53 +0100
+Subject: [PATCH 0693/2871] ls-tree: fix expansion of repeated %(path)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+expand_show_tree() borrows the base strbuf given to us by read_tree() to
+build the full path of the current entry when handling %(path).  Only
+its indirect caller, show_tree_fmt(), removes the added entry name.
+That works fine as long as %(path) is only included once in the format
+string, but accumulates duplicates if it's repeated:
+
+   $ git ls-tree --format='%(path) %(path) %(path)' HEAD M*
+   Makefile MakefileMakefile MakefileMakefileMakefile
+
+Reset the length after each use to get the same expansion every time;
+here's the behavior with this patch:
+
+   $ ./git ls-tree --format='%(path) %(path) %(path)' HEAD M*
+   Makefile Makefile Makefile
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-tree.c         | 6 +++---
+ t/t3104-ls-tree-format.sh | 6 ++++++
+ 2 files changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/ls-tree.c b/builtin/ls-tree.c
+index 8a1bf2fa4d..c3284610dd 100644
+--- a/builtin/ls-tree.c
++++ b/builtin/ls-tree.c
+@@ -97,9 +97,12 @@ static size_t expand_show_tree(struct strbuf *sb, const char *start,
+ 		const char *prefix = chomp_prefix ? ls_tree_prefix : NULL;
+ 		struct strbuf quoted = STRBUF_INIT;
+ 		struct strbuf sbuf = STRBUF_INIT;
++		size_t baselen = data->base->len;
++
+ 		strbuf_addstr(data->base, data->pathname);
+ 		name = relative_path(data->base->buf, prefix, &sbuf);
+ 		quote_c_style(name, &quoted, NULL, 0);
++		strbuf_setlen(data->base, baselen);
+ 		strbuf_addbuf(sb, &quoted);
+ 		strbuf_release(&sbuf);
+ 		strbuf_release(&quoted);
+@@ -143,7 +146,6 @@ static int show_recursive(const char *base, size_t baselen, const char *pathname
+ static int show_tree_fmt(const struct object_id *oid, struct strbuf *base,
+ 			 const char *pathname, unsigned mode, void *context)
+ {
+-	size_t baselen;
+ 	int recurse = 0;
+ 	struct strbuf sb = STRBUF_INIT;
+ 	enum object_type type = object_type(mode);
+@@ -163,12 +165,10 @@ static int show_tree_fmt(const struct object_id *oid, struct strbuf *base,
+ 	if (type == OBJ_BLOB && (ls_options & LS_TREE_ONLY))
+ 		return 0;
+ 
+-	baselen = base->len;
+ 	strbuf_expand(&sb, format, expand_show_tree, &data);
+ 	strbuf_addch(&sb, line_termination);
+ 	fwrite(sb.buf, sb.len, 1, stdout);
+ 	strbuf_release(&sb);
+-	strbuf_setlen(base, baselen);
+ 	return recurse;
+ }
+ 
+diff --git a/t/t3104-ls-tree-format.sh b/t/t3104-ls-tree-format.sh
+index 7f1eb699d3..7e6c4dc5da 100755
+--- a/t/t3104-ls-tree-format.sh
++++ b/t/t3104-ls-tree-format.sh
+@@ -37,6 +37,12 @@ test_ls_tree_format () {
+ 	'
+ }
+ 
++test_expect_success "ls-tree --format='%(path) %(path) %(path)' HEAD top-file" '
++	git ls-tree --format="%(path) %(path) %(path)" HEAD top-file.t >actual &&
++	echo top-file.t top-file.t top-file.t >expect &&
++	test_cmp expect actual
++'
++
+ test_ls_tree_format \
+ 	"%(objectmode) %(objecttype) %(objectname)%x09%(path)" \
+ 	""
+-- 
+2.39.3 (Apple Git-145)
+

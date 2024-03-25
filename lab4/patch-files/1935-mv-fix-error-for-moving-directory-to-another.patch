@@ -1,0 +1,47 @@
+From c2cbefc51023a9d919846afb5629910d014d231c Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 11 Aug 2023 18:14:35 -0700
+Subject: [PATCH 1935/2871] mv: fix error for moving directory to another
+
+If both directories D1 and D2 already exists, and further there is a
+filesystem entity D2/D1, "git mv D1 D2" would fail, and we get an
+error message that says:
+
+    "cannot move directory over file, source=D1, destination=D2/D1"
+
+regardless of the type of existing "D2/D1".  If it is a file, the
+message is correct, but if it is a directory, it is not (we could
+make the D2/D1 directory a union of its original contents and what
+was in D1/, but that is not what we do).
+
+The code that decies to issue the error message only checks for
+existence of "D2/D1" and does not care what kind of thing sits at
+the path.
+
+Rephrase the message to say
+
+    "destination already exists, source=D1, destination=D2/D1"
+
+that would be suitable for any kind of thing being in the way.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/mv.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/mv.c b/builtin/mv.c
+index 665bd27448..80fc7a3c70 100644
+--- a/builtin/mv.c
++++ b/builtin/mv.c
+@@ -304,7 +304,7 @@ int cmd_mv(int argc, const char **argv, const char *prefix)
+ 		}
+ 		if (S_ISDIR(st.st_mode)
+ 		    && lstat(dst, &st) == 0) {
+-			bad = _("cannot move directory over file");
++			bad = _("destination already exists");
+ 			goto act_on_entry;
+ 		}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

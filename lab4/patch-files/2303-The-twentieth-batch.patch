@@ -1,0 +1,54 @@
+From ceadf0f3cf51550166a387ec8508bb55e7883057 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 20 Oct 2023 15:17:06 -0700
+Subject: [PATCH 2303/2871] The twentieth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index 2702799dc2..a1a2da191c 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -89,6 +89,9 @@ UI, Workflows & Features
+  * "git repack" learned "--max-cruft-size" to prevent cruft packs from
+    growing without bounds.
+ 
++ * "git merge-tree" learned to take strategy backend specific options
++   via the "-X" option, like "git merge" does.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -126,6 +129,10 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * Test coverage for trailers has been improved.
+ 
++ * The code to iterate over loose references have been optimized to
++   reduce the number of lstat() system calls.
++   (merge 2cdb796101 vd/loose-ref-iteration-optimization later to maint).
++
+ 
+ Fixes since v2.42
+ -----------------
+@@ -250,6 +257,10 @@ Fixes since v2.42
+    option is used.
+    (merge e95bafc52f jc/merge-ort-attr-index-fix later to maint).
+ 
++ * Unlike "git log --pretty=%D", "git log --pretty="%(decorate)" did
++   not auto-initialize the decoration subsystem, which has been
++   corrected.
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge fd3ba590d8 ws/git-push-doc-grammofix later to maint).
+    (merge 5f33a843de ds/upload-pack-error-sequence-fix later to maint).
+@@ -274,3 +285,4 @@ Fixes since v2.42
+    (merge f4cbb32c27 rs/parse-opt-ctx-cleanup later to maint).
+    (merge badf2fe1c3 jk/decoration-and-other-leak-fixes later to maint).
+    (merge cebfaaa333 sn/cat-file-doc-update later to maint).
++   (merge 8b3aa36f5a ps/rewritten-is-per-worktree-doc later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

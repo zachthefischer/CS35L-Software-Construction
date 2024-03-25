@@ -1,0 +1,86 @@
+From ec5d9d684c06130b9f4bf46bf9373104f79c6afe Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Thu, 10 Aug 2023 20:39:41 +0000
+Subject: [PATCH 1925/2871] maintenance: use random minute in launchctl
+ scheduler
+
+The get_random_minute() method was created to allow maintenance
+schedules to be fixed to a random minute of the hour. This randomness is
+only intended to spread out the load from a number of clients, but each
+client should have an hour between each maintenance cycle.
+
+Use get_random_minute() when constructing the schedules for launchctl.
+
+The format already includes a 'Minute' key which is modified from 0 to
+the random minute.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c | 23 ++++++++++++-----------
+ 1 file changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 2ebae7bc17..286ce131a5 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -1708,7 +1708,6 @@ static int get_schedule_cmd(const char **cmd, int *is_available)
+ 	return 1;
+ }
+ 
+-MAYBE_UNUSED
+ static int get_random_minute(void)
+ {
+ 	/* Use a static value when under tests. */
+@@ -1830,6 +1829,7 @@ static int launchctl_schedule_plist(const char *exec_path, enum schedule_priorit
+ 	struct strbuf plist = STRBUF_INIT, plist2 = STRBUF_INIT;
+ 	struct stat st;
+ 	const char *cmd = "launchctl";
++	int minute = get_random_minute();
+ 
+ 	get_schedule_cmd(&cmd, NULL);
+ 	preamble = "<?xml version=\"1.0\"?>\n"
+@@ -1855,29 +1855,30 @@ static int launchctl_schedule_plist(const char *exec_path, enum schedule_priorit
+ 	case SCHEDULE_HOURLY:
+ 		repeat = "<dict>\n"
+ 			 "<key>Hour</key><integer>%d</integer>\n"
+-			 "<key>Minute</key><integer>0</integer>\n"
++			 "<key>Minute</key><integer>%d</integer>\n"
+ 			 "</dict>\n";
+ 		for (i = 1; i <= 23; i++)
+-			strbuf_addf(&plist, repeat, i);
++			strbuf_addf(&plist, repeat, i, minute);
+ 		break;
+ 
+ 	case SCHEDULE_DAILY:
+ 		repeat = "<dict>\n"
+ 			 "<key>Day</key><integer>%d</integer>\n"
+ 			 "<key>Hour</key><integer>0</integer>\n"
+-			 "<key>Minute</key><integer>0</integer>\n"
++			 "<key>Minute</key><integer>%d</integer>\n"
+ 			 "</dict>\n";
+ 		for (i = 1; i <= 6; i++)
+-			strbuf_addf(&plist, repeat, i);
++			strbuf_addf(&plist, repeat, i, minute);
+ 		break;
+ 
+ 	case SCHEDULE_WEEKLY:
+-		strbuf_addstr(&plist,
+-			      "<dict>\n"
+-			      "<key>Day</key><integer>0</integer>\n"
+-			      "<key>Hour</key><integer>0</integer>\n"
+-			      "<key>Minute</key><integer>0</integer>\n"
+-			      "</dict>\n");
++		strbuf_addf(&plist,
++			    "<dict>\n"
++			    "<key>Day</key><integer>0</integer>\n"
++			    "<key>Hour</key><integer>0</integer>\n"
++			    "<key>Minute</key><integer>%d</integer>\n"
++			    "</dict>\n",
++			    minute);
+ 		break;
+ 
+ 	default:
+-- 
+2.39.3 (Apple Git-145)
+

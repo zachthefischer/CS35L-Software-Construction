@@ -1,0 +1,37 @@
+From dc8937fbb99aa00de777852cc7d04d0534bb956c Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 15 Jun 2023 02:53:48 +0000
+Subject: [PATCH 1596/2871] doc: trailer.<token>.command: emphasize deprecation
+
+This puts the deprecation notice up front, instead of leaving it to the
+next paragraph.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 97dc1c8c95..6016af5c20 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -238,13 +238,13 @@ trailer.<token>.ifmissing::
+ 	that option for trailers with the specified <token>.
+ 
+ trailer.<token>.command::
++	Deprecated in favor of 'trailer.<token>.cmd'.
+ 	This option behaves in the same way as 'trailer.<token>.cmd', except
+ 	that it doesn't pass anything as argument to the specified command.
+ 	Instead the first occurrence of substring $ARG is replaced by the
+ 	<value> that would be passed as argument.
+ +
+-The 'trailer.<token>.command' option has been deprecated in favor of
+-'trailer.<token>.cmd' due to the fact that $ARG in the user's command is
++Note that $ARG in the user's command is
+ only replaced once and that the original way of replacing $ARG is not safe.
+ +
+ When both 'trailer.<token>.cmd' and 'trailer.<token>.command' are given
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,76 @@
+From c6a0468f824f458acea442450d204a3d01d1aa9b Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 13 Sep 2023 15:18:03 -0400
+Subject: [PATCH 2112/2871] builtin/repack.c: extract common cruft pack loop
+
+When generating the list of packs to store in a MIDX (when given the
+`--write-midx` option), we include any cruft packs both during
+--geometric and non-geometric repacks.
+
+But the rules for when we do and don't have to check whether any of
+those cruft packs were queued for deletion differ slightly between the
+two cases.
+
+But the two can be unified, provided there is a little bit of extra
+detail added in the comment to clarify when it is safe to avoid checking
+for any pending deletions (and why it is OK to do so even when not
+required).
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 31 ++++++++++++++++++-------------
+ 1 file changed, 18 insertions(+), 13 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index be8d314e0c..48245ffd99 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -702,26 +702,31 @@ static void midx_included_packs(struct string_list *include,
+ 
+ 			string_list_insert(include, strbuf_detach(&buf, NULL));
+ 		}
+-
+-		for_each_string_list_item(item, &existing->cruft_packs) {
+-			/*
+-			 * no need to check DELETE_PACK, since we're not
+-			 * doing an ALL_INTO_ONE repack
+-			 */
+-			string_list_insert(include, xstrfmt("%s.idx", item->string));
+-		}
+ 	} else {
+ 		for_each_string_list_item(item, &existing->non_kept_packs) {
+ 			if (pack_is_marked_for_deletion(item))
+ 				continue;
+ 			string_list_insert(include, xstrfmt("%s.idx", item->string));
+ 		}
++	}
+ 
+-		for_each_string_list_item(item, &existing->cruft_packs) {
+-			if (pack_is_marked_for_deletion(item))
+-				continue;
+-			string_list_insert(include, xstrfmt("%s.idx", item->string));
+-		}
++	for_each_string_list_item(item, &existing->cruft_packs) {
++		/*
++		 * When doing a --geometric repack, there is no need to check
++		 * for deleted packs, since we're by definition not doing an
++		 * ALL_INTO_ONE repack (hence no packs will be deleted).
++		 * Otherwise we must check for and exclude any packs which are
++		 * enqueued for deletion.
++		 *
++		 * So we could omit the conditional below in the --geometric
++		 * case, but doing so is unnecessary since no packs are marked
++		 * as pending deletion (since we only call
++		 * `mark_packs_for_deletion()` when doing an all-into-one
++		 * repack).
++		 */
++		if (pack_is_marked_for_deletion(item))
++			continue;
++		string_list_insert(include, xstrfmt("%s.idx", item->string));
+ 	}
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

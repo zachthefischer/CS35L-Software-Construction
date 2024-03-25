@@ -1,0 +1,132 @@
+From 24fc2cde6448233dbbe1f6695577a49679ccc98b Mon Sep 17 00:00:00 2001
+From: William Sprent <williams@unity3d.com>
+Date: Mon, 27 Mar 2023 07:55:02 +0000
+Subject: [PATCH 1125/2871] builtin/sparse-checkout: remove NEED_WORK_TREE flag
+
+In preparation for adding a sub-command to 'sparse-checkout' that can be
+run in a bare repository, remove the 'NEED_WORK_TREE' flag from its
+entry in the 'commands' array of 'git.c'.
+
+To avoid that this changes any behaviour, add calls to
+'setup_work_tree()' to all of the 'sparse-checkout' sub-commands and add
+tests that verify that 'sparse-checkout <cmd>' still fail with a clear
+error message telling the user that the command needs a work tree.
+
+Signed-off-by: William Sprent <williams@unity3d.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/sparse-checkout.c          |  6 ++++++
+ git.c                              |  2 +-
+ t/t1091-sparse-checkout-builtin.sh | 33 ++++++++++++++++++++++++++++++
+ 3 files changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/sparse-checkout.c b/builtin/sparse-checkout.c
+index 8d5ae6f2a6..fe3d2686ce 100644
+--- a/builtin/sparse-checkout.c
++++ b/builtin/sparse-checkout.c
+@@ -57,6 +57,7 @@ static int sparse_checkout_list(int argc, const char **argv, const char *prefix)
+ 	char *sparse_filename;
+ 	int res;
+ 
++	setup_work_tree();
+ 	if (!core_apply_sparse_checkout)
+ 		die(_("this worktree is not sparse"));
+ 
+@@ -446,6 +447,7 @@ static int sparse_checkout_init(int argc, const char **argv, const char *prefix)
+ 		OPT_END(),
+ 	};
+ 
++	setup_work_tree();
+ 	repo_read_index(the_repository);
+ 
+ 	init_opts.cone_mode = -1;
+@@ -758,6 +760,7 @@ static int sparse_checkout_add(int argc, const char **argv, const char *prefix)
+ 		OPT_END(),
+ 	};
+ 
++	setup_work_tree();
+ 	if (!core_apply_sparse_checkout)
+ 		die(_("no sparse-checkout to add to"));
+ 
+@@ -804,6 +807,7 @@ static int sparse_checkout_set(int argc, const char **argv, const char *prefix)
+ 		OPT_END(),
+ 	};
+ 
++	setup_work_tree();
+ 	repo_read_index(the_repository);
+ 
+ 	set_opts.cone_mode = -1;
+@@ -853,6 +857,7 @@ static int sparse_checkout_reapply(int argc, const char **argv,
+ 		OPT_END(),
+ 	};
+ 
++	setup_work_tree();
+ 	if (!core_apply_sparse_checkout)
+ 		die(_("must be in a sparse-checkout to reapply sparsity patterns"));
+ 
+@@ -896,6 +901,7 @@ static int sparse_checkout_disable(int argc, const char **argv,
+ 	 * forcibly return to a dense checkout regardless of initial state.
+ 	 */
+ 
++	setup_work_tree();
+ 	argc = parse_options(argc, argv, prefix,
+ 			     builtin_sparse_checkout_disable_options,
+ 			     builtin_sparse_checkout_disable_usage, 0);
+diff --git a/git.c b/git.c
+index ae2134f29a..9dee94a4b3 100644
+--- a/git.c
++++ b/git.c
+@@ -584,7 +584,7 @@ static struct cmd_struct commands[] = {
+ 	{ "show-branch", cmd_show_branch, RUN_SETUP },
+ 	{ "show-index", cmd_show_index, RUN_SETUP_GENTLY },
+ 	{ "show-ref", cmd_show_ref, RUN_SETUP },
+-	{ "sparse-checkout", cmd_sparse_checkout, RUN_SETUP | NEED_WORK_TREE },
++	{ "sparse-checkout", cmd_sparse_checkout, RUN_SETUP },
+ 	{ "stage", cmd_add, RUN_SETUP | NEED_WORK_TREE },
+ 	{ "stash", cmd_stash, RUN_SETUP | NEED_WORK_TREE },
+ 	{ "status", cmd_status, RUN_SETUP | NEED_WORK_TREE },
+diff --git a/t/t1091-sparse-checkout-builtin.sh b/t/t1091-sparse-checkout-builtin.sh
+index 627267be15..7216267aec 100755
+--- a/t/t1091-sparse-checkout-builtin.sh
++++ b/t/t1091-sparse-checkout-builtin.sh
+@@ -882,4 +882,37 @@ test_expect_success 'by default, non-cone mode will warn on individual files' '
+ 	grep "pass a leading slash before paths.*if you want a single file" warning
+ '
+ 
++test_expect_success 'setup bare repo' '
++	git clone --bare "file://$(pwd)/repo" bare
++'
++test_expect_success 'list fails outside work tree' '
++	test_must_fail git -C bare sparse-checkout list 2>err &&
++	test_i18ngrep "this operation must be run in a work tree" err
++'
++
++test_expect_success 'add fails outside work tree' '
++	test_must_fail git -C bare sparse-checkout add deeper 2>err &&
++	test_i18ngrep "this operation must be run in a work tree" err
++'
++
++test_expect_success 'set fails outside work tree' '
++	test_must_fail git -C bare sparse-checkout set deeper 2>err &&
++	test_i18ngrep "this operation must be run in a work tree" err
++'
++
++test_expect_success 'init fails outside work tree' '
++	test_must_fail git -C bare sparse-checkout init 2>err &&
++	test_i18ngrep "this operation must be run in a work tree" err
++'
++
++test_expect_success 'reapply fails outside work tree' '
++	test_must_fail git -C bare sparse-checkout reapply 2>err &&
++	test_i18ngrep "this operation must be run in a work tree" err
++'
++
++test_expect_success 'disable fails outside work tree' '
++	test_must_fail git -C bare sparse-checkout disable 2>err &&
++	test_i18ngrep "this operation must be run in a work tree" err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

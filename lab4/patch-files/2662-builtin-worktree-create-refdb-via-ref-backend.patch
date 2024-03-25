@@ -1,0 +1,123 @@
+From 8f4c00de954f809e83daf8b1425de82561f3721e Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 8 Jan 2024 11:05:47 +0100
+Subject: [PATCH 2662/2871] builtin/worktree: create refdb via ref backend
+
+When creating a worktree we create the worktree's ref database manually
+by first writing a "HEAD" file so that the directory is recognized as a
+Git repository by other commands, and then running git-update-ref(1) or
+git-symbolic-ref(1) to write the actual value. But while this is fine
+for the files backend, this logic simply assumes too much about how the
+ref backend works and will leave behind an invalid ref database once any
+other ref backend lands.
+
+Refactor the code to instead use `refs_init_db()` to initialize the ref
+database so that git-worktree(1) itself does not need to know about how
+to initialize it. This will allow future ref backends to customize how
+the per-worktree ref database is set up. Furthermore, as we now already
+have a worktree ref store around, we can also avoid spawning external
+commands to write the HEAD reference and instead use the refs API to do
+so.
+
+Note that we do not have an equivalent to passing the `--quiet` flag to
+git-symbolic-ref(1) as we did before. This flag does not have an effect
+anyway though, as git-symbolic-ref(1) only honors it when reading a
+symref, but never when writing one.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/worktree.c | 48 +++++++++++++++++++++-------------------------
+ 1 file changed, 22 insertions(+), 26 deletions(-)
+
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 58937a2a68..dd10446d81 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -416,7 +416,6 @@ static int add_worktree(const char *path, const char *refname,
+ 	struct strbuf sb_git = STRBUF_INIT, sb_repo = STRBUF_INIT;
+ 	struct strbuf sb = STRBUF_INIT, realpath = STRBUF_INIT;
+ 	const char *name;
+-	struct child_process cp = CHILD_PROCESS_INIT;
+ 	struct strvec child_env = STRVEC_INIT;
+ 	unsigned int counter = 0;
+ 	int len, ret;
+@@ -424,7 +423,8 @@ static int add_worktree(const char *path, const char *refname,
+ 	struct commit *commit = NULL;
+ 	int is_branch = 0;
+ 	struct strbuf sb_name = STRBUF_INIT;
+-	struct worktree **worktrees;
++	struct worktree **worktrees, *wt = NULL;
++	struct ref_store *wt_refs;
+ 
+ 	worktrees = get_worktrees();
+ 	check_candidate_path(path, opts->force, worktrees, "add");
+@@ -500,15 +500,26 @@ static int add_worktree(const char *path, const char *refname,
+ 	write_file(sb.buf, "../..");
+ 
+ 	/*
+-	 * This is to keep resolve_ref() happy. We need a valid HEAD
+-	 * or is_git_directory() will reject the directory. Any value which
+-	 * looks like an object ID will do since it will be immediately
+-	 * replaced by the symbolic-ref or update-ref invocation in the new
+-	 * worktree.
++	 * Set up the ref store of the worktree and create the HEAD reference.
+ 	 */
+-	strbuf_reset(&sb);
+-	strbuf_addf(&sb, "%s/HEAD", sb_repo.buf);
+-	write_file(sb.buf, "%s", oid_to_hex(null_oid()));
++	wt = get_linked_worktree(name, 1);
++	if (!wt) {
++		ret = error(_("could not find created worktree '%s'"), name);
++		goto done;
++	}
++	wt_refs = get_worktree_ref_store(wt);
++
++	ret = refs_init_db(wt_refs, REFS_INIT_DB_IS_WORKTREE, &sb);
++	if (ret)
++		goto done;
++
++	if (!is_branch && commit)
++		ret = refs_update_ref(wt_refs, NULL, "HEAD", &commit->object.oid,
++				      NULL, 0, UPDATE_REFS_MSG_ON_ERR);
++	else
++		ret = refs_create_symref(wt_refs, "HEAD", symref.buf, NULL);
++	if (ret)
++		goto done;
+ 
+ 	/*
+ 	 * If the current worktree has sparse-checkout enabled, then copy
+@@ -527,22 +538,6 @@ static int add_worktree(const char *path, const char *refname,
+ 
+ 	strvec_pushf(&child_env, "%s=%s", GIT_DIR_ENVIRONMENT, sb_git.buf);
+ 	strvec_pushf(&child_env, "%s=%s", GIT_WORK_TREE_ENVIRONMENT, path);
+-	cp.git_cmd = 1;
+-
+-	if (!is_branch && commit) {
+-		strvec_pushl(&cp.args, "update-ref", "HEAD",
+-			     oid_to_hex(&commit->object.oid), NULL);
+-	} else {
+-		strvec_pushl(&cp.args, "symbolic-ref", "HEAD",
+-			     symref.buf, NULL);
+-		if (opts->quiet)
+-			strvec_push(&cp.args, "--quiet");
+-	}
+-
+-	strvec_pushv(&cp.env, child_env.v);
+-	ret = run_command(&cp);
+-	if (ret)
+-		goto done;
+ 
+ 	if (opts->orphan &&
+ 	    (ret = make_worktree_orphan(refname, opts, &child_env)))
+@@ -588,6 +583,7 @@ static int add_worktree(const char *path, const char *refname,
+ 	strbuf_release(&sb_git);
+ 	strbuf_release(&sb_name);
+ 	strbuf_release(&realpath);
++	free_worktree(wt);
+ 	return ret;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

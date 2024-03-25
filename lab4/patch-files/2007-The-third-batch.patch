@@ -1,0 +1,51 @@
+From 1a190bc14ab4345d02137f58f67de8b6627e57d5 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 29 Aug 2023 13:16:42 -0700
+Subject: [PATCH 2007/2871] The third batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index 6cad659605..5924a0b6f1 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -22,10 +22,13 @@ UI, Workflows & Features
+  * Update two credential helpers to correctly match which credential
+    to erase; they dropped not the ones with stale password.
+ 
++ * Git GUI updates.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+- * TBD.
++ * "git check-attr" has been taught to work better with sparse-index.
++
+ 
+ 
+ Fixes since v2.42
+@@ -35,9 +38,18 @@ Fixes since v2.42
+    chopped to fit under filesystem limitation.
+    (merge ac300bda10 mp/rebase-label-length-limit later to maint).
+ 
++ * Scalar updates.
++   (merge f9a547d3a7 ds/scalar-updates later to maint).
++
++ * Tweak GitHub Actions CI so that pushing the same commit to multiple
++   branch tips at the same time will not waste building and testing
++   the same thing twice.
++   (merge 99fe06cbfd jc/ci-skip-same-commit later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge fd3ba590d8 ws/git-push-doc-grammofix later to maint).
+    (merge 5f33a843de ds/upload-pack-error-sequence-fix later to maint).
+    (merge beaa1d952b jk/function-pointer-mismatches-fix later to maint).
+    (merge b46d806ea5 ob/t9001-indent-fix later to maint).
+    (merge fdc9914c28 ja/worktree-orphan later to maint).
++   (merge c2cbefc510 jc/mv-d-to-d-error-message-fix later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

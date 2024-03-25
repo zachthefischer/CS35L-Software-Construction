@@ -1,0 +1,27 @@
+From 5727be06c6df7aca70dd02636c7e3d619febbd1f Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 26 Jun 2023 16:24:40 +0000
+Subject: [PATCH 1678/2871] completion: complete --no-stat
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index f4e773cb99..ec2e4c9e71 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1758,7 +1758,7 @@ __git_diff_common_options="--stat --numstat --shortstat --summary
+ 			--textconv --no-textconv --break-rewrites
+ 			--patch --no-patch --cc --combined-all-paths
+ 			--anchored= --compact-summary --ignore-matching-lines=
+-			--irreversible-delete --line-prefix
++			--irreversible-delete --line-prefix --no-stat
+ "
+ 
+ # Options for diff/difftool
+-- 
+2.39.3 (Apple Git-145)
+

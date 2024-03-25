@@ -1,0 +1,37 @@
+From 37f6040764489ee63b14807c1196c3b2e6469eb4 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 25 Jul 2023 22:16:49 -0700
+Subject: [PATCH 1855/2871] SubmittingPatches: choice of base for fixing an
+ older maintenance track
+
+When working on an high-value bugfix that must be given to ancient
+maintenance tracks, a starting point that is older than `maint` may
+have to be chosen.
+
+Helped-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index f1774c91e9..c500fb4398 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -46,7 +46,12 @@ latest HEAD commit of `maint` or `master` based on the following cases:
+ * If you are fixing bugs in the released version, use `maint` as the
+   starting point (which may mean you have to fix things without using
+   new API features on the cutting edge that recently appeared in
+-  `master` but were not available in the released version).
++  `master` but were not available in the released version). If the bug
++  exists in an older version (e.g., commit `X` introduced the bug, and
++  `git describe --contains X` says `v2.30.0-rc2-gXXXXXX` has it), then
++  use the tip of the maintenance branch for the 2.30.x versions in the
++  `maint-2.30` branch in https://github.com/gitster/git[the maintainer's
++  repo].
+ 
+ * Otherwise (such as if you are adding new features) use `master`.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

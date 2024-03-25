@@ -1,0 +1,41 @@
+From 5d5ca1b362b3bb6c436b2fec798446ddcf32c24b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 30 Jan 2024 00:38:56 -0500
+Subject: [PATCH 2783/2871] Makefile: remove UNIT_TEST_BIN directory with "make
+ clean"
+
+We remove $(UNIT_TEST_PROGS), but that leaves the automatically
+generated "bin" dir they reside in. And once we start cleaning that,
+there is no point in removing the individual programs, as they'll by
+wiped out by the recurse "rm".
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 282a5da713..23723367b8 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3676,14 +3676,14 @@ cocciclean:
+ 	$(RM) contrib/coccinelle/*.cocci.patch
+ 
+ clean: profile-clean coverage-clean cocciclean
+-	$(RM) -r .build
++	$(RM) -r .build $(UNIT_TEST_BIN)
+ 	$(RM) po/git.pot po/git-core.pot
+ 	$(RM) git.res
+ 	$(RM) $(OBJECTS)
+ 	$(RM) headless-git.o
+ 	$(RM) $(LIB_FILE) $(XDIFF_LIB) $(REFTABLE_LIB) $(REFTABLE_TEST_LIB)
+ 	$(RM) $(ALL_PROGRAMS) $(SCRIPT_LIB) $(BUILT_INS) $(OTHER_PROGRAMS)
+-	$(RM) $(TEST_PROGRAMS) $(UNIT_TEST_PROGS)
++	$(RM) $(TEST_PROGRAMS)
+ 	$(RM) $(FUZZ_PROGRAMS)
+ 	$(RM) $(SP_OBJ)
+ 	$(RM) $(HCC)
+-- 
+2.39.3 (Apple Git-145)
+

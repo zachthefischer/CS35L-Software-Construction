@@ -1,0 +1,110 @@
+From 331b094eec6d4c937af6e59df2a537112e4d8205 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 16 Apr 2023 03:03:05 +0000
+Subject: [PATCH 1296/2871] protocol.h: move definition of DEFAULT_GIT_PORT
+ from cache.h
+
+Michael J Gruber noticed that connection via the git:// protocol no
+longer worked after a recent header clean-up.  This was caused by
+funny interaction of few gotchas.  First, a necessary definition
+
+	#define DEFAULT_GIT_PORT 9418
+
+was made invisible to a place where
+
+	const char *port = STR(DEFAULT_GIT_PORT);
+
+was expecting to turn the integer into "9418" with a clever STR()
+macro, and ended up stringifying it to
+
+	const char *port = "DEFAULT_GIT_PORT";
+
+without giving any chance to compilers to notice such a mistake.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h    | 21 ---------------------
+ daemon.c   |  1 +
+ protocol.h | 21 +++++++++++++++++++++
+ 3 files changed, 22 insertions(+), 21 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 2f21704da9..71e2fe74c4 100644
+--- a/cache.h
++++ b/cache.h
+@@ -39,27 +39,6 @@
+ #define S_DIFFTREE_IFXMIN_NEQ	0x80000000
+ 
+ 
+-/*
+- * Intensive research over the course of many years has shown that
+- * port 9418 is totally unused by anything else. Or
+- *
+- *	Your search - "port 9418" - did not match any documents.
+- *
+- * as www.google.com puts it.
+- *
+- * This port has been properly assigned for git use by IANA:
+- * git (Assigned-9418) [I06-050728-0001].
+- *
+- *	git  9418/tcp   git pack transfer service
+- *	git  9418/udp   git pack transfer service
+- *
+- * with Linus Torvalds <torvalds@osdl.org> as the point of
+- * contact. September 2005.
+- *
+- * See http://www.iana.org/assignments/port-numbers
+- */
+-#define DEFAULT_GIT_PORT 9418
+-
+ /*
+  * Basic data structures for the directory cache
+  */
+diff --git a/daemon.c b/daemon.c
+index db8a31a6ea..75c3c06457 100644
+--- a/daemon.c
++++ b/daemon.c
+@@ -4,6 +4,7 @@
+ #include "config.h"
+ #include "environment.h"
+ #include "pkt-line.h"
++#include "protocol.h"
+ #include "run-command.h"
+ #include "setup.h"
+ #include "strbuf.h"
+diff --git a/protocol.h b/protocol.h
+index cef1a4a01c..de66bf80f8 100644
+--- a/protocol.h
++++ b/protocol.h
+@@ -1,6 +1,27 @@
+ #ifndef PROTOCOL_H
+ #define PROTOCOL_H
+ 
++/*
++ * Intensive research over the course of many years has shown that
++ * port 9418 is totally unused by anything else. Or
++ *
++ *	Your search - "port 9418" - did not match any documents.
++ *
++ * as www.google.com puts it.
++ *
++ * This port has been properly assigned for git use by IANA:
++ * git (Assigned-9418) [I06-050728-0001].
++ *
++ *	git  9418/tcp   git pack transfer service
++ *	git  9418/udp   git pack transfer service
++ *
++ * with Linus Torvalds <torvalds@osdl.org> as the point of
++ * contact. September 2005.
++ *
++ * See http://www.iana.org/assignments/port-numbers
++ */
++#define DEFAULT_GIT_PORT 9418
++
+ enum protocol_version {
+ 	protocol_unknown_version = -1,
+ 	protocol_v0 = 0,
+-- 
+2.39.3 (Apple Git-145)
+

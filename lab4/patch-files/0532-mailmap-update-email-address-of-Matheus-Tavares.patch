@@ -1,0 +1,31 @@
+From 38645f8cb19ffb5d8713f66d1013f04f671ddc64 Mon Sep 17 00:00:00 2001
+From: Matheus Tavares <matheus.bernardino@usp.br>
+Date: Fri, 9 Dec 2022 20:35:16 -0300
+Subject: [PATCH 0532/2871] mailmap: update email address of Matheus Tavares
+
+I haven't been very active in the community lately, but I'm soon going
+to lose access to my previous commit email (@usp.br); so add my current
+personal address to mailmap for any future message exchanges or patch
+contributions.
+
+Signed-off-by: Matheus Tavares <matheus.bernardino@usp.br>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .mailmap | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.mailmap b/.mailmap
+index 07db36a9bb..95aaa1c833 100644
+--- a/.mailmap
++++ b/.mailmap
+@@ -165,6 +165,7 @@ Mark Rada <marada@uwaterloo.ca>
+ Martin Langhoff <martin@laptop.org> <martin@catalyst.net.nz>
+ Martin von Zweigbergk <martinvonz@gmail.com> <martin.von.zweigbergk@gmail.com>
+ Masaya Suzuki <masayasuzuki@google.com> <draftcode@gmail.com>
++Matheus Tavares <matheus.tavb@gmail.com> <matheus.bernardino@usp.br>
+ Matt Draisey <matt@draisey.ca> <mattdraisey@sympatico.ca>
+ Matt Kraai <kraai@ftbfs.org> <matt.kraai@amo.abbott.com>
+ Matt McCutchen <matt@mattmccutchen.net> <hashproduct@gmail.com>
+-- 
+2.39.3 (Apple Git-145)
+

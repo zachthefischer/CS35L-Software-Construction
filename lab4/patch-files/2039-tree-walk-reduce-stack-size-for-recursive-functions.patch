@@ -1,0 +1,132 @@
+From 59c4c7d1cbd23eaade955e61f8f1d5d964a9a727 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 02:17:54 -0400
+Subject: [PATCH 2039/2871] tree-walk: reduce stack size for recursive
+ functions
+
+The traverse_trees() and traverse_trees_recursive() functions call each
+other recursively. In a deep tree, this can result in running out of
+stack space and crashing.
+
+There's obviously going to be some limit here based on available stack,
+but the problem is exacerbated by a few large structs, many of which we
+over-allocate. For example, in traverse_trees() we store a name_entry
+and tree_desc_x per tree, both of which contain an object_id (which is
+now 32 bytes). And we allocate 8 of them (from MAX_TRAVERSE_TREES), even
+though many traversals will only look at 1 or 2.
+
+Interestingly, we used to allocate these on the heap, prior to
+8dd40c0472 (traverse_trees(): use stack array for name entries,
+2020-01-30). That commit was trying to simplify away allocation size
+computations, and naively assumed that the sizes were small enough not
+to matter. And they don't in normal cases, but on my stock Debian system
+I see a crash running "git archive" on a tree with ~3600 entries.
+That's deep enough we wouldn't see it in practice, but probably shallow
+enough that we'd prefer not to make it a hard limit. Especially because
+other systems may have even smaller stacks.
+
+We can replace these stack variables with a few malloc invocations. This
+reduces the stack sizes for the two functions from 1128 and 752 bytes,
+respectively, down to 40 and 92 bytes. That allows a depth of ~13000 on
+my machine (the improvement isn't in linear proportion because my
+numbers don't count the size of parameters and other function overhead).
+
+The possible downsides are:
+
+  1. We now have to remember to free(). But both functions have an easy
+     single exit (and already had to clean up other bits anyway).
+
+  2. The extra malloc()/free() overhead might be measurable. I tested
+     this by setting up a 3000-depth tree with a single blob and running
+     "git archive" on it. After switching to the heap, it consistently
+     runs 2-3% faster! Presumably this is because the 1K+ of wasted
+     stack space penalized memory caches.
+
+On a more real-world case like linux.git, the speed difference isn't
+measurable at all, simply because most trees aren't that deep and
+there's so much other work going on (like accessing the objects
+themselves). So the improvement I saw should be taken as evidence that
+we're not making anything worse, but isn't really that interesting on
+its own. The main motivation here is that we're now less likely to run
+out of stack space and crash.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ tree-walk.c    | 10 ++++++----
+ unpack-trees.c |  9 +++++++--
+ 2 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/tree-walk.c b/tree-walk.c
+index 29ead71be1..ad49d55290 100644
+--- a/tree-walk.c
++++ b/tree-walk.c
+@@ -442,9 +442,9 @@ int traverse_trees(struct index_state *istate,
+ 		   struct traverse_info *info)
+ {
+ 	int error = 0;
+-	struct name_entry entry[MAX_TRAVERSE_TREES];
++	struct name_entry *entry;
+ 	int i;
+-	struct tree_desc_x tx[ARRAY_SIZE(entry)];
++	struct tree_desc_x *tx;
+ 	struct strbuf base = STRBUF_INIT;
+ 	int interesting = 1;
+ 	char *traverse_path;
+@@ -455,8 +455,8 @@ int traverse_trees(struct index_state *istate,
+ 	if (traverse_trees_cur_depth > traverse_trees_max_depth)
+ 		traverse_trees_max_depth = traverse_trees_cur_depth;
+ 
+-	if (n >= ARRAY_SIZE(entry))
+-		BUG("traverse_trees() called with too many trees (%d)", n);
++	ALLOC_ARRAY(entry, n);
++	ALLOC_ARRAY(tx, n);
+ 
+ 	for (i = 0; i < n; i++) {
+ 		tx[i].d = t[i];
+@@ -551,6 +551,8 @@ int traverse_trees(struct index_state *istate,
+ 	}
+ 	for (i = 0; i < n; i++)
+ 		free_extended_entry(tx + i);
++	free(tx);
++	free(entry);
+ 	free(traverse_path);
+ 	info->traverse_path = NULL;
+ 	strbuf_release(&base);
+diff --git a/unpack-trees.c b/unpack-trees.c
+index 87517364dc..a203f9a3d7 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -864,8 +864,8 @@ static int traverse_trees_recursive(int n, unsigned long dirmask,
+ 	struct unpack_trees_options *o = info->data;
+ 	int i, ret, bottom;
+ 	int nr_buf = 0;
+-	struct tree_desc t[MAX_UNPACK_TREES];
+-	void *buf[MAX_UNPACK_TREES];
++	struct tree_desc *t;
++	void **buf;
+ 	struct traverse_info newinfo;
+ 	struct name_entry *p;
+ 	int nr_entries;
+@@ -902,6 +902,9 @@ static int traverse_trees_recursive(int n, unsigned long dirmask,
+ 	newinfo.pathlen = st_add3(newinfo.pathlen, tree_entry_len(p), 1);
+ 	newinfo.df_conflicts |= df_conflicts;
+ 
++	ALLOC_ARRAY(t, n);
++	ALLOC_ARRAY(buf, n);
++
+ 	/*
+ 	 * Fetch the tree from the ODB for each peer directory in the
+ 	 * n commits.
+@@ -937,6 +940,8 @@ static int traverse_trees_recursive(int n, unsigned long dirmask,
+ 
+ 	for (i = 0; i < nr_buf; i++)
+ 		free(buf[i]);
++	free(buf);
++	free(t);
+ 
+ 	return ret;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

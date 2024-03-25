@@ -1,0 +1,101 @@
+From 7ee1af8cb8b97385fc4e603bc024d877def5adb4 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Tue, 28 Feb 2023 08:59:34 -0600
+Subject: [PATCH 1037/2871] completion: prompt: use generic colors
+
+When the prompt command mode was introduced in 1bfc51ac81 (Allow
+__git_ps1 to be used in PROMPT_COMMAND, 2012-10-10), the assumption was
+that it was necessary in order to properly add colors to PS1 in bash,
+but this wasn't true.
+
+It's true that the \[ \] markers add the information needed to properly
+calculate the width of the prompt, and they have to be added directly to
+PS1, a function returning them doesn't work.
+
+But that is because bash coverts the \[ \] markers in PS1 to \001 \002,
+which is what readline ultimately needs in order to calculate the width.
+
+We don't need bash to do this conversion, we can use \001 \002
+ourselves, and then the prompt command mode is not necessary to display
+colors.
+
+This is what functions returning colors are supposed to do [1].
+
+[1] http://mywiki.wooledge.org/BashFAQ/053
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Tested-by: Joakim Petersen <joak-pet@online.no>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-prompt.sh | 19 +++++++------------
+ t/t9903-bash-prompt.sh           |  8 ++++----
+ 2 files changed, 11 insertions(+), 16 deletions(-)
+
+diff --git a/contrib/completion/git-prompt.sh b/contrib/completion/git-prompt.sh
+index 57972c2845..76ee4ab1e5 100644
+--- a/contrib/completion/git-prompt.sh
++++ b/contrib/completion/git-prompt.sh
+@@ -100,9 +100,7 @@
+ #
+ # If you would like a colored hint about the current dirty state, set
+ # GIT_PS1_SHOWCOLORHINTS to a nonempty value. The colors are based on
+-# the colored output of "git status -sb" and are available only when
+-# using __git_ps1 for PROMPT_COMMAND or precmd in Bash,
+-# but always available in Zsh.
++# the colored output of "git status -sb".
+ #
+ # If you would like __git_ps1 to do nothing in the case when the current
+ # directory is set up to be ignored by git, then set
+@@ -259,12 +257,12 @@ __git_ps1_colorize_gitstring ()
+ 		local c_lblue='%F{blue}'
+ 		local c_clear='%f'
+ 	else
+-		# Using \[ and \] around colors is necessary to prevent
++		# Using \001 and \002 around colors is necessary to prevent
+ 		# issues with command line editing/browsing/completion!
+-		local c_red='\[\e[31m\]'
+-		local c_green='\[\e[32m\]'
+-		local c_lblue='\[\e[1;34m\]'
+-		local c_clear='\[\e[0m\]'
++		local c_red=$'\001\e[31m\002'
++		local c_green=$'\001\e[32m\002'
++		local c_lblue=$'\001\e[1;34m\002'
++		local c_clear=$'\001\e[0m\002'
+ 	fi
+ 	local bad_color=$c_red
+ 	local ok_color=$c_green
+@@ -574,11 +572,8 @@ __git_ps1 ()
+ 		b="\${__git_ps1_branch_name}"
+ 	fi
+ 
+-	# NO color option unless in PROMPT_COMMAND mode or it's Zsh
+ 	if [ -n "${GIT_PS1_SHOWCOLORHINTS-}" ]; then
+-		if [ $pcmode = yes ] || [ -n "${ZSH_VERSION-}" ]; then
+-			__git_ps1_colorize_gitstring
+-		fi
++		__git_ps1_colorize_gitstring
+ 	fi
+ 
+ 	local f="$h$w$i$s$u$p"
+diff --git a/t/t9903-bash-prompt.sh b/t/t9903-bash-prompt.sh
+index d459fae655..d667dda654 100755
+--- a/t/t9903-bash-prompt.sh
++++ b/t/t9903-bash-prompt.sh
+@@ -13,10 +13,10 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ . "$GIT_BUILD_DIR/contrib/completion/git-prompt.sh"
+ 
+ actual="$TRASH_DIRECTORY/actual"
+-c_red='\\[\\e[31m\\]'
+-c_green='\\[\\e[32m\\]'
+-c_lblue='\\[\\e[1;34m\\]'
+-c_clear='\\[\\e[0m\\]'
++c_red='\001\e[31m\002'
++c_green='\001\e[32m\002'
++c_lblue='\001\e[1;34m\002'
++c_clear='\001\e[0m\002'
+ 
+ test_expect_success 'setup for prompt tests' '
+ 	git init otherrepo &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,58 @@
+From 0da4b538e40f38f2ee7adc625cac18ae0d8df4d1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=90o=C3=A0n=20Tr=E1=BA=A7n=20C=C3=B4ng=20Danh?=
+ <congdanhqx@gmail.com>
+Date: Thu, 10 Nov 2022 23:36:45 +0700
+Subject: [PATCH 0370/2871] bisect--helper: log: allow arbitrary number of
+ arguments
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In a later change, we would like to turn bisect into a builtin by
+renaming bisect--helper.
+
+However, there's an oddity that "git bisect log" accepts any number of
+arguments and it will just ignore them all.
+
+Let's prepare for the next step by ignoring any arguments passed to
+"git bisect--helper log"
+
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/bisect--helper.c | 4 +---
+ git-bisect.sh            | 2 --
+ 2 files changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/builtin/bisect--helper.c b/builtin/bisect--helper.c
+index 29d5a26c64..6066f553fd 100644
+--- a/builtin/bisect--helper.c
++++ b/builtin/bisect--helper.c
+@@ -1347,10 +1347,8 @@ static int cmd_bisect__next(int argc, const char **argv UNUSED, const char *pref
+ 	return res;
+ }
+ 
+-static int cmd_bisect__log(int argc, const char **argv UNUSED, const char *prefix UNUSED)
++static int cmd_bisect__log(int argc UNUSED, const char **argv UNUSED, const char *prefix UNUSED)
+ {
+-	if (argc)
+-		return error(_("'%s' requires 0 arguments"), "git bisect log");
+ 	return bisect_log();
+ }
+ 
+diff --git a/git-bisect.sh b/git-bisect.sh
+index 9f6c8cc093..f95b8103a9 100755
+--- a/git-bisect.sh
++++ b/git-bisect.sh
+@@ -57,8 +57,6 @@ case "$#" in
+ 	case "$cmd" in
+ 	help)
+ 		git bisect -h ;;
+-	log)
+-		git bisect--helper log || exit ;;
+ 	*)
+ 		git bisect--helper "$cmd" "$@" ;;
+ 	esac
+-- 
+2.39.3 (Apple Git-145)
+

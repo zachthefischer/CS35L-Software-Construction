@@ -1,0 +1,45 @@
+From 14903c8e9208a4562e3fbc52614e4adb731e31e0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 24 Nov 2022 22:48:21 +0100
+Subject: [PATCH 0438/2871] trace2 tests: guard pthread test with "PTHREAD"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 81071626ba1 (trace2: add global counter mechanism, 2022-10-24)
+these tests have been failing when git is compiled with NO_PTHREADS=Y,
+which is always the case e.g. if 'uname -s' is "NONSTOP_KERNEL".
+
+Reported-by: Randall S. Becker <randall.becker@nexbridge.ca>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0211-trace2-perf.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t0211-trace2-perf.sh b/t/t0211-trace2-perf.sh
+index 0b3436e8ca..b4e9135118 100755
+--- a/t/t0211-trace2-perf.sh
++++ b/t/t0211-trace2-perf.sh
+@@ -203,7 +203,7 @@ test_expect_success 'stopwatch timer test/test1' '
+ 	have_timer_event "main" "timer" "test" "test1" 5 actual
+ '
+ 
+-test_expect_success 'stopwatch timer test/test2' '
++test_expect_success PTHREAD 'stopwatch timer test/test2' '
+ 	test_when_finished "rm trace.perf actual" &&
+ 	test_config_global trace2.perfBrief 1 &&
+ 	test_config_global trace2.perfTarget "$(pwd)/trace.perf" &&
+@@ -249,7 +249,7 @@ test_expect_success 'global counter test/test1' '
+ 	have_counter_event "main" "counter" "test" "test1" 15 actual
+ '
+ 
+-test_expect_success 'global counter test/test2' '
++test_expect_success PTHREAD 'global counter test/test2' '
+ 	test_when_finished "rm trace.perf actual" &&
+ 	test_config_global trace2.perfBrief 1 &&
+ 	test_config_global trace2.perfTarget "$(pwd)/trace.perf" &&
+-- 
+2.39.3 (Apple Git-145)
+

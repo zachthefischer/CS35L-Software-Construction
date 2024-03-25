@@ -1,0 +1,61 @@
+From dca675c6ef9b1d649adfb5a6cfdf2e7c32f18928 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Mon, 17 Apr 2023 21:10:43 +0200
+Subject: [PATCH 1395/2871] t1502: don't create unused files
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Three tests in file t1502-rev-parse-parseopt.sh use three redirections
+with invocation of "git rev-parse --parseopt --".  All three tests
+redirect standard output to file "out" and file "spec" to standard
+input.  Two of the tests redirect standard output a second time to file
+"actual", and the third test redirects standard error to file "err".
+These tests check contents of files "actual" and "err", but don't use
+the files named "out" for assertions.  The two tests that redirect to
+standard output twice might also be confusing to the reader.
+
+Don't redirect standard output of "git rev-parse" to file "out" in
+t1502-rev-parse-parseopt.sh to avoid creating unnecessary files.
+
+Acked-by: Øystein Walle <oystwa@gmail.com>
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1502-rev-parse-parseopt.sh | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/t/t1502-rev-parse-parseopt.sh b/t/t1502-rev-parse-parseopt.sh
+index de1d48f3ba..dd811b7fb4 100755
+--- a/t/t1502-rev-parse-parseopt.sh
++++ b/t/t1502-rev-parse-parseopt.sh
+@@ -302,14 +302,14 @@ test_expect_success 'test --parseopt help output: "wrapped" options normal "or:"
+ 	|EOF
+ 	END_EXPECT
+ 
+-	test_must_fail git rev-parse --parseopt -- -h >out <spec >actual &&
++	test_must_fail git rev-parse --parseopt -- -h <spec >actual &&
+ 	test_cmp expect actual
+ '
+ 
+ test_expect_success 'test --parseopt invalid opt-spec' '
+ 	test_write_lines x -- "=, x" >spec &&
+ 	echo "fatal: missing opt-spec before option flags" >expect &&
+-	test_must_fail git rev-parse --parseopt -- >out <spec 2>err &&
++	test_must_fail git rev-parse --parseopt -- <spec 2>err &&
+ 	test_cmp expect err
+ '
+ 
+@@ -339,7 +339,7 @@ test_expect_success 'test --parseopt help output: multi-line blurb after empty l
+ 	|EOF
+ 	END_EXPECT
+ 
+-	test_must_fail git rev-parse --parseopt -- -h >out <spec >actual &&
++	test_must_fail git rev-parse --parseopt -- -h <spec >actual &&
+ 	test_cmp expect actual
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

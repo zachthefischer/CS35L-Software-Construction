@@ -1,0 +1,38 @@
+From 2fc9e9ca3c7505bc60069f11e7ef09b1aeeee473 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 30 Jan 2023 14:24:32 -0800
+Subject: [PATCH 0759/2871] The twelfth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index 01f539ec0b..7e6d1171c2 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -189,6 +189,14 @@ Fixes since v2.39
+    enabled, which has been corrected.
+    (merge 06a668cb90 cw/fetch-remote-group-with-duplication later to maint).
+ 
++ * Clarify how "checkout -b/-B" and "git branch [-f]" are similar but
++   different in the documentation.
++   (merge fedb8ea2df jc/doc-checkout-b later to maint).
++
++ * "git hash-object" now checks that the resulting object is well
++   formed with the same code as "git fsck".
++   (merge 8e4309038f jk/hash-object-fsck later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 77e04b2ed4 rs/t4205-do-not-exit-in-test-script later to maint).
+    (merge faebba436e rs/plug-pattern-list-leak-in-lof later to maint).
+@@ -219,3 +227,5 @@ Fixes since v2.39
+    (merge dcb47e52b0 en/t6426-todo-cleanup later to maint).
+    (merge 5b8db44bdd jc/format-patch-v-unleak later to maint).
+    (merge 590b636737 jk/hash-object-literally-fd-leak later to maint).
++   (merge 5458ba0a4d tb/t0003-invoke-dd-more-portably later to maint).
++   (merge 70661d288b ar/markup-em-dash later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

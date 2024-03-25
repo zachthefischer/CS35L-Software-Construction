@@ -1,0 +1,65 @@
+From d664a7ad20f9cb013f4c53654b76973612a89991 Mon Sep 17 00:00:00 2001
+From: Philip Oakley <philipoakley@iee.email>
+Date: Thu, 19 Jan 2023 18:18:23 +0000
+Subject: [PATCH 0719/2871] doc: pretty-formats: separate parameters from
+ placeholders
+
+Commit a57523428b4 (pretty: support padding placeholders, %< %> and %><,
+2013-04-19) introduced columnated place holders. These placeholders
+can be confusing as they contain `<` and `>` characters as part
+of their placeholders adjacent to the `<N>` parameters.
+
+Add spaces either side of the `<N>` parameters in the title line.
+The code (strtol) will consume any spaces around the number values
+(assuming they are passed as a quoted string with spaces).
+Note that the spaces are optional.
+
+Subsequent commits will clarify other confusions.
+
+Signed-off-by: Philip Oakley <philipoakley@iee.email>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/pretty-formats.txt | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/pretty-formats.txt b/Documentation/pretty-formats.txt
+index 0b4c1c8d98..02bec23509 100644
+--- a/Documentation/pretty-formats.txt
++++ b/Documentation/pretty-formats.txt
+@@ -146,24 +146,27 @@ The placeholders are:
+ '%m':: left (`<`), right (`>`) or boundary (`-`) mark
+ '%w([<w>[,<i1>[,<i2>]]])':: switch line wrapping, like the -w option of
+ 			    linkgit:git-shortlog[1].
+-'%<(<N>[,trunc|ltrunc|mtrunc])':: make the next placeholder take at
++'%<( <N> [,trunc|ltrunc|mtrunc])':: make the next placeholder take at
+ 				  least N columns, padding spaces on
+ 				  the right if necessary.  Optionally
+ 				  truncate at the beginning (ltrunc),
+ 				  the middle (mtrunc) or the end
+ 				  (trunc) if the output is longer than
+-				  N columns.  Note that truncating
++				  N columns.
++				  Note 1: that truncating
+ 				  only works correctly with N >= 2.
+-'%<|(<N>)':: make the next placeholder take at least until Nth
++				  Note 2: spaces around the N
++				  values are optional.
++'%<|( <N> )':: make the next placeholder take at least until Nth
+ 	     columns, padding spaces on the right if necessary
+-'%>(<N>)', '%>|(<N>)':: similar to '%<(<N>)', '%<|(<N>)' respectively,
++'%>( <N> )', '%>|( <N> )':: similar to '%<( <N> )', '%<|( <N> )' respectively,
+ 			but padding spaces on the left
+-'%>>(<N>)', '%>>|(<N>)':: similar to '%>(<N>)', '%>|(<N>)'
++'%>>( <N> )', '%>>|( <N> )':: similar to '%>( <N> )', '%>|( <N> )'
+ 			  respectively, except that if the next
+ 			  placeholder takes more spaces than given and
+ 			  there are spaces on its left, use those
+ 			  spaces
+-'%><(<N>)', '%><|(<N>)':: similar to '%<(<N>)', '%<|(<N>)'
++'%><( <N> )', '%><|( <N> )':: similar to '%<( <N> )', '%<|( <N> )'
+ 			  respectively, but padding both sides
+ 			  (i.e. the text is centered)
+ 
+-- 
+2.39.3 (Apple Git-145)
+

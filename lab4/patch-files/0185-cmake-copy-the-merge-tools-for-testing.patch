@@ -1,0 +1,32 @@
+From 6a83b5f081086d3a3d1c3cb8b6a8aad660b705ab Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 18 Oct 2022 10:59:02 +0000
+Subject: [PATCH 0185/2871] cmake: copy the merge tools for testing
+
+Even when running the tests via CTest, t7609 and t7610 rely on more than
+only a few mergetools to be copied to the build directory. Let's make it
+so.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/buildsystems/CMakeLists.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/buildsystems/CMakeLists.txt b/contrib/buildsystems/CMakeLists.txt
+index 4aee1e2434..fe606c179f 100644
+--- a/contrib/buildsystems/CMakeLists.txt
++++ b/contrib/buildsystems/CMakeLists.txt
+@@ -1078,7 +1078,8 @@ if(NOT ${CMAKE_BINARY_DIR}/CMakeCache.txt STREQUAL ${CACHE_PATH})
+ 	#misc copies
+ 	file(COPY ${CMAKE_SOURCE_DIR}/t/chainlint.sed DESTINATION ${CMAKE_BINARY_DIR}/t/)
+ 	file(COPY ${CMAKE_SOURCE_DIR}/po/is.po DESTINATION ${CMAKE_BINARY_DIR}/po/)
+-	file(COPY ${CMAKE_SOURCE_DIR}/mergetools/tkdiff DESTINATION ${CMAKE_BINARY_DIR}/mergetools/)
++	file(GLOB mergetools "${CMAKE_SOURCE_DIR}/mergetools/*")
++	file(COPY ${mergetools} DESTINATION ${CMAKE_BINARY_DIR}/mergetools/)
+ 	file(COPY ${CMAKE_SOURCE_DIR}/contrib/completion/git-prompt.sh DESTINATION ${CMAKE_BINARY_DIR}/contrib/completion/)
+ 	file(COPY ${CMAKE_SOURCE_DIR}/contrib/completion/git-completion.bash DESTINATION ${CMAKE_BINARY_DIR}/contrib/completion/)
+ endif()
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,102 @@
+From e0539b4b25310e242d30b91a2c86f5e7a30aade6 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 16 Dec 2022 20:41:28 +0100
+Subject: [PATCH 0734/2871] Move is_<platform> functions to the beginning
+
+We need these in `_which` and they should be defined before that
+function's definition.
+
+This commit is best viewed with `--color-moved`.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Pratyush Yadav <me@yadavpratyush.com>
+---
+ git-gui.sh | 58 +++++++++++++++++++++++++++++-------------------------
+ 1 file changed, 31 insertions(+), 27 deletions(-)
+
+diff --git a/git-gui.sh b/git-gui.sh
+index 0fe60f80cc..f779fc9268 100755
+--- a/git-gui.sh
++++ b/git-gui.sh
+@@ -44,6 +44,37 @@ if {[catch {package require Tcl 8.5} err]
+ 
+ catch {rename send {}} ; # What an evil concept...
+ 
++######################################################################
++##
++## Enabling platform-specific code paths
++
++proc is_MacOSX {} {
++	if {[tk windowingsystem] eq {aqua}} {
++		return 1
++	}
++	return 0
++}
++
++proc is_Windows {} {
++	if {$::tcl_platform(platform) eq {windows}} {
++		return 1
++	}
++	return 0
++}
++
++set _iscygwin {}
++proc is_Cygwin {} {
++	global _iscygwin
++	if {$_iscygwin eq {}} {
++		if {[string match "CYGWIN_*" $::tcl_platform(os)]} {
++			set _iscygwin 1
++		} else {
++			set _iscygwin 0
++		}
++	}
++	return $_iscygwin
++}
++
+ ######################################################################
+ ##
+ ## locate our library
+@@ -163,7 +194,6 @@ set _isbare {}
+ set _gitexec {}
+ set _githtmldir {}
+ set _reponame {}
+-set _iscygwin {}
+ set _search_path {}
+ set _shellpath {@@SHELL_PATH@@}
+ 
+@@ -252,32 +282,6 @@ proc reponame {} {
+ 	return $::_reponame
+ }
+ 
+-proc is_MacOSX {} {
+-	if {[tk windowingsystem] eq {aqua}} {
+-		return 1
+-	}
+-	return 0
+-}
+-
+-proc is_Windows {} {
+-	if {$::tcl_platform(platform) eq {windows}} {
+-		return 1
+-	}
+-	return 0
+-}
+-
+-proc is_Cygwin {} {
+-	global _iscygwin
+-	if {$_iscygwin eq {}} {
+-		if {[string match "CYGWIN_*" $::tcl_platform(os)]} {
+-			set _iscygwin 1
+-		} else {
+-			set _iscygwin 0
+-		}
+-	}
+-	return $_iscygwin
+-}
+-
+ proc is_enabled {option} {
+ 	global enabled_options
+ 	if {[catch {set on $enabled_options($option)}]} {return 0}
+-- 
+2.39.3 (Apple Git-145)
+

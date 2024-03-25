@@ -1,0 +1,78 @@
+From b72df612afc12b46ea003732d739d7d746871773 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 17:05:36 -0400
+Subject: [PATCH 2263/2871] commit-graph: check size of commit data chunk
+
+We expect a commit-graph file to have a fixed-size data record for each
+commit in the file (and we know the number of commits to expct from the
+size of the lookup table). If we encounter a file where this is too
+small, we'll look past the end of the chunk (and possibly even off the
+mapped memory).
+
+We can fix this by checking the size up front when we record the
+pointer.
+
+The included test doesn't segfault, since it ends up reading bytes
+from another chunk. But it produces nonsense results, since the values
+it reads are garbage. Our test notices this by comparing the output to a
+non-corrupted run of the same command (and of course we also check that
+the expected error is printed to stderr).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c          | 12 +++++++++++-
+ t/t5318-commit-graph.sh |  9 +++++++++
+ 2 files changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 472332f603..9b80bbd75b 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -340,6 +340,16 @@ static int graph_read_oid_lookup(const unsigned char *chunk_start,
+ 	return 0;
+ }
+ 
++static int graph_read_commit_data(const unsigned char *chunk_start,
++				  size_t chunk_size, void *data)
++{
++	struct commit_graph *g = data;
++	if (chunk_size != g->num_commits * GRAPH_DATA_WIDTH)
++		return error("commit-graph commit data chunk is wrong size");
++	g->chunk_commit_data = chunk_start;
++	return 0;
++}
++
+ static int graph_read_bloom_data(const unsigned char *chunk_start,
+ 				  size_t chunk_size, void *data)
+ {
+@@ -422,7 +432,7 @@ struct commit_graph *parse_commit_graph(struct repo_settings *s,
+ 
+ 	read_chunk(cf, GRAPH_CHUNKID_OIDFANOUT, graph_read_oid_fanout, graph);
+ 	read_chunk(cf, GRAPH_CHUNKID_OIDLOOKUP, graph_read_oid_lookup, graph);
+-	pair_chunk_unsafe(cf, GRAPH_CHUNKID_DATA, &graph->chunk_commit_data);
++	read_chunk(cf, GRAPH_CHUNKID_DATA, graph_read_commit_data, graph);
+ 	pair_chunk_unsafe(cf, GRAPH_CHUNKID_EXTRAEDGES, &graph->chunk_extra_edges);
+ 	pair_chunk_unsafe(cf, GRAPH_CHUNKID_BASE, &graph->chunk_base_graphs);
+ 
+diff --git a/t/t5318-commit-graph.sh b/t/t5318-commit-graph.sh
+index d10658de9e..492460157d 100755
+--- a/t/t5318-commit-graph.sh
++++ b/t/t5318-commit-graph.sh
+@@ -870,4 +870,13 @@ test_expect_success 'reader notices out-of-bounds fanout' '
+ 	test_cmp expect.err err
+ '
+ 
++test_expect_success 'reader notices too-small commit data chunk' '
++	check_corrupt_chunk CDAT clear 00000000 &&
++	cat >expect.err <<-\EOF &&
++	error: commit-graph commit data chunk is wrong size
++	error: commit-graph is missing the Commit Data chunk
++	EOF
++	test_cmp expect.err err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,54 @@
+From 8f50984cf4e1c7562cd96a4064dcdfef181d6b97 Mon Sep 17 00:00:00 2001
+From: Nikolay Edigaryev <edigaryev@gmail.com>
+Date: Sun, 14 Jan 2024 19:50:50 +0000
+Subject: [PATCH 2686/2871] rev-list-options: fix off-by-one in
+ '--filter=blob:limit=<n>' explainer
+
+'--filter=blob:limit=<n>' was introduced in 25ec7bcac0 (list-objects:
+filter objects in traverse_commit_list, 2017-11-21) and later expanded
+to bitmaps in 84243da129 (pack-bitmap: implement BLOB_LIMIT filtering,
+2020-02-14)
+
+The logic that was introduced in these commits (and that still persists
+to this day) omits blobs larger than _or equal_ to n bytes or units.
+
+However, the documentation (Documentation/rev-list-options.txt) states:
+
+>The form '--filter=blob:limit=<n>[kmg]' omits blobs larger than n
+bytes or units. n may be zero.
+
+Moreover, the t6113-rev-list-bitmap-filters.sh tests for exactly this
+logic, so it seems it is the documentation that needs fixing, not the
+code.
+
+This changes the explanation to be similar to
+Documentation/git-clone.txt, which is correct.
+
+Signed-off-by: Nikolay Edigaryev <edigaryev@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/rev-list-options.txt | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/rev-list-options.txt b/Documentation/rev-list-options.txt
+index 1837509566..964c7a4f37 100644
+--- a/Documentation/rev-list-options.txt
++++ b/Documentation/rev-list-options.txt
+@@ -927,10 +927,10 @@ ifdef::git-rev-list[]
+ +
+ The form '--filter=blob:none' omits all blobs.
+ +
+-The form '--filter=blob:limit=<n>[kmg]' omits blobs larger than n bytes
+-or units.  n may be zero.  The suffixes k, m, and g can be used to name
+-units in KiB, MiB, or GiB.  For example, 'blob:limit=1k' is the same
+-as 'blob:limit=1024'.
++The form '--filter=blob:limit=<n>[kmg]' omits blobs of size at least n
++bytes or units.  n may be zero.  The suffixes k, m, and g can be used
++to name units in KiB, MiB, or GiB.  For example, 'blob:limit=1k'
++is the same as 'blob:limit=1024'.
+ +
+ The form '--filter=object:type=(tag|commit|tree|blob)' omits all objects
+ which are not of the requested type.
+-- 
+2.39.3 (Apple Git-145)
+

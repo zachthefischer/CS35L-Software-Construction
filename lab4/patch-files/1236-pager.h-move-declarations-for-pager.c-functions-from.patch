@@ -1,0 +1,358 @@
+From ca4eed708d8cb5c7b585578d3b4170e8adaa920f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:41:59 -0700
+Subject: [PATCH 1236/2871] pager.h: move declarations for pager.c functions
+ from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/am.c       |  1 +
+ builtin/blame.c    |  1 +
+ builtin/fetch.c    |  1 +
+ builtin/grep.c     |  1 +
+ builtin/help.c     |  1 +
+ builtin/log.c      |  1 +
+ builtin/name-rev.c |  1 +
+ builtin/var.c      |  1 +
+ cache.h            | 13 -------------
+ color.c            |  1 +
+ column.c           |  1 +
+ config.c           |  1 +
+ date.c             |  1 +
+ diff.c             |  1 +
+ editor.c           |  1 +
+ environment.c      |  1 -
+ git.c              |  1 +
+ pager.c            |  3 +++
+ pager.h            | 17 +++++++++++++++++
+ pretty.c           |  1 +
+ progress.c         |  1 +
+ range-diff.c       |  1 +
+ sequencer.c        |  1 +
+ 23 files changed, 39 insertions(+), 14 deletions(-)
+ create mode 100644 pager.h
+
+diff --git a/builtin/am.c b/builtin/am.c
+index f7a065e529..5c83f2e003 100644
+--- a/builtin/am.c
++++ b/builtin/am.c
+@@ -40,6 +40,7 @@
+ #include "apply.h"
+ #include "string-list.h"
+ #include "packfile.h"
++#include "pager.h"
+ #include "repository.h"
+ #include "pretty.h"
+ #include "wrapper.h"
+diff --git a/builtin/blame.c b/builtin/blame.c
+index a628388c2c..2df6039a6e 100644
+--- a/builtin/blame.c
++++ b/builtin/blame.c
+@@ -30,6 +30,7 @@
+ #include "progress.h"
+ #include "object-name.h"
+ #include "object-store.h"
++#include "pager.h"
+ #include "blame.h"
+ #include "refs.h"
+ #include "setup.h"
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 8a8ab6799e..61e8ac113b 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -28,6 +28,7 @@
+ #include "strvec.h"
+ #include "utf8.h"
+ #include "packfile.h"
++#include "pager.h"
+ #include "list-objects-filter-options.h"
+ #include "commit-reach.h"
+ #include "branch.h"
+diff --git a/builtin/grep.c b/builtin/grep.c
+index fb11be6075..b86c754def 100644
+--- a/builtin/grep.c
++++ b/builtin/grep.c
+@@ -30,6 +30,7 @@
+ #include "object-name.h"
+ #include "object-store.h"
+ #include "packfile.h"
++#include "pager.h"
+ #include "write-or-die.h"
+ 
+ static const char *grep_prefix;
+diff --git a/builtin/help.c b/builtin/help.c
+index 87333a02ec..128aa83099 100644
+--- a/builtin/help.c
++++ b/builtin/help.c
+@@ -6,6 +6,7 @@
+ #include "builtin.h"
+ #include "exec-cmd.h"
+ #include "gettext.h"
++#include "pager.h"
+ #include "parse-options.h"
+ #include "run-command.h"
+ #include "config-list.h"
+diff --git a/builtin/log.c b/builtin/log.c
+index b6246c7042..95de51921f 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -15,6 +15,7 @@
+ #include "object-file.h"
+ #include "object-name.h"
+ #include "object-store.h"
++#include "pager.h"
+ #include "color.h"
+ #include "commit.h"
+ #include "diff.h"
+diff --git a/builtin/name-rev.c b/builtin/name-rev.c
+index 41fd56b9ba..593f0506a1 100644
+--- a/builtin/name-rev.c
++++ b/builtin/name-rev.c
+@@ -9,6 +9,7 @@
+ #include "tag.h"
+ #include "refs.h"
+ #include "object-name.h"
++#include "pager.h"
+ #include "parse-options.h"
+ #include "prio-queue.h"
+ #include "hash-lookup.h"
+diff --git a/builtin/var.c b/builtin/var.c
+index 90616cf65a..aa8150fa92 100644
+--- a/builtin/var.c
++++ b/builtin/var.c
+@@ -7,6 +7,7 @@
+ #include "config.h"
+ #include "editor.h"
+ #include "ident.h"
++#include "pager.h"
+ #include "refs.h"
+ 
+ static const char var_usage[] = "git var (-l | <variable>)";
+diff --git a/cache.h b/cache.h
+index 97ddf4094a..21fd520b04 100644
+--- a/cache.h
++++ b/cache.h
+@@ -145,7 +145,6 @@ struct cache_entry {
+ 
+ /* Forward structure decls */
+ struct pathspec;
+-struct child_process;
+ struct tree;
+ 
+ /*
+@@ -621,8 +620,6 @@ int df_name_compare(const char *name1, size_t len1, int mode1,
+ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2);
+ int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2);
+ 
+-const char *git_pager(int stdout_is_tty);
+-
+ struct cache_def {
+ 	struct strbuf path;
+ 	int flags;
+@@ -671,16 +668,6 @@ int copy_fd(int ifd, int ofd);
+ int copy_file(const char *dst, const char *src, int mode);
+ int copy_file_with_time(const char *dst, const char *src, int mode);
+ 
+-/* pager.c */
+-void setup_pager(void);
+-int pager_in_use(void);
+-extern int pager_use_color;
+-int term_columns(void);
+-void term_clear_line(void);
+-int decimal_width(uintmax_t);
+-int check_pager_config(const char *cmd);
+-void prepare_pager_args(struct child_process *, const char *pager);
+-
+ /* base85 */
+ int decode_85(char *dst, const char *line, int linelen);
+ void encode_85(char *buf, const unsigned char *data, int bytes);
+diff --git a/color.c b/color.c
+index a8e8d5202a..6031998d3e 100644
+--- a/color.c
++++ b/color.c
+@@ -4,6 +4,7 @@
+ #include "editor.h"
+ #include "gettext.h"
+ #include "hex.h"
++#include "pager.h"
+ 
+ static int git_use_color_default = GIT_COLOR_AUTO;
+ int color_stdout_is_tty = -1;
+diff --git a/column.c b/column.c
+index fbf88639aa..c89c90328a 100644
+--- a/column.c
++++ b/column.c
+@@ -2,6 +2,7 @@
+ #include "config.h"
+ #include "column.h"
+ #include "string-list.h"
++#include "pager.h"
+ #include "parse-options.h"
+ #include "run-command.h"
+ #include "utf8.h"
+diff --git a/config.c b/config.c
+index aac439530e..11e3295419 100644
+--- a/config.c
++++ b/config.c
+@@ -25,6 +25,7 @@
+ #include "string-list.h"
+ #include "object-name.h"
+ #include "object-store.h"
++#include "pager.h"
+ #include "utf8.h"
+ #include "dir.h"
+ #include "color.h"
+diff --git a/date.c b/date.c
+index 1fb2cd1b53..e944c8905a 100644
+--- a/date.c
++++ b/date.c
+@@ -7,6 +7,7 @@
+ #include "cache.h"
+ #include "date.h"
+ #include "gettext.h"
++#include "pager.h"
+ 
+ /*
+  * This is like mktime, but without normalization of tm_wday and tm_yday.
+diff --git a/diff.c b/diff.c
+index f8e0d3b5c5..fa86d02319 100644
+--- a/diff.c
++++ b/diff.c
+@@ -31,6 +31,7 @@
+ #include "graph.h"
+ #include "oid-array.h"
+ #include "packfile.h"
++#include "pager.h"
+ #include "parse-options.h"
+ #include "help.h"
+ #include "promisor-remote.h"
+diff --git a/editor.c b/editor.c
+index 12025dfec3..7c79638549 100644
+--- a/editor.c
++++ b/editor.c
+@@ -5,6 +5,7 @@
+ #include "editor.h"
+ #include "environment.h"
+ #include "gettext.h"
++#include "pager.h"
+ #include "strbuf.h"
+ #include "strvec.h"
+ #include "run-command.h"
+diff --git a/environment.c b/environment.c
+index 39efa49fe3..8a96997539 100644
+--- a/environment.c
++++ b/environment.c
+@@ -59,7 +59,6 @@ size_t packed_git_window_size = DEFAULT_PACKED_GIT_WINDOW_SIZE;
+ size_t packed_git_limit = DEFAULT_PACKED_GIT_LIMIT;
+ size_t delta_base_cache_limit = 96 * 1024 * 1024;
+ unsigned long big_file_threshold = 512 * 1024 * 1024;
+-int pager_use_color = 1;
+ const char *editor_program;
+ const char *askpass_program;
+ const char *excludes_file;
+diff --git a/git.c b/git.c
+index d2bb86e0d3..0241d2cf91 100644
+--- a/git.c
++++ b/git.c
+@@ -4,6 +4,7 @@
+ #include "exec-cmd.h"
+ #include "gettext.h"
+ #include "help.h"
++#include "pager.h"
+ #include "run-command.h"
+ #include "alias.h"
+ #include "replace-object.h"
+diff --git a/pager.c b/pager.c
+index 6367e8ef86..be78c70664 100644
+--- a/pager.c
++++ b/pager.c
+@@ -1,10 +1,13 @@
+ #include "cache.h"
+ #include "config.h"
+ #include "editor.h"
++#include "pager.h"
+ #include "run-command.h"
+ #include "sigchain.h"
+ #include "alias.h"
+ 
++int pager_use_color = 1;
++
+ #ifndef DEFAULT_PAGER
+ #define DEFAULT_PAGER "less"
+ #endif
+diff --git a/pager.h b/pager.h
+new file mode 100644
+index 0000000000..b77433026d
+--- /dev/null
++++ b/pager.h
+@@ -0,0 +1,17 @@
++#ifndef PAGER_H
++#define PAGER_H
++
++struct child_process;
++
++const char *git_pager(int stdout_is_tty);
++void setup_pager(void);
++int pager_in_use(void);
++int term_columns(void);
++void term_clear_line(void);
++int decimal_width(uintmax_t);
++int check_pager_config(const char *cmd);
++void prepare_pager_args(struct child_process *, const char *pager);
++
++extern int pager_use_color;
++
++#endif /* PAGER_H */
+diff --git a/pretty.c b/pretty.c
+index 76fc4f61e4..c4671603b5 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -7,6 +7,7 @@
+ #include "hex.h"
+ #include "utf8.h"
+ #include "diff.h"
++#include "pager.h"
+ #include "revision.h"
+ #include "string-list.h"
+ #include "mailmap.h"
+diff --git a/progress.c b/progress.c
+index c5c8514737..96a8e36a52 100644
+--- a/progress.c
++++ b/progress.c
+@@ -10,6 +10,7 @@
+ 
+ #define GIT_TEST_PROGRESS_ONLY
+ #include "cache.h"
++#include "pager.h"
+ #include "progress.h"
+ #include "strbuf.h"
+ #include "trace.h"
+diff --git a/range-diff.c b/range-diff.c
+index a2994331a1..a1e0cffb9f 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -11,6 +11,7 @@
+ #include "linear-assignment.h"
+ #include "diffcore.h"
+ #include "commit.h"
++#include "pager.h"
+ #include "pretty.h"
+ #include "userdiff.h"
+ #include "apply.h"
+diff --git a/sequencer.c b/sequencer.c
+index be10249fd0..fcca3b8144 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -12,6 +12,7 @@
+ #include "object-name.h"
+ #include "object-store.h"
+ #include "object.h"
++#include "pager.h"
+ #include "commit.h"
+ #include "sequencer.h"
+ #include "tag.h"
+-- 
+2.39.3 (Apple Git-145)
+

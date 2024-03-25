@@ -1,0 +1,194 @@
+From 926c40d04b5a77e00d3b22a5d2696c22b81569cc Mon Sep 17 00:00:00 2001
+From: Jacob Abel <jacobabel@nullpo.dev>
+Date: Wed, 17 May 2023 21:49:06 +0000
+Subject: [PATCH 1470/2871] worktree add: emit warn when there is a bad HEAD
+
+Add a warning to `worktree add` when the command tries to reference
+HEAD, there exist valid local branches, and the HEAD points to a
+non-existent reference.
+
+Current Behavior:
+% git -C foo worktree list
+/path/to/repo/foo     dadc8e6dac [main]
+/path/to/repo/foo_wt  0000000000 [badref]
+% git -C foo worktree add ../wt1
+Preparing worktree (new branch 'wt1')
+HEAD is now at dadc8e6dac dummy commit
+% git -C foo_wt worktree add ../wt2
+hint: If you meant to create a worktree containing a new orphan branch
+[...]
+hint: Disable this message with "git config advice.worktreeAddOrphan false"
+fatal: invalid reference: HEAD
+%
+
+New Behavior:
+% git -C foo worktree list
+/path/to/repo/foo     dadc8e6dac [main]
+/path/to/repo/foo_wt  0000000000 [badref]
+% git -C foo worktree add ../wt1
+Preparing worktree (new branch 'wt1')
+HEAD is now at dadc8e6dac dummy commit
+% git -C foo_wt worktree add ../wt2
+warning: HEAD points to an invalid (or orphaned) reference.
+HEAD path: '/path/to/repo/foo/.git/worktrees/foo_wt/HEAD'
+HEAD contents: 'ref: refs/heads/badref'
+hint: If you meant to create a worktree containing a new orphan branch
+[...]
+hint: Disable this message with "git config advice.worktreeAddOrphan false"
+fatal: invalid reference: HEAD
+%
+
+Signed-off-by: Jacob Abel <jacobabel@nullpo.dev>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/worktree.c      | 34 +++++++++++++++++++++++++++++-----
+ t/t2400-worktree-add.sh | 18 +++++++++++++++++-
+ 2 files changed, 46 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 093b2cb032..5f62084334 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -638,6 +638,9 @@ static int first_valid_ref(const char *refname,
+  *
+  * - Checks whether any valid local branches exist.
+  *
++ * - Emits a warning if there exist any valid branches but HEAD does not point
++ *   to a valid reference.
++ *
+  * Returns 1 if any of the previous checks are true, otherwise returns 0.
+  */
+ static int can_use_local_refs(const struct add_opts *opts)
+@@ -645,6 +648,23 @@ static int can_use_local_refs(const struct add_opts *opts)
+ 	if (head_ref(first_valid_ref, NULL)) {
+ 		return 1;
+ 	} else if (for_each_branch_ref(first_valid_ref, NULL)) {
++		if (!opts->quiet) {
++			struct strbuf path = STRBUF_INIT;
++			struct strbuf contents = STRBUF_INIT;
++
++			strbuf_add_real_path(&path, get_worktree_git_dir(NULL));
++			strbuf_addstr(&path, "/HEAD");
++			strbuf_read_file(&contents, path.buf, 64);
++			strbuf_stripspace(&contents, 0);
++			strbuf_strip_suffix(&contents, "\n");
++
++			warning(_("HEAD points to an invalid (or orphaned) reference.\n"
++				  "HEAD path: '%s'\n"
++				  "HEAD contents: '%s'"),
++				  path.buf, contents.buf);
++			strbuf_release(&path);
++			strbuf_release(&contents);
++		}
+ 		return 1;
+ 	}
+ 	return 0;
+@@ -666,16 +686,12 @@ static int can_use_local_refs(const struct add_opts *opts)
+ static int can_use_remote_refs(const struct add_opts *opts)
+ {
+ 	if (!guess_remote) {
+-		if (!opts->quiet)
+-			fprintf_ln(stderr, WORKTREE_ADD_DWIM_ORPHAN_INFER_TEXT);
+ 		return 0;
+ 	} else if (for_each_remote_ref(first_valid_ref, NULL)) {
+ 		return 1;
+ 	} else if (!opts->force && remote_get(NULL)) {
+ 		die(_("No local or remote refs exist despite at least one remote\n"
+ 		      "present, stopping; use 'add -f' to overide or fetch a remote first"));
+-	} else if (!opts->quiet) {
+-		fprintf_ln(stderr, WORKTREE_ADD_DWIM_ORPHAN_INFER_TEXT);
+ 	}
+ 	return 0;
+ }
+@@ -828,8 +844,12 @@ static int add(int ac, const char **av, const char *prefix)
+ 		int n;
+ 		const char *s = worktree_basename(path, &n);
+ 		new_branch = xstrndup(s, n);
+-	} else if (opts.orphan || opts.detach) {
++	} else if (opts.orphan) {
+ 		// No-op
++	} else if (opts.detach) {
++		// Check HEAD
++		if (!strcmp(branch, "HEAD"))
++			can_use_local_refs(&opts);
+ 	} else if (ac < 2 && new_branch) {
+ 		// DWIM: Infer --orphan when repo has no refs.
+ 		opts.orphan = dwim_orphan(&opts, !!opt_track, 0);
+@@ -854,6 +874,10 @@ static int add(int ac, const char **av, const char *prefix)
+ 				branch = remote;
+ 			}
+ 		}
++
++		if (!strcmp(branch, "HEAD"))
++			can_use_local_refs(&opts);
++
+ 	}
+ 
+ 	if (!opts.orphan && !lookup_commit_reference_by_name(branch)) {
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index c7ca8df586..0ac468e69e 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -722,6 +722,7 @@ test_dwim_orphan () {
+ 	local use_quiet=0 &&
+ 	local remote=0 &&
+ 	local remote_ref=0 &&
++	local use_detach=0 &&
+ 	local use_new_branch=0 &&
+ 
+ 	local outcome="$1" &&
+@@ -747,6 +748,10 @@ test_dwim_orphan () {
+ 		success=0 &&
+ 		outcome_text='"add" error inferred "--orphan" gives illegal opts combo'
+ 		;;
++	"warn_bad_head")
++		success=0 &&
++		outcome_text='"add" error, warn on bad HEAD, hint use orphan'
++		;;
+ 	*)
+ 		echo "test_dwim_orphan(): invalid outcome: '$outcome'" >&2 &&
+ 		return 1
+@@ -818,7 +823,7 @@ test_dwim_orphan () {
+ 			context="$context, invalid (or orphan) HEAD"
+ 			;;
+ 
+-		# Whether the code path is tested with the base add command or -b
++		# Whether the code path is tested with the base add command, -b, or --detach
+ 		"no_-b")
+ 			use_new_branch=0 &&
+ 			context="$context, no --branch"
+@@ -827,6 +832,10 @@ test_dwim_orphan () {
+ 			use_new_branch=1 &&
+ 			context="$context, --branch"
+ 			;;
++		"detach")
++			use_detach=1 &&
++			context="$context, --detach"
++			;;
+ 
+ 		# Whether to check that all output is suppressed (except errors)
+ 		# or that the output is as expected
+@@ -887,6 +896,9 @@ test_dwim_orphan () {
+ 	if [ $use_new_branch -eq 1 ]
+ 	then
+ 		args="$args -b foo"
++	elif [ $use_detach -eq 1 ]
++	then
++		args="$args --detach"
+ 	else
+ 		context="DWIM (no --branch), $context"
+ 	fi &&
+@@ -1023,6 +1035,10 @@ do
+ 		test_dwim_orphan 'infer' $dwim_test_args -b no_local_ref remote no_remote_ref no_guess_remote
+ 		test_dwim_orphan 'infer' $dwim_test_args -b no_local_ref remote no_remote_ref guess_remote
+ 		test_dwim_orphan 'infer' $dwim_test_args -b no_local_ref remote remote_ref guess_remote
++
++		test_dwim_orphan 'warn_bad_head' $dwim_test_args no_-b local_ref bad_head
++		test_dwim_orphan 'warn_bad_head' $dwim_test_args -b local_ref bad_head
++		test_dwim_orphan 'warn_bad_head' $dwim_test_args detach local_ref bad_head
+ 	done
+ 
+ 	test_dwim_orphan 'fatal_orphan_bad_combo' $quiet_mode no_-b no_checkout
+-- 
+2.39.3 (Apple Git-145)
+

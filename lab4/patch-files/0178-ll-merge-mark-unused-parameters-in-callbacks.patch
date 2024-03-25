@@ -1,0 +1,67 @@
+From 4b992f0a24ad884eb43898cbb468fdf8fbe647bb Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 17 Oct 2022 21:10:24 -0400
+Subject: [PATCH 0178/2871] ll-merge: mark unused parameters in callbacks
+
+We have a generic ll_merge_fn, but not every implementation needs every
+parameter. In particular, neither binary nor ext merges care about names
+(since they do not generate conflict markers), and most do not need to
+look at the ll_merge_driver itself.
+
+Ironically, neither ll_xdl_merge() nor ll_union_merge() needs to have
+their driver parameter annotated (even though both are named
+drv_unused!).  This is because they may fall back to calling
+ll_binary_merge() directly. And even though that function won't look at
+it, we still pass it along, and hence it is "used" in the caller.
+
+We could get away with passing NULL, but that's likely more confusing
+and brittle than just passing along our own driver. And we have to keep
+the driver parameter in all callbacks, since ll_ext_merge() uses it.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ll-merge.c | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/ll-merge.c b/ll-merge.c
+index 8955d7e1f6..a8e2db9336 100644
+--- a/ll-merge.c
++++ b/ll-merge.c
+@@ -49,14 +49,14 @@ void reset_merge_attributes(void)
+ /*
+  * Built-in low-levels
+  */
+-static enum ll_merge_result ll_binary_merge(const struct ll_merge_driver *drv_unused,
++static enum ll_merge_result ll_binary_merge(const struct ll_merge_driver *drv UNUSED,
+ 			   mmbuffer_t *result,
+-			   const char *path,
+-			   mmfile_t *orig, const char *orig_name,
+-			   mmfile_t *src1, const char *name1,
+-			   mmfile_t *src2, const char *name2,
++			   const char *path UNUSED,
++			   mmfile_t *orig, const char *orig_name UNUSED,
++			   mmfile_t *src1, const char *name1 UNUSED,
++			   mmfile_t *src2, const char *name2 UNUSED,
+ 			   const struct ll_merge_options *opts,
+-			   int marker_size)
++			   int marker_size UNUSED)
+ {
+ 	enum ll_merge_result ret;
+ 	mmfile_t *stolen;
+@@ -183,9 +183,9 @@ static void create_temp(mmfile_t *src, char *path, size_t len)
+ static enum ll_merge_result ll_ext_merge(const struct ll_merge_driver *fn,
+ 			mmbuffer_t *result,
+ 			const char *path,
+-			mmfile_t *orig, const char *orig_name,
+-			mmfile_t *src1, const char *name1,
+-			mmfile_t *src2, const char *name2,
++			mmfile_t *orig, const char *orig_name UNUSED,
++			mmfile_t *src1, const char *name1 UNUSED,
++			mmfile_t *src2, const char *name2 UNUSED,
+ 			const struct ll_merge_options *opts,
+ 			int marker_size)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

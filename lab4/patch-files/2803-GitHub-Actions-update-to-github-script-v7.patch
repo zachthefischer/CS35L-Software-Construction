@@ -1,0 +1,30 @@
+From c4ddbe043ebfecba68943e1b38b9d6c179e734da Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 2 Feb 2024 12:39:35 -0800
+Subject: [PATCH 2803/2871] GitHub Actions: update to github-script@v7
+
+We seem to be getting "Node.js 16 actions are deprecated." warnings
+for jobs that use github-script@v6.  Update to github-script@v7,
+which is said to use Node.js 20.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index d119a63b93..c7b04a521b 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -63,7 +63,7 @@ jobs:
+           echo "skip_concurrent=$skip_concurrent" >>$GITHUB_OUTPUT
+       - name: skip if the commit or tree was already tested
+         id: skip-if-redundant
+-        uses: actions/github-script@v6
++        uses: actions/github-script@v7
+         if: steps.check-ref.outputs.enabled == 'yes'
+         with:
+           github-token: ${{secrets.GITHUB_TOKEN}}
+-- 
+2.39.3 (Apple Git-145)
+

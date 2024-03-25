@@ -1,0 +1,94 @@
+From 4e57c88e028c25ee9428b51ff829299bbb88a80c Mon Sep 17 00:00:00 2001
+From: Lars Kellogg-Stedman <lars@oddbit.com>
+Date: Mon, 19 Dec 2022 17:48:50 -0500
+Subject: [PATCH 0583/2871] line-range: fix infinite loop bug with '$' regex
+
+When the -L argument to "git log" is passed the zero-width regular
+expression "$" (as in "-L :$:line-range.c"), this results in an
+infinite loop in find_funcname_matching_regexp().
+
+Modify find_funcname_matching_regexp to correctly match the entire line
+instead of the zero-width match at eol and update the loop condition to
+prevent an infinite loop in the event of other undiscovered corner cases.
+
+The primary change is that we pre-decrement the beginning-of-line marker
+('bol') before comparing it to '\n'. In the case of '$', where we match the
+'\n' at the end of the line and start the loop with bol == eol, this
+ensures that bol will find the beginning of the line on which the match
+occurred.
+
+Originally reported in <https://stackoverflow.com/q/74690545/147356>.
+
+Signed-off-by: Lars Kellogg-Stedman <lars@oddbit.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ line-range.c        |  7 ++++---
+ t/t4211-line-log.sh | 22 ++++++++++++++++++++++
+ 2 files changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/line-range.c b/line-range.c
+index 955a8a9535..47bf0d6f1a 100644
+--- a/line-range.c
++++ b/line-range.c
+@@ -135,7 +135,7 @@ static const char *find_funcname_matching_regexp(xdemitconf_t *xecfg, const char
+ {
+ 	int reg_error;
+ 	regmatch_t match[1];
+-	while (1) {
++	while (*start) {
+ 		const char *bol, *eol;
+ 		reg_error = regexec(regexp, start, 1, match, 0);
+ 		if (reg_error == REG_NOMATCH)
+@@ -148,8 +148,8 @@ static const char *find_funcname_matching_regexp(xdemitconf_t *xecfg, const char
+ 		/* determine extent of line matched */
+ 		bol = start+match[0].rm_so;
+ 		eol = start+match[0].rm_eo;
+-		while (bol > start && *bol != '\n')
+-			bol--;
++		while (bol > start && *--bol != '\n')
++			; /* nothing */
+ 		if (*bol == '\n')
+ 			bol++;
+ 		while (*eol && *eol != '\n')
+@@ -161,6 +161,7 @@ static const char *find_funcname_matching_regexp(xdemitconf_t *xecfg, const char
+ 			return bol;
+ 		start = eol;
+ 	}
++	return NULL;
+ }
+ 
+ static const char *parse_range_funcname(
+diff --git a/t/t4211-line-log.sh b/t/t4211-line-log.sh
+index ac9e4d0928..c6540e822f 100755
+--- a/t/t4211-line-log.sh
++++ b/t/t4211-line-log.sh
+@@ -315,4 +315,26 @@ test_expect_success 'line-log with --before' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'setup tests for zero-width regular expressions' '
++	cat >expect <<-EOF
++	Modify func1() in file.c
++	Add func1() and func2() in file.c
++	EOF
++'
++
++test_expect_success 'zero-width regex $ matches any function name' '
++	git log --format="%s" --no-patch "-L:$:file.c" >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'zero-width regex ^ matches any function name' '
++	git log --format="%s" --no-patch "-L:^:file.c" >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'zero-width regex .* matches any function name' '
++	git log --format="%s" --no-patch "-L:.*:file.c" >actual &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,32 @@
+From c764e2806013e65c1ebee4b82afe3da1b55d3e51 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:37 -0500
+Subject: [PATCH 0939/2871] rewrite_parents(): mark unused callback parameter
+
+The rewrite_parents() function takes a callback, but not every callback
+needs the "rev" parameter. Mark the unused one so -Wunused-parameter
+will be happy.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ line-log.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/line-log.c b/line-log.c
+index a7f3e7f6ce..1ab2d75f29 100644
+--- a/line-log.c
++++ b/line-log.c
+@@ -1281,7 +1281,8 @@ int line_log_process_ranges_arbitrary_commit(struct rev_info *rev, struct commit
+ 	return changed;
+ }
+ 
+-static enum rewrite_result line_log_rewrite_one(struct rev_info *rev, struct commit **pp)
++static enum rewrite_result line_log_rewrite_one(struct rev_info *rev UNUSED,
++						struct commit **pp)
+ {
+ 	for (;;) {
+ 		struct commit *p = *pp;
+-- 
+2.39.3 (Apple Git-145)
+

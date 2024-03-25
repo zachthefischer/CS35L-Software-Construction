@@ -1,0 +1,32 @@
+From 2d194548cb8c16d17925be0f0e8ce946eb6d1f6e Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Thu, 28 Dec 2023 04:55:16 +0000
+Subject: [PATCH 2613/2871] CodingGuidelines: move period inside parentheses
+
+The contents within parenthesis should be omittable without resulting
+in broken text.
+
+Eliding the parenthesis left a period to end a run without any content.
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/CodingGuidelines | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/CodingGuidelines b/Documentation/CodingGuidelines
+index 8d3a467c01..b64e52fdbe 100644
+--- a/Documentation/CodingGuidelines
++++ b/Documentation/CodingGuidelines
+@@ -450,7 +450,7 @@ For C programs:
+    one of the approved headers that includes it first for you.  (The
+    approved headers currently include "builtin.h",
+    "t/helper/test-tool.h", "xdiff/xinclude.h", or
+-   "reftable/system.h").  You do not have to include more than one of
++   "reftable/system.h".)  You do not have to include more than one of
+    these.
+ 
+  - A C file must directly include the header files that declare the
+-- 
+2.39.3 (Apple Git-145)
+

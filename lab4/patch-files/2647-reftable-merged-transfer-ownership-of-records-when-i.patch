@@ -1,0 +1,67 @@
+From 19b9496c1f0630a4ba252abcdfd313bf9c46347a Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 3 Jan 2024 07:22:43 +0100
+Subject: [PATCH 2647/2871] reftable/merged: transfer ownership of records when
+ iterating
+
+When iterating over records with the merged iterator we put the records
+into a priority queue before yielding them to the caller. This means
+that we need to allocate the contents of these records before we can
+pass them over to the caller.
+
+The handover to the caller is quite inefficient though because we first
+deallocate the record passed in by the caller and then copy over the new
+record, which requires us to reallocate memory.
+
+Refactor the code to instead transfer ownership of the new record to the
+caller. So instead of reallocating all contents, we now release the old
+record and then copy contents of the new record into place.
+
+The following benchmark of `git show-ref --quiet` in a repository with
+around 350k refs shows a clear improvement. Before:
+
+    HEAP SUMMARY:
+        in use at exit: 21,163 bytes in 193 blocks
+      total heap usage: 708,058 allocs, 707,865 frees, 36,783,255 bytes allocated
+
+After:
+
+    HEAP SUMMARY:
+        in use at exit: 21,163 bytes in 193 blocks
+      total heap usage: 357,007 allocs, 356,814 frees, 24,193,602 bytes allocated
+
+This shows that we now have roundabout a single allocation per record
+that we're yielding from the iterator. Ideally, we'd also get rid of
+this allocation so that the number of allocations doesn't scale with the
+number of refs anymore. This would require some larger surgery though
+because the memory is owned by the priority queue before transferring it
+over to the caller.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/merged.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/reftable/merged.c b/reftable/merged.c
+index a28bb99aaf..a52914d667 100644
+--- a/reftable/merged.c
++++ b/reftable/merged.c
+@@ -124,10 +124,12 @@ static int merged_iter_next_entry(struct merged_iter *mi,
+ 		reftable_record_release(&top.rec);
+ 	}
+ 
+-	reftable_record_copy_from(rec, &entry.rec, hash_size(mi->hash_id));
++	reftable_record_release(rec);
++	*rec = entry.rec;
+ 
+ done:
+-	reftable_record_release(&entry.rec);
++	if (err)
++		reftable_record_release(&entry.rec);
+ 	return err;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

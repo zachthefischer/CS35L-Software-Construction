@@ -1,0 +1,56 @@
+From 2a250d6165deee97dd7d8641096b93b85fa95287 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Apr 2023 18:20:27 -0400
+Subject: [PATCH 1248/2871] pack-revindex: introduce
+ GIT_TEST_REV_INDEX_DIE_ON_DISK
+
+In ec8e7760ac (pack-revindex: ensure that on-disk reverse indexes are
+given precedence, 2021-01-25), we introduced
+GIT_TEST_REV_INDEX_DIE_IN_MEMORY to abort the process when Git generated
+a reverse index from scratch.
+
+ec8e7760ac was about ensuring that Git prefers a .rev file when
+available over generating the same information in memory from scratch.
+
+In a subsequent patch, we'll introduce `pack.readReverseIndex`, which
+may be used to disable reading ".rev" files when available. In order to
+ensure that those files are indeed being ignored, introduce an analogous
+option to abort the process when Git reads a ".rev" file from disk.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-revindex.c | 3 +++
+ pack-revindex.h | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/pack-revindex.c b/pack-revindex.c
+index e3d69cc0f7..44e1b3fed9 100644
+--- a/pack-revindex.c
++++ b/pack-revindex.c
+@@ -205,6 +205,9 @@ static int load_revindex_from_disk(char *revindex_name,
+ 	size_t revindex_size;
+ 	struct revindex_header *hdr;
+ 
++	if (git_env_bool(GIT_TEST_REV_INDEX_DIE_ON_DISK, 0))
++		die("dying as requested by '%s'", GIT_TEST_REV_INDEX_DIE_ON_DISK);
++
+ 	fd = git_open(revindex_name);
+ 
+ 	if (fd < 0) {
+diff --git a/pack-revindex.h b/pack-revindex.h
+index 3d1969ce8b..ef8afee88b 100644
+--- a/pack-revindex.h
++++ b/pack-revindex.h
+@@ -36,6 +36,7 @@
+ 
+ #define GIT_TEST_WRITE_REV_INDEX "GIT_TEST_WRITE_REV_INDEX"
+ #define GIT_TEST_REV_INDEX_DIE_IN_MEMORY "GIT_TEST_REV_INDEX_DIE_IN_MEMORY"
++#define GIT_TEST_REV_INDEX_DIE_ON_DISK "GIT_TEST_REV_INDEX_DIE_ON_DISK"
+ 
+ struct packed_git;
+ struct multi_pack_index;
+-- 
+2.39.3 (Apple Git-145)
+

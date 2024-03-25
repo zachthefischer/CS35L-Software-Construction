@@ -1,0 +1,58 @@
+From acf8ea23afec3e42f0644dc1cdf66043b06bf3eb Mon Sep 17 00:00:00 2001
+From: Justin Tobler <jltobler@gmail.com>
+Date: Thu, 11 Jan 2024 20:24:30 +0000
+Subject: [PATCH 2680/2871] t5541: remove lockfile creation
+
+To create error conditions, some tests set up reference locks by
+directly creating its lockfile. While this works for the files reference
+backend, this approach is incompatible with the reftable backend.
+Refactor the test to create a d/f conflict via git-update-ref(1) instead
+so that the test is reference backend agnostic.
+
+Signed-off-by: Justin Tobler <jltobler@gmail.com>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5541-http-push-smart.sh | 18 +++++-------------
+ 1 file changed, 5 insertions(+), 13 deletions(-)
+
+diff --git a/t/t5541-http-push-smart.sh b/t/t5541-http-push-smart.sh
+index df758e187d..71428f3d5c 100755
+--- a/t/t5541-http-push-smart.sh
++++ b/t/t5541-http-push-smart.sh
+@@ -232,8 +232,9 @@ test_expect_success 'push --atomic fails on server-side errors' '
+ 	test_config -C "$d" http.receivepack true &&
+ 	up="$HTTPD_URL"/smart/atomic-branches.git &&
+ 
+-	# break ref updates for other on the remote site
+-	mkdir "$d/refs/heads/other.lock" &&
++	# Create d/f conflict to break ref updates for other on the remote site.
++	git -C "$d" update-ref -d refs/heads/other &&
++	git -C "$d" update-ref refs/heads/other/conflict HEAD &&
+ 
+ 	# add the new commit to other
+ 	git branch -f other collateral &&
+@@ -241,18 +242,9 @@ test_expect_success 'push --atomic fails on server-side errors' '
+ 	# --atomic should cause entire push to be rejected
+ 	test_must_fail git push --atomic "$up" atomic other 2>output  &&
+ 
+-	# the new branch should not have been created upstream
+-	test_must_fail git -C "$d" show-ref --verify refs/heads/atomic &&
+-
+-	# upstream should still reflect atomic2, the last thing we pushed
+-	# successfully
+-	git rev-parse atomic2 >expected &&
+-	# ...to other.
+-	git -C "$d" rev-parse refs/heads/other >actual &&
+-	test_cmp expected actual &&
+-
+-	# the new branch should not have been created upstream
++	# The atomic and other branches should not be created upstream.
+ 	test_must_fail git -C "$d" show-ref --verify refs/heads/atomic &&
++	test_must_fail git -C "$d" show-ref --verify refs/heads/other &&
+ 
+ 	# the failed refs should be indicated to the user
+ 	grep "^ ! .*rejected.* other -> other .*atomic transaction failed" output &&
+-- 
+2.39.3 (Apple Git-145)
+

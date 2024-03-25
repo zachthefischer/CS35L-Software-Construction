@@ -1,0 +1,53 @@
+From b07a819c05f47ac07dec9704c121a2cfb4857ebe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 13 Dec 2022 07:20:09 +0100
+Subject: [PATCH 0550/2871] reflog: clear leftovers in reflog_expiry_cleanup()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+reflog_expiry_prepare() calls mark_reachable(), which recurively flags
+commits as REACHABLE.  The traversal stops beyond a certain age
+threshold; the boundary commits also marked as REACHABLE and put back
+into mark_list at the end.  unreachable() finishes the traversal down to
+the roots if necessary -- but if all interesting commits are younger
+than the age threshold then only recent commits need to be visited.
+
+When this optimization works then the boundary commits still sit there
+in mark_list at the end.  Clear their REACHABLE flag and release the
+commit list allocations.
+
+While at it remove a duplicate code line from mark_reachable(); the same
+flag is already set five lines up.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reflog.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/reflog.c b/reflog.c
+index d258fd3199..aedebf9fdb 100644
+--- a/reflog.c
++++ b/reflog.c
+@@ -193,7 +193,6 @@ static void mark_reachable(struct expire_reflog_policy_cb *cb)
+ 			commit_list_insert(commit, &leftover);
+ 			continue;
+ 		}
+-		commit->object.flags |= REACHABLE;
+ 		parent = commit->parents;
+ 		while (parent) {
+ 			commit = parent->item;
+@@ -378,6 +377,9 @@ void reflog_expiry_cleanup(void *cb_data)
+ 		clear_commit_marks(cb->tip_commit, REACHABLE);
+ 		break;
+ 	}
++	for (elem = cb->mark_list; elem; elem = elem->next)
++		clear_commit_marks(elem->item, REACHABLE);
++	free_commit_list(cb->mark_list);
+ }
+ 
+ int count_reflog_ent(struct object_id *ooid UNUSED,
+-- 
+2.39.3 (Apple Git-145)
+

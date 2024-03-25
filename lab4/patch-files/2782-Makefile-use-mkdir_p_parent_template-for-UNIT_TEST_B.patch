@@ -1,0 +1,89 @@
+From 318ecda5aaacbc9990a0ef1f792ccbe8660ddba9 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 30 Jan 2024 00:37:40 -0500
+Subject: [PATCH 2782/2871] Makefile: use mkdir_p_parent_template for
+ UNIT_TEST_BIN
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We build the UNIT_TEST_BIN directory (t/unit-tests/bin) on the fly with
+"mkdir -p". And so the recipe for UNIT_TEST_PROGS, which put their
+output in that directory, depend on UNIT_TEST_BIN to make sure it's
+there.
+
+But using a normal dependency leads to weird outcomes, because the
+timestamp of the directory is important. For example, try this:
+
+  $ make
+  [...builds everything...]
+
+  [now re-build one unit test]
+  $ touch t/unit-tests/t-ctype.c
+  $ make
+      SUBDIR templates
+      CC t/unit-tests/t-ctype.o
+      LINK t/unit-tests/bin/t-ctype
+
+So far so good. Now running make again should build nothing. But it
+doesn't!
+
+  $ make
+      SUBDIR templates
+      LINK t/unit-tests/bin/t-basic
+      LINK t/unit-tests/bin/t-mem-pool
+      LINK t/unit-tests/bin/t-strbuf
+
+Er, what? Let's rebuild again:
+
+  $ make
+      SUBDIR templates
+      LINK t/unit-tests/bin/t-ctype
+
+Weird. And now we ping-pong back and forth forever:
+
+  $ make
+      SUBDIR templates
+      LINK t/unit-tests/bin/t-basic
+      LINK t/unit-tests/bin/t-mem-pool
+      LINK t/unit-tests/bin/t-strbuf
+  $ make
+      SUBDIR templates
+      LINK t/unit-tests/bin/t-ctype
+
+What happens is that writing t/unit-tests/bin/t-ctype updates the mtime
+of the directory t/unit-tests/bin. And then on the next invocation of
+make, all of those other tests are now older and so get rebuilt. And
+back and forth forever.
+
+We can fix this by making the directory as part of the build recipe for
+the programs, using the template from 0b6d0bc924 (Makefiles: add and use
+wildcard "mkdir -p" template, 2022-03-03).
+
+Helped-by: SZEDER Gábor <szeder.dev@gmail.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 1a62e48759..282a5da713 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3863,10 +3863,8 @@ $(FUZZ_PROGRAMS): all
+ 
+ fuzz-all: $(FUZZ_PROGRAMS)
+ 
+-$(UNIT_TEST_BIN):
+-	@mkdir -p $(UNIT_TEST_BIN)
+-
+-$(UNIT_TEST_PROGS): $(UNIT_TEST_BIN)/%$X: $(UNIT_TEST_DIR)/%.o $(UNIT_TEST_DIR)/test-lib.o $(GITLIBS) GIT-LDFLAGS $(UNIT_TEST_BIN)
++$(UNIT_TEST_PROGS): $(UNIT_TEST_BIN)/%$X: $(UNIT_TEST_DIR)/%.o $(UNIT_TEST_DIR)/test-lib.o $(GITLIBS) GIT-LDFLAGS
++	$(call mkdir_p_parent_template)
+ 	$(QUIET_LINK)$(CC) $(ALL_CFLAGS) -o $@ $(ALL_LDFLAGS) \
+ 		$(filter %.o,$^) $(filter %.a,$^) $(LIBS)
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,61 @@
+From 0856f13abaea5f8d3915dd60e7221e108ce14fdf Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Nov 2023 09:17:09 +0100
+Subject: [PATCH 2402/2871] t9164: fix inability to find basename(1) in
+ Subversion hooks
+
+Hooks executed by Subversion are spawned with an empty environment. By
+default, not even variables like PATH will be propagated to them. In
+order to ensure that we're still able to find required executables, we
+thus write the current PATH variable into the hook script itself and
+then re-export it in t9164.
+
+This happens too late in the script though, as we already tried to
+execute the basename(1) utility before exporting the PATH variable. This
+tends to work on most platforms as the fallback value of PATH for Bash
+(see `getconf PATH`) is likely to contain this binary. But on more
+exotic platforms like NixOS this is not the case, and thus the test
+fails.
+
+While we could work around this issue by simply setting PATH earlier, it
+feels fragile to inject a user-controlled value into the script and have
+the shell interpret it. Instead, we can refactor the hook setup to write
+a `hooks-env` file that configures PATH for us. Like this, Subversion
+will know to set up the environment as expected for all hooks.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9164-git-svn-dcommit-concurrent.sh | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/t/t9164-git-svn-dcommit-concurrent.sh b/t/t9164-git-svn-dcommit-concurrent.sh
+index c8e6c0733f..d1dec89c3b 100755
+--- a/t/t9164-git-svn-dcommit-concurrent.sh
++++ b/t/t9164-git-svn-dcommit-concurrent.sh
+@@ -46,6 +46,14 @@ setup_hook()
+ 			"passed to setup_hook" >&2 ; return 1; }
+ 	echo "cnt=$skip_revs" > "$hook_type-counter"
+ 	rm -f "$rawsvnrepo/hooks/"*-commit # drop previous hooks
++
++	# Subversion hooks run with an empty environment by default. We thus
++	# need to propagate PATH so that we can find executables.
++	cat >"$rawsvnrepo/conf/hooks-env" <<-EOF
++	[default]
++	PATH = ${PATH}
++	EOF
++
+ 	hook="$rawsvnrepo/hooks/$hook_type"
+ 	cat > "$hook" <<- 'EOF1'
+ 		#!/bin/sh
+@@ -63,7 +71,6 @@ EOF1
+ 	if [ "$hook_type" = "pre-commit" ]; then
+ 		echo "echo 'commit disallowed' >&2; exit 1" >>"$hook"
+ 	else
+-		echo "PATH=\"$PATH\"; export PATH" >>"$hook"
+ 		echo "svnconf=\"$svnconf\"" >>"$hook"
+ 		cat >>"$hook" <<- 'EOF2'
+ 			cd work-auto-commits.svn
+-- 
+2.39.3 (Apple Git-145)
+

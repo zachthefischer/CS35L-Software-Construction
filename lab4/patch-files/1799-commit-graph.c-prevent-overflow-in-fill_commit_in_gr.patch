@@ -1,0 +1,46 @@
+From 50a71c2942167654f95d00b450a961cf387547ec Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:38:05 -0400
+Subject: [PATCH 1799/2871] commit-graph.c: prevent overflow in
+ `fill_commit_in_graph()`
+
+In a similar spirit as previous commits, ensure that we don't overflow
+when the lex_index of the commit we are trying to fill out exceeds
+2^32-1/(g->hash_len+16).
+
+The other hunk touched in this patch is not susceptible to overflow,
+since an explicit cast is made to a 64-bit unsigned value. For clarity
+and consistency with the rest of the commits in this series, avoid a
+tricky to reason about cast, and use `st_mult()` directly.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 69110e4dbb..5e32063d3d 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -838,7 +838,7 @@ static int fill_commit_in_graph(struct repository *r,
+ 	fill_commit_graph_info(item, g, pos);
+ 
+ 	lex_index = pos - g->num_commits_in_base;
+-	commit_data = g->chunk_commit_data + (g->hash_len + 16) * lex_index;
++	commit_data = g->chunk_commit_data + st_mult(g->hash_len + 16, lex_index);
+ 
+ 	item->object.parsed = 1;
+ 
+@@ -860,7 +860,7 @@ static int fill_commit_in_graph(struct repository *r,
+ 	}
+ 
+ 	parent_data_ptr = (uint32_t*)(g->chunk_extra_edges +
+-			  4 * (uint64_t)(edge_value & GRAPH_EDGE_LAST_MASK));
++			  st_mult(4, edge_value & GRAPH_EDGE_LAST_MASK));
+ 	do {
+ 		edge_value = get_be32(parent_data_ptr);
+ 		pptr = insert_parent_or_die(r, g,
+-- 
+2.39.3 (Apple Git-145)
+

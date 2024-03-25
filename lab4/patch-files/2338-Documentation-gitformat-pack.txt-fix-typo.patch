@@ -1,0 +1,37 @@
+From 530a9f183f03cfa49d1951a5c204ef44f41f8c9d Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 31 Oct 2023 15:24:08 -0400
+Subject: [PATCH 2338/2871] Documentation/gitformat-pack.txt: fix typo
+
+e0d1bcf825 (multi-pack-index: add format details, 2018-07-12) describes
+the MIDX's "PNAM" chunk as having entries which are "null-terminated
+strings".
+
+This is a typo, as strings are terminated with a NUL character, which is
+a distinct concept from "NULL" or "null", which we typically reserve for
+the void pointer to address 0.
+
+Correct the documentation accordingly.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitformat-pack.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/gitformat-pack.txt b/Documentation/gitformat-pack.txt
+index 0c1be2dbe8..4b7e6da1e7 100644
+--- a/Documentation/gitformat-pack.txt
++++ b/Documentation/gitformat-pack.txt
+@@ -390,7 +390,7 @@ CHUNK LOOKUP:
+ CHUNK DATA:
+ 
+ 	Packfile Names (ID: {'P', 'N', 'A', 'M'})
+-	    Stores the packfile names as concatenated, null-terminated strings.
++	    Stores the packfile names as concatenated, NUL-terminated strings.
+ 	    Packfiles must be listed in lexicographic order for fast lookups by
+ 	    name. This is the only chunk not guaranteed to be a multiple of four
+ 	    bytes in length, so should be the last chunk for alignment reasons.
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,80 @@
+From 24c5a270d10a7857cc3f0e6f3b04933f69ee2c8c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 16 Sep 2023 18:11:46 -0400
+Subject: [PATCH 2124/2871] merge-ort: lowercase a few error messages
+
+As noted in CodingGuidelines, error messages should not be capitalized.
+Fix up a few of these that were copied verbatim from merge-recursive to
+match our modern style.
+
+We'll likewise fix up the matching ones from merge-recursive. We care a
+bit less there, since the hope is that it will eventually go away. But
+besides being the right thing to do in the meantime, it is necessary for
+t6406 to pass both with and without GIT_TEST_MERGE_ALGORITHM set (one of
+our CI jobs sets it to "recursive", which will use the merge-recursive.c
+code). An alternative would be to use "grep -i" in the test to check
+the message, but it's nice for the test suite to be be more exact (we'd
+notice if the capitalization fix regressed).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c           | 4 ++--
+ merge-recursive.c     | 4 ++--
+ t/t6406-merge-attr.sh | 2 +-
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index 3953c9f745..7857ce9fbd 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -2105,12 +2105,12 @@ static int handle_content_merge(struct merge_options *opt,
+ 					  &result_buf);
+ 
+ 		if ((merge_status < 0) || !result_buf.ptr)
+-			ret = error(_("Failed to execute internal merge"));
++			ret = error(_("failed to execute internal merge"));
+ 
+ 		if (!ret &&
+ 		    write_object_file(result_buf.ptr, result_buf.size,
+ 				      OBJ_BLOB, &result->oid))
+-			ret = error(_("Unable to add %s to database"), path);
++			ret = error(_("unable to add %s to database"), path);
+ 
+ 		free(result_buf.ptr);
+ 		if (ret)
+diff --git a/merge-recursive.c b/merge-recursive.c
+index 6a4081bb0f..0d7e57e2df 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -1383,12 +1383,12 @@ static int merge_mode_and_contents(struct merge_options *opt,
+ 						  extra_marker_size);
+ 
+ 			if ((merge_status < 0) || !result_buf.ptr)
+-				ret = err(opt, _("Failed to execute internal merge"));
++				ret = err(opt, _("failed to execute internal merge"));
+ 
+ 			if (!ret &&
+ 			    write_object_file(result_buf.ptr, result_buf.size,
+ 					      OBJ_BLOB, &result->blob.oid))
+-				ret = err(opt, _("Unable to add %s to database"),
++				ret = err(opt, _("unable to add %s to database"),
+ 					  a->path);
+ 
+ 			free(result_buf.ptr);
+diff --git a/t/t6406-merge-attr.sh b/t/t6406-merge-attr.sh
+index 05ad13b23e..72f8c1722f 100755
+--- a/t/t6406-merge-attr.sh
++++ b/t/t6406-merge-attr.sh
+@@ -180,7 +180,7 @@ test_expect_success !WINDOWS 'custom merge driver that is killed with a signal'
+ 	>./please-abort &&
+ 	echo "* merge=custom" >.gitattributes &&
+ 	test_must_fail git merge main 2>err &&
+-	grep "^error: Failed to execute internal merge" err &&
++	grep "^error: failed to execute internal merge" err &&
+ 	git ls-files -u >output &&
+ 	git diff --name-only HEAD >>output &&
+ 	test_must_be_empty output
+-- 
+2.39.3 (Apple Git-145)
+

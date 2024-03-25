@@ -1,0 +1,98 @@
+From b85c5a4ec66f18fdaa550fdf7801f48ebbc4292f Mon Sep 17 00:00:00 2001
+From: Mark Levedahl <mlevedahl@gmail.com>
+Date: Mon, 26 Jun 2023 12:53:05 -0400
+Subject: [PATCH 1989/2871] git-gui - use mkshortcut on Cygwin
+
+git-gui enables the "Repository->Create Desktop Icon" item on Cygwin,
+offering to create a shortcut that starts git-gui on the current
+repository. The code in do_cygwin_shortcut invokes function
+win32_create_lnk to create the shortcut. This latter function is shared
+between Cygwin and Git For Windows and expects Windows rather than unix
+pathnames, though do_cygwin_shortcut provides unix pathnames. Also, this
+function tries to invoke the Windows Script Host to run a javascript
+snippet, but this fails under Cygwin's Tcl. So, win32_create_lnk just
+does not support Cygwin.
+
+However, Cygwin's default installation provides /bin/mkshortcut for
+creating desktop shortcuts. This is compatible with exec under Cygwin's
+Tcl, understands Cygwin's unix pathnames, and avoids the need for shell
+escapes to encode troublesome paths. So, teach git-gui to use mkshortcut
+on Cygwin, leaving win32_create_lnk unchanged and for exclusive use by
+Git For Windows.
+
+Notes: "CHERE_INVOKING=1" is recognized by Cygwin's /etc/profile and
+prevents a "chdir $HOME", leaving the shell in the working directory
+specified by the shortcut. That directory is written directly by
+mkshortcut eliminating any problems with shell escapes and quoting.
+
+The code being replaced includes the full pathname of the git-gui
+creating the shortcut, but that git-gui might not be compatible with the
+git found after /etc/profile sets the path, and might have a pathname
+that defies encoding using shell escapes that can survive the multiple
+incompatible interpreters involved in the chain of creating and using
+this shortcut.  The new code uses bare "git gui" as the command to
+execute, thus using the system git to launch the system git-gui, and
+avoiding both issues.
+
+Signed-off-by: Mark Levedahl <mlevedahl@gmail.com>
+Acked-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Pratyush Yadav <me@yadavpratyush.com>
+---
+ lib/shortcut.tcl | 31 ++++++++++++++-----------------
+ 1 file changed, 14 insertions(+), 17 deletions(-)
+
+diff --git a/lib/shortcut.tcl b/lib/shortcut.tcl
+index 97d1d7aa02..674a41f5e0 100644
+--- a/lib/shortcut.tcl
++++ b/lib/shortcut.tcl
+@@ -27,13 +27,10 @@ proc do_windows_shortcut {} {
+ }
+ 
+ proc do_cygwin_shortcut {} {
+-	global argv0 _gitworktree
++	global argv0 _gitworktree oguilib
+ 
+ 	if {[catch {
+ 		set desktop [exec cygpath \
+-			--windows \
+-			--absolute \
+-			--long-name \
+ 			--desktop]
+ 		}]} {
+ 			set desktop .
+@@ -48,19 +45,19 @@ proc do_cygwin_shortcut {} {
+ 			set fn ${fn}.lnk
+ 		}
+ 		if {[catch {
+-				set sh [exec cygpath \
+-					--windows \
+-					--absolute \
+-					/bin/sh.exe]
+-				set me [exec cygpath \
+-					--unix \
+-					--absolute \
+-					$argv0]
+-				win32_create_lnk $fn [list \
+-					$sh -c \
+-					"CHERE_INVOKING=1 source /etc/profile;[sq $me] &" \
+-					] \
+-					[file normalize $_gitworktree]
++				set repodir [file normalize $_gitworktree]
++				set shargs {-c \
++					"CHERE_INVOKING=1 \
++					source /etc/profile; \
++					git gui"}
++				exec /bin/mkshortcut.exe \
++					--arguments $shargs \
++					--desc "git-gui on $repodir" \
++					--icon $oguilib/git-gui.ico \
++					--name $fn \
++					--show min \
++					--workingdir $repodir \
++					/bin/sh.exe
+ 			} err]} {
+ 			error_popup [strcat [mc "Cannot write shortcut:"] "\n\n$err"]
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

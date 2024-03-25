@@ -1,0 +1,75 @@
+From e95bafc52f095b33b5a283179e08a44279c293d0 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Mon, 9 Oct 2023 13:21:00 +0000
+Subject: [PATCH 2247/2871] merge-ort: initialize repo in index state
+
+initialize_attr_index() does not initialize the repo member of
+attr_index. Starting in 44451a2e5e (attr: teach "--attr-source=<tree>"
+global option to "git", 2023-05-06), this became a problem because
+istate->repo gets passed down the call chain starting in
+git_check_attr(). This gets passed all the way down to
+replace_refs_enabled(), which segfaults when accessing r->gitdir.
+
+Fix this by initializing the repository in the index state.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Helped-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c           |  1 +
+ t/t4300-merge-tree.sh | 27 +++++++++++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index a50b095c47..44782c19cb 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -1916,6 +1916,7 @@ static void initialize_attr_index(struct merge_options *opt)
+ 	struct index_state *attr_index = &opt->priv->attr_index;
+ 	struct cache_entry *ce;
+ 
++	attr_index->repo = opt->repo;
+ 	attr_index->initialized = 1;
+ 
+ 	if (!opt->renormalize)
+diff --git a/t/t4300-merge-tree.sh b/t/t4300-merge-tree.sh
+index 57c4f26e46..9c197260d5 100755
+--- a/t/t4300-merge-tree.sh
++++ b/t/t4300-merge-tree.sh
+@@ -86,6 +86,33 @@ EXPECTED
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success '3-way merge with --attr-source' '
++	test_when_finished rm -rf 3-way &&
++	git init 3-way &&
++	(
++		cd 3-way &&
++		test_commit initial file1 foo &&
++		base=$(git rev-parse HEAD) &&
++		git checkout -b brancha &&
++		echo bar >>file1 &&
++		git commit -am "adding bar" &&
++		source=$(git rev-parse HEAD) &&
++		git checkout @{-1} &&
++		git checkout -b branchb &&
++		echo baz >>file1 &&
++		git commit -am "adding baz" &&
++		merge=$(git rev-parse HEAD) &&
++		git checkout -b gitattributes &&
++		test_commit "gitattributes" .gitattributes "file1 merge=union" &&
++		git checkout @{-1} &&
++		tree=$(git --attr-source=gitattributes merge-tree --write-tree \
++		--merge-base "$base" --end-of-options "$source" "$merge") &&
++		test_write_lines foo bar baz >expect &&
++		git cat-file -p "$tree:file1" >actual &&
++		test_cmp expect actual
++	)
++'
++
+ test_expect_success 'file change A, B (same)' '
+ 	git reset --hard initial &&
+ 	test_commit "change-a-b-same-A" "initial-file" "AAA" &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,70 @@
+From 866a1b902627df25bce2213d18285af9bd0ecae0 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 29 Nov 2023 08:25:18 +0100
+Subject: [PATCH 2481/2871] t6301: write invalid object ID via `test-tool
+ ref-store`
+
+One of the tests in t6301 verifies that the reference backend correctly
+warns about the case where a reference points to a non-existent object.
+This is done by writing the object ID into the loose reference directly,
+which is quite intimate with how the files backend works.
+
+Refactor the code to instead use `test-tool ref-store` to write the
+reference, which is backend-agnostic.
+
+There are two more tests in this file which write loose files directly,
+as well. But both of them are indeed quite specific to the loose files
+backend and cannot be easily ported to other backends. We thus mark them
+as requiring the REFFILES prerequisite.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6301-for-each-ref-errors.sh | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/t/t6301-for-each-ref-errors.sh b/t/t6301-for-each-ref-errors.sh
+index 2667dd13fe..83b8a19d94 100755
+--- a/t/t6301-for-each-ref-errors.sh
++++ b/t/t6301-for-each-ref-errors.sh
+@@ -15,7 +15,7 @@ test_expect_success setup '
+ 	git for-each-ref --format="%(objectname) %(refname)" >brief-list
+ '
+ 
+-test_expect_success 'Broken refs are reported correctly' '
++test_expect_success REFFILES 'Broken refs are reported correctly' '
+ 	r=refs/heads/bogus &&
+ 	: >.git/$r &&
+ 	test_when_finished "rm -f .git/$r" &&
+@@ -25,7 +25,7 @@ test_expect_success 'Broken refs are reported correctly' '
+ 	test_cmp broken-err err
+ '
+ 
+-test_expect_success 'NULL_SHA1 refs are reported correctly' '
++test_expect_success REFFILES 'NULL_SHA1 refs are reported correctly' '
+ 	r=refs/heads/zeros &&
+ 	echo $ZEROS >.git/$r &&
+ 	test_when_finished "rm -f .git/$r" &&
+@@ -39,15 +39,14 @@ test_expect_success 'NULL_SHA1 refs are reported correctly' '
+ '
+ 
+ test_expect_success 'Missing objects are reported correctly' '
+-	r=refs/heads/missing &&
+-	echo $MISSING >.git/$r &&
+-	test_when_finished "rm -f .git/$r" &&
+-	echo "fatal: missing object $MISSING for $r" >missing-err &&
++	test_when_finished "git update-ref -d refs/heads/missing" &&
++	test-tool ref-store main update-ref msg refs/heads/missing "$MISSING" "$ZERO_OID" REF_SKIP_OID_VERIFICATION &&
++	echo "fatal: missing object $MISSING for refs/heads/missing" >missing-err &&
+ 	test_must_fail git for-each-ref 2>err &&
+ 	test_cmp missing-err err &&
+ 	(
+ 		cat brief-list &&
+-		echo "$MISSING $r"
++		echo "$MISSING refs/heads/missing"
+ 	) | sort -k 2 >missing-brief-expected &&
+ 	git for-each-ref --format="%(objectname) %(refname)" >brief-out 2>brief-err &&
+ 	test_cmp missing-brief-expected brief-out &&
+-- 
+2.39.3 (Apple Git-145)
+

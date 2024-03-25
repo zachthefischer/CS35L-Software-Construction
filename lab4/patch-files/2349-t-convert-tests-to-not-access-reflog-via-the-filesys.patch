@@ -1,0 +1,165 @@
+From 668e31c690b821b9aba0fc6d11f483b1d154682a Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 2 Nov 2023 09:46:53 +0100
+Subject: [PATCH 2349/2871] t: convert tests to not access reflog via the
+ filesystem
+
+Some of our tests reach directly into the filesystem in order to both
+read or modify the reflog, which will break once we have a second
+reference backend in our codebase that stores reflogs differently.
+
+Refactor these tests to either use git-reflog(1) or the ref-store test
+helper. Note that the refactoring to use git-reflog(1) also requires us
+to adapt our expectations in some cases where we previously verified the
+exact on-disk log entries. This seems like an acceptable tradeoff though
+to ensure that different backends have the same user-visible behaviour
+as any user would typically use git-reflog(1) anyway to access the logs.
+Any backend-specific verification of the written on-disk format should
+be implemented in a separate, backend-specific test.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1400-update-ref.sh | 17 +++++++++++------
+ t/t3200-branch.sh     | 24 ++++++++++++------------
+ 2 files changed, 23 insertions(+), 18 deletions(-)
+
+diff --git a/t/t1400-update-ref.sh b/t/t1400-update-ref.sh
+index 51a8d0bba9..b7d1e5deed 100755
+--- a/t/t1400-update-ref.sh
++++ b/t/t1400-update-ref.sh
+@@ -90,7 +90,8 @@ test_expect_success "deleting current branch adds message to HEAD's log" '
+ 	git symbolic-ref HEAD $m &&
+ 	git update-ref -m delete-$m -d $m &&
+ 	test_must_fail git show-ref --verify -q $m &&
+-	grep "delete-$m$" .git/logs/HEAD
++	test-tool ref-store main for-each-reflog-ent HEAD >actual &&
++	grep "delete-$m$" actual
+ '
+ 
+ test_expect_success "deleting by HEAD adds message to HEAD's log" '
+@@ -99,7 +100,8 @@ test_expect_success "deleting by HEAD adds message to HEAD's log" '
+ 	git symbolic-ref HEAD $m &&
+ 	git update-ref -m delete-by-head -d HEAD &&
+ 	test_must_fail git show-ref --verify -q $m &&
+-	grep "delete-by-head$" .git/logs/HEAD
++	test-tool ref-store main for-each-reflog-ent HEAD >actual &&
++	grep "delete-by-head$" actual
+ '
+ 
+ test_expect_success 'update-ref does not create reflogs by default' '
+@@ -130,7 +132,7 @@ test_expect_success 'creates no reflog in bare repository' '
+ 
+ test_expect_success 'core.logAllRefUpdates=true creates reflog in bare repository' '
+ 	test_when_finished "git -C $bare config --unset core.logAllRefUpdates && \
+-		rm $bare/logs/$m" &&
++		test-tool ref-store main delete-reflog $m" &&
+ 	git -C $bare config core.logAllRefUpdates true &&
+ 	git -C $bare update-ref $m $bareB &&
+ 	git -C $bare rev-parse $bareB >expect &&
+@@ -263,7 +265,10 @@ test_expect_success "(not) changed .git/$m" '
+ 	! test $B = $(git show-ref -s --verify $m)
+ '
+ 
+-rm -f .git/logs/refs/heads/main
++test_expect_success "clean up reflog" '
++	test-tool ref-store main delete-reflog $m
++'
++
+ test_expect_success "create $m (logged by touch)" '
+ 	test_config core.logAllRefUpdates false &&
+ 	GIT_COMMITTER_DATE="2005-05-26 23:30" \
+@@ -316,7 +321,7 @@ $A $B $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150260 +0000	Switch
+ $B $A $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150860 +0000
+ EOF
+ test_expect_success "verifying $m's log (logged by touch)" '
+-	test_when_finished "git update-ref -d $m && rm -rf .git/logs actual expect" &&
++	test_when_finished "git update-ref -d $m && git reflog expire --expire=all --all && rm -rf actual expect" &&
+ 	test-tool ref-store main for-each-reflog-ent $m >actual &&
+ 	test_cmp actual expect
+ '
+@@ -346,7 +351,7 @@ $A $B $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150380 +0000	Switch
+ $B $A $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150980 +0000
+ EOF
+ test_expect_success "verifying $m's log (logged by config)" '
+-	test_when_finished "git update-ref -d $m && rm -rf .git/logs actual expect" &&
++	test_when_finished "git update-ref -d $m && git reflog expire --expire=all --all && rm -rf actual expect" &&
+ 	test-tool ref-store main for-each-reflog-ent $m >actual &&
+ 	test_cmp actual expect
+ '
+diff --git a/t/t3200-branch.sh b/t/t3200-branch.sh
+index 1197a44fca..30fb0dee6b 100755
+--- a/t/t3200-branch.sh
++++ b/t/t3200-branch.sh
+@@ -76,14 +76,14 @@ test_expect_success 'git branch HEAD should fail' '
+ '
+ 
+ cat >expect <<EOF
+-$ZERO_OID $HEAD $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150200 +0000	branch: Created from main
++$HEAD refs/heads/d/e/f@{0}: branch: Created from main
+ EOF
+ test_expect_success 'git branch --create-reflog d/e/f should create a branch and a log' '
+ 	GIT_COMMITTER_DATE="2005-05-26 23:30" \
+ 	git -c core.logallrefupdates=false branch --create-reflog d/e/f &&
+ 	test_ref_exists refs/heads/d/e/f &&
+-	test_path_is_file .git/logs/refs/heads/d/e/f &&
+-	test_cmp expect .git/logs/refs/heads/d/e/f
++	git reflog show --no-abbrev-commit refs/heads/d/e/f >actual &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'git branch -d d/e/f should delete a branch and a log' '
+@@ -203,10 +203,9 @@ test_expect_success 'git branch -M baz bam should succeed when baz is checked ou
+ 	test $(git rev-parse --abbrev-ref HEAD) = bam
+ '
+ 
+-test_expect_success 'git branch -M baz bam should add entries to .git/logs/HEAD' '
+-	msg="Branch: renamed refs/heads/baz to refs/heads/bam" &&
+-	grep " $ZERO_OID.*$msg$" .git/logs/HEAD &&
+-	grep "^$ZERO_OID.*$msg$" .git/logs/HEAD
++test_expect_success 'git branch -M baz bam should add entries to HEAD reflog' '
++	git reflog show HEAD >actual &&
++	grep "HEAD@{0}: Branch: renamed refs/heads/baz to refs/heads/bam" actual
+ '
+ 
+ test_expect_success 'git branch -M should leave orphaned HEAD alone' '
+@@ -228,7 +227,7 @@ test_expect_success 'git branch -M should leave orphaned HEAD alone' '
+ test_expect_success 'resulting reflog can be shown by log -g' '
+ 	oid=$(git rev-parse HEAD) &&
+ 	cat >expect <<-EOF &&
+-	HEAD@{0} $oid $msg
++	HEAD@{0} $oid Branch: renamed refs/heads/baz to refs/heads/bam
+ 	HEAD@{2} $oid checkout: moving from foo to baz
+ 	EOF
+ 	git log -g --format="%gd %H %gs" -2 HEAD >actual &&
+@@ -702,7 +701,8 @@ test_expect_success 'git branch -C c1 c2 should succeed when c1 is checked out'
+ 
+ test_expect_success 'git branch -C c1 c2 should never touch HEAD' '
+ 	msg="Branch: copied refs/heads/c1 to refs/heads/c2" &&
+-	! grep "$msg$" .git/logs/HEAD
++	git reflog HEAD >actual &&
++	! grep "$msg$" actual
+ '
+ 
+ test_expect_success 'git branch -C main should work when main is checked out' '
+@@ -1143,14 +1143,14 @@ test_expect_success '--set-upstream-to notices an error to set branch as own ups
+ 
+ # Keep this test last, as it changes the current branch
+ cat >expect <<EOF
+-$ZERO_OID $HEAD $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> 1117150200 +0000	branch: Created from main
++$HEAD refs/heads/g/h/i@{0}: branch: Created from main
+ EOF
+ test_expect_success 'git checkout -b g/h/i -l should create a branch and a log' '
+ 	GIT_COMMITTER_DATE="2005-05-26 23:30" \
+ 	git checkout -b g/h/i -l main &&
+ 	test_ref_exists refs/heads/g/h/i &&
+-	test_path_is_file .git/logs/refs/heads/g/h/i &&
+-	test_cmp expect .git/logs/refs/heads/g/h/i
++	git reflog show --no-abbrev-commit refs/heads/g/h/i >actual &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success 'checkout -b makes reflog by default' '
+-- 
+2.39.3 (Apple Git-145)
+

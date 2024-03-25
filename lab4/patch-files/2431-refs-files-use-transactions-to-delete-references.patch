@@ -1,0 +1,196 @@
+From e85e5dd78aea907702970ae121b0b4e29b3ea90b Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 14 Nov 2023 09:58:42 +0100
+Subject: [PATCH 2431/2871] refs/files: use transactions to delete references
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In the `files_delete_refs()` callback function of the files backend we
+implement deletion of references. This is done in two steps:
+
+    1. We lock the packed-refs file and delete all references from it in
+       a single transaction.
+
+    2. We delete all loose references via separate calls to
+       `refs_delete_ref()`.
+
+These steps essentially duplicate the logic around locking and deletion
+order that we already have in the transactional interfaces, where we do
+know to lock and evict references from the packed-refs file. Despite the
+fact that we duplicate the logic, it's also less efficient than if we
+used a single generic transaction:
+
+    - The transactional interface knows to skip locking of the packed
+      refs in case they don't contain any of the refs which are about to
+      be deleted.
+
+    - We end up creating N+1 separate reference transactions, one for
+      the packed-refs file and N for the individual loose references.
+
+Refactor the code to instead delete references via a single transaction.
+As we don't assert the expected old object ID this is equivalent to the
+previous behaviour, and we already do the same in the packed-refs
+backend.
+
+Despite the fact that the result is simpler to reason about, this change
+also results in improved performance. The following benchmarks have been
+executed in linux.git:
+
+```
+$ hyperfine -n '{rev}, packed={packed} refcount={refcount}' \
+    -L packed true,false -L refcount 1,1000 -L rev master,pks-ref-store-generic-delete-refs \
+    --setup 'git -C /home/pks/Development/git switch --detach {rev} && make -C /home/pks/Development/git -j17' \
+    --prepare 'printf "create refs/heads/new-branch-%d HEAD\n" $(seq {refcount}) | git -C /home/pks/Reproduction/linux.git update-ref --stdin && if test {packed} = true; then git pack-refs --all; fi' \
+    --warmup=10 \
+    '/home/pks/Development/git/bin-wrappers/git -C /home/pks/Reproduction/linux.git branch -d new-branch-{1..{refcount}}'
+
+Benchmark 1: master packed=true refcount=1
+  Time (mean ± σ):       7.8 ms ±   1.6 ms    [User: 3.4 ms, System: 4.4 ms]
+  Range (min … max):     5.5 ms …  11.0 ms    120 runs
+
+Benchmark 2: master packed=false refcount=1
+  Time (mean ± σ):       7.0 ms ±   1.1 ms    [User: 3.2 ms, System: 3.8 ms]
+  Range (min … max):     5.7 ms …   9.8 ms    180 runs
+
+Benchmark 3: master packed=true refcount=1000
+  Time (mean ± σ):     283.8 ms ±   5.2 ms    [User: 45.7 ms, System: 231.5 ms]
+  Range (min … max):   276.7 ms … 291.6 ms    10 runs
+
+Benchmark 4: master packed=false refcount=1000
+  Time (mean ± σ):     284.4 ms ±   5.3 ms    [User: 44.2 ms, System: 233.6 ms]
+  Range (min … max):   277.1 ms … 293.3 ms    10 runs
+
+Benchmark 5: generic-delete-refs packed=true refcount=1
+  Time (mean ± σ):       6.2 ms ±   1.8 ms    [User: 2.3 ms, System: 3.9 ms]
+  Range (min … max):     4.1 ms …  12.2 ms    142 runs
+
+Benchmark 6: generic-delete-refs packed=false refcount=1
+  Time (mean ± σ):       7.1 ms ±   1.4 ms    [User: 2.8 ms, System: 4.3 ms]
+  Range (min … max):     4.2 ms …  10.8 ms    157 runs
+
+Benchmark 7: generic-delete-refs packed=true refcount=1000
+  Time (mean ± σ):     198.9 ms ±   1.7 ms    [User: 29.5 ms, System: 165.7 ms]
+  Range (min … max):   196.1 ms … 201.4 ms    10 runs
+
+Benchmark 8: generic-delete-refs packed=false refcount=1000
+  Time (mean ± σ):     199.7 ms ±   7.8 ms    [User: 32.2 ms, System: 163.2 ms]
+  Range (min … max):   193.8 ms … 220.7 ms    10 runs
+
+Summary
+  generic-delete-refs packed=true refcount=1 ran
+    1.14 ± 0.37 times faster than master packed=false refcount=1
+    1.15 ± 0.40 times faster than generic-delete-refs packed=false refcount=1
+    1.26 ± 0.44 times faster than master packed=true refcount=1
+   32.24 ± 9.17 times faster than generic-delete-refs packed=true refcount=1000
+   32.36 ± 9.29 times faster than generic-delete-refs packed=false refcount=1000
+   46.00 ± 13.10 times faster than master packed=true refcount=1000
+   46.10 ± 13.13 times faster than master packed=false refcount=1000
+```
+
+Especially in the case where we have many references we can see a clear
+performance speedup of nearly 30%.
+
+This is in contrast to the stated objecive in a27dcf89b68 (refs: make
+delete_refs() virtual, 2016-09-04), where the virtual `delete_refs()`
+function was introduced with the intent to speed things up rather than
+making things slower. So it seems like we have outlived the need for a
+virtual function.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs/files-backend.c | 66 +++++++++++++++++++++++---------------------
+ 1 file changed, 34 insertions(+), 32 deletions(-)
+
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index db5c0c7a72..778d3a96ba 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -1268,49 +1268,51 @@ static int files_pack_refs(struct ref_store *ref_store,
+ static int files_delete_refs(struct ref_store *ref_store, const char *msg,
+ 			     struct string_list *refnames, unsigned int flags)
+ {
+-	struct files_ref_store *refs =
+-		files_downcast(ref_store, REF_STORE_WRITE, "delete_refs");
++	struct ref_transaction *transaction;
+ 	struct strbuf err = STRBUF_INIT;
+-	int i, result = 0;
++	struct string_list_item *item;
++	int ret = 0, failures = 0;
+ 
+ 	if (!refnames->nr)
+ 		return 0;
+ 
+-	if (packed_refs_lock(refs->packed_ref_store, 0, &err))
+-		goto error;
+-
+-	if (refs_delete_refs(refs->packed_ref_store, msg, refnames, flags)) {
+-		packed_refs_unlock(refs->packed_ref_store);
+-		goto error;
++	/*
++	 * Since we don't check the references' old_oids, the
++	 * individual updates can't fail, so we can pack all of the
++	 * updates into a single transaction.
++	 */
++	transaction = ref_store_transaction_begin(ref_store, &err);
++	if (!transaction) {
++		ret = error("%s", err.buf);
++		goto out;
+ 	}
+ 
+-	packed_refs_unlock(refs->packed_ref_store);
+-
+-	for (i = 0; i < refnames->nr; i++) {
+-		const char *refname = refnames->items[i].string;
+-
+-		if (refs_delete_ref(&refs->base, msg, refname, NULL, flags))
+-			result |= error(_("could not remove reference %s"), refname);
++	for_each_string_list_item(item, refnames) {
++		ret = ref_transaction_delete(transaction, item->string,
++					     NULL, flags, msg, &err);
++		if (ret) {
++			warning(_("could not delete reference %s: %s"),
++				item->string, err.buf);
++			strbuf_reset(&err);
++			failures = 1;
++		}
+ 	}
+ 
+-	strbuf_release(&err);
+-	return result;
+-
+-error:
+-	/*
+-	 * If we failed to rewrite the packed-refs file, then it is
+-	 * unsafe to try to remove loose refs, because doing so might
+-	 * expose an obsolete packed value for a reference that might
+-	 * even point at an object that has been garbage collected.
+-	 */
+-	if (refnames->nr == 1)
+-		error(_("could not delete reference %s: %s"),
+-		      refnames->items[0].string, err.buf);
+-	else
+-		error(_("could not delete references: %s"), err.buf);
++	ret = ref_transaction_commit(transaction, &err);
++	if (ret) {
++		if (refnames->nr == 1)
++			error(_("could not delete reference %s: %s"),
++			      refnames->items[0].string, err.buf);
++		else
++			error(_("could not delete references: %s"), err.buf);
++	}
+ 
++out:
++	if (!ret && failures)
++		ret = -1;
++	ref_transaction_free(transaction);
+ 	strbuf_release(&err);
+-	return -1;
++	return ret;
+ }
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

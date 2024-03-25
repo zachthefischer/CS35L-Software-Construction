@@ -1,0 +1,43 @@
+From c5773dc078f05a98c9359938dbce3b3dc70aa3bd Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Sat, 11 Feb 2023 11:15:26 +0000
+Subject: [PATCH 0860/2871] commit-reach: avoid NULL dereference
+
+The loop at the top of can_all_from_reach_with_flag() already
+accounts for `from->objects[i].item' being NULL, so it follows
+the cleanup loop should also account for a NULL `from_one'.
+
+I managed to segfault here on one of my giant, many-remote repos
+using `git fetch --negotiation-tip=...  --negotiation-only'
+where the --negotiation-tip= argument was a glob which (inadvertently)
+captured more refs than I wanted.  I have not reproduced this
+in a standalone test case.
+
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-reach.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/commit-reach.c b/commit-reach.c
+index 5a845440a9..7e422b0cd3 100644
+--- a/commit-reach.c
++++ b/commit-reach.c
+@@ -628,8 +628,12 @@ int can_all_from_reach_with_flag(struct object_array *from,
+ 	}
+ 	free(list);
+ 
+-	for (i = 0; i < from->nr; i++)
+-		from->objects[i].item->flags &= ~assign_flag;
++	for (i = 0; i < from->nr; i++) {
++		struct object *from_one = from->objects[i].item;
++
++		if (from_one)
++			from_one->flags &= ~assign_flag;
++	}
+ 
+ 	return result;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

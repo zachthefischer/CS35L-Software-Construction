@@ -1,0 +1,144 @@
+From f1f8a258567268974b9bbd012c33ad219a31aa0e Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Sun, 20 Aug 2023 19:50:08 +0100
+Subject: [PATCH 1968/2871] pretty: add pointer and tag options to %(decorate)
+
+Add pointer and tag options to %(decorate) format, to allow to override
+the " -> " string used to show where HEAD points and the "tag: " string
+used to mark tags.
+
+Document in pretty-formats.txt and test in t4205-log-pretty-formats.sh.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/pretty-formats.txt |  9 +++++++++
+ log-tree.c                       | 12 +++++++++---
+ log-tree.h                       |  2 ++
+ pretty.c                         |  6 +++++-
+ t/t4205-log-pretty-formats.sh    |  7 ++++++-
+ 5 files changed, 31 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/pretty-formats.txt b/Documentation/pretty-formats.txt
+index 709d85af21..d38b4ab566 100644
+--- a/Documentation/pretty-formats.txt
++++ b/Documentation/pretty-formats.txt
+@@ -233,6 +233,15 @@ parentheses (`%x29`), due to their role in the option syntax.
+ ** 'prefix=<value>': Shown before the list of ref names.  Defaults to "{nbsp}`(`".
+ ** 'suffix=<value>': Shown after the list of ref names.  Defaults to "`)`".
+ ** 'separator=<value>': Shown between ref names.  Defaults to "`,`{nbsp}".
++** 'pointer=<value>': Shown between HEAD and the branch it points to, if any.
++		      Defaults to "{nbsp}`->`{nbsp}".
++** 'tag=<value>': Shown before tag names. Defaults to "`tag:`{nbsp}".
++
+++
++For example, to produce decorations with no wrapping
++or tag annotations, and spaces as separators:
+++
++`%(decorate:prefix=,suffix=,tag=,separator= )`
+ 
+ '%(describe[:<options>])'::
+ human-readable name, like linkgit:git-describe[1]; empty string for
+diff --git a/log-tree.c b/log-tree.c
+index 44f4693567..50b4850eda 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -317,6 +317,8 @@ void format_decorations(struct strbuf *sb,
+ 	const char *prefix = " (";
+ 	const char *suffix = ")";
+ 	const char *separator = ", ";
++	const char *pointer = " -> ";
++	const char *tag = "tag: ";
+ 
+ 	decoration = get_name_decoration(&commit->object);
+ 	if (!decoration)
+@@ -329,6 +331,10 @@ void format_decorations(struct strbuf *sb,
+ 			suffix = opts->suffix;
+ 		if (opts->separator)
+ 			separator = opts->separator;
++		if (opts->pointer)
++			pointer = opts->pointer;
++		if (opts->tag)
++			tag = opts->tag;
+ 	}
+ 
+ 	color_commit = diff_get_color(use_color, DIFF_COMMIT);
+@@ -351,9 +357,9 @@ void format_decorations(struct strbuf *sb,
+ 				strbuf_addstr(sb, color_reset);
+ 			}
+ 
+-			if (decoration->type == DECORATION_REF_TAG) {
++			if (*tag && decoration->type == DECORATION_REF_TAG) {
+ 				strbuf_addstr(sb, color);
+-				strbuf_addstr(sb, "tag: ");
++				strbuf_addstr(sb, tag);
+ 				strbuf_addstr(sb, color_reset);
+ 			}
+ 
+@@ -364,7 +370,7 @@ void format_decorations(struct strbuf *sb,
+ 			if (current_and_HEAD &&
+ 			    decoration->type == DECORATION_REF_HEAD) {
+ 				strbuf_addstr(sb, color);
+-				strbuf_addstr(sb, " -> ");
++				strbuf_addstr(sb, pointer);
+ 				strbuf_addstr(sb, color_reset);
+ 				strbuf_addstr(sb, decorate_get_color(use_color, current_and_HEAD->type));
+ 				show_name(sb, current_and_HEAD);
+diff --git a/log-tree.h b/log-tree.h
+index 14898de8ac..41c776fea5 100644
+--- a/log-tree.h
++++ b/log-tree.h
+@@ -17,6 +17,8 @@ struct decoration_options {
+ 	char *prefix;
+ 	char *suffix;
+ 	char *separator;
++	char *pointer;
++	char *tag;
+ };
+ 
+ int parse_decorate_color_config(const char *var, const char *slot_name, const char *value);
+diff --git a/pretty.c b/pretty.c
+index 1639efe2f8..7f3abb676c 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1407,7 +1407,9 @@ static void parse_decoration_options(const char **arg,
+ {
+ 	while (parse_decoration_option(arg, "prefix", &opts->prefix) ||
+ 	       parse_decoration_option(arg, "suffix", &opts->suffix) ||
+-	       parse_decoration_option(arg, "separator", &opts->separator))
++	       parse_decoration_option(arg, "separator", &opts->separator) ||
++	       parse_decoration_option(arg, "pointer", &opts->pointer) ||
++	       parse_decoration_option(arg, "tag", &opts->tag))
+ 		;
+ }
+ 
+@@ -1416,6 +1418,8 @@ static void free_decoration_options(const struct decoration_options *opts)
+ 	free(opts->prefix);
+ 	free(opts->suffix);
+ 	free(opts->separator);
++	free(opts->pointer);
++	free(opts->tag);
+ }
+ 
+ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
+diff --git a/t/t4205-log-pretty-formats.sh b/t/t4205-log-pretty-formats.sh
+index 6ba399c5be..16626e4fe9 100755
+--- a/t/t4205-log-pretty-formats.sh
++++ b/t/t4205-log-pretty-formats.sh
+@@ -600,7 +600,12 @@ test_expect_success 'pretty format %decorate' '
+ 	echo "%(decorate:prefix=[ ,suffix= ],separater=; )" >expect4 &&
+ 	git log --format="%(decorate:prefix=[ ,suffix= ],separater=%x3B )" \
+ 		-1 >actual4 &&
+-	test_cmp expect4 actual4
++	test_cmp expect4 actual4 &&
++
++	echo "HEAD->foo bar qux" >expect5 &&
++	git log --format="%(decorate:prefix=,suffix=,separator= ,tag=,pointer=->)" \
++		-1 >actual5 &&
++	test_cmp expect5 actual5
+ '
+ 
+ cat >trailers <<EOF
+-- 
+2.39.3 (Apple Git-145)
+

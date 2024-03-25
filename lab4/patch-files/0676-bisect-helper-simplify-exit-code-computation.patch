@@ -1,0 +1,41 @@
+From 7a8d7aaa47d952f255f29528359ee5e4edb7c6d2 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 12 Jan 2023 16:19:09 +0100
+Subject: [PATCH 0676/2871] bisect--helper: simplify exit code computation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We _already_ have a function to determine whether a given `enum
+bisect_error` value is non-zero but still _actually_ indicates success.
+
+Let's use it instead of duplicating the logic.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bisect.c | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index cc9483e851..09505fc4dc 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -1440,12 +1440,5 @@ int cmd_bisect(int argc, const char **argv, const char *prefix)
+ 		res = fn(argc, argv, prefix);
+ 	}
+ 
+-	/*
+-	 * Handle early success
+-	 * From check_merge_bases > check_good_are_ancestors_of_bad > bisect_next_all
+-	 */
+-	if ((res == BISECT_INTERNAL_SUCCESS_MERGE_BASE) || (res == BISECT_INTERNAL_SUCCESS_1ST_BAD_FOUND))
+-		res = BISECT_OK;
+-
+-	return -res;
++	return is_bisect_success(res) ? 0 : -res;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

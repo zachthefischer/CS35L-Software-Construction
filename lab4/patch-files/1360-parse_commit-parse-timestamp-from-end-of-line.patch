@@ -1,0 +1,120 @@
+From ea1615dfdd70fcc49f8567fd6abdf5fcda2fbc0d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 27 Apr 2023 04:14:09 -0400
+Subject: [PATCH 1360/2871] parse_commit(): parse timestamp from end of line
+
+To find the committer timestamp, we parse left-to-right looking for the
+closing ">" of the email, and then expect the timestamp right after
+that. But we've seen some broken cases in the wild where this fails, but
+we _could_ find the timestamp with a little extra work. E.g.:
+
+  Name <Name<email>> 123456789 -0500
+
+This means that features that rely on the committer timestamp, like
+--since or --until, will treat the commit as happening at time 0 (i.e.,
+1970).
+
+This is doubly confusing because the pretty-print parser learned to
+handle these in 03818a4a94 (split_ident: parse timestamp from end of
+line, 2013-10-14). So printing them via "git show", etc, makes
+everything look normal, but --until, etc are still broken (despite the
+fact that that commit explicitly mentioned --until!).
+
+So let's use the same trick as 03818a4a94: find the end of the line, and
+parse back to the final ">". In theory we could use split_ident_line()
+here, but it's actually a bit more strict. In particular, it requires a
+valid time-zone token, too. That should be present, of course, but we
+wouldn't want to break --until for cases that are working currently.
+
+We might want to teach split_ident_line() to become more lenient there,
+but it would require checking its many callers (since right now they can
+assume that if date_start is non-NULL, so is tz_start).
+
+So for now we'll just reimplement the same trick in the commit parser.
+
+The test is in t4212, which already covers similar cases, courtesy of
+03818a4a94. We'll just adjust the broken commit to munge both the author
+and committer timestamps. Note that we could match (author|committer)
+here, but alternation can't be used portably in sed. Since we wouldn't
+expect to see ">" except as part of an ident line, we can just match
+that character on any line.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit.c               | 24 ++++++++++++++++--------
+ t/t4212-log-corrupt.sh |  7 ++++++-
+ 2 files changed, 22 insertions(+), 9 deletions(-)
+
+diff --git a/commit.c b/commit.c
+index e433c33bb0..a1bc4bd8b9 100644
+--- a/commit.c
++++ b/commit.c
+@@ -91,6 +91,7 @@ struct commit *lookup_commit_reference_by_name(const char *name)
+ static timestamp_t parse_commit_date(const char *buf, const char *tail)
+ {
+ 	const char *dateptr;
++	const char *eol;
+ 
+ 	if (buf + 6 >= tail)
+ 		return 0;
+@@ -102,16 +103,23 @@ static timestamp_t parse_commit_date(const char *buf, const char *tail)
+ 		return 0;
+ 	if (memcmp(buf, "committer", 9))
+ 		return 0;
+-	while (buf < tail && *buf++ != '>')
+-		/* nada */;
+-	if (buf >= tail)
++
++	/*
++	 * Jump to end-of-line so that we can walk backwards to find the
++	 * end-of-email ">". This is more forgiving of malformed cases
++	 * because unexpected characters tend to be in the name and email
++	 * fields.
++	 */
++	eol = memchr(buf, '\n', tail - buf);
++	if (!eol)
+ 		return 0;
+-	dateptr = buf;
+-	while (buf < tail && *buf++ != '\n')
+-		/* nada */;
+-	if (buf >= tail)
++	dateptr = eol;
++	while (dateptr > buf && dateptr[-1] != '>')
++		dateptr--;
++	if (dateptr == buf || dateptr == eol)
+ 		return 0;
+-	/* dateptr < buf && buf[-1] == '\n', so parsing will stop at buf-1 */
++
++	/* dateptr < eol && *eol == '\n', so parsing will stop at eol */
+ 	return parse_timestamp(dateptr, NULL, 10);
+ }
+ 
+diff --git a/t/t4212-log-corrupt.sh b/t/t4212-log-corrupt.sh
+index 8b5433ea74..af4b35ff56 100755
+--- a/t/t4212-log-corrupt.sh
++++ b/t/t4212-log-corrupt.sh
+@@ -9,7 +9,7 @@ test_expect_success 'setup' '
+ 	test_commit foo &&
+ 
+ 	git cat-file commit HEAD >ok.commit &&
+-	sed "/^author /s/>/>-<>/" <ok.commit >broken_email.commit &&
++	sed "s/>/>-<>/" <ok.commit >broken_email.commit &&
+ 
+ 	git hash-object --literally -w -t commit broken_email.commit >broken_email.hash &&
+ 	git update-ref refs/heads/broken_email $(cat broken_email.hash)
+@@ -44,6 +44,11 @@ test_expect_success 'git log --format with broken author email' '
+ 	test_must_be_empty actual.err
+ '
+ 
++test_expect_success '--until handles broken email' '
++	git rev-list --until=1980-01-01 broken_email >actual &&
++	test_must_be_empty actual
++'
++
+ munge_author_date () {
+ 	git cat-file commit "$1" >commit.orig &&
+ 	sed "s/^\(author .*>\) [0-9]*/\1 $2/" <commit.orig >commit.munge &&
+-- 
+2.39.3 (Apple Git-145)
+

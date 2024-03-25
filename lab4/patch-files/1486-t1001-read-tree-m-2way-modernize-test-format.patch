@@ -1,0 +1,30 @@
+From 58db6e450b52cda221a9e8288e61ceb12553e651 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Thu, 18 May 2023 20:03:09 +0000
+Subject: [PATCH 1486/2871] t1001-read-tree-m-2way: modernize test format
+
+Some tests are still using the older four space indent format. Update
+these to use tabs.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1001-read-tree-m-2way.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t1001-read-tree-m-2way.sh b/t/t1001-read-tree-m-2way.sh
+index 3fb1b0c162..88c524f655 100755
+--- a/t/t1001-read-tree-m-2way.sh
++++ b/t/t1001-read-tree-m-2way.sh
+@@ -26,7 +26,7 @@ TEST_PASSES_SANITIZE_LEAK=true
+ . "$TEST_DIRECTORY"/lib-read-tree.sh
+ 
+ read_tree_twoway () {
+-    git read-tree -m "$1" "$2" && git ls-files --stage
++	git read-tree -m "$1" "$2" && git ls-files --stage
+ }
+ 
+ compare_change () {
+-- 
+2.39.3 (Apple Git-145)
+

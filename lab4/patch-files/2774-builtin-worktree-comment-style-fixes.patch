@@ -1,0 +1,44 @@
+From 777f7838415f6e83c350a39b8119e38794a04739 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 29 Jan 2024 12:28:37 -0800
+Subject: [PATCH 2774/2871] builtin/worktree: comment style fixes
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/worktree.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 62b7e26f4b..aba8a2fcaf 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -850,21 +850,21 @@ static int add(int ac, const char **av, const char *prefix)
+ 		const char *s = worktree_basename(path, &n);
+ 		new_branch = xstrndup(s, n);
+ 	} else if (opts.orphan) {
+-		// No-op
++		; /* no-op */
+ 	} else if (opts.detach) {
+-		// Check HEAD
++		/* Check HEAD */
+ 		if (!strcmp(branch, "HEAD"))
+ 			can_use_local_refs(&opts);
+ 	} else if (ac < 2 && new_branch) {
+-		// DWIM: Infer --orphan when repo has no refs.
++		/* DWIM: Infer --orphan when repo has no refs. */
+ 		opts.orphan = dwim_orphan(&opts, !!opt_track, 0);
+ 	} else if (ac < 2) {
+-		// DWIM: Guess branch name from path.
++		/* DWIM: Guess branch name from path. */
+ 		const char *s = dwim_branch(path, &new_branch);
+ 		if (s)
+ 			branch = s;
+ 
+-		// DWIM: Infer --orphan when repo has no refs.
++		/* DWIM: Infer --orphan when repo has no refs. */
+ 		opts.orphan = (!s) && dwim_orphan(&opts, !!opt_track, 1);
+ 	} else if (ac == 2) {
+ 		struct object_id oid;
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+git log --pretty=format:"%cd" $1 | cut -d" " -f6 | sort | uniq -c | awk '{print $2, $1}'
+
+#did this a few days ago so the values are probably a little off
+#git log               --> looks at all the commits
+#--pretty=format:"%cd" --> gives the commit date of each commit
+# $1                   --> passes in an argument, in this case 2012j..2024a
+# git log --pretty=format:"%cd" $1 --> gives the commit date of every commit in the range presented by $1
+
+# this gets piped into cut -d" " -f6, which separates all the fields by spaces and only looks at the last column (which is the time zone)
+
+# this list of time zones gets piped into sort which sorts 
+# then piped into uniq-c, which counts the number of unique values in a row
+
+# output is in the format " count  timezone ", so I switch it around with awk '{print $2, $1}

@@ -1,0 +1,27 @@
+From af181e4dbd130cafc90a8d452dc76aaf8efabb14 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:12 +0000
+Subject: [PATCH 2226/2871] documentation: fix adjective vs. noun
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/commit.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/config/commit.txt b/Documentation/config/commit.txt
+index 2c95573930..bcb46cf630 100644
+--- a/Documentation/config/commit.txt
++++ b/Documentation/config/commit.txt
+@@ -25,5 +25,5 @@ commit.template::
+ 	new commit messages.
+ 
+ commit.verbose::
+-	A boolean or int to specify the level of verbose with `git commit`.
++	A boolean or int to specify the level of verbosity with `git commit`.
+ 	See linkgit:git-commit[1].
+-- 
+2.39.3 (Apple Git-145)
+

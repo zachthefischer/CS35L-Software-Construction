@@ -1,0 +1,33 @@
+From c805f06b0141f6df1543b7433c20b88028169908 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 31 Oct 2022 18:52:21 -0400
+Subject: [PATCH 0281/2871] Documentation: build redo-seen.sh from jch..seen
+
+In a similar spirit as the previous commit, the 'seen' branch gets
+rebuilt by reintegrating topics between 'jch' and the (old) tip of
+'seen'.
+
+Update the instructions on how to generate Meta/redo-seen.sh for the
+first time to reflect this.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/howto/maintain-git.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/howto/maintain-git.txt b/Documentation/howto/maintain-git.txt
+index bac6429fbc..d07c6d44e5 100644
+--- a/Documentation/howto/maintain-git.txt
++++ b/Documentation/howto/maintain-git.txt
+@@ -298,7 +298,7 @@ by doing the following:
+ 
+  - Rebuild 'seen'.
+ 
+-     $ Meta/Reintegrate master..seen >Meta/redo-seen.sh
++     $ Meta/Reintegrate jch..seen >Meta/redo-seen.sh
+ 
+    Edit the result by adding new topics that are not still in 'seen'
+    in the script.  Then
+-- 
+2.39.3 (Apple Git-145)
+

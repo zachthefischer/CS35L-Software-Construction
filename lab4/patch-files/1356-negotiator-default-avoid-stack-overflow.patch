@@ -1,0 +1,86 @@
+From 8e21ff5edb305bcfc12fc782f1c92542c427b624 Mon Sep 17 00:00:00 2001
+From: Han Xin <hanxin.hx@bytedance.com>
+Date: Wed, 26 Apr 2023 21:15:03 +0800
+Subject: [PATCH 1356/2871] negotiator/default: avoid stack overflow
+
+mark_common() in negotiator/default.c may overflow the stack due to
+recursive function calls. Avoid this by instead recursing using a
+heap-allocated data structure.
+
+This is the same case as 4654134976f (negotiator/skipping: avoid
+stack overflow, 2022-10-25)
+
+Reported-by: Xin Xing <xingxin.xx@bytedance.com>
+Signed-off-by: Han Xin <hanxin.hx@bytedance.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ negotiator/default.c | 39 +++++++++++++++++++++++++++++----------
+ 1 file changed, 29 insertions(+), 10 deletions(-)
+
+diff --git a/negotiator/default.c b/negotiator/default.c
+index f4b78eb47d..635cdd6483 100644
+--- a/negotiator/default.c
++++ b/negotiator/default.c
+@@ -55,30 +55,49 @@ static int clear_marks(const char *refname, const struct object_id *oid,
+ static void mark_common(struct negotiation_state *ns, struct commit *commit,
+ 		int ancestors_only, int dont_parse)
+ {
+-	if (commit != NULL && !(commit->object.flags & COMMON)) {
+-		struct object *o = (struct object *)commit;
++	struct prio_queue queue = { NULL };
++
++	if (!commit || (commit->object.flags & COMMON))
++		return;
++
++	prio_queue_put(&queue, commit);
++	if (!ancestors_only) {
++		commit->object.flags |= COMMON;
+ 
+-		if (!ancestors_only)
+-			o->flags |= COMMON;
++		if ((commit->object.flags & SEEN) && !(commit->object.flags & POPPED))
++			ns->non_common_revs--;
++	}
++	while ((commit = prio_queue_get(&queue))) {
++		struct object *o = (struct object *)commit;
+ 
+ 		if (!(o->flags & SEEN))
+ 			rev_list_push(ns, commit, SEEN);
+ 		else {
+ 			struct commit_list *parents;
+ 
+-			if (!ancestors_only && !(o->flags & POPPED))
+-				ns->non_common_revs--;
+ 			if (!o->parsed && !dont_parse)
+ 				if (repo_parse_commit(the_repository, commit))
+-					return;
++					continue;
+ 
+ 			for (parents = commit->parents;
+ 					parents;
+-					parents = parents->next)
+-				mark_common(ns, parents->item, 0,
+-					    dont_parse);
++					parents = parents->next) {
++				struct commit *p = parents->item;
++
++				if (p->object.flags & COMMON)
++					continue;
++
++				p->object.flags |= COMMON;
++
++				if ((p->object.flags & SEEN) && !(p->object.flags & POPPED))
++					ns->non_common_revs--;
++
++				prio_queue_put(&queue, parents->item);
++			}
+ 		}
+ 	}
++
++	clear_prio_queue(&queue);
+ }
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

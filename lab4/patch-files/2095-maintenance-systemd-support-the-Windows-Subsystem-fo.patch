@@ -1,0 +1,56 @@
+From 5e8515e8e8d10f882d1e8ffeb34b8348426515ed Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Sun, 10 Sep 2023 08:30:20 +0000
+Subject: [PATCH 2095/2871] maintenance(systemd): support the Windows Subsystem
+ for Linux
+
+When running in the Windows Subsystem for Linux (WSL), it is usually
+necessary to use the Git Credential Manager for authentication when
+performing the background fetches.
+
+This requires interoperability between the Windows Subsystem for Linux
+and the Windows host to work, which uses so-called vsocks, i.e. sockets
+intended for communcations between virtual machines and the host they
+are running on.
+
+However, when Git is configured to run background maintenance via
+`systemd`, the address families available to those maintenance processes
+are restricted, and did not include `AF_VSOCK`. This leads to problems
+e.g. when a background fetch tries to access github.com:
+
+	systemd[437]: Starting Optimize Git repositories data...
+	git[747387]: WSL (747387) ERROR: UtilBindVsockAnyPort:285: socket failed 97
+	git[747381]: fatal: could not read Username for 'https://github.com': No such device or address
+	git[747381]: error: failed to prefetch remotes
+	git[747381]: error: task 'prefetch' failed
+	systemd[437]: git-maintenance@hourly.service: Main process exited, code=exited, status=1/FAILURE
+	systemd[437]: git-maintenance@hourly.service: Failed with result 'exit-code'.
+	systemd[437]: Failed to start Optimize Git repositories data.
+
+Address this (pun intended) by adding the `AF_VSOCK` address family to
+the allow list.
+
+This fixes https://github.com/microsoft/git/issues/604.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 5c4315f0d8..719cae9a88 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -2397,7 +2397,7 @@ static int systemd_timer_write_unit_templates(const char *exec_path)
+ 	       "LockPersonality=yes\n"
+ 	       "MemoryDenyWriteExecute=yes\n"
+ 	       "NoNewPrivileges=yes\n"
+-	       "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\n"
++	       "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_VSOCK\n"
+ 	       "RestrictNamespaces=yes\n"
+ 	       "RestrictRealtime=yes\n"
+ 	       "RestrictSUIDSGID=yes\n"
+-- 
+2.39.3 (Apple Git-145)
+

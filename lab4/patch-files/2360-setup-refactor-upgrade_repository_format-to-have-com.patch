@@ -1,0 +1,78 @@
+From 4ce14e13250e824b7d410d9bff88061525346a15 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 6 Nov 2023 11:46:01 +0100
+Subject: [PATCH 2360/2871] setup: refactor `upgrade_repository_format()` to
+ have common exit
+
+The `upgrade_repository_format()` function has multiple exit paths,
+which means that there is no common cleanup of acquired resources.
+While this isn't much of a problem right now, we're about to fix a
+memory leak that would require us to free the resource in every one of
+those exit paths.
+
+Refactor the code to have a common exit path so that the subsequent
+memory leak fix becomes easier to implement.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ setup.c | 31 ++++++++++++++++++++-----------
+ 1 file changed, 20 insertions(+), 11 deletions(-)
+
+diff --git a/setup.c b/setup.c
+index 2e607632db..b9474b163a 100644
+--- a/setup.c
++++ b/setup.c
+@@ -693,29 +693,38 @@ int upgrade_repository_format(int target_version)
+ 	struct strbuf err = STRBUF_INIT;
+ 	struct strbuf repo_version = STRBUF_INIT;
+ 	struct repository_format repo_fmt = REPOSITORY_FORMAT_INIT;
++	int ret;
+ 
+ 	strbuf_git_common_path(&sb, the_repository, "config");
+ 	read_repository_format(&repo_fmt, sb.buf);
+ 	strbuf_release(&sb);
+ 
+-	if (repo_fmt.version >= target_version)
+-		return 0;
++	if (repo_fmt.version >= target_version) {
++		ret = 0;
++		goto out;
++	}
+ 
+ 	if (verify_repository_format(&repo_fmt, &err) < 0) {
+-		error("cannot upgrade repository format from %d to %d: %s",
+-		      repo_fmt.version, target_version, err.buf);
+-		strbuf_release(&err);
+-		return -1;
++		ret = error("cannot upgrade repository format from %d to %d: %s",
++			    repo_fmt.version, target_version, err.buf);
++		goto out;
++	}
++	if (!repo_fmt.version && repo_fmt.unknown_extensions.nr) {
++		ret = error("cannot upgrade repository format: "
++			    "unknown extension %s",
++			    repo_fmt.unknown_extensions.items[0].string);
++		goto out;
+ 	}
+-	if (!repo_fmt.version && repo_fmt.unknown_extensions.nr)
+-		return error("cannot upgrade repository format: "
+-			     "unknown extension %s",
+-			     repo_fmt.unknown_extensions.items[0].string);
+ 
+ 	strbuf_addf(&repo_version, "%d", target_version);
+ 	git_config_set("core.repositoryformatversion", repo_version.buf);
++
++	ret = 1;
++
++out:
+ 	strbuf_release(&repo_version);
+-	return 1;
++	strbuf_release(&err);
++	return ret;
+ }
+ 
+ static void init_repository_format(struct repository_format *format)
+-- 
+2.39.3 (Apple Git-145)
+

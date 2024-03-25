@@ -1,0 +1,56 @@
+From eddd134ce3ad18c147fe0d0dc5e6b3118b8f61b8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Thu, 11 Jan 2024 13:40:17 +0100
+Subject: [PATCH 2677/2871] advice: fix an unexpected leading space
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This space was introduced, presumably unintentionally, in b3b18d1621
+(advice: revamp advise API, 2020-03-02)
+
+I notice this space due to confuse diff outputs while doing some
+changes to enum advice_type.
+
+As a reference, a recent change we have to that enum is:
+
+    $ git show 35f0383
+
+    ...
+    diff --git a/advice.h b/advice.h
+    index 0f584163f5..2affbe1426 100644
+    --- a/advice.h
+    +++ b/advice.h
+    @@ -49,6 +49,7 @@ struct string_list;
+	    ADVICE_UPDATE_SPARSE_PATH,
+	    ADVICE_WAITING_FOR_EDITOR,
+	    ADVICE_SKIPPED_CHERRY_PICKS,
+    +       ADVICE_WORKTREE_ADD_ORPHAN,
+     };
+
+Note the hunk header, instead of a much more expected:
+
+    @@ -49,6 +49,7 @@ enum advice_type
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ advice.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/advice.h b/advice.h
+index 9396bcdcf1..74d44d1156 100644
+--- a/advice.h
++++ b/advice.h
+@@ -10,7 +10,7 @@ struct string_list;
+  * Add the new config variable to Documentation/config/advice.txt.
+  * Call advise_if_enabled to print your advice.
+  */
+- enum advice_type {
++enum advice_type {
+ 	ADVICE_ADD_EMBEDDED_REPO,
+ 	ADVICE_ADD_EMPTY_PATHSPEC,
+ 	ADVICE_ADD_IGNORED_FILE,
+-- 
+2.39.3 (Apple Git-145)
+

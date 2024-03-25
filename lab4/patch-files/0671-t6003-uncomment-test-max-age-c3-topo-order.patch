@@ -1,0 +1,65 @@
+From b3594800ebc586ee7b3e2196694a55bb36c32d30 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Thu, 12 Jan 2023 00:32:40 +0100
+Subject: [PATCH 0671/2871] t6003: uncomment test '--max-age=c3, --topo-order'
+
+Test '--max-age=c3, --topo-order' in t6003-rev-list-topo-order.sh has
+been commented out as failing since its introduction in [1].  However,
+the test is successful at least since commit [2] -- bisecting further is
+harder because of incompatibility of such old Git code with modern
+header file <openssl/bn.h> [3].
+
+Uncomment this test to gain test coverage.
+
+[1] f573571a21 ([PATCH] Add t/t6003 with some --topo-order tests,
+    2005-07-07)
+[2] 765ac8ec46 (Rip out merge-order and make "git log <paths>..." work
+    again., 2006-02-28)
+[3] BIGNUM used in git's `epoch.c` which was removed in [2] changed
+    significantly between OpenSSL 1.0.2 and OpenSSL 1.1.0
+    See also https://stackoverflow.com/a/42295243/1083697 and
+    https://lore.kernel.org/git/Y71qiCs+oAS2OegH@coredump.intra.peff.net/
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6003-rev-list-topo-order.sh | 23 ++++++++++-------------
+ 1 file changed, 10 insertions(+), 13 deletions(-)
+
+diff --git a/t/t6003-rev-list-topo-order.sh b/t/t6003-rev-list-topo-order.sh
+index 1f7d7dd20c..5cf2cee74d 100755
+--- a/t/t6003-rev-list-topo-order.sh
++++ b/t/t6003-rev-list-topo-order.sh
+@@ -326,19 +326,16 @@ a2
+ c3
+ EOF
+ 
+-#
+-# this test fails on --topo-order - a fix is required
+-#
+-#test_output_expect_success '--max-age=c3, --topo-order' "git rev-list --topo-order --max-age=$(commit_date c3) l5" <<EOF
+-#l5
+-#l4
+-#l3
+-#a4
+-#c3
+-#b4
+-#a3
+-#a2
+-#EOF
++test_output_expect_success '--max-age=c3, --topo-order' "git rev-list --topo-order --max-age=$(commit_date c3) l5" <<EOF
++l5
++l4
++l3
++a4
++c3
++b4
++a3
++a2
++EOF
+ 
+ test_output_expect_success 'one specified head reachable from another a4, c3, --topo-order' "list_duplicates git rev-list --topo-order a4 c3" <<EOF
+ EOF
+-- 
+2.39.3 (Apple Git-145)
+

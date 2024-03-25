@@ -1,0 +1,55 @@
+From 156e28b36d424a26b4548de636fa548b14defa71 Mon Sep 17 00:00:00 2001
+From: Jeff Hostetler <jeffhostetler@github.com>
+Date: Fri, 2 Feb 2024 18:04:54 +0000
+Subject: [PATCH 2800/2871] sparse-index: pass string length to
+ index_file_exists()
+
+The call to index_file_exists() in the loop in expand_to_path() passes
+the wrong string length.  Let's fix that.
+
+The loop in expand_to_path() searches the name-hash for each
+sub-directory prefix in the provided pathname. That is, by searching
+for "dir1/" then "dir1/dir2/" then "dir1/dir2/dir3/" and so on until
+it finds a cache-entry representing a sparse directory.
+
+The code creates "strbuf path_mutable" to contain the working pathname
+and modifies the buffer in-place by temporarily replacing the character
+following each successive "/" with NUL for the duration of the call to
+index_file_exists().
+
+It does not update the strbuf.len during this substitution.
+
+Pass the patched length of the prefix path instead.
+
+Signed-off-by: Jeff Hostetler <jeffhostetler@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sparse-index.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sparse-index.c b/sparse-index.c
+index affc4048f2..e7908cb792 100644
+--- a/sparse-index.c
++++ b/sparse-index.c
+@@ -326,8 +326,9 @@ void expand_to_path(struct index_state *istate,
+ 		replace++;
+ 		temp = *replace;
+ 		*replace = '\0';
++		substr_len = replace - path_mutable.buf;
+ 		if (index_file_exists(istate, path_mutable.buf,
+-				      path_mutable.len, icase)) {
++				      substr_len, icase)) {
+ 			/*
+ 			 * We found a parent directory in the name-hash
+ 			 * hashtable, because only sparse directory entries
+@@ -340,7 +341,6 @@ void expand_to_path(struct index_state *istate,
+ 		}
+ 
+ 		*replace = temp;
+-		substr_len = replace - path_mutable.buf;
+ 	}
+ 
+ cleanup:
+-- 
+2.39.3 (Apple Git-145)
+

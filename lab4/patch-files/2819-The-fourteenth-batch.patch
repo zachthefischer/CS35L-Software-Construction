@@ -1,0 +1,65 @@
+From 235986be822c9f8689be2e9a0b7804d0b1b6d821 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 6 Feb 2024 14:31:50 -0800
+Subject: [PATCH 2819/2871] The fourteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.44.0.txt | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.44.0.txt b/Documentation/RelNotes/2.44.0.txt
+index 7d3b75e796..8615306eed 100644
+--- a/Documentation/RelNotes/2.44.0.txt
++++ b/Documentation/RelNotes/2.44.0.txt
+@@ -81,6 +81,9 @@ UI, Workflows & Features
+    and the other version are available to custom 3-way merge driver
+    via %S, %X, and %Y placeholders.
+ 
++ * The write codepath for the reftable data learned to honor
++   core.fsync configuration.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -134,6 +137,10 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * Tests on ref API are moved around to prepare for reftable.
+ 
++ * The Makefile often had to say "-L$(path) -R$(path)" that repeats
++   the path to the same library directory for link time and runtime.
++   A Makefile template is used to reduce such repetition.
++
+ 
+ Fixes since v2.43
+ -----------------
+@@ -265,6 +272,18 @@ Fixes since v2.43
+    plan to remove it in the future, which was not our intention.
+    (merge 0009542cab jc/ls-files-doc-update later to maint).
+ 
++ * "git diff --no-index file1 file2" segfaulted while invoking the
++   external diff driver, which has been corrected.
++   (merge 85a9a63c92 jk/diff-external-with-no-index later to maint).
++
++ * Rewrite //-comments to /* comments */ in files whose comments
++   prevalently use the latter.
++   (merge de65079d7b jc/comment-style-fixes later to maint).
++
++ * Cirrus CI jobs started breaking because we specified version of
++   FreeBSD that is no longer available, which has been corrected.
++   (merge 81fffb66d3 cb/use-freebsd-13-2-at-cirrus-ci later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 50f1abcff6 js/packfile-h-typofix later to maint).
+    (merge cbf498eb53 jb/reflog-expire-delete-dry-run-options later to maint).
+@@ -305,3 +324,7 @@ Fixes since v2.43
+    (merge af3d2c160f jc/majordomo-to-subspace later to maint).
+    (merge ee9895b0ff sd/negotiate-trace-fix later to maint).
+    (merge 976d0251ce jc/coc-whitespace-fix later to maint).
++   (merge 9023198280 jt/p4-spell-re-with-raw-string later to maint).
++   (merge 36c9c44fa4 tb/pack-bitmap-drop-unused-struct-member later to maint).
++   (merge 19ed0dff8f js/win32-retry-pipe-write-on-enospc later to maint).
++   (merge 3cb4384683 jc/t0091-with-unknown-git later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,31 @@
+From 1a66d8c6f658051a02b6d8f024e80e06fccdcd11 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:47 +0000
+Subject: [PATCH 0744/2871] rebase: remove --allow-empty-message from
+ incompatible opts
+
+--allow-empty-message was turned into a no-op and even documented
+as such; the flag is simply ignored.  Since the flag is ignored, it
+shouldn't be documented as being incompatible with other flags.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 6490bc96a1..7d01d1412d 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -647,7 +647,6 @@ are incompatible with the following options:
+  * --merge
+  * --strategy
+  * --strategy-option
+- * --allow-empty-message
+  * --[no-]autosquash
+  * --rebase-merges
+  * --interactive
+-- 
+2.39.3 (Apple Git-145)
+

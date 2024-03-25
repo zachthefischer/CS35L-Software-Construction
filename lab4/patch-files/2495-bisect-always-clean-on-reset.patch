@@ -1,0 +1,83 @@
+From daaa03e54c481b4906b4b6a80d89dbb5a239e509 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 01:53:41 -0500
+Subject: [PATCH 2495/2871] bisect: always clean on reset
+
+Usually "bisect reset" cleans up any refs/bisect/ refs, along with
+meta-files like .git/BISECT_LOG. But it only does so after deciding that
+a bisection is active, which it does by reading BISECT_START. This is
+usually fine, but it's possible to get into a confusing state if the
+BISECT_START file is gone, but other cruft is left (this might be due to
+a bug, or a system crash, etc).
+
+And since "bisect reset" refuses to do anything in this state, the user
+has no easy way to clean up the leftover cruft. While another "bisect
+start" would clear the state, in the interim it can be annoying, as
+other tools (like our bash prompt code) think we are bisecting, and
+for-each-ref output may be polluted with refs/bisect/ entries.
+
+Further adding to the confusion is that running "bisect reset $some_ref"
+skips the BISECT_START check. So it never realizes that there's no
+bisection active and does the cleanup anyway!
+
+So let's just make sure we always do the cleanup, whether we looked at
+BISECT_START or not. If the user doesn't give us a commit to reset to,
+we'll still say "We are not bisecting" and skip the call to "git
+checkout".
+
+Reported-by: Janik Haag <janik@aq0.de>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bisect.c            | 9 ++++-----
+ t/t6030-bisect-porcelain.sh | 6 ++++++
+ 2 files changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index 7301740267..0bcaadc658 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -227,11 +227,10 @@ static int bisect_reset(const char *commit)
+ 	struct strbuf branch = STRBUF_INIT;
+ 
+ 	if (!commit) {
+-		if (strbuf_read_file(&branch, git_path_bisect_start(), 0) < 1) {
++		if (!strbuf_read_file(&branch, git_path_bisect_start(), 0))
+ 			printf(_("We are not bisecting.\n"));
+-			return 0;
+-		}
+-		strbuf_rtrim(&branch);
++		else
++			strbuf_rtrim(&branch);
+ 	} else {
+ 		struct object_id oid;
+ 
+@@ -240,7 +239,7 @@ static int bisect_reset(const char *commit)
+ 		strbuf_addstr(&branch, commit);
+ 	}
+ 
+-	if (!ref_exists("BISECT_HEAD")) {
++	if (branch.len && !ref_exists("BISECT_HEAD")) {
+ 		struct child_process cmd = CHILD_PROCESS_INIT;
+ 
+ 		cmd.git_cmd = 1;
+diff --git a/t/t6030-bisect-porcelain.sh b/t/t6030-bisect-porcelain.sh
+index 3ba4fdf615..c07776810a 100755
+--- a/t/t6030-bisect-porcelain.sh
++++ b/t/t6030-bisect-porcelain.sh
+@@ -147,6 +147,12 @@ test_expect_success 'bisect reset when not bisecting' '
+ 	cmp branch.expect branch.output
+ '
+ 
++test_expect_success 'bisect reset cleans up even when not bisecting' '
++	echo garbage >.git/BISECT_LOG &&
++	git bisect reset &&
++	test_path_is_missing .git/BISECT_LOG
++'
++
+ test_expect_success 'bisect reset removes packed refs' '
+ 	git bisect reset &&
+ 	git bisect start &&
+-- 
+2.39.3 (Apple Git-145)
+

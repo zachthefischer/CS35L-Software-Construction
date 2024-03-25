@@ -1,0 +1,103 @@
+From d3beb61f939ffcdbefc02d9ddf9d7a46102ec663 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 13 Dec 2022 06:14:23 -0500
+Subject: [PATCH 0561/2871] list-objects-filter: mark unused parameters in
+ virtual functions
+
+The "struct filter" abstract type defines several virtual function
+pointers. Not all of the concrete functions need every parameter, but
+they have to conform to the generic interface. Mark unused ones to
+silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ list-objects-filter.c | 30 +++++++++++++++---------------
+ 1 file changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/list-objects-filter.c b/list-objects-filter.c
+index b9543545ca..2bbac622be 100644
+--- a/list-objects-filter.c
++++ b/list-objects-filter.c
+@@ -70,13 +70,13 @@ struct filter {
+ };
+ 
+ static enum list_objects_filter_result filter_blobs_none(
+-	struct repository *r,
++	struct repository *r UNUSED,
+ 	enum list_objects_filter_situation filter_situation,
+ 	struct object *obj,
+-	const char *pathname,
+-	const char *filename,
++	const char *pathname UNUSED,
++	const char *filename UNUSED,
+ 	struct oidset *omits,
+-	void *filter_data_)
++	void *filter_data_ UNUSED)
+ {
+ 	switch (filter_situation) {
+ 	default:
+@@ -112,7 +112,7 @@ static enum list_objects_filter_result filter_blobs_none(
+ }
+ 
+ static void filter_blobs_none__init(
+-	struct list_objects_filter_options *filter_options,
++	struct list_objects_filter_options *filter_options UNUSED,
+ 	struct filter *filter)
+ {
+ 	filter->filter_object_fn = filter_blobs_none;
+@@ -159,11 +159,11 @@ static int filter_trees_update_omits(
+ }
+ 
+ static enum list_objects_filter_result filter_trees_depth(
+-	struct repository *r,
++	struct repository *r UNUSED,
+ 	enum list_objects_filter_situation filter_situation,
+ 	struct object *obj,
+-	const char *pathname,
+-	const char *filename,
++	const char *pathname UNUSED,
++	const char *filename UNUSED,
+ 	struct oidset *omits,
+ 	void *filter_data_)
+ {
+@@ -274,8 +274,8 @@ static enum list_objects_filter_result filter_blobs_limit(
+ 	struct repository *r,
+ 	enum list_objects_filter_situation filter_situation,
+ 	struct object *obj,
+-	const char *pathname,
+-	const char *filename,
++	const char *pathname UNUSED,
++	const char *filename UNUSED,
+ 	struct oidset *omits,
+ 	void *filter_data_)
+ {
+@@ -554,12 +554,12 @@ struct filter_object_type_data {
+ };
+ 
+ static enum list_objects_filter_result filter_object_type(
+-	struct repository *r,
++	struct repository *r UNUSED,
+ 	enum list_objects_filter_situation filter_situation,
+ 	struct object *obj,
+-	const char *pathname,
+-	const char *filename,
+-	struct oidset *omits,
++	const char *pathname UNUSED,
++	const char *filename UNUSED,
++	struct oidset *omits UNUSED,
+ 	void *filter_data_)
+ {
+ 	struct filter_object_type_data *filter_data = filter_data_;
+@@ -675,7 +675,7 @@ static enum list_objects_filter_result filter_combine(
+ 	struct object *obj,
+ 	const char *pathname,
+ 	const char *filename,
+-	struct oidset *omits,
++	struct oidset *omits UNUSED,
+ 	void *filter_data)
+ {
+ 	struct combine_filter_data *d = filter_data;
+-- 
+2.39.3 (Apple Git-145)
+

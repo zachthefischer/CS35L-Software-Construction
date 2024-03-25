@@ -1,0 +1,48 @@
+From a361660aeff6dcf85c92eb1f7bd7645ec6fc60bc Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 13 Dec 2022 06:13:08 -0500
+Subject: [PATCH 0558/2871] xdiff: drop unused parameter in def_ff()
+
+The def_ff() function is the default "find_func" for finding hunk
+headers. It has never used its "priv" argument since it was introduced
+in f258475a6e (Per-path attribute based hunk header selection.,
+2007-07-06). But back then we used a function pointer to switch between
+a caller-provided function and the default, so the two had to conform to
+the same interface.
+
+In ff2981f724 (xdiff: factor out match_func_rec(), 2016-05-28), that
+pointer indirection went away in favor of code which directly calls
+either of the two functions. So there's no need for def_ff() to retain
+this unused parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ xdiff/xemit.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/xdiff/xemit.c b/xdiff/xemit.c
+index c4ccd68d47..75f0fe4986 100644
+--- a/xdiff/xemit.c
++++ b/xdiff/xemit.c
+@@ -95,7 +95,7 @@ xdchange_t *xdl_get_hunk(xdchange_t **xscr, xdemitconf_t const *xecfg)
+ }
+ 
+ 
+-static long def_ff(const char *rec, long len, char *buf, long sz, void *priv)
++static long def_ff(const char *rec, long len, char *buf, long sz)
+ {
+ 	if (len > 0 &&
+ 			(isalpha((unsigned char)*rec) || /* identifier? */
+@@ -117,7 +117,7 @@ static long match_func_rec(xdfile_t *xdf, xdemitconf_t const *xecfg, long ri,
+ 	const char *rec;
+ 	long len = xdl_get_rec(xdf, ri, &rec);
+ 	if (!xecfg->find_func)
+-		return def_ff(rec, len, buf, sz, xecfg->find_func_priv);
++		return def_ff(rec, len, buf, sz);
+ 	return xecfg->find_func(rec, len, buf, sz, xecfg->find_func_priv);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

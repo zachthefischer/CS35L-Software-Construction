@@ -1,0 +1,48 @@
+From 7bc49e8f553c0f76cccd142c33715ee8f1b15811 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 25 Sep 2023 11:50:59 +0000
+Subject: [PATCH 2149/2871] coverity: allow overriding the Coverity project
+
+By default, the builds are submitted to the `git` project at
+https://scan.coverity.com/projects/git.
+
+The Git for Windows project would like to use this workflow, too,
+though, and needs the builds to be submitted to the `git-for-windows`
+Coverity project.
+
+To that end, allow configuring the Coverity project name via the
+repository variable, you guessed it, `COVERITY_PROJECT`. The default if
+that variable is not configured or has an empty value is still `git`.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/coverity.yml | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/.github/workflows/coverity.yml b/.github/workflows/coverity.yml
+index 4bc1572f04..55a3a8f5ac 100644
+--- a/.github/workflows/coverity.yml
++++ b/.github/workflows/coverity.yml
+@@ -11,6 +11,9 @@ name: Coverity
+ # `COVERITY_SCAN_EMAIL` and `COVERITY_SCAN_TOKEN`. The former specifies the
+ # email to which the Coverity reports should be sent and the latter can be
+ # obtained from the Project Settings tab of the Coverity project).
++#
++# By default, the builds are submitted to the Coverity project `git`. To override this,
++# set the repository variable `COVERITY_PROJECT`.
+ 
+ on:
+   push:
+@@ -20,7 +23,7 @@ jobs:
+     if: contains(fromJSON(vars.ENABLE_COVERITY_SCAN_FOR_BRANCHES || '[""]'), github.ref_name)
+     runs-on: ubuntu-latest
+     env:
+-      COVERITY_PROJECT: git
++      COVERITY_PROJECT: ${{ vars.COVERITY_PROJECT || 'git' }}
+       COVERITY_LANGUAGE: cxx
+       COVERITY_PLATFORM: linux64
+     steps:
+-- 
+2.39.3 (Apple Git-145)
+

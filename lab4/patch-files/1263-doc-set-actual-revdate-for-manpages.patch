@@ -1,0 +1,46 @@
+From 28fde3a1f4322993d731e2b2b6543ba0e24a5788 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Thu, 13 Apr 2023 01:47:22 -0600
+Subject: [PATCH 1263/2871] doc: set actual revdate for manpages
+
+manpages expect the date of the last revision, if that is not found
+DocBook Stylesheets go through a series of hacks to generate one with
+the format `%d/%d/%Y` which is not ideal.
+
+In addition to this format not being standard, different tools generate
+dates with different formats.
+
+There's no need for any confusion if we specify the revision date, so
+let's do so.
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/Makefile b/Documentation/Makefile
+index 3133ea3182..b629176d7d 100644
+--- a/Documentation/Makefile
++++ b/Documentation/Makefile
+@@ -144,13 +144,16 @@ man5dir = $(mandir)/man5
+ man7dir = $(mandir)/man7
+ # DESTDIR =
+ 
++GIT_DATE := $(shell git show --quiet --pretty='%as')
++
+ ASCIIDOC = asciidoc
+ ASCIIDOC_EXTRA =
+ ASCIIDOC_HTML = xhtml11
+ ASCIIDOC_DOCBOOK = docbook
+ ASCIIDOC_CONF = -f asciidoc.conf
+ ASCIIDOC_COMMON = $(ASCIIDOC) $(ASCIIDOC_EXTRA) $(ASCIIDOC_CONF) \
+-		-amanmanual='Git Manual' -amansource='Git $(GIT_VERSION)'
++		-amanmanual='Git Manual' -amansource='Git $(GIT_VERSION)' \
++		-arevdate='$(GIT_DATE)'
+ ASCIIDOC_DEPS = asciidoc.conf GIT-ASCIIDOCFLAGS
+ TXT_TO_HTML = $(ASCIIDOC_COMMON) -b $(ASCIIDOC_HTML)
+ TXT_TO_XML = $(ASCIIDOC_COMMON) -b $(ASCIIDOC_DOCBOOK)
+-- 
+2.39.3 (Apple Git-145)
+

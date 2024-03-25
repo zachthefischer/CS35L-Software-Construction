@@ -1,0 +1,70 @@
+From dce7b311266951fc2fb7a1dcbe89416ba8cebbb5 Mon Sep 17 00:00:00 2001
+From: Adam Szkoda <adaszko@gmail.com>
+Date: Wed, 25 Jan 2023 12:40:50 +0000
+Subject: [PATCH 0741/2871] ssh signing: better error message when key not in
+ agent
+
+When signing a commit with a SSH key, with the private key missing from
+ssh-agent, a confusing error message is produced:
+
+    error: Load key
+    "/var/folders/t5/cscwwl_n3n1_8_5j_00x_3t40000gn/T//.git_signing_key_tmpkArSj7":
+    invalid format? fatal: failed to write commit object
+
+The temporary file .git_signing_key_tmpkArSj7 created by git contains a
+valid *public* key.  The error message comes from `ssh-keygen -Y sign' and
+is caused by a fallback mechanism in ssh-keygen whereby it tries to
+interpret .git_signing_key_tmpkArSj7 as a *private* key if it can't find in
+the agent [1].  A fix is scheduled to be released in OpenSSH 9.1. All that
+needs to be done is to pass an additional backward-compatible option -U to
+'ssh-keygen -Y sign' call.  With '-U', ssh-keygen always interprets the file
+as public key and expects to find the private key in the agent.
+
+As a result, when the private key is missing from the agent, a more accurate
+error message gets produced:
+
+    error: Couldn't find key in agent
+
+[1] https://bugzilla.mindrot.org/show_bug.cgi?id=3429
+
+Signed-off-by: Adam Szkoda <adaszko@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gpg-interface.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/gpg-interface.c b/gpg-interface.c
+index f877a1ea56..687236430b 100644
+--- a/gpg-interface.c
++++ b/gpg-interface.c
+@@ -998,6 +998,7 @@ static int sign_buffer_ssh(struct strbuf *buffer, struct strbuf *signature,
+ 	char *ssh_signing_key_file = NULL;
+ 	struct strbuf ssh_signature_filename = STRBUF_INIT;
+ 	const char *literal_key = NULL;
++	int literal_ssh_key = 0;
+ 
+ 	if (!signing_key || signing_key[0] == '\0')
+ 		return error(
+@@ -1005,6 +1006,7 @@ static int sign_buffer_ssh(struct strbuf *buffer, struct strbuf *signature,
+ 
+ 	if (is_literal_ssh_key(signing_key, &literal_key)) {
+ 		/* A literal ssh key */
++		literal_ssh_key = 1;
+ 		key_file = mks_tempfile_t(".git_signing_key_tmpXXXXXX");
+ 		if (!key_file)
+ 			return error_errno(
+@@ -1039,8 +1041,10 @@ static int sign_buffer_ssh(struct strbuf *buffer, struct strbuf *signature,
+ 		     "-Y", "sign",
+ 		     "-n", "git",
+ 		     "-f", ssh_signing_key_file,
+-		     buffer_file->filename.buf,
+ 		     NULL);
++	if (literal_ssh_key)
++		strvec_push(&signer.args, "-U");
++	strvec_push(&signer.args, buffer_file->filename.buf);
+ 
+ 	sigchain_push(SIGPIPE, SIG_IGN);
+ 	ret = pipe_command(&signer, NULL, 0, NULL, 0, &signer_stderr, 0);
+-- 
+2.39.3 (Apple Git-145)
+

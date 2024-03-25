@@ -1,0 +1,126 @@
+From 69c5f17f11a2afe6b56b04f5a4377e4332858cde Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 6 Oct 2022 09:23:19 -0400
+Subject: [PATCH 0051/2871] attr: drop DEBUG_ATTR code
+
+Since its inception in d0bfd026a8 (Add basic infrastructure to assign
+attributes to paths, 2007-04-12), the attribute code carries a little
+bit of debug code that is conditionally compiled only when DEBUG_ATTR is
+set. But since you have to know about it and make a special build of Git
+to use it, it's not clear that it's helping anyone (and there are very
+few mentions of it on the list over the years).
+
+Meanwhile, it causes slight headaches. Since it's not built as part of a
+regular compile, it's subject to bitrot. E.g., this was dealt with in
+712efb1a42 (attr: make it build with DEBUG_ATTR again, 2013-01-15), and
+it currently fails to build with DEVELOPER=1 since e810e06357 (attr:
+tighten const correctness with git_attr and match_attr, 2017-01-27).
+
+And it causes confusion with -Wunused-parameter; the "what" parameter of
+fill_one() is unused in a normal build, but needed in a debug build.
+
+Let's just get rid of this code (and the now-useless parameter).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ attr.c | 41 +++--------------------------------------
+ 1 file changed, 3 insertions(+), 38 deletions(-)
+
+diff --git a/attr.c b/attr.c
+index 8250b06953..42ad6de8c7 100644
+--- a/attr.c
++++ b/attr.c
+@@ -23,10 +23,6 @@ static const char git_attr__unknown[] = "(builtin)unknown";
+ #define ATTR__UNSET NULL
+ #define ATTR__UNKNOWN git_attr__unknown
+ 
+-#ifndef DEBUG_ATTR
+-#define DEBUG_ATTR 0
+-#endif
+-
+ struct git_attr {
+ 	int attr_nr; /* unique attribute number */
+ 	char name[FLEX_ARRAY]; /* attribute name */
+@@ -807,33 +803,6 @@ static struct attr_stack *read_attr(struct index_state *istate,
+ 	return res;
+ }
+ 
+-#if DEBUG_ATTR
+-static void debug_info(const char *what, struct attr_stack *elem)
+-{
+-	fprintf(stderr, "%s: %s\n", what, elem->origin ? elem->origin : "()");
+-}
+-static void debug_set(const char *what, const char *match, struct git_attr *attr, const void *v)
+-{
+-	const char *value = v;
+-
+-	if (ATTR_TRUE(value))
+-		value = "set";
+-	else if (ATTR_FALSE(value))
+-		value = "unset";
+-	else if (ATTR_UNSET(value))
+-		value = "unspecified";
+-
+-	fprintf(stderr, "%s: %s => %s (%s)\n",
+-		what, attr->name, (char *) value, match);
+-}
+-#define debug_push(a) debug_info("push", (a))
+-#define debug_pop(a) debug_info("pop", (a))
+-#else
+-#define debug_push(a) do { ; } while (0)
+-#define debug_pop(a) do { ; } while (0)
+-#define debug_set(a,b,c,d) do { ; } while (0)
+-#endif /* DEBUG_ATTR */
+-
+ static const char *git_etc_gitattributes(void)
+ {
+ 	static const char *system_wide;
+@@ -954,7 +923,6 @@ static void prepare_attr_stack(struct index_state *istate,
+ 		    (!namelen || path[namelen] == '/'))
+ 			break;
+ 
+-		debug_pop(elem);
+ 		*stack = elem->prev;
+ 		attr_stack_free(elem);
+ 	}
+@@ -1028,7 +996,7 @@ static int path_matches(const char *pathname, int pathlen,
+ 
+ static int macroexpand_one(struct all_attrs_item *all_attrs, int nr, int rem);
+ 
+-static int fill_one(const char *what, struct all_attrs_item *all_attrs,
++static int fill_one(struct all_attrs_item *all_attrs,
+ 		    const struct match_attr *a, int rem)
+ {
+ 	int i;
+@@ -1039,9 +1007,6 @@ static int fill_one(const char *what, struct all_attrs_item *all_attrs,
+ 		const char *v = a->state[i].setto;
+ 
+ 		if (*n == ATTR__UNKNOWN) {
+-			debug_set(what,
+-				  a->is_macro ? a->u.attr->name : a->u.pat.pattern,
+-				  attr, v);
+ 			*n = v;
+ 			rem--;
+ 			rem = macroexpand_one(all_attrs, attr->attr_nr, rem);
+@@ -1064,7 +1029,7 @@ static int fill(const char *path, int pathlen, int basename_offset,
+ 				continue;
+ 			if (path_matches(path, pathlen, basename_offset,
+ 					 &a->u.pat, base, stack->originlen))
+-				rem = fill_one("fill", all_attrs, a, rem);
++				rem = fill_one(all_attrs, a, rem);
+ 		}
+ 	}
+ 
+@@ -1076,7 +1041,7 @@ static int macroexpand_one(struct all_attrs_item *all_attrs, int nr, int rem)
+ 	const struct all_attrs_item *item = &all_attrs[nr];
+ 
+ 	if (item->macro && item->value == ATTR__TRUE)
+-		return fill_one("expand", all_attrs, item->macro, rem);
++		return fill_one(all_attrs, item->macro, rem);
+ 	else
+ 		return rem;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

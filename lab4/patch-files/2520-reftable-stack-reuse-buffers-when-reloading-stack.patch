@@ -1,0 +1,78 @@
+From d779996a1087747886853f4e73cff920c09ab1a2 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 11 Dec 2023 10:07:50 +0100
+Subject: [PATCH 2520/2871] reftable/stack: reuse buffers when reloading stack
+
+In `reftable_stack_reload_once()` we iterate over all the tables added
+to the stack in order to figure out whether any of the tables needs to
+be reloaded. We use a set of buffers in this context to compute the
+paths of these tables, but discard those buffers on every iteration.
+This is quite wasteful given that we do not need to transfer ownership
+of the allocated buffer outside of the loop.
+
+Refactor the code to instead reuse the buffers to reduce the number of
+allocations we need to do. Note that we do not have to manually reset
+the buffer because `stack_filename()` does this for us already.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index f5d18a842a..2dd2373360 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -204,6 +204,7 @@ static int reftable_stack_reload_once(struct reftable_stack *st, char **names,
+ 		reftable_calloc(sizeof(struct reftable_table) * names_len);
+ 	int new_readers_len = 0;
+ 	struct reftable_merged_table *new_merged = NULL;
++	struct strbuf table_path = STRBUF_INIT;
+ 	int i;
+ 
+ 	while (*names) {
+@@ -223,13 +224,10 @@ static int reftable_stack_reload_once(struct reftable_stack *st, char **names,
+ 
+ 		if (!rd) {
+ 			struct reftable_block_source src = { NULL };
+-			struct strbuf table_path = STRBUF_INIT;
+ 			stack_filename(&table_path, st, name);
+ 
+ 			err = reftable_block_source_from_file(&src,
+ 							      table_path.buf);
+-			strbuf_release(&table_path);
+-
+ 			if (err < 0)
+ 				goto done;
+ 
+@@ -267,16 +265,13 @@ static int reftable_stack_reload_once(struct reftable_stack *st, char **names,
+ 	for (i = 0; i < cur_len; i++) {
+ 		if (cur[i]) {
+ 			const char *name = reader_name(cur[i]);
+-			struct strbuf filename = STRBUF_INIT;
+-			stack_filename(&filename, st, name);
++			stack_filename(&table_path, st, name);
+ 
+ 			reader_close(cur[i]);
+ 			reftable_reader_free(cur[i]);
+ 
+ 			/* On Windows, can only unlink after closing. */
+-			unlink(filename.buf);
+-
+-			strbuf_release(&filename);
++			unlink(table_path.buf);
+ 		}
+ 	}
+ 
+@@ -288,6 +283,7 @@ static int reftable_stack_reload_once(struct reftable_stack *st, char **names,
+ 	reftable_free(new_readers);
+ 	reftable_free(new_tables);
+ 	reftable_free(cur);
++	strbuf_release(&table_path);
+ 	return err;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

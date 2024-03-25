@@ -1,0 +1,262 @@
+From 637e8944a13af5eae2dcaef99d4d84645f2b60ac Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 20 Oct 2023 06:13:10 -0400
+Subject: [PATCH 2297/2871] Revert "send-email: extract email-parsing code into
+ a subroutine"
+
+This reverts commit b6049542b97e7b135e0e82bf996084d461224d32.
+
+Prior to that commit, we read the results of the user editing the
+"--compose" message in a loop, picking out parts we cared about, and
+streaming the result out to a ".final" file. That commit split the
+reading/interpreting into two phases; we'd now read into a hash, and
+then pick things out of the hash.
+
+The goal was making the code more readable. And in some ways it did,
+because the ugly regexes are confined to the reading phase. But it also
+introduced several bugs, because now the two phases need to match each
+other. In particular:
+
+  - we pick out headers like "Subject: foo" with a case-insensitive
+    regex, and then use the user-provided header name as the key in a
+    case-sensitive hash. So if the user wrote "subject: foo", we'd no
+    longer recognize it as a subject.
+
+  - the namespace for the hash keys conflates header names with meta
+    information like "body". If you put "body: foo" in your message, it
+    would be misinterpreted as the actual message body (nobody is likely
+    to do that in practice, but it seems like an unnecessary danger).
+
+  - the handling for to/cc/bcc is totally broken. The behavior before
+    that commit is to recognize and skip those headers, with a note to
+    the user that they are not yet handled. Not great, but OK. But
+    after the patch, the reading side now splits the addresses into a
+    perl array-ref. But the interpreting side doesn't handle this at
+    all, and blindly prints the stringified array-ref value. This leads
+    to garbage like:
+
+      (mbox) Adding to: ARRAY (0x555b4345c428) from line 'To: ARRAY(0x555b4345c428)'
+      error: unable to extract a valid address from: ARRAY (0x555b4345c428)
+      What to do with this address? ([q]uit|[d]rop|[e]dit):
+
+    Probably not a huge deal, since nobody should even try to use those
+    headers in the first place (since they were not implemented). But
+    the new behavior is worse, and indicative of the sorts of problems
+    that come from having the two layers.
+
+The revert had a few conflicts, due to later work in this area from
+15dc3b9161 (send-email: rename variable for clarity, 2018-03-04) and
+d11c943c78 (send-email: support separate Reply-To address, 2018-03-04).
+I've ported the changes from those commits over as part of the conflict
+resolution.
+
+The new tests show the bugs. Note the use of GIT_SEND_EMAIL_NOTTY in the
+second one. Without it, the test is happy to reach outside the test
+harness to the developer's actual terminal (when run with the buggy
+state before this patch).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl   | 120 ++++++++++++++----------------------------
+ t/t9001-send-email.sh |  35 ++++++++++++
+ 2 files changed, 75 insertions(+), 80 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index 897cea6564..2adaa35938 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -888,73 +888,59 @@ sub get_patch_subject {
+ 		do_edit($compose_filename);
+ 	}
+ 
++	open my $c2, ">", $compose_filename . ".final"
++		or die sprintf(__("Failed to open %s.final: %s"), $compose_filename, $!);
++
+ 	open $c, "<", $compose_filename
+ 		or die sprintf(__("Failed to open %s: %s"), $compose_filename, $!);
+ 
++	my $need_8bit_cte = file_has_nonascii($compose_filename);
++	my $in_body = 0;
++	my $summary_empty = 1;
+ 	if (!defined $compose_encoding) {
+ 		$compose_encoding = "UTF-8";
+ 	}
+-
+-	my %parsed_email;
+-	while (my $line = <$c>) {
+-		next if $line =~ m/^GIT:/;
+-		parse_header_line($line, \%parsed_email);
+-		if ($line =~ /^$/) {
+-			$parsed_email{'body'} = filter_body($c);
++	while(<$c>) {
++		next if m/^GIT:/;
++		if ($in_body) {
++			$summary_empty = 0 unless (/^\n$/);
++		} elsif (/^\n$/) {
++			$in_body = 1;
++			if ($need_8bit_cte) {
++				print $c2 "MIME-Version: 1.0\n",
++					 "Content-Type: text/plain; ",
++					   "charset=$compose_encoding\n",
++					 "Content-Transfer-Encoding: 8bit\n";
++			}
++		} elsif (/^MIME-Version:/i) {
++			$need_8bit_cte = 0;
++		} elsif (/^Subject:\s*(.+)\s*$/i) {
++			$initial_subject = $1;
++			my $subject = $initial_subject;
++			$_ = "Subject: " .
++				quote_subject($subject, $compose_encoding) .
++				"\n";
++		} elsif (/^In-Reply-To:\s*(.+)\s*$/i) {
++			$initial_in_reply_to = $1;
++			next;
++		} elsif (/^Reply-To:\s*(.+)\s*$/i) {
++			$reply_to = $1;
++		} elsif (/^From:\s*(.+)\s*$/i) {
++			$sender = $1;
++			next;
++		} elsif (/^(?:To|Cc|Bcc):/i) {
++			print __("To/Cc/Bcc fields are not interpreted yet, they have been ignored\n");
++			next;
+ 		}
++		print $c2 $_;
+ 	}
+ 	close $c;
++	close $c2;
+ 
+-	open my $c2, ">", $compose_filename . ".final"
+-	or die sprintf(__("Failed to open %s.final: %s"), $compose_filename, $!);
+-
+-
+-	if ($parsed_email{'From'}) {
+-		$sender = delete($parsed_email{'From'});
+-	}
+-	if ($parsed_email{'In-Reply-To'}) {
+-		$initial_in_reply_to = delete($parsed_email{'In-Reply-To'});
+-	}
+-	if ($parsed_email{'Reply-To'}) {
+-		$reply_to = delete($parsed_email{'Reply-To'});
+-	}
+-	if ($parsed_email{'Subject'}) {
+-		$initial_subject = delete($parsed_email{'Subject'});
+-		print $c2 "Subject: " .
+-			quote_subject($initial_subject, $compose_encoding) .
+-			"\n";
+-	}
+-
+-	if ($parsed_email{'MIME-Version'}) {
+-		print $c2 "MIME-Version: $parsed_email{'MIME-Version'}\n",
+-				"Content-Type: $parsed_email{'Content-Type'};\n",
+-				"Content-Transfer-Encoding: $parsed_email{'Content-Transfer-Encoding'}\n";
+-		delete($parsed_email{'MIME-Version'});
+-		delete($parsed_email{'Content-Type'});
+-		delete($parsed_email{'Content-Transfer-Encoding'});
+-	} elsif (file_has_nonascii($compose_filename)) {
+-		my $content_type = (delete($parsed_email{'Content-Type'}) or
+-			"text/plain; charset=$compose_encoding");
+-		print $c2 "MIME-Version: 1.0\n",
+-			"Content-Type: $content_type\n",
+-			"Content-Transfer-Encoding: 8bit\n";
+-	}
+-	# Preserve unknown headers
+-	foreach my $key (keys %parsed_email) {
+-		next if $key eq 'body';
+-		print $c2 "$key: $parsed_email{$key}";
+-	}
+-
+-	if ($parsed_email{'body'}) {
+-		print $c2 "\n$parsed_email{'body'}\n";
+-		delete($parsed_email{'body'});
+-	} else {
++	if ($summary_empty) {
+ 		print __("Summary email is empty, skipping it\n");
+ 		$compose = -1;
+ 	}
+-
+-	close $c2;
+-
+ } elsif ($annotate) {
+ 	do_edit(@files);
+ }
+@@ -1009,32 +995,6 @@ sub ask {
+ 	return;
+ }
+ 
+-sub parse_header_line {
+-	my $lines = shift;
+-	my $parsed_line = shift;
+-	my $addr_pat = join "|", qw(To Cc Bcc);
+-
+-	foreach (split(/\n/, $lines)) {
+-		if (/^($addr_pat):\s*(.+)$/i) {
+-		        $parsed_line->{$1} = [ parse_address_line($2) ];
+-		} elsif (/^([^:]*):\s*(.+)\s*$/i) {
+-		        $parsed_line->{$1} = $2;
+-		}
+-	}
+-}
+-
+-sub filter_body {
+-	my $c = shift;
+-	my $body = "";
+-	while (my $body_line = <$c>) {
+-		if ($body_line !~ m/^GIT:/) {
+-			$body .= $body_line;
+-		}
+-	}
+-	return $body;
+-}
+-
+-
+ my %broken_encoding;
+ 
+ sub file_declares_8bit_cte {
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index a60b05ad3f..c62f032056 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -2505,4 +2505,39 @@ test_expect_success $PREREQ 'test forbidSendmailVariables behavior override' '
+ 		HEAD^
+ '
+ 
++test_expect_success $PREREQ '--compose handles lowercase headers' '
++	write_script fake-editor <<-\EOF &&
++	sed "s/^From:.*/from: edited-from@example.com/i" "$1" >"$1.tmp" &&
++	mv "$1.tmp" "$1"
++	EOF
++	clean_fake_sendmail &&
++	git send-email \
++		--compose \
++		--from="Example <from@example.com>" \
++		--to=nobody@example.com \
++		--smtp-server="$(pwd)/fake.sendmail" \
++		HEAD^ &&
++	grep "From: edited-from@example.com" msgtxt1
++'
++
++test_expect_success $PREREQ '--compose handles to headers' '
++	write_script fake-editor <<-\EOF &&
++	sed "s/^$/To: edited-to@example.com\n/" <"$1" >"$1.tmp" &&
++	echo this is the body >>"$1.tmp" &&
++	mv "$1.tmp" "$1"
++	EOF
++	clean_fake_sendmail &&
++	GIT_SEND_EMAIL_NOTTY=1 \
++	git send-email \
++		--compose \
++		--from="Example <from@example.com>" \
++		--to=nobody@example.com \
++		--smtp-server="$(pwd)/fake.sendmail" \
++		HEAD^ &&
++	# Ideally the "to" header we specified would be used,
++	# but the program explicitly warns that these are
++	# ignored. For now, just make sure we did not abort.
++	grep "To:" msgtxt1
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

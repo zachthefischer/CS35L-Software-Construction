@@ -1,0 +1,94 @@
+From 05b9425960d005e83ccf8308fea9f25fbd0bd861 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 17 Nov 2022 06:46:47 +0100
+Subject: [PATCH 0395/2871] revision: move together exclusion-related functions
+
+Move together the definitions of functions that handle exclusions of
+refs so that related functionality sits in a single place, only.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ revision.c | 52 ++++++++++++++++++++++++++--------------------------
+ 1 file changed, 26 insertions(+), 26 deletions(-)
+
+diff --git a/revision.c b/revision.c
+index 0760e78936..be755670e2 100644
+--- a/revision.c
++++ b/revision.c
+@@ -1517,14 +1517,6 @@ static void add_rev_cmdline_list(struct rev_info *revs,
+ 	}
+ }
+ 
+-struct all_refs_cb {
+-	int all_flags;
+-	int warned_bad_reflog;
+-	struct rev_info *all_revs;
+-	const char *name_for_errormsg;
+-	struct worktree *wt;
+-};
+-
+ int ref_excluded(struct string_list *ref_excludes, const char *path)
+ {
+ 	struct string_list_item *item;
+@@ -1538,6 +1530,32 @@ int ref_excluded(struct string_list *ref_excludes, const char *path)
+ 	return 0;
+ }
+ 
++void clear_ref_exclusion(struct string_list **ref_excludes_p)
++{
++	if (*ref_excludes_p) {
++		string_list_clear(*ref_excludes_p, 0);
++		free(*ref_excludes_p);
++	}
++	*ref_excludes_p = NULL;
++}
++
++void add_ref_exclusion(struct string_list **ref_excludes_p, const char *exclude)
++{
++	if (!*ref_excludes_p) {
++		CALLOC_ARRAY(*ref_excludes_p, 1);
++		(*ref_excludes_p)->strdup_strings = 1;
++	}
++	string_list_append(*ref_excludes_p, exclude);
++}
++
++struct all_refs_cb {
++	int all_flags;
++	int warned_bad_reflog;
++	struct rev_info *all_revs;
++	const char *name_for_errormsg;
++	struct worktree *wt;
++};
++
+ static int handle_one_ref(const char *path, const struct object_id *oid,
+ 			  int flag UNUSED,
+ 			  void *cb_data)
+@@ -1563,24 +1581,6 @@ static void init_all_refs_cb(struct all_refs_cb *cb, struct rev_info *revs,
+ 	cb->wt = NULL;
+ }
+ 
+-void clear_ref_exclusion(struct string_list **ref_excludes_p)
+-{
+-	if (*ref_excludes_p) {
+-		string_list_clear(*ref_excludes_p, 0);
+-		free(*ref_excludes_p);
+-	}
+-	*ref_excludes_p = NULL;
+-}
+-
+-void add_ref_exclusion(struct string_list **ref_excludes_p, const char *exclude)
+-{
+-	if (!*ref_excludes_p) {
+-		CALLOC_ARRAY(*ref_excludes_p, 1);
+-		(*ref_excludes_p)->strdup_strings = 1;
+-	}
+-	string_list_append(*ref_excludes_p, exclude);
+-}
+-
+ static void handle_refs(struct ref_store *refs,
+ 			struct rev_info *revs, unsigned flags,
+ 			int (*for_each)(struct ref_store *, each_ref_fn, void *))
+-- 
+2.39.3 (Apple Git-145)
+

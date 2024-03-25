@@ -1,0 +1,84 @@
+From 370ddcbc89646c7f53728ec7d1fb87597b52de67 Mon Sep 17 00:00:00 2001
+From: Paul Eggert <eggert@cs.ucla.edu>
+Date: Mon, 20 Mar 2023 16:05:07 -0700
+Subject: [PATCH 1091/2871] git-compat-util: use gettimeofday(2) for time(2)
+
+Use gettimeofday instead of time(NULL) to get current time.
+This avoids clock skew on glibc 2.31+ on Linux, where in the
+first 1 to 2.5 ms of every second, time(NULL) returns a
+value that is one less than the tv_sec part of
+higher-resolution timestamps such as those returned by
+gettimeofday or timespec_get, or those in the file system.
+There are similar clock skew problems on AIX and MS-Windows,
+which have problems in the first 5 ms of every second.
+
+Without this patch, users can observe Git issuing a
+timestamp T+1 before it issues timestamp T, because Git
+sometimes uses time(NULL) or time(&t) and sometimes uses
+higher-res methods like gettimeofday.  Although strictly
+speaking users should tolerate this behavior because a
+superuser can always change the clock back, this is a
+quality of implementation issue and users naturally expect
+Git to issue timestamps in increasing order unless the
+superuser has fiddled with the system clock.
+
+This patch always uses gettimeofday(...) instead of time(...),
+and I have verified that the resulting .o files never refer
+to the name 'time'.  A trickier patch would change only
+those calls for which timestamp monotonicity is user-visible.
+Such a patch would require more expertise about Git internals,
+though, and would be harder to maintain later.
+
+Another possibility would be to change Git's documentation
+to warn users that Git does not always issue timestamps in
+increasing order.  However, Git users would likely be either
+dismayed by this possibility, or confused by the level of
+detail that any such documentation would require.
+
+Yet another possibility would be to fix the Linux kernel so
+that the time syscall is consistent with the other timestamp
+syscalls.  I suppose this has not been done due to
+performance implications.  (Git's use of timestamps is rare
+enough that performance is not a significant consideration
+for git.)  However, this wouldn't fix Git's problem on older
+Linux kernels, or on AIX or MS-Windows.
+
+Signed-off-by: Paul Eggert <eggert@cs.ucla.edu>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-compat-util.h | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/git-compat-util.h b/git-compat-util.h
+index 4f0028ce60..871c94587b 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -339,6 +339,25 @@ static inline const char *precompose_string_if_needed(const char *in)
+ int compat_mkdir_wo_trailing_slash(const char*, mode_t);
+ #endif
+ 
++#ifdef time
++#undef time
++#endif
++static inline time_t git_time(time_t *tloc)
++{
++	struct timeval tv;
++
++	/*
++	 * Avoid time(NULL), which can disagree with gettimeofday(2)
++	 * and filesystem timestamps.
++	 */
++	gettimeofday(&tv, NULL);
++
++	if (tloc)
++		*tloc = tv.tv_sec;
++	return tv.tv_sec;
++}
++#define time git_time
++
+ #ifdef NO_STRUCT_ITIMERVAL
+ struct itimerval {
+ 	struct timeval it_interval;
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,100 @@
+From 4263f9279e331fabb34fac7ef92a5a1061ae1d01 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 6 Nov 2023 17:56:30 -0500
+Subject: [PATCH 2365/2871] list-objects: drop --unpacked non-commit objects
+ from results
+
+In git-rev-list(1), we describe the `--unpacked` option as:
+
+    Only useful with `--objects`; print the object IDs that are not in
+    packs.
+
+This is true of commits, which we discard via get_commit_action(), but
+not of the objects they reach. So if we ask for an --objects traversal
+with --unpacked, we may get arbitrarily many objects which are indeed
+packed.
+
+I am nearly certain this behavior dates back to the introduction of
+`--unpacked` via 12d2a18780 ("git rev-list --unpacked" shows only
+unpacked commits, 2005-07-03), but I couldn't get that revision of Git
+to compile for me. At least as early as v2.0.0 this has been subtly
+broken:
+
+    $ git.compile --version
+    git version 2.0.0
+
+    $ git.compile rev-list --objects --all --unpacked
+    72791fe96c93f9ec5c311b8bc966ab349b3b5bbe
+    05713d991c18bbeef7e154f99660005311b5004d v1.0
+    153ed8b7719c6f5a68ce7ffc43133e95a6ac0fdb
+    8e4020bb5a8d8c873b25de15933e75cc0fc275df one
+    9200b628cf9dc883a85a7abc8d6e6730baee589c two
+    3e6b46e1b7e3b91acce99f6a823104c28aae0b58 unpacked.t
+
+There, only the first, third, and sixth entries are loose, with the
+remaining set of objects belonging to at least one pack.
+
+The implications for this are relatively benign: bare 'git repack'
+invocations which invoke pack-objects with --unpacked are impacted, and
+at worst we'll store a few extra objects that should have been excluded.
+
+Arguably changing this behavior is a backwards-incompatible change,
+since it alters the set of objects emitted from rev-list queries with
+`--objects` and `--unpacked`. But I argue that this change is still
+sensible, since the existing implementation deviates from
+clearly-written documentation.
+
+The fix here is straightforward: avoid showing any non-commit objects
+which are contained in packs by discarding them within list-objects.c,
+before they are shown to the user. Note that similar treatment for
+`list-objects.c::show_commit()` is not needed, since that case is
+already handled by `revision.c::get_commit_action()`.
+
+Co-authored-by: Jeff King <peff@peff.net>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ list-objects.c           |  3 +++
+ t/t6000-rev-list-misc.sh | 13 +++++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/list-objects.c b/list-objects.c
+index e60a6cd5b4..8bb6d3c922 100644
+--- a/list-objects.c
++++ b/list-objects.c
+@@ -37,6 +37,9 @@ static void show_object(struct traversal_context *ctx,
+ {
+ 	if (!ctx->show_object)
+ 		return;
++	if (ctx->revs->unpacked && has_object_pack(&object->oid))
++		return;
++
+ 	ctx->show_object(object, name, ctx->show_data);
+ }
+ 
+diff --git a/t/t6000-rev-list-misc.sh b/t/t6000-rev-list-misc.sh
+index 12def7bcbf..6289a2e8b0 100755
+--- a/t/t6000-rev-list-misc.sh
++++ b/t/t6000-rev-list-misc.sh
+@@ -169,4 +169,17 @@ test_expect_success 'rev-list --count --objects' '
+ 	test_line_count = $count actual
+ '
+ 
++test_expect_success 'rev-list --unpacked' '
++	git repack -ad &&
++	test_commit unpacked &&
++
++	git rev-list --objects --no-object-names unpacked^.. >expect.raw &&
++	sort expect.raw >expect &&
++
++	git rev-list --all --objects --unpacked --no-object-names >actual.raw &&
++	sort actual.raw >actual &&
++
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

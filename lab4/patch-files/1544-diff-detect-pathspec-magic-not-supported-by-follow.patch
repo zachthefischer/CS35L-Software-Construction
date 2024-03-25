@@ -1,0 +1,176 @@
+From 8260bc59023136edeaed1f1006a03f44cc849883 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 1 Jun 2023 13:43:51 -0400
+Subject: [PATCH 1544/2871] diff: detect pathspec magic not supported by
+ --follow
+
+The --follow code doesn't handle most forms of pathspec magic. We check
+that no unexpected ones have made it to try_to_follow_renames() with a
+runtime GUARD_PATHSPEC() check, which gives behavior like this:
+
+  $ git log --follow ':(icase)makefile' >/dev/null
+  BUG: tree-diff.c:596: unsupported magic 10
+  Aborted
+
+The same is true of ":(glob)", ":(attr)", and so on. It's good that we
+notice the problem rather than continuing and producing a wrong answer.
+But there are two non-ideal things:
+
+  1. The idea of GUARD_PATHSPEC() is to catch programming errors where
+     low-level code gets unexpected pathspecs. We'd usually try to catch
+     unsupported pathspecs by passing a magic_mask to parse_pathspec(),
+     which would give the user a much better message like:
+
+       pathspec magic not supported by this command: 'icase'
+
+     That doesn't happen here because git-log usually _does_ support
+     all types of pathspec magic, and so it passes "0" for the mask
+     (this call actually happens in setup_revisions()). It needs to
+     distinguish the normal case from the "--follow" one but currently
+     doesn't.
+
+  2. In addition to --follow, we have the log.follow config option. When
+     that is set, we try to turn on --follow mode only when there is a
+     single pathspec (since --follow doesn't handle anything else). But
+     really, that ought to be expanded to "use --follow when the
+     pathspec supports it". Otherwise, we'd complain any time you use an
+     exotic pathspec:
+
+       $ git config log.follow true
+       $ git log ':(icase)makefile' >/dev/null
+       BUG: tree-diff.c:596: unsupported magic 10
+       Aborted
+
+     We should instead just avoid enabling follow mode if it's not
+     supported by this particular invocation.
+
+This patch expands our diff_check_follow_pathspec() function to cover
+pathspec magic, solving both problems.
+
+A few final notes:
+
+  - we could also solve (1) by passing the appropriate mask to
+    parse_pathspec(). But that's not great for two reasons. One is that
+    the error message is less precise. It says "magic not supported by
+    this command", but really it is not the command, but rather the
+    --follow option which is the problem. The second is that it always
+    calls die(). But for our log.follow code, we want to speculatively
+    ask "is this pathspec OK?" and just get a boolean result.
+
+  - This is obviously the right thing to do for ':(icase)' and most
+    other magic options. But ':(glob)' is a bit odd here. The --follow
+    code doesn't support wildcards, but we allow them anyway. From
+    try_to_follow_renames():
+
+	#if 0
+	        /*
+	         * We should reject wildcards as well. Unfortunately we
+	         * haven't got a reliable way to detect that 'foo\*bar' in
+	         * fact has no wildcards. nowildcard_len is merely a hint for
+	         * optimization. Let it slip for now until wildmatch is taught
+	         * about dry-run mode and returns wildcard info.
+	         */
+	        if (opt->pathspec.has_wildcard)
+	                BUG("wildcards are not supported");
+	#endif
+
+    So something like "git log --follow 'Make*'" is already doing the
+    wrong thing, since ":(glob)" behavior is already the default (it is
+    used only to countermand an earlier --noglob-pathspecs).
+
+    So we _could_ loosen the guard to allow :(glob), since it just
+    behaves the same as pathspecs do by default. But it seems like a
+    backwards step to do so. It already doesn't work (it hits the BUG()
+    case currently), and given that the user took an explicit step to
+    say "this pathspec should glob", it is reasonable for us to say "no,
+    --follow does not support globbing" (or in the case of log.follow,
+    avoid turning on follow mode). Which is what happens after this
+    patch.
+
+  - The set of allowed pathspec magic is obviously the same as in
+    GUARD_PATHSPEC(). We could perhaps factor these out to avoid
+    repetition. The point of having separate masks and GUARD calls is
+    that we don't necessarily know which parsed pathspecs will be used
+    where. But in this case, the two are heavily correlated. Still,
+    there may be some value in keeping them separate; it would make
+    anyone think twice about adding new magic to the list in
+    diff_check_follow_pathspec(). They'd need to touch
+    try_to_follow_renames() as well, which is the code that would
+    actually need to be updated to handle more exotic pathspecs.
+
+  - The documentation for log.follow says that it enables --follow
+    "...when a single <path> is given". We could possibly expand that to
+    say "with no unsupported pathspec magic", but that raises the
+    question of documenting which magic is supported. I think the
+    existing wording of "single <path>" sufficiently encompasses the
+    idea (the forbidden magic is stuff that might match multiple
+    entries), and the spirit remains the same.
+
+Reported-by: Jim Pryor <dubiousjim@gmail.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c         | 15 +++++++++++++++
+ t/t4202-log.sh | 15 +++++++++++++++
+ 2 files changed, 30 insertions(+)
+
+diff --git a/diff.c b/diff.c
+index dc9f21a9dc..df89996896 100644
+--- a/diff.c
++++ b/diff.c
+@@ -4723,11 +4723,26 @@ unsigned diff_filter_bit(char status)
+ 
+ int diff_check_follow_pathspec(struct pathspec *ps, int die_on_error)
+ {
++	unsigned forbidden_magic;
++
+ 	if (ps->nr != 1) {
+ 		if (die_on_error)
+ 			die(_("--follow requires exactly one pathspec"));
+ 		return 0;
+ 	}
++
++	forbidden_magic = ps->items[0].magic & ~(PATHSPEC_FROMTOP |
++						 PATHSPEC_LITERAL);
++	if (forbidden_magic) {
++		if (die_on_error) {
++			struct strbuf sb = STRBUF_INIT;
++			pathspec_magic_names(forbidden_magic, &sb);
++			die(_("pathspec magic not supported by --follow: %s"),
++			    sb.buf);
++		}
++		return 0;
++	}
++
+ 	return 1;
+ }
+ 
+diff --git a/t/t4202-log.sh b/t/t4202-log.sh
+index 2ce2b41174..b1f49d2954 100755
+--- a/t/t4202-log.sh
++++ b/t/t4202-log.sh
+@@ -187,6 +187,21 @@ test_expect_success 'git config log.follow does not die with no paths' '
+ 	git log --
+ '
+ 
++test_expect_success 'git log --follow rejects unsupported pathspec magic' '
++	test_must_fail git log --follow ":(top,glob,icase)ichi" 2>stderr &&
++	# check full error message; we want to be sure we mention both
++	# of the rejected types (glob,icase), but not the allowed one (top)
++	echo "fatal: pathspec magic not supported by --follow: ${SQ}glob${SQ}, ${SQ}icase${SQ}" >expect &&
++	test_cmp expect stderr
++'
++
++test_expect_success 'log.follow disabled with unsupported pathspec magic' '
++	test_config log.follow true &&
++	git log --format=%s ":(glob,icase)ichi" >actual &&
++	echo third >expect &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'git config log.follow is overridden by --no-follow' '
+ 	test_config log.follow true &&
+ 	git log --no-follow --pretty="format:%s" ichi >actual &&
+-- 
+2.39.3 (Apple Git-145)
+

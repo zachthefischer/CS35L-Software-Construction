@@ -1,0 +1,53 @@
+From abfbff61efc4d91dc964eb2360760fa640ad0f0f Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 7 Feb 2024 10:46:54 -0800
+Subject: [PATCH 2829/2871] tag: fix sign_buffer() call to create a signed tag
+
+The command "git tag -s" internally calls sign_buffer() to make a
+cryptographic signature using the chosen backend like GPG and SSH.
+The internal helper functions used by "git tag" implementation seem
+to use a "negative return values are errors, zero or positive return
+values are not" convention, and there are places (e.g., verify_tag()
+that calls gpg_verify_tag()) that these internal helper functions
+translate return values that signal errors to conform to this
+convention, but do_sign() that calls sign_buffer() forgets to do so.
+
+Fix it, so that a failed call to sign_buffer() that can return the
+exit status from pipe_command() will not be overlooked.
+
+Reported-by: Sergey Kosukhin <skosukhin@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/tag.c   | 2 +-
+ gpg-interface.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/tag.c b/builtin/tag.c
+index 3918eacbb5..b28ead06ea 100644
+--- a/builtin/tag.c
++++ b/builtin/tag.c
+@@ -176,7 +176,7 @@ static int verify_tag(const char *name, const char *ref UNUSED,
+ 
+ static int do_sign(struct strbuf *buffer)
+ {
+-	return sign_buffer(buffer, buffer, get_signing_key());
++	return sign_buffer(buffer, buffer, get_signing_key()) ? -1 : 0;
+ }
+ 
+ static const char tag_template[] =
+diff --git a/gpg-interface.h b/gpg-interface.h
+index 143cdc1c02..7cd98161f7 100644
+--- a/gpg-interface.h
++++ b/gpg-interface.h
+@@ -66,7 +66,7 @@ size_t parse_signed_buffer(const char *buf, size_t size);
+  * Create a detached signature for the contents of "buffer" and append
+  * it after "signature"; "buffer" and "signature" can be the same
+  * strbuf instance, which would cause the detached signature appended
+- * at the end.
++ * at the end.  Returns 0 on success, non-zero on failure.
+  */
+ int sign_buffer(struct strbuf *buffer, struct strbuf *signature,
+ 		const char *signing_key);
+-- 
+2.39.3 (Apple Git-145)
+

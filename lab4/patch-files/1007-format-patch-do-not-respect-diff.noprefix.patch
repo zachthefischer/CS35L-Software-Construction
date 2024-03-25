@@ -1,0 +1,81 @@
+From c169af8f7ab521cc47b59f104db78847e324a3cb Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Mar 2023 01:11:49 -0500
+Subject: [PATCH 1007/2871] format-patch: do not respect diff.noprefix
+
+The output of format-patch respects diff.noprefix, but this usually ends
+up being a hassle for people receiving the patch, as they have to
+manually specify "-p0" in order to apply it.
+
+I don't think there was any specific intention for it to behave this
+way. The noprefix option is handled by git_diff_ui_config(), and
+format-patch exists in a gray area between plumbing and porcelain.
+People do look at the output, and we'd expect it to colorize things,
+respect their choice of algorithm, and so on. But this particular option
+creates problems for the receiver (in theory so does diff.mnemonicprefix,
+but since we are always formatting commits, the mnemonic prefixes will
+always be "a/" and "b/").
+
+So let's disable it. The slight downsides are:
+
+  - people who have set diff.noprefix presumably like to see their
+    patches without prefixes. If they use format-patch to review their
+    series, they'll see prefixes. On the other hand, it is probably a
+    good idea for them to look at what will actually get sent out.
+
+    We could try to play games here with "is stdout a tty", as we do for
+    color. But that's not a completely reliable signal, and it's
+    probably not worth the trouble. If you want to see the patch with
+    the usual bells and whistles, then you are better off using "git
+    log" or "git show".
+
+  - if a project really does have a workflow that likes prefix-less
+    patches, and the receiver is prepared to use "-p0", then the sender
+    now has to manually say "--no-prefix" for each format-patch
+    invocation. That doesn't seem _too_ terrible given that the receiver
+    has to manually say "-p0" for each git-am invocation.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c           | 9 +++++++++
+ t/t4014-format-patch.sh | 5 +++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index a70fba198f..eaf511aab8 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1085,6 +1085,15 @@ static int git_format_config(const char *var, const char *value, void *cb)
+ 		return 0;
+ 	}
+ 
++	/*
++	 * ignore some porcelain config which would otherwise be parsed by
++	 * git_diff_ui_config(), via git_log_config(); we can't just avoid
++	 * diff_ui_config completely, because we do care about some ui options
++	 * like color.
++	 */
++	if (!strcmp(var, "diff.noprefix"))
++		return 0;
++
+ 	return git_log_config(var, value, cb);
+ }
+ 
+diff --git a/t/t4014-format-patch.sh b/t/t4014-format-patch.sh
+index f3313b8c58..f5a41fd47e 100755
+--- a/t/t4014-format-patch.sh
++++ b/t/t4014-format-patch.sh
+@@ -2386,4 +2386,9 @@ test_expect_success 'interdiff: solo-patch' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'format-patch does not respect diff.noprefix' '
++	git -c diff.noprefix format-patch -1 --stdout >actual &&
++	grep "^--- a/blorp" actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

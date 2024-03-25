@@ -1,0 +1,49 @@
+From 97f03a562840b3aacb790188567d631cc7e6e46f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:39:26 +0200
+Subject: [PATCH 0141/2871] doc txt & -h consistency: make "worktree"
+ consistent
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Make the "worktree" -h output consistent with the *.txt version.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/worktree.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index ba6846c378..4a24d53be1 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -16,17 +16,18 @@
+ #include "quote.h"
+ 
+ #define BUILTIN_WORKTREE_ADD_USAGE \
+-	N_("git worktree add [<options>] <path> [<commit-ish>]")
++	N_("git worktree add [-f] [--detach] [--checkout] [--lock [--reason <string>]]\n" \
++	   "                 [-b <new-branch>] <path> [<commit-ish>]")
+ #define BUILTIN_WORKTREE_LIST_USAGE \
+-	N_("git worktree list [<options>]")
++	N_("git worktree list [-v | --porcelain [-z]]")
+ #define BUILTIN_WORKTREE_LOCK_USAGE \
+-	N_("git worktree lock [<options>] <path>")
++	N_("git worktree lock [--reason <string>] <worktree>")
+ #define BUILTIN_WORKTREE_MOVE_USAGE \
+ 	N_("git worktree move <worktree> <new-path>")
+ #define BUILTIN_WORKTREE_PRUNE_USAGE \
+-	N_("git worktree prune [<options>]")
++	N_("git worktree prune [-n] [-v] [--expire <expire>]")
+ #define BUILTIN_WORKTREE_REMOVE_USAGE \
+-	N_("git worktree remove [<options>] <worktree>")
++	N_("git worktree remove [-f] <worktree>")
+ #define BUILTIN_WORKTREE_REPAIR_USAGE \
+ 	N_("git worktree repair [<path>...]")
+ #define BUILTIN_WORKTREE_UNLOCK_USAGE \
+-- 
+2.39.3 (Apple Git-145)
+

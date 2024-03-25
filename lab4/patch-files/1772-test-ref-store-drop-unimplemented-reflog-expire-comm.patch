@@ -1,0 +1,54 @@
+From b8ef49d54c83c1dfa7026bad47b315f16bb9c16a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:43:58 -0400
+Subject: [PATCH 1772/2871] test-ref-store: drop unimplemented reflog-expire
+ command
+
+The reflog-expire command has been unimplemented since it was added in
+80f2a6097c (t/helper: add test-ref-store to test ref-store functions,
+2017-03-26). This causes -Wunused-parameter to complain, since the
+function just calls die() without looking at its arguments.
+
+We could mark these as UNUSED to silence the warning. But let's just
+drop the function. It has no callers in the test suite and is not doing
+anything useful, beyond perhaps reminding us that it's something we
+_could_ be testing.
+
+But since the bulk of the work in adding such tests would be the shell
+bits that actually examine the reflog state before and after expiration,
+this is not even a useful step in that direction. Somebody who wants to
+do that work later can easily add this function back.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-ref-store.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/t/helper/test-ref-store.c b/t/helper/test-ref-store.c
+index fb18831ec2..aa900cbfab 100644
+--- a/t/helper/test-ref-store.c
++++ b/t/helper/test-ref-store.c
+@@ -268,11 +268,6 @@ static int cmd_delete_reflog(struct ref_store *refs, const char **argv)
+ 	return refs_delete_reflog(refs, refname);
+ }
+ 
+-static int cmd_reflog_expire(struct ref_store *refs, const char **argv)
+-{
+-	die("not supported yet");
+-}
+-
+ static int cmd_delete_ref(struct ref_store *refs, const char **argv)
+ {
+ 	const char *msg = notnull(*argv++, "msg");
+@@ -326,7 +321,6 @@ static struct command commands[] = {
+ 	{ "reflog-exists", cmd_reflog_exists },
+ 	{ "create-reflog", cmd_create_reflog },
+ 	{ "delete-reflog", cmd_delete_reflog },
+-	{ "reflog-expire", cmd_reflog_expire },
+ 	/*
+ 	 * backend transaction functions can't be tested separately
+ 	 */
+-- 
+2.39.3 (Apple Git-145)
+

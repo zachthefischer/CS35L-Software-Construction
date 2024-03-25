@@ -1,0 +1,86 @@
+From 6cfcabfb9f60369f6fb4d24465a7c98b1d90b34b Mon Sep 17 00:00:00 2001
+From: Christian Couder <christian.couder@gmail.com>
+Date: Mon, 2 Oct 2023 18:54:56 +0200
+Subject: [PATCH 2173/2871] pack-objects: allow `--filter` without `--stdout`
+
+9535ce7337 (pack-objects: add list-objects filtering, 2017-11-21)
+taught `git pack-objects` to use `--filter`, but required the use of
+`--stdout` since a partial clone mechanism was not yet in place to
+handle missing objects. Since then, changes like 9e27beaa23
+(promisor-remote: implement promisor_remote_get_direct(), 2019-06-25)
+and others added support to dynamically fetch objects that were missing.
+
+Even without a promisor remote, filtering out objects can also be useful
+if we can put the filtered out objects in a separate pack, and in this
+case it also makes sense for pack-objects to write the packfile directly
+to an actual file rather than on stdout.
+
+Remove the `--stdout` requirement when using `--filter`, so that in a
+follow-up commit, repack can pass `--filter` to pack-objects to omit
+certain objects from the resulting packfile.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-pack-objects.txt     | 4 ++--
+ builtin/pack-objects.c                 | 8 ++------
+ t/t5317-pack-objects-filter-objects.sh | 8 ++++++++
+ 3 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/Documentation/git-pack-objects.txt b/Documentation/git-pack-objects.txt
+index dea7eacb0f..e32404c6aa 100644
+--- a/Documentation/git-pack-objects.txt
++++ b/Documentation/git-pack-objects.txt
+@@ -296,8 +296,8 @@ So does `git bundle` (see linkgit:git-bundle[1]) when it creates a bundle.
+ 	nevertheless.
+ 
+ --filter=<filter-spec>::
+-	Requires `--stdout`.  Omits certain objects (usually blobs) from
+-	the resulting packfile.  See linkgit:git-rev-list[1] for valid
++	Omits certain objects (usually blobs) from the resulting
++	packfile.  See linkgit:git-rev-list[1] for valid
+ 	`<filter-spec>` forms.
+ 
+ --no-filter::
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 6eb9756836..89a8b5a976 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -4402,12 +4402,8 @@ int cmd_pack_objects(int argc, const char **argv, const char *prefix)
+ 	if (!rev_list_all || !rev_list_reflog || !rev_list_index)
+ 		unpack_unreachable_expiration = 0;
+ 
+-	if (filter_options.choice) {
+-		if (!pack_to_stdout)
+-			die(_("cannot use --filter without --stdout"));
+-		if (stdin_packs)
+-			die(_("cannot use --filter with --stdin-packs"));
+-	}
++	if (stdin_packs && filter_options.choice)
++		die(_("cannot use --filter with --stdin-packs"));
+ 
+ 	if (stdin_packs && use_internal_rev_list)
+ 		die(_("cannot use internal rev list with --stdin-packs"));
+diff --git a/t/t5317-pack-objects-filter-objects.sh b/t/t5317-pack-objects-filter-objects.sh
+index b26d476c64..2ff3eef9a3 100755
+--- a/t/t5317-pack-objects-filter-objects.sh
++++ b/t/t5317-pack-objects-filter-objects.sh
+@@ -53,6 +53,14 @@ test_expect_success 'verify blob:none packfile has no blobs' '
+ 	! grep blob verify_result
+ '
+ 
++test_expect_success 'verify blob:none packfile without --stdout' '
++	git -C r1 pack-objects --revs --filter=blob:none mypackname >packhash <<-EOF &&
++	HEAD
++	EOF
++	git -C r1 verify-pack -v "mypackname-$(cat packhash).pack" >verify_result &&
++	! grep blob verify_result
++'
++
+ test_expect_success 'verify normal and blob:none packfiles have same commits/trees' '
+ 	git -C r1 verify-pack -v ../all.pack >verify_result &&
+ 	grep -E "commit|tree" verify_result |
+-- 
+2.39.3 (Apple Git-145)
+

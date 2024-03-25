@@ -1,0 +1,37 @@
+From 5123e6e7bd3b0bf3777cb77e36d141f76d8604a4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Wed, 8 Feb 2023 20:21:11 +0100
+Subject: [PATCH 0840/2871] run-command.c: remove dead assignment in while-loop
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Remove code that's been unused since it was added in
+c553c72eed6 (run-command: add an asynchronous parallel child
+processor, 2015-12-15).
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ run-command.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/run-command.c b/run-command.c
+index 50cc011654..b439c7974c 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -1632,9 +1632,7 @@ static void pp_buffer_stderr(struct parallel_processes *pp,
+ 			     const struct run_process_parallel_opts *opts,
+ 			     int output_timeout)
+ {
+-	int i;
+-
+-	while ((i = poll(pp->pfd, opts->processes, output_timeout) < 0)) {
++	while (poll(pp->pfd, opts->processes, output_timeout) < 0) {
+ 		if (errno == EINTR)
+ 			continue;
+ 		pp_cleanup(pp, opts);
+-- 
+2.39.3 (Apple Git-145)
+

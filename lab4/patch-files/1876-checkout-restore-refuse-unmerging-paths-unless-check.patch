@@ -1,0 +1,144 @@
+From 54f98fee5069f50c6e96687504b82a7695c8648a Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 31 Jul 2023 15:44:07 -0700
+Subject: [PATCH 1876/2871] checkout/restore: refuse unmerging paths unless
+ checking out of the index
+
+Recreating unmerged index entries using resolve-undo data,
+recreating conflicted working tree files using unmerged index
+entries, and writing data out of unmerged index entries, make
+sense only when we are checking paths out of the index and not when
+we are checking paths out of a tree-ish.
+
+Add an extra check to make sure "--merge" and "--ours/--theirs"
+options are rejected when checking out from a tree-ish, update the
+document (especially the SYNOPSIS section) to highlight that they
+are incompatible, and add a few tests to make sure the combination
+fails.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-checkout.txt | 9 ++++++---
+ Documentation/git-restore.txt  | 4 ++++
+ builtin/checkout.c             | 9 +++++++++
+ t/t2070-restore.sh             | 7 +++++--
+ t/t7201-co.sh                  | 5 +++++
+ 5 files changed, 29 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-checkout.txt b/Documentation/git-checkout.txt
+index 4af0904f47..a30e3ebc51 100644
+--- a/Documentation/git-checkout.txt
++++ b/Documentation/git-checkout.txt
+@@ -12,8 +12,10 @@ SYNOPSIS
+ 'git checkout' [-q] [-f] [-m] --detach [<branch>]
+ 'git checkout' [-q] [-f] [-m] [--detach] <commit>
+ 'git checkout' [-q] [-f] [-m] [[-b|-B|--orphan] <new-branch>] [<start-point>]
+-'git checkout' [-f|--ours|--theirs|-m|--conflict=<style>] [<tree-ish>] [--] <pathspec>...
+-'git checkout' [-f|--ours|--theirs|-m|--conflict=<style>] [<tree-ish>] --pathspec-from-file=<file> [--pathspec-file-nul]
++'git checkout' [-f] <tree-ish> [--] <pathspec>...
++'git checkout' [-f] <tree-ish> --pathspec-from-file=<file> [--pathspec-file-nul]
++'git checkout' [-f|--ours|--theirs|-m|--conflict=<style>] [--] <pathspec>...
++'git checkout' [-f|--ours|--theirs|-m|--conflict=<style>] --pathspec-from-file=<file> [--pathspec-file-nul]
+ 'git checkout' (-p|--patch) [<tree-ish>] [--] [<pathspec>...]
+ 
+ DESCRIPTION
+@@ -260,7 +262,8 @@ and mark the resolved paths with `git add` (or `git rm` if the merge
+ should result in deletion of the path).
+ +
+ When checking out paths from the index, this option lets you recreate
+-the conflicted merge in the specified paths.
++the conflicted merge in the specified paths.  This option cannot be
++used when checking out paths from a tree-ish.
+ +
+ When switching branches with `--merge`, staged changes may be lost.
+ 
+diff --git a/Documentation/git-restore.txt b/Documentation/git-restore.txt
+index 5964810caa..c70444705b 100644
+--- a/Documentation/git-restore.txt
++++ b/Documentation/git-restore.txt
+@@ -78,6 +78,8 @@ all modified paths.
+ --theirs::
+ 	When restoring files in the working tree from the index, use
+ 	stage #2 ('ours') or #3 ('theirs') for unmerged paths.
++	This option cannot be used when checking out paths from a
++	tree-ish (i.e. with the `--source` option).
+ +
+ Note that during `git rebase` and `git pull --rebase`, 'ours' and
+ 'theirs' may appear swapped. See the explanation of the same options
+@@ -87,6 +89,8 @@ in linkgit:git-checkout[1] for details.
+ --merge::
+ 	When restoring files on the working tree from the index,
+ 	recreate the conflicted merge in the unmerged paths.
++	This option cannot be used when checking out paths from a
++	tree-ish (i.e. with the `--source` option).
+ 
+ --conflict=<style>::
+ 	The same as `--merge` option above, but changes the way the
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index 715eeb5048..b8dfba57c6 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -520,6 +520,15 @@ static int checkout_paths(const struct checkout_opts *opts,
+ 			    "--merge", "--conflict", "--staged");
+ 	}
+ 
++	/*
++	 * recreating unmerged index entries and writing out data from
++	 * unmerged index entries would make no sense when checking out
++	 * of a tree-ish.
++	 */
++	if ((opts->merge || opts->writeout_stage) && opts->source_tree)
++		die(_("'%s', '%s', or '%s' cannot be used when checking out of a tree"),
++		    "--merge", "--ours", "--theirs");
++
+ 	if (opts->patch_mode) {
+ 		enum add_p_mode patch_mode;
+ 		const char *rev = new_branch_info->name;
+diff --git a/t/t2070-restore.sh b/t/t2070-restore.sh
+index c5d19dd973..fd775807e7 100755
+--- a/t/t2070-restore.sh
++++ b/t/t2070-restore.sh
+@@ -137,11 +137,14 @@ test_expect_success 'restore --staged invalidates cache tree for deletions' '
+ 	test_must_fail git rev-parse HEAD:new1
+ '
+ 
+-test_expect_success 'restore with merge options rejects --staged' '
++test_expect_success 'restore with merge options are incompatible with certain options' '
+ 	for opts in \
+ 		"--staged --ours" \
+ 		"--staged --theirs" \
+ 		"--staged --merge" \
++		"--source=HEAD --ours" \
++		"--source=HEAD --theirs" \
++		"--source=HEAD --merge" \
+ 		"--staged --conflict=diff3" \
+ 		"--staged --worktree --ours" \
+ 		"--staged --worktree --theirs" \
+@@ -149,7 +152,7 @@ test_expect_success 'restore with merge options rejects --staged' '
+ 		"--staged --worktree --conflict=zdiff3"
+ 	do
+ 		test_must_fail git restore $opts . 2>err &&
+-		grep "cannot be used with --staged" err || return
++		grep "cannot be used" err || return
+ 	done
+ '
+ 
+diff --git a/t/t7201-co.sh b/t/t7201-co.sh
+index 61ad47b0c1..23d4dadbcc 100755
+--- a/t/t7201-co.sh
++++ b/t/t7201-co.sh
+@@ -497,6 +497,11 @@ test_expect_success 'checkout unmerged stage' '
+ 	test ztheirside = "z$(cat file)"
+ '
+ 
++test_expect_success 'checkout path with --merge from tree-ish is a no-no' '
++	setup_conflicting_index &&
++	test_must_fail git checkout -m HEAD -- file
++'
++
+ test_expect_success 'checkout with --merge' '
+ 	setup_conflicting_index &&
+ 	echo "none of the above" >sample &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,36 @@
+From 7bac6a4b1b1ca00faaf6e67580b3157618ffaa68 Mon Sep 17 00:00:00 2001
+From: Todd Zullinger <tmz@pobox.com>
+Date: Fri, 3 Nov 2023 10:17:50 -0400
+Subject: [PATCH 2363/2871] RelNotes: minor typo fixes in 2.43.0 draft
+
+Signed-off-by: Todd Zullinger <tmz@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index 29aba39f9e..3b4c0c804e 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -16,7 +16,7 @@ Backward Compatibility Notes
+    rule is that "--not" given from the command line only affects revs
+    given from the command line that comes but not revs read from the
+    standard input, and "--not" read from the standard input affects
+-   revs given from the stanrdard input and not revs given from the
++   revs given from the standard input and not revs given from the
+    command line.
+ 
+ UI, Workflows & Features
+@@ -62,7 +62,7 @@ UI, Workflows & Features
+    describe complex "revert of revert of revert" situation better in
+    their own words.
+ 
+- * The command-line complation support (in contrib/) learned to
++ * The command-line completion support (in contrib/) learned to
+    complete "git commit --trailer=" for possible trailer keys.
+ 
+  * "git update-index" learns "--show-index-version" to inspect
+-- 
+2.39.3 (Apple Git-145)
+

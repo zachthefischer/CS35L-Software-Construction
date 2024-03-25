@@ -1,0 +1,30 @@
+From 2047b2c28cb456f60b6e6876e1fc0330e436fad5 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 15 Dec 2023 12:32:42 -0800
+Subject: [PATCH 2571/2871] git-bisect.txt: BISECT_HEAD is not that special
+
+The description of "git bisect --no-checkout" called BISECT_HEAD a
+"special ref", but there is nothing special about it.  It merely is
+yet another pseudoref.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-bisect.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-bisect.txt b/Documentation/git-bisect.txt
+index 191b4a42b6..aa02e46224 100644
+--- a/Documentation/git-bisect.txt
++++ b/Documentation/git-bisect.txt
+@@ -362,7 +362,7 @@ OPTIONS
+ --no-checkout::
+ +
+ Do not checkout the new working tree at each iteration of the bisection
+-process. Instead just update a special reference named `BISECT_HEAD` to make
++process. Instead just update the reference named `BISECT_HEAD` to make
+ it point to the commit that should be tested.
+ +
+ This option may be useful when the test you would perform in each step
+-- 
+2.39.3 (Apple Git-145)
+

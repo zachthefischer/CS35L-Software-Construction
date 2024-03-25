@@ -1,0 +1,65 @@
+From 624eb90fa8f65a79396615f3c2842ac5a3743350 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 18 Dec 2023 12:44:19 -0800
+Subject: [PATCH 2583/2871] The second batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.44.0.txt | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.44.0.txt b/Documentation/RelNotes/2.44.0.txt
+index 6a2bd93c91..94609c03cd 100644
+--- a/Documentation/RelNotes/2.44.0.txt
++++ b/Documentation/RelNotes/2.44.0.txt
+@@ -9,6 +9,12 @@ UI, Workflows & Features
+  * "git rebase --autosquash" is now enabled for non-interactive rebase,
+    but it is still incompatible with the apply backend.
+ 
++ * Introduce "git replay", a tool meant on the server side without
++   working tree to recreate a history.
++
++ * "git merge-file" learned to take the "--diff-algorithm" option to
++   use algorithm different from the default "myers" diff.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -21,6 +27,11 @@ Performance, Internal Implementation, Development Support etc.
+    in an unspecified order, to allow certain optimizations to take
+    advantage of.
+ 
++ * Simplify API implementation to delete references by eliminating
++   duplication.
++
++ * Subject approxidate() and show_date() machinery to OSS-Fuzz.
++
+ 
+ Fixes since v2.43
+ -----------------
+@@ -40,4 +51,22 @@ Fixes since v2.43
+    simplifying our implementation.
+    (merge 6ff658cc78 tz/send-email-negatable-options later to maint).
+ 
++ * Earlier we stopped relying on commit-graph that (still) records
++   information about commits that are lost from the object store,
++   which has negative performance implications.  The default has been
++   flipped to disable this pessimization.
++   (merge b1df3b3867 ps/commit-graph-less-paranoid later to maint).
++
++ * Stale URLs have been updated to their current counterparts (or
++   archive.org) and HTTP links are replaced with working HTTPS links.
++   (merge 62b4f7b9c6 js/update-urls-in-doc-and-comment later to maint).
++
++ * trace2 streams used to record the URLs that potentially embed
++   authentication material, which has been corrected.
++   (merge 16fa3eebc0 jh/trace2-redact-auth later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
++   (merge 50f1abcff6 js/packfile-h-typofix later to maint).
++   (merge cbf498eb53 jb/reflog-expire-delete-dry-run-options later to maint).
++   (merge 7854bf4960 rs/i18n-cannot-be-used-together later to maint).
++   (merge cd3c28c53a rs/column-leakfix later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

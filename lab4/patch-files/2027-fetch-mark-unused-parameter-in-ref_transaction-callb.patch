@@ -1,0 +1,32 @@
+From ccf759cdb7e11e9fcfcbad02685472ce2c7a7d9a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:37 -0400
+Subject: [PATCH 2027/2871] fetch: mark unused parameter in ref_transaction
+ callback
+
+Since this callback is just trying to collect the set of queued tag
+updates, there is no need for it to look at old_oid at all. Mark it as
+unused to appease -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index eed4a7cdb6..8f93529505 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -308,7 +308,7 @@ static void clear_item(struct refname_hash_entry *item)
+ 
+ 
+ static void add_already_queued_tags(const char *refname,
+-				    const struct object_id *old_oid,
++				    const struct object_id *old_oid UNUSED,
+ 				    const struct object_id *new_oid,
+ 				    void *cb_data)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

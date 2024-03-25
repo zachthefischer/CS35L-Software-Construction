@@ -1,0 +1,28 @@
+From 3b08839926fcc7cc48cf4c759737c1a71af430c1 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 3 Nov 2022 20:41:55 -0400
+Subject: [PATCH 0303/2871] The tenth batch
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/RelNotes/2.39.0.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.39.0.txt b/Documentation/RelNotes/2.39.0.txt
+index 2aae4107c2..7096f07689 100644
+--- a/Documentation/RelNotes/2.39.0.txt
++++ b/Documentation/RelNotes/2.39.0.txt
+@@ -215,6 +215,10 @@ Fixes since v2.38
+  * The way "git repack" creared temporary files when it received a
+    signal was prone to deadlocking, which has been corrected.
+ 
++ * Various tests exercising the transfer.credentialsInUrl
++   configuration are taught to avoid making requests which require
++   resolving localhost to reduce CI-flakiness.
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 413bc6d20a ds/cmd-main-reorder later to maint).
+    (merge 8d2863e4ed nw/t1002-cleanup later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

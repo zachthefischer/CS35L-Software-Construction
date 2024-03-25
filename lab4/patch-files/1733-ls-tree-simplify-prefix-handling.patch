@@ -1,0 +1,118 @@
+From 7b7203e78af7bfe431b9aadd7b726775ed442b3c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 7 Jul 2023 20:34:31 +0200
+Subject: [PATCH 1733/2871] ls-tree: simplify prefix handling
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+git ls-tree has two prefixes: The one handed to cmd_ls_tree(), i.e. the
+current subdirectory in the repository (if any) and the "display" prefix
+used by the show_tree_*() functions.  The option --full-name clears the
+last one, i.e. it shows full paths, and --full-tree clears both, i.e. it
+acts as if the command was started in the root of the repository.
+
+The show_tree_*() functions use the ls_tree_options members chomp_prefix
+and ls_tree_prefix to determine their prefix values.  Calculate it once
+in cmd_ls_tree() instead, once the main prefix value is finalized.
+
+This allows chomp_prefix to become a local variable.  Stop using
+strlen(3) to determine its initial value -- we only care whether we got
+a non-empty string, not precisely how long it is.
+
+Rename ls_tree_prefix to prefix to demonstrate that we converted all
+users and because the ls_tree_ part is no longer necessary since
+030a3d5d9e (ls-tree: use a "struct options", 2023-01-12) turned it from
+a global variable to a struct member.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-tree.c | 24 ++++++++++--------------
+ 1 file changed, 10 insertions(+), 14 deletions(-)
+
+diff --git a/builtin/ls-tree.c b/builtin/ls-tree.c
+index 7a062e2b67..53073d64cb 100644
+--- a/builtin/ls-tree.c
++++ b/builtin/ls-tree.c
+@@ -50,8 +50,7 @@ struct ls_tree_options {
+ 		LS_SHOW_TREES = 1 << 2,
+ 	} ls_options;
+ 	struct pathspec pathspec;
+-	int chomp_prefix;
+-	const char *ls_tree_prefix;
++	const char *prefix;
+ 	const char *format;
+ };
+ 
+@@ -128,8 +127,7 @@ static int show_tree_fmt(const struct object_id *oid, struct strbuf *base,
+ 			strbuf_add_unique_abbrev(&sb, oid, options->abbrev);
+ 		else if (skip_prefix(format, "(path)", &format)) {
+ 			const char *name;
+-			const char *prefix = options->chomp_prefix ?
+-					     options->ls_tree_prefix : NULL;
++			const char *prefix = options->prefix;
+ 			struct strbuf sbuf = STRBUF_INIT;
+ 			size_t baselen = base->len;
+ 
+@@ -173,7 +171,7 @@ static void show_tree_common_default_long(struct ls_tree_options *options,
+ 					  const char *pathname,
+ 					  const size_t baselen)
+ {
+-	const char *prefix = options->chomp_prefix ? options->ls_tree_prefix : NULL;
++	const char *prefix = options->prefix;
+ 
+ 	strbuf_addstr(base, pathname);
+ 
+@@ -258,7 +256,7 @@ static int show_tree_name_only(const struct object_id *oid, struct strbuf *base,
+ 	if (early >= 0)
+ 		return early;
+ 
+-	prefix = options->chomp_prefix ? options->ls_tree_prefix : NULL;
++	prefix = options->prefix;
+ 	strbuf_addstr(base, pathname);
+ 	if (options->null_termination) {
+ 		struct strbuf sb = STRBUF_INIT;
+@@ -345,6 +343,7 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
+ 	struct object_id oid;
+ 	struct tree *tree;
+ 	int i, full_tree = 0;
++	int chomp_prefix = prefix && *prefix;
+ 	read_tree_fn_t fn = NULL;
+ 	enum ls_tree_cmdmode cmdmode = MODE_DEFAULT;
+ 	int null_termination = 0;
+@@ -366,7 +365,7 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
+ 			    MODE_NAME_STATUS),
+ 		OPT_CMDMODE(0, "object-only", &cmdmode, N_("list only objects"),
+ 			    MODE_OBJECT_ONLY),
+-		OPT_SET_INT(0, "full-name", &options.chomp_prefix,
++		OPT_SET_INT(0, "full-name", &chomp_prefix,
+ 			    N_("use full path names"), 0),
+ 		OPT_BOOL(0, "full-tree", &full_tree,
+ 			 N_("list entire tree; not just current directory "
+@@ -381,18 +380,15 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
+ 	int ret;
+ 
+ 	git_config(git_default_config, NULL);
+-	options.ls_tree_prefix = prefix;
+-	if (prefix)
+-		options.chomp_prefix = strlen(prefix);
+ 
+ 	argc = parse_options(argc, argv, prefix, ls_tree_options,
+ 			     ls_tree_usage, 0);
+ 	options.null_termination = null_termination;
+ 
+-	if (full_tree) {
+-		options.ls_tree_prefix = prefix = NULL;
+-		options.chomp_prefix = 0;
+-	}
++	if (full_tree)
++		prefix = NULL;
++	options.prefix = chomp_prefix ? prefix : NULL;
++
+ 	/*
+ 	 * We wanted to detect conflicts between --name-only and
+ 	 * --name-status, but once we're done with that subsequent
+-- 
+2.39.3 (Apple Git-145)
+

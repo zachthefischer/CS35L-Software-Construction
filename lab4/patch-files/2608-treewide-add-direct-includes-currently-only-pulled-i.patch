@@ -1,0 +1,67 @@
+From ec2101abf3ea00a3cbb4c88c14d6658fa6d09984 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 23 Dec 2023 17:14:59 +0000
+Subject: [PATCH 2608/2871] treewide: add direct includes currently only pulled
+ in transitively
+
+The next commit will remove a bunch of unnecessary includes, but to do
+so, we need some of the lower level direct includes that files rely on
+to be explicitly specified.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit-graph.c      | 1 +
+ builtin/for-each-ref.c      | 1 +
+ builtin/fsmonitor--daemon.c | 1 +
+ commit-graph.c              | 1 +
+ 4 files changed, 4 insertions(+)
+
+diff --git a/builtin/commit-graph.c b/builtin/commit-graph.c
+index c5684342ec..81a28c6fcd 100644
+--- a/builtin/commit-graph.c
++++ b/builtin/commit-graph.c
+@@ -11,6 +11,7 @@
+ #include "object-store-ll.h"
+ #include "progress.h"
+ #include "replace-object.h"
++#include "strbuf.h"
+ #include "tag.h"
+ #include "trace2.h"
+ 
+diff --git a/builtin/for-each-ref.c b/builtin/for-each-ref.c
+index 6235d72f9d..b5bc700d13 100644
+--- a/builtin/for-each-ref.c
++++ b/builtin/for-each-ref.c
+@@ -1,4 +1,5 @@
+ #include "builtin.h"
++#include "commit.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "object.h"
+diff --git a/builtin/fsmonitor--daemon.c b/builtin/fsmonitor--daemon.c
+index 7260604534..9f80b9eaff 100644
+--- a/builtin/fsmonitor--daemon.c
++++ b/builtin/fsmonitor--daemon.c
+@@ -12,6 +12,7 @@
+ #include "compat/fsmonitor/fsm-health.h"
+ #include "compat/fsmonitor/fsm-listen.h"
+ #include "fsmonitor--daemon.h"
++#include "repository.h"
+ #include "simple-ipc.h"
+ #include "khash.h"
+ #include "pkt-line.h"
+diff --git a/commit-graph.c b/commit-graph.c
+index 5bfee53e87..e7212400da 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -1,5 +1,6 @@
+ #include "git-compat-util.h"
+ #include "config.h"
++#include "csum-file.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "lockfile.h"
+-- 
+2.39.3 (Apple Git-145)
+

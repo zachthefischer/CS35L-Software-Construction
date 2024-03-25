@@ -1,0 +1,113 @@
+From a8305bc6d8eb55cf52264964c8fc0289b72f2fd8 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 11 Dec 2023 10:08:07 +0100
+Subject: [PATCH 2524/2871] reftable/block: introduce macro to initialize
+ `struct block_iter`
+
+There are a bunch of locations where we initialize members of `struct
+block_iter`, which makes it harder than necessary to expand this struct
+to have additional members. Unify the logic via a new `BLOCK_ITER_INIT`
+macro that initializes all members.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/block.c      | 4 +---
+ reftable/block.h      | 4 ++++
+ reftable/block_test.c | 4 ++--
+ reftable/iter.h       | 8 ++++----
+ reftable/reader.c     | 7 +++----
+ 5 files changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/reftable/block.c b/reftable/block.c
+index 34d4d07369..8c6a8c77fc 100644
+--- a/reftable/block.c
++++ b/reftable/block.c
+@@ -389,9 +389,7 @@ int block_reader_seek(struct block_reader *br, struct block_iter *it,
+ 	struct reftable_record rec = reftable_new_record(block_reader_type(br));
+ 	struct strbuf key = STRBUF_INIT;
+ 	int err = 0;
+-	struct block_iter next = {
+-		.last_key = STRBUF_INIT,
+-	};
++	struct block_iter next = BLOCK_ITER_INIT;
+ 
+ 	int i = binsearch(br->restart_count, &restart_key_less, &args);
+ 	if (args.error) {
+diff --git a/reftable/block.h b/reftable/block.h
+index 87c77539b5..51699af233 100644
+--- a/reftable/block.h
++++ b/reftable/block.h
+@@ -86,6 +86,10 @@ struct block_iter {
+ 	struct strbuf last_key;
+ };
+ 
++#define BLOCK_ITER_INIT { \
++	.last_key = STRBUF_INIT, \
++}
++
+ /* initializes a block reader. */
+ int block_reader_init(struct block_reader *br, struct reftable_block *bl,
+ 		      uint32_t header_off, uint32_t table_block_size,
+diff --git a/reftable/block_test.c b/reftable/block_test.c
+index cb88af4a56..c00bbc8aed 100644
+--- a/reftable/block_test.c
++++ b/reftable/block_test.c
+@@ -32,7 +32,7 @@ static void test_block_read_write(void)
+ 	int i = 0;
+ 	int n;
+ 	struct block_reader br = { 0 };
+-	struct block_iter it = { .last_key = STRBUF_INIT };
++	struct block_iter it = BLOCK_ITER_INIT;
+ 	int j = 0;
+ 	struct strbuf want = STRBUF_INIT;
+ 
+@@ -87,7 +87,7 @@ static void test_block_read_write(void)
+ 	block_iter_close(&it);
+ 
+ 	for (i = 0; i < N; i++) {
+-		struct block_iter it = { .last_key = STRBUF_INIT };
++		struct block_iter it = BLOCK_ITER_INIT;
+ 		strbuf_reset(&want);
+ 		strbuf_addstr(&want, names[i]);
+ 
+diff --git a/reftable/iter.h b/reftable/iter.h
+index 09eb0cbfa5..47d67d84df 100644
+--- a/reftable/iter.h
++++ b/reftable/iter.h
+@@ -53,10 +53,10 @@ struct indexed_table_ref_iter {
+ 	int is_finished;
+ };
+ 
+-#define INDEXED_TABLE_REF_ITER_INIT                                     \
+-	{                                                               \
+-		.cur = { .last_key = STRBUF_INIT }, .oid = STRBUF_INIT, \
+-	}
++#define INDEXED_TABLE_REF_ITER_INIT { \
++	.cur = BLOCK_ITER_INIT, \
++	.oid = STRBUF_INIT, \
++}
+ 
+ void iterator_from_indexed_table_ref_iter(struct reftable_iterator *it,
+ 					  struct indexed_table_ref_iter *itr);
+diff --git a/reftable/reader.c b/reftable/reader.c
+index b4db23ce18..9de64f50b4 100644
+--- a/reftable/reader.c
++++ b/reftable/reader.c
+@@ -224,10 +224,9 @@ struct table_iter {
+ 	struct block_iter bi;
+ 	int is_finished;
+ };
+-#define TABLE_ITER_INIT                          \
+-	{                                        \
+-		.bi = {.last_key = STRBUF_INIT } \
+-	}
++#define TABLE_ITER_INIT { \
++	.bi = BLOCK_ITER_INIT \
++}
+ 
+ static void table_iter_copy_from(struct table_iter *dest,
+ 				 struct table_iter *src)
+-- 
+2.39.3 (Apple Git-145)
+

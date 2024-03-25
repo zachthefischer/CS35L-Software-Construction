@@ -1,0 +1,50 @@
+From e8eeda1f9e1e125e268e97cfea42bf3ea8232b68 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:39:15 +0200
+Subject: [PATCH 0130/2871] doc txt & -h consistency: make "read-tree"
+ consistent
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The C version was right to use "()" in place of "[]" around the option
+listing, let's update the *.txt version accordingly, and furthermore
+list the *.c options in the same order as the *.txt.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-read-tree.txt | 2 +-
+ builtin/read-tree.c             | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-read-tree.txt b/Documentation/git-read-tree.txt
+index b9bfdc0a31..7567955bad 100644
+--- a/Documentation/git-read-tree.txt
++++ b/Documentation/git-read-tree.txt
+@@ -9,7 +9,7 @@ git-read-tree - Reads tree information into the index
+ SYNOPSIS
+ --------
+ [verse]
+-'git read-tree' [[-m [--trivial] [--aggressive] | --reset | --prefix=<prefix>]
++'git read-tree' [(-m [--trivial] [--aggressive] | --reset | --prefix=<prefix>)
+ 		[-u | -i]] [--index-output=<file>] [--no-sparse-checkout]
+ 		(--empty | <tree-ish1> [<tree-ish2> [<tree-ish3>]])
+ 
+diff --git a/builtin/read-tree.c b/builtin/read-tree.c
+index b3a389e1b1..f4cbe460b9 100644
+--- a/builtin/read-tree.c
++++ b/builtin/read-tree.c
+@@ -39,7 +39,7 @@ static int list_tree(struct object_id *oid)
+ 
+ static const char * const read_tree_usage[] = {
+ 	N_("git read-tree [(-m [--trivial] [--aggressive] | --reset | --prefix=<prefix>)\n"
+-	   "              [-u | -i]] [--no-sparse-checkout] [--index-output=<file>]\n"
++	   "              [-u | -i]] [--index-output=<file>] [--no-sparse-checkout]\n"
+ 	   "              (--empty | <tree-ish1> [<tree-ish2> [<tree-ish3>]])"),
+ 	NULL
+ };
+-- 
+2.39.3 (Apple Git-145)
+

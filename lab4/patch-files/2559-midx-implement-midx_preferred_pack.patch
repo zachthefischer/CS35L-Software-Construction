@@ -1,0 +1,224 @@
+From b1e3333068247ddd44021a0b69457c249ddee7a1 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 14 Dec 2023 17:24:25 -0500
+Subject: [PATCH 2559/2871] midx: implement `midx_preferred_pack()`
+
+When performing a binary search over the objects in a MIDX's bitmap
+(i.e. in pseudo-pack order), the reader reconstructs the pseudo-pack
+ordering using a combination of (a) the preferred pack, (b) the pack's
+lexical position in the MIDX based on pack names, and (c) the object
+offset within the pack.
+
+In order to perform this binary search, the reader must know the
+identity of the preferred pack. This could be stored in the MIDX, but
+isn't for historical reasons, mostly because it can easily be inferred
+at read-time by looking at the object in the first bit position and
+finding out which pack it was selected from in the MIDX, like so:
+
+    nth_midxed_pack_int_id(m, pack_pos_to_midx(m, 0));
+
+In midx_to_pack_pos() which performs this binary search, we look up the
+identity of the preferred pack before each search. This is relatively
+quick, since it involves two table-driven lookups (one in the MIDX's
+revindex for `pack_pos_to_midx()`, and another in the MIDX's object
+table for `nth_midxed_pack_int_id()`).
+
+But since the preferred pack does not change after the MIDX is written,
+it is safe to cache this value on the MIDX itself.
+
+Write a helper to do just that, and rewrite all of the existing
+call-sites that care about the identity of the preferred pack in terms
+of this new helper.
+
+This will prepare us for a subsequent patch where we will need to binary
+search through the MIDX's pseudo-pack order multiple times.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c                    | 20 ++++++++++++++++++++
+ midx.h                    |  2 ++
+ pack-bitmap.c             | 17 +++++++----------
+ pack-bitmap.h             |  1 -
+ pack-revindex.c           |  4 +++-
+ t/helper/test-read-midx.c | 13 +++++--------
+ 6 files changed, 37 insertions(+), 20 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index beaf0c0de4..85e1c2cd12 100644
+--- a/midx.c
++++ b/midx.c
+@@ -21,6 +21,7 @@
+ #include "refs.h"
+ #include "revision.h"
+ #include "list-objects.h"
++#include "pack-revindex.h"
+ 
+ #define MIDX_SIGNATURE 0x4d494458 /* "MIDX" */
+ #define MIDX_VERSION 1
+@@ -177,6 +178,8 @@ struct multi_pack_index *load_multi_pack_index(const char *object_dir, int local
+ 
+ 	m->num_packs = get_be32(m->data + MIDX_BYTE_NUM_PACKS);
+ 
++	m->preferred_pack_idx = -1;
++
+ 	cf = init_chunkfile(NULL);
+ 
+ 	if (read_table_of_contents(cf, m->data, midx_size,
+@@ -460,6 +463,23 @@ int midx_contains_pack(struct multi_pack_index *m, const char *idx_or_pack_name)
+ 	return midx_locate_pack(m, idx_or_pack_name, NULL);
+ }
+ 
++int midx_preferred_pack(struct multi_pack_index *m, uint32_t *pack_int_id)
++{
++	if (m->preferred_pack_idx == -1) {
++		if (load_midx_revindex(m) < 0) {
++			m->preferred_pack_idx = -2;
++			return -1;
++		}
++
++		m->preferred_pack_idx =
++			nth_midxed_pack_int_id(m, pack_pos_to_midx(m, 0));
++	} else if (m->preferred_pack_idx == -2)
++		return -1; /* no revindex */
++
++	*pack_int_id = m->preferred_pack_idx;
++	return 0;
++}
++
+ int prepare_multi_pack_index_one(struct repository *r, const char *object_dir, int local)
+ {
+ 	struct multi_pack_index *m;
+diff --git a/midx.h b/midx.h
+index 89c5aa637e..f87a8fff26 100644
+--- a/midx.h
++++ b/midx.h
+@@ -29,6 +29,7 @@ struct multi_pack_index {
+ 	unsigned char num_chunks;
+ 	uint32_t num_packs;
+ 	uint32_t num_objects;
++	int preferred_pack_idx;
+ 
+ 	int local;
+ 
+@@ -74,6 +75,7 @@ int midx_contains_pack(struct multi_pack_index *m,
+ 		       const char *idx_or_pack_name);
+ int midx_locate_pack(struct multi_pack_index *m, const char *idx_or_pack_name,
+ 		     uint32_t *pos);
++int midx_preferred_pack(struct multi_pack_index *m, uint32_t *pack_int_id);
+ int prepare_multi_pack_index_one(struct repository *r, const char *object_dir, int local);
+ 
+ /*
+diff --git a/pack-bitmap.c b/pack-bitmap.c
+index 4d5a484678..1682f99596 100644
+--- a/pack-bitmap.c
++++ b/pack-bitmap.c
+@@ -338,7 +338,7 @@ static int open_midx_bitmap_1(struct bitmap_index *bitmap_git,
+ 	struct stat st;
+ 	char *bitmap_name = midx_bitmap_filename(midx);
+ 	int fd = git_open(bitmap_name);
+-	uint32_t i;
++	uint32_t i, preferred_pack;
+ 	struct packed_git *preferred;
+ 
+ 	if (fd < 0) {
+@@ -393,7 +393,12 @@ static int open_midx_bitmap_1(struct bitmap_index *bitmap_git,
+ 		}
+ 	}
+ 
+-	preferred = bitmap_git->midx->packs[midx_preferred_pack(bitmap_git)];
++	if (midx_preferred_pack(bitmap_git->midx, &preferred_pack) < 0) {
++		warning(_("could not determine MIDX preferred pack"));
++		goto cleanup;
++	}
++
++	preferred = bitmap_git->midx->packs[preferred_pack];
+ 	if (!is_pack_valid(preferred)) {
+ 		warning(_("preferred pack (%s) is invalid"),
+ 			preferred->pack_name);
+@@ -1926,14 +1931,6 @@ static int try_partial_reuse(struct bitmapped_pack *pack,
+ 	return 0;
+ }
+ 
+-uint32_t midx_preferred_pack(struct bitmap_index *bitmap_git)
+-{
+-	struct multi_pack_index *m = bitmap_git->midx;
+-	if (!m)
+-		BUG("midx_preferred_pack: requires non-empty MIDX");
+-	return nth_midxed_pack_int_id(m, pack_pos_to_midx(bitmap_git->midx, 0));
+-}
+-
+ static void reuse_partial_packfile_from_bitmap_1(struct bitmap_index *bitmap_git,
+ 						 struct bitmapped_pack *pack,
+ 						 struct bitmap *reuse)
+diff --git a/pack-bitmap.h b/pack-bitmap.h
+index 7a12a2ce81..179b343912 100644
+--- a/pack-bitmap.h
++++ b/pack-bitmap.h
+@@ -77,7 +77,6 @@ int test_bitmap_hashes(struct repository *r);
+ 
+ struct bitmap_index *prepare_bitmap_walk(struct rev_info *revs,
+ 					 int filter_provided_objects);
+-uint32_t midx_preferred_pack(struct bitmap_index *bitmap_git);
+ void reuse_partial_packfile_from_bitmap(struct bitmap_index *bitmap_git,
+ 					struct bitmapped_pack **packs_out,
+ 					size_t *packs_nr_out,
+diff --git a/pack-revindex.c b/pack-revindex.c
+index acf1dd9786..7dc6c776d5 100644
+--- a/pack-revindex.c
++++ b/pack-revindex.c
+@@ -542,7 +542,9 @@ int midx_to_pack_pos(struct multi_pack_index *m, uint32_t at, uint32_t *pos)
+ 	 * implicitly is preferred (and includes all its objects, since ties are
+ 	 * broken first by pack identifier).
+ 	 */
+-	key.preferred_pack = nth_midxed_pack_int_id(m, pack_pos_to_midx(m, 0));
++	if (midx_preferred_pack(key.midx, &key.preferred_pack) < 0)
++		return error(_("could not determine preferred pack"));
++
+ 
+ 	found = bsearch(&key, m->revindex_data, m->num_objects,
+ 			sizeof(*m->revindex_data), midx_pack_order_cmp);
+diff --git a/t/helper/test-read-midx.c b/t/helper/test-read-midx.c
+index e48557aba1..4acae41bb9 100644
+--- a/t/helper/test-read-midx.c
++++ b/t/helper/test-read-midx.c
+@@ -6,6 +6,7 @@
+ #include "pack-bitmap.h"
+ #include "packfile.h"
+ #include "setup.h"
++#include "gettext.h"
+ 
+ static int read_midx_file(const char *object_dir, int show_objects)
+ {
+@@ -79,7 +80,7 @@ static int read_midx_checksum(const char *object_dir)
+ static int read_midx_preferred_pack(const char *object_dir)
+ {
+ 	struct multi_pack_index *midx = NULL;
+-	struct bitmap_index *bitmap = NULL;
++	uint32_t preferred_pack;
+ 
+ 	setup_git_directory();
+ 
+@@ -87,16 +88,12 @@ static int read_midx_preferred_pack(const char *object_dir)
+ 	if (!midx)
+ 		return 1;
+ 
+-	bitmap = prepare_bitmap_git(the_repository);
+-	if (!bitmap)
+-		return 1;
+-	if (!bitmap_is_midx(bitmap)) {
+-		free_bitmap_index(bitmap);
++	if (midx_preferred_pack(midx, &preferred_pack) < 0) {
++		warning(_("could not determine MIDX preferred pack"));
+ 		return 1;
+ 	}
+ 
+-	printf("%s\n", midx->pack_names[midx_preferred_pack(bitmap)]);
+-	free_bitmap_index(bitmap);
++	printf("%s\n", midx->pack_names[preferred_pack]);
+ 	return 0;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

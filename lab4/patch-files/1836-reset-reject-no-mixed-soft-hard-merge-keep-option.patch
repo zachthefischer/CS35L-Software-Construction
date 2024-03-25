@@ -1,0 +1,86 @@
+From 3821eb6c3dedba1c57522a1254a916f5ad0d15dc Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 19 Jul 2023 06:37:39 -0700
+Subject: [PATCH 1836/2871] reset: reject --no-(mixed|soft|hard|merge|keep)
+ option
+
+"git reset --no-mixed" behaved exactly like "git reset --mixed",
+which was nonsense.
+
+If there were only two kinds, e.g. "mixed" vs "separate", it might
+have made sense to make "git reset --no-mixed" behave identically to
+"git reset --separate" and vice-versa, but because we have many
+types of reset, let's just forbid "--no-mixed" and negated form of
+other types.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/reset.c  | 29 ++++++++++++++++++-----------
+ t/t7102-reset.sh | 10 ++++++++++
+ 2 files changed, 28 insertions(+), 11 deletions(-)
+
+diff --git a/builtin/reset.c b/builtin/reset.c
+index f99f32d580..ac4901e003 100644
+--- a/builtin/reset.c
++++ b/builtin/reset.c
+@@ -334,18 +334,25 @@ int cmd_reset(int argc, const char **argv, const char *prefix)
+ 		OPT__QUIET(&quiet, N_("be quiet, only report errors")),
+ 		OPT_BOOL(0, "no-refresh", &no_refresh,
+ 				N_("skip refreshing the index after reset")),
+-		OPT_SET_INT(0, "mixed", &reset_type,
+-						N_("reset HEAD and index"), MIXED),
+-		OPT_SET_INT(0, "soft", &reset_type, N_("reset only HEAD"), SOFT),
+-		OPT_SET_INT(0, "hard", &reset_type,
+-				N_("reset HEAD, index and working tree"), HARD),
+-		OPT_SET_INT(0, "merge", &reset_type,
+-				N_("reset HEAD, index and working tree"), MERGE),
+-		OPT_SET_INT(0, "keep", &reset_type,
+-				N_("reset HEAD but keep local changes"), KEEP),
++		OPT_SET_INT_F(0, "mixed", &reset_type,
++			      N_("reset HEAD and index"),
++			      MIXED, PARSE_OPT_NONEG),
++		OPT_SET_INT_F(0, "soft", &reset_type,
++			      N_("reset only HEAD"),
++			      SOFT, PARSE_OPT_NONEG),
++		OPT_SET_INT_F(0, "hard", &reset_type,
++			      N_("reset HEAD, index and working tree"),
++			      HARD, PARSE_OPT_NONEG),
++		OPT_SET_INT_F(0, "merge", &reset_type,
++			      N_("reset HEAD, index and working tree"),
++			      MERGE, PARSE_OPT_NONEG),
++		OPT_SET_INT_F(0, "keep", &reset_type,
++			      N_("reset HEAD but keep local changes"),
++			      KEEP, PARSE_OPT_NONEG),
+ 		OPT_CALLBACK_F(0, "recurse-submodules", NULL,
+-			    "reset", "control recursive updating of submodules",
+-			    PARSE_OPT_OPTARG, option_parse_recurse_submodules_worktree_updater),
++			       "reset", "control recursive updating of submodules",
++			       PARSE_OPT_OPTARG,
++			       option_parse_recurse_submodules_worktree_updater),
+ 		OPT_BOOL('p', "patch", &patch_mode, N_("select hunks interactively")),
+ 		OPT_BOOL('N', "intent-to-add", &intent_to_add,
+ 				N_("record only the fact that removed paths will be added later")),
+diff --git a/t/t7102-reset.sh b/t/t7102-reset.sh
+index 22477f3a31..4287863ae6 100755
+--- a/t/t7102-reset.sh
++++ b/t/t7102-reset.sh
+@@ -71,6 +71,16 @@ check_changes () {
+ 	done | test_cmp .cat_expect -
+ }
+ 
++# no negated form for various type of resets
++for opt in soft mixed hard merge keep
++do
++	test_expect_success "no 'git reset --no-$opt'" '
++		test_when_finished "rm -f err" &&
++		test_must_fail git reset --no-$opt 2>err &&
++		grep "error: unknown option .no-$opt." err
++	'
++done
++
+ test_expect_success 'reset --hard message' '
+ 	hex=$(git log -1 --format="%h") &&
+ 	git reset --hard >.actual &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,37 @@
+From c9192f9e45f12f7e4c93488eb77a3098e75a78cc Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Mon, 21 Aug 2023 19:07:20 +0200
+Subject: [PATCH 2052/2871] git-revert.txt: add discussion
+
+The section is inspired by git-commit.txt.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-revert.txt | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/Documentation/git-revert.txt b/Documentation/git-revert.txt
+index d2e10d3dce..cbe0208834 100644
+--- a/Documentation/git-revert.txt
++++ b/Documentation/git-revert.txt
+@@ -142,6 +142,16 @@ EXAMPLES
+ 	changes. The revert only modifies the working tree and the
+ 	index.
+ 
++DISCUSSION
++----------
++
++While git creates a basic commit message automatically, it is
++_strongly_ recommended to explain why the original commit is being
++reverted.
++In addition, repeatedly reverting reverts will result in increasingly
++unwieldy subject lines, for example 'Reapply "Reapply "<original subject>""'.
++Please consider rewording these to be shorter and more unique.
++
+ CONFIGURATION
+ -------------
+ 
+-- 
+2.39.3 (Apple Git-145)
+

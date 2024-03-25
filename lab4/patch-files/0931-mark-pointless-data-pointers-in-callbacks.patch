@@ -1,0 +1,57 @@
+From d3dcfa047f415de5590b60781dcdf11492e25d41 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:15 -0500
+Subject: [PATCH 0931/2871] mark "pointless" data pointers in callbacks
+
+Both the object_array_filter() and trie_find() functions use callback
+functions that let the caller specify which elements match. These
+callbacks take a void pointer in case the caller wants to pass in extra
+data. But in each case, the single user of these functions just passes
+NULL, and the callback ignores the extra pointer.
+
+We could just remove these unused parameters from the callback interface
+entirely. But it's good practice to provide such a pointer, as it guides
+future callers of the function in the right direction (rather than
+tempting them to access global data). Plus it's consistent with other
+generic callback interfaces.
+
+So let's instead annotate the unused parameters, in order to silence the
+compiler's -Wunused-parameter warning.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ path.c     | 3 ++-
+ revision.c | 2 +-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/path.c b/path.c
+index 492e17ad12..0b641233e3 100644
+--- a/path.c
++++ b/path.c
+@@ -347,7 +347,8 @@ static void init_common_trie(void)
+  * Helper function for update_common_dir: returns 1 if the dir
+  * prefix is common.
+  */
+-static int check_common(const char *unmatched, void *value, void *baton)
++static int check_common(const char *unmatched, void *value,
++			void *baton UNUSED)
+ {
+ 	struct common_dir *dir = value;
+ 
+diff --git a/revision.c b/revision.c
+index 21f5f572c2..4a24fc3fcd 100644
+--- a/revision.c
++++ b/revision.c
+@@ -4159,7 +4159,7 @@ static struct commit *get_revision_1(struct rev_info *revs)
+  * Return true for entries that have not yet been shown.  (This is an
+  * object_array_each_func_t.)
+  */
+-static int entry_unshown(struct object_array_entry *entry, void *cb_data_unused)
++static int entry_unshown(struct object_array_entry *entry, void *cb_data UNUSED)
+ {
+ 	return !(entry->item->flags & SHOWN);
+ }
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,149 @@
+From c4d9c79378e9108358c3f20e27bc437754cd805d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?SZEDER=20G=C3=A1bor?= <szeder.dev@gmail.com>
+Date: Sun, 19 Mar 2023 17:27:12 +0100
+Subject: [PATCH 1062/2871] treewide: remove unnecessary inclusions of
+ parse-options.h from headers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The headers 'diagnose.h', 'list-objects-filter-options.h',
+'ref-filter.h' and 'remote.h' declare option parsing callback
+functions with a 'struct option*' parameter, and 'revision.h' declares
+an option parsing helper function taking 'struct parse_opt_ctx_t*' and
+'struct option*' parameters.  These headers all include
+'parse-options.h', although they don't need any of the type
+definitions from that header file.  Furthermore,
+'list-objects-filter-options.h' and 'ref-filter.h' also define some
+OPT_* macros to initialize a 'struct option', but these don't
+necessitate the inclusion of parse-options.h in these headers either,
+because these macros are only expanded in source files.
+
+Remove these unnecessary inclusions of parse-options.h and use forward
+declarations to declare the necessary types.
+
+After this patch none of the header files include parse-options.h
+anymore.
+
+With these changes, the build time after modifying only
+parse-options.h is reduced by about 30%, and the number of targets
+built is almost 20% less:
+
+  Before:
+
+    $ touch parse-options.h && time make -j4 |wc -l
+    353
+
+    real    1m1.527s
+    user    3m32.205s
+    sys	    0m15.903s
+
+  After:
+
+    289
+
+    real    0m39.285s
+    user    2m12.540s
+    sys     0m11.164s
+
+Signed-off-by: SZEDER Gábor <szeder.dev@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diagnose.h                    | 3 ++-
+ list-objects-filter-options.h | 3 ++-
+ ref-filter.h                  | 2 +-
+ remote.h                      | 2 +-
+ revision.h                    | 3 ++-
+ 5 files changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/diagnose.h b/diagnose.h
+index 7a4951a786..f525219ab0 100644
+--- a/diagnose.h
++++ b/diagnose.h
+@@ -2,7 +2,8 @@
+ #define DIAGNOSE_H
+ 
+ #include "strbuf.h"
+-#include "parse-options.h"
++
++struct option;
+ 
+ enum diagnose_mode {
+ 	DIAGNOSE_NONE,
+diff --git a/list-objects-filter-options.h b/list-objects-filter-options.h
+index 1fe393f447..aad295f232 100644
+--- a/list-objects-filter-options.h
++++ b/list-objects-filter-options.h
+@@ -2,9 +2,10 @@
+ #define LIST_OBJECTS_FILTER_OPTIONS_H
+ 
+ #include "cache.h"
+-#include "parse-options.h"
+ #include "string-list.h"
+ 
++struct option;
++
+ /*
+  * The list of defined filters for list-objects.
+  */
+diff --git a/ref-filter.h b/ref-filter.h
+index aa0eea4ecf..daa6d02017 100644
+--- a/ref-filter.h
++++ b/ref-filter.h
+@@ -4,7 +4,6 @@
+ #include "oid-array.h"
+ #include "refs.h"
+ #include "commit.h"
+-#include "parse-options.h"
+ 
+ /* Quoting styles */
+ #define QUOTE_NONE 0
+@@ -24,6 +23,7 @@
+ 
+ struct atom_value;
+ struct ref_sorting;
++struct option;
+ 
+ enum ref_sorting_order {
+ 	REF_SORTING_REVERSE = 1<<0,
+diff --git a/remote.h b/remote.h
+index 1ebbe42792..92eccf22ec 100644
+--- a/remote.h
++++ b/remote.h
+@@ -2,10 +2,10 @@
+ #define REMOTE_H
+ 
+ #include "cache.h"
+-#include "parse-options.h"
+ #include "hashmap.h"
+ #include "refspec.h"
+ 
++struct option;
+ struct transport_ls_refs_options;
+ 
+ /**
+diff --git a/revision.h b/revision.h
+index 30febad09a..d5b26db955 100644
+--- a/revision.h
++++ b/revision.h
+@@ -2,7 +2,6 @@
+ #define REVISION_H
+ 
+ #include "commit.h"
+-#include "parse-options.h"
+ #include "grep.h"
+ #include "notes.h"
+ #include "pretty.h"
+@@ -61,6 +60,8 @@ struct string_list;
+ struct saved_parents;
+ struct bloom_key;
+ struct bloom_filter_settings;
++struct option;
++struct parse_opt_ctx_t;
+ define_shared_commit_slab(revision_sources, char *);
+ 
+ struct rev_cmdline_info {
+-- 
+2.39.3 (Apple Git-145)
+

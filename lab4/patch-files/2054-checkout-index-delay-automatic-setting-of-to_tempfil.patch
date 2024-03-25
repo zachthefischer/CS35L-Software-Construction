@@ -1,0 +1,117 @@
+From 9b40386586aca7364f7518d5d7e7f89ba9e80d85 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 5 Sep 2023 03:12:59 -0400
+Subject: [PATCH 2054/2871] checkout-index: delay automatic setting of
+ to_tempfile
+
+Using --stage=all requires writing to tempfiles, since we cannot put
+multiple stages into a single file. So --stage=all implies --temp.
+
+But we do so by setting to_tempfile in the options callback for --stage,
+rather than after all options have been parsed. This leads to two bugs:
+
+  1. If you run "checkout-index --stage=all --stage=2", this should not
+     imply --temp, but it currently does. The callback cannot just unset
+     to_tempfile when it sees the "2" value, because it no longer knows
+     if its value was from the earlier --stage call, or if the user
+     specified --temp explicitly.
+
+  2. If you run "checkout-index --stage=all --no-temp", the --no-temp
+     will overwrite the earlier implied --temp. But this mode of
+     operation cannot work, and the command will fail with "<path>
+     already exists" when trying to write the higher stages.
+
+We can fix both by lazily setting to_tempfile. We'll make it a tristate,
+with -1 as "not yet given", and have --stage=all enable it only after
+all options are parsed. Likewise, after all options are parsed we can
+detect and reject the bogus "--no-temp" case.
+
+Note that this does technically change the behavior for "--stage=all
+--no-temp" for paths which have only one stage present (which
+accidentally worked before, but is now forbidden). But this behavior was
+never intended, and you'd have to go out of your way to try to trigger
+it.
+
+The new tests cover both cases, as well the general "--stage=all implies
+--temp", as most of the other tests explicitly say "--temp". Ironically,
+the test "checkout --temp within subdir" is the only one that _doesn't_
+use "--temp", and so was implicitly covering this case. But it seems
+reasonable to have a more explicit test alongside the other related
+ones.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/checkout-index.c       |  9 +++++++--
+ t/t2004-checkout-cache-temp.sh | 20 ++++++++++++++++++++
+ 2 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/checkout-index.c b/builtin/checkout-index.c
+index f62f13f2b5..526c210bcb 100644
+--- a/builtin/checkout-index.c
++++ b/builtin/checkout-index.c
+@@ -24,7 +24,7 @@
+ static int nul_term_line;
+ static int checkout_stage; /* default to checkout stage0 */
+ static int ignore_skip_worktree; /* default to 0 */
+-static int to_tempfile;
++static int to_tempfile = -1;
+ static char topath[4][TEMPORARY_FILENAME_LENGTH + 1];
+ 
+ static struct checkout state = CHECKOUT_INIT;
+@@ -196,7 +196,6 @@ static int option_parse_stage(const struct option *opt,
+ 	BUG_ON_OPT_NEG(unset);
+ 
+ 	if (!strcmp(arg, "all")) {
+-		to_tempfile = 1;
+ 		checkout_stage = CHECKOUT_ALL;
+ 	} else {
+ 		int ch = arg[0];
+@@ -269,6 +268,12 @@ int cmd_checkout_index(int argc, const char **argv, const char *prefix)
+ 		state.base_dir = "";
+ 	state.base_dir_len = strlen(state.base_dir);
+ 
++	if (to_tempfile < 0)
++		to_tempfile = (checkout_stage == CHECKOUT_ALL);
++	if (!to_tempfile && checkout_stage == CHECKOUT_ALL)
++		die(_("options '%s' and '%s' cannot be used together"),
++		    "--stage=all", "--no-temp");
++
+ 	/*
+ 	 * when --prefix is specified we do not want to update cache.
+ 	 */
+diff --git a/t/t2004-checkout-cache-temp.sh b/t/t2004-checkout-cache-temp.sh
+index b16d69ca4a..45dd1bc858 100755
+--- a/t/t2004-checkout-cache-temp.sh
++++ b/t/t2004-checkout-cache-temp.sh
+@@ -117,6 +117,26 @@ test_expect_success 'checkout all stages/one file to temporary files' '
+ 	test $(cat $s3) = tree3path1)
+ '
+ 
++test_expect_success '--stage=all implies --temp' '
++	rm -f path* .merge_* actual &&
++	git checkout-index --stage=all -- path1 &&
++	test_path_is_missing path1
++'
++
++test_expect_success 'overriding --stage=all resets implied --temp' '
++	rm -f path* .merge_* actual &&
++	git checkout-index --stage=all --stage=2 -- path1 &&
++	echo tree2path1 >expect &&
++	test_cmp expect path1
++'
++
++test_expect_success '--stage=all --no-temp is rejected' '
++	rm -f path* .merge_* actual &&
++	test_must_fail git checkout-index --stage=all --no-temp -- path1 2>err &&
++	grep -v "already exists" err &&
++	grep "options .--stage=all. and .--no-temp. cannot be used together" err
++'
++
+ test_expect_success 'checkout some stages/one file to temporary files' '
+ 	rm -f path* .merge_* actual &&
+ 	git checkout-index --stage=all --temp -- path2 >actual &&
+-- 
+2.39.3 (Apple Git-145)
+

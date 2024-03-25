@@ -1,0 +1,40 @@
+From 6d5e9e53aa46b97227a25c85400fd00b8237411a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 27 Dec 2022 19:39:10 +0100
+Subject: [PATCH 0618/2871] bundle <cmd>: have usage_msg_opt() note the missing
+ "<file>"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Improve the usage we emit on e.g. "git bundle create" to note why
+we're showing the usage, it's because the "<file>" argument is
+missing.
+
+We know that'll be the case for all parse_options_cmd_bundle() users,
+as they're passing the "char **bundle_file" parameter, which as the
+context shows we're expected to populate.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bundle.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/bundle.c b/builtin/bundle.c
+index 34b4aa611b..4b63574c98 100644
+--- a/builtin/bundle.c
++++ b/builtin/bundle.c
+@@ -48,7 +48,7 @@ static int parse_options_cmd_bundle(int argc,
+ 	argc = parse_options(argc, argv, NULL, options, usagestr,
+ 			     PARSE_OPT_STOP_AT_NON_OPTION);
+ 	if (!argc)
+-		usage_with_options(usagestr, options);
++		usage_msg_opt(_("need a <file> argument"), usagestr, options);
+ 	*bundle_file = prefix_filename(prefix, argv[0]);
+ 	return argc;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

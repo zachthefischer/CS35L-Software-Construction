@@ -1,0 +1,37 @@
+From 31dfa17b3b83fcf0ff8ba286167b4225dc7d480d Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:42:01 -0700
+Subject: [PATCH 1238/2871] cache.h: remove unnecessary includes
+
+cache.h did not need any of these headers, and nothing that depended
+upon cache.h needed them either.  Simply expunge these includes.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 21fd520b04..16b5fc9fa3 100644
+--- a/cache.h
++++ b/cache.h
+@@ -4,14 +4,10 @@
+ #include "git-compat-util.h"
+ #include "strbuf.h"
+ #include "hashmap.h"
+-#include "list.h"
+ #include "gettext.h"
+ #include "string-list.h"
+-#include "hash.h"
+-#include "path.h"
+ #include "pathspec.h"
+ #include "object.h"
+-#include "repository.h"
+ #include "statinfo.h"
+ 
+ #if defined(DT_UNKNOWN) && !defined(NO_D_TYPE_IN_DIRENT)
+-- 
+2.39.3 (Apple Git-145)
+

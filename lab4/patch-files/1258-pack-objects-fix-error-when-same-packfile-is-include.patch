@@ -1,0 +1,74 @@
+From 752b465c3c0fd7f503b50c326017b8b13af83c3b Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 14 Apr 2023 08:01:54 +0200
+Subject: [PATCH 1258/2871] pack-objects: fix error when same packfile is
+ included and excluded
+
+When passing the same packfile both as included and excluded via the
+`--stdin-packs` option, then we will return an error because the
+excluded packfile cannot be found. This is because we will only set the
+`util` pointer for the included packfile list if it was found, so that
+we later die when we notice that it's in fact not set for the excluded
+packfile list.
+
+Fix this bug by always setting the `util` pointer for both the included
+and excluded list entries.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-objects.c        |  8 +++-----
+ t/t5331-pack-objects-stdin.sh | 20 ++++++++++++++++++++
+ 2 files changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index c97ae1b6d0..884b84a2fd 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -3351,11 +3351,9 @@ static void read_packs_list_from_stdin(void)
+ 	for (p = get_all_packs(the_repository); p; p = p->next) {
+ 		const char *pack_name = pack_basename(p);
+ 
+-		item = string_list_lookup(&include_packs, pack_name);
+-		if (!item)
+-			item = string_list_lookup(&exclude_packs, pack_name);
+-
+-		if (item)
++		if ((item = string_list_lookup(&include_packs, pack_name)))
++			item->util = p;
++		if ((item = string_list_lookup(&exclude_packs, pack_name)))
+ 			item->util = p;
+ 	}
+ 
+diff --git a/t/t5331-pack-objects-stdin.sh b/t/t5331-pack-objects-stdin.sh
+index 71c8a4a635..3ef736ec05 100755
+--- a/t/t5331-pack-objects-stdin.sh
++++ b/t/t5331-pack-objects-stdin.sh
+@@ -169,4 +169,24 @@ test_expect_success 'pack-objects --stdin with duplicate packfile' '
+ 	)
+ '
+ 
++test_expect_success 'pack-objects --stdin with same packfile excluded and included' '
++	test_when_finished "rm -fr repo" &&
++
++	git init repo &&
++	(
++		cd repo &&
++		test_commit "commit" &&
++		git repack -ad &&
++
++		{
++			basename .git/objects/pack/pack-*.pack &&
++			printf "^%s\n" "$(basename .git/objects/pack/pack-*.pack)"
++		} >packfiles &&
++
++		git pack-objects --stdin-packs generated-pack <packfiles &&
++		packed_objects generated-pack-*.idx >packed-objects &&
++		test_must_be_empty packed-objects
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

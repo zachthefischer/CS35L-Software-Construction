@@ -1,0 +1,209 @@
+From 73359a9b4375e0a0c02bb6b4f50e6782837cdc3f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 03:00:40 +0000
+Subject: [PATCH 1221/2871] treewide: be explicit about dependence on convert.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ archive.c          | 1 +
+ blame.c            | 1 +
+ builtin/cat-file.c | 1 +
+ builtin/ls-files.c | 1 +
+ cache.h            | 1 -
+ combine-diff.c     | 1 +
+ config.c           | 1 +
+ convert.c          | 1 +
+ diff.c             | 1 +
+ dir.c              | 1 +
+ environment.c      | 1 +
+ ll-merge.c         | 1 +
+ object-file.c      | 1 +
+ streaming.c        | 1 +
+ unpack-trees.h     | 1 +
+ 15 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/archive.c b/archive.c
+index f1b8e9ce48..ab8966d73a 100644
+--- a/archive.c
++++ b/archive.c
+@@ -2,6 +2,7 @@
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
++#include "convert.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/blame.c b/blame.c
+index 3455f6a5ea..ff2a6c4912 100644
+--- a/blame.c
++++ b/blame.c
+@@ -3,6 +3,7 @@
+ #include "object-store.h"
+ #include "cache-tree.h"
+ #include "mergesort.h"
++#include "convert.h"
+ #include "diff.h"
+ #include "diffcore.h"
+ #include "gettext.h"
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index 04d4bb6c77..1e4b4798f4 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -7,6 +7,7 @@
+ #include "cache.h"
+ #include "alloc.h"
+ #include "config.h"
++#include "convert.h"
+ #include "builtin.h"
+ #include "diff.h"
+ #include "environment.h"
+diff --git a/builtin/ls-files.c b/builtin/ls-files.c
+index 68532f3e51..7f228353fe 100644
+--- a/builtin/ls-files.c
++++ b/builtin/ls-files.c
+@@ -8,6 +8,7 @@
+ #include "cache.h"
+ #include "repository.h"
+ #include "config.h"
++#include "convert.h"
+ #include "quote.h"
+ #include "dir.h"
+ #include "builtin.h"
+diff --git a/cache.h b/cache.h
+index d9ca2688d8..415f0f8567 100644
+--- a/cache.h
++++ b/cache.h
+@@ -6,7 +6,6 @@
+ #include "hashmap.h"
+ #include "list.h"
+ #include "gettext.h"
+-#include "convert.h"
+ #include "string-list.h"
+ #include "pack-revindex.h"
+ #include "hash.h"
+diff --git a/combine-diff.c b/combine-diff.c
+index 44ef6a1a81..6586e4508d 100644
+--- a/combine-diff.c
++++ b/combine-diff.c
+@@ -1,6 +1,7 @@
+ #include "cache.h"
+ #include "object-store.h"
+ #include "commit.h"
++#include "convert.h"
+ #include "blob.h"
+ #include "diff.h"
+ #include "diffcore.h"
+diff --git a/config.c b/config.c
+index 3cee6538f3..9e74b5aec7 100644
+--- a/config.c
++++ b/config.c
+@@ -12,6 +12,7 @@
+ #include "date.h"
+ #include "branch.h"
+ #include "config.h"
++#include "convert.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "ident.h"
+diff --git a/convert.c b/convert.c
+index 5912770644..5a2ea5308d 100644
+--- a/convert.c
++++ b/convert.c
+@@ -1,6 +1,7 @@
+ #include "cache.h"
+ #include "advice.h"
+ #include "config.h"
++#include "convert.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "object-store.h"
+diff --git a/diff.c b/diff.c
+index e55a015cfd..47c1973a50 100644
+--- a/diff.c
++++ b/diff.c
+@@ -5,6 +5,7 @@
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
++#include "convert.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "tempfile.h"
+diff --git a/dir.c b/dir.c
+index 10f6c38b93..d1f1b1ef76 100644
+--- a/dir.c
++++ b/dir.c
+@@ -9,6 +9,7 @@
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
++#include "convert.h"
+ #include "dir.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/environment.c b/environment.c
+index 2254595e4a..e57292eccc 100644
+--- a/environment.c
++++ b/environment.c
+@@ -10,6 +10,7 @@
+ #include "cache.h"
+ #include "abspath.h"
+ #include "branch.h"
++#include "convert.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "repository.h"
+diff --git a/ll-merge.c b/ll-merge.c
+index 8be38d3bd4..28bc94c45d 100644
+--- a/ll-merge.c
++++ b/ll-merge.c
+@@ -6,6 +6,7 @@
+ 
+ #include "cache.h"
+ #include "config.h"
++#include "convert.h"
+ #include "attr.h"
+ #include "xdiff-interface.h"
+ #include "run-command.h"
+diff --git a/object-file.c b/object-file.c
+index 76b22ca75c..a4331e0da6 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -10,6 +10,7 @@
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
++#include "convert.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/streaming.c b/streaming.c
+index 024fd796b7..27e014d8b2 100644
+--- a/streaming.c
++++ b/streaming.c
+@@ -2,6 +2,7 @@
+  * Copyright (c) 2011, Google Inc.
+  */
+ #include "cache.h"
++#include "convert.h"
+ #include "environment.h"
+ #include "streaming.h"
+ #include "repository.h"
+diff --git a/unpack-trees.h b/unpack-trees.h
+index 61c06eb7c5..30622aeebf 100644
+--- a/unpack-trees.h
++++ b/unpack-trees.h
+@@ -2,6 +2,7 @@
+ #define UNPACK_TREES_H
+ 
+ #include "cache.h"
++#include "convert.h"
+ #include "strvec.h"
+ #include "string-list.h"
+ #include "tree-walk.h"
+-- 
+2.39.3 (Apple Git-145)
+

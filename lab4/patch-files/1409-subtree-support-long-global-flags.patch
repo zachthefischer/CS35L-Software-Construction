@@ -1,0 +1,31 @@
+From b4de9239bfbc402738a5755d75a8b90a25c5cfdf Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Sun, 7 May 2023 03:09:48 +0000
+Subject: [PATCH 1409/2871] subtree: support long global flags
+
+The documentation at e75d1da38a claimed support, but it was never present
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/git-subtree.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index 10c9c87839..7db4c45676 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -34,8 +34,8 @@ git subtree pull  --prefix=<prefix> <repository> <ref>
+ git subtree push  --prefix=<prefix> <repository> <refspec>
+ --
+ h,help        show the help
+-q             quiet
+-d             show debug messages
++q,quiet       quiet
++d,debug       show debug messages
+ P,prefix=     the name of the subdir to split out
+  options for 'split' (also: 'push')
+ annotate=     add a prefix to commit message of new commits
+-- 
+2.39.3 (Apple Git-145)
+

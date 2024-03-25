@@ -1,0 +1,63 @@
+From 8806120de6c242a7143cfb1701106c5f9f77cf90 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Thu, 23 Mar 2023 16:15:23 -0600
+Subject: [PATCH 1202/2871] doc: asciidoc: remove custom header macro
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In 2007 we added a custom header macro to provide version information
+7ef195ba3e (Documentation: Add version information to man pages,
+2007-03-25),
+
+However, in 2008 asciidoc added the attributes to do this properly [1].
+
+This was not implemented in Git until 2019: 226daba280 (Doc/Makefile:
+give mansource/-version/-manual attributes, 2019-09-16).
+
+But in 2023 we are doing it properly, so there's no need for the custom
+macro.
+
+[1] https://github.com/asciidoc-py/asciidoc-py/commit/ad78a3c
+
+Cc: Martin Ågren <martin.agren@gmail.com>
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Reviewed-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/asciidoc.conf | 19 -------------------
+ 1 file changed, 19 deletions(-)
+
+diff --git a/Documentation/asciidoc.conf b/Documentation/asciidoc.conf
+index 3e4c13971b..60f76f43ed 100644
+--- a/Documentation/asciidoc.conf
++++ b/Documentation/asciidoc.conf
+@@ -51,25 +51,6 @@ ifdef::doctype-manpage[]
+ endif::doctype-manpage[]
+ endif::backend-docbook[]
+ 
+-ifdef::doctype-manpage[]
+-ifdef::backend-docbook[]
+-[header]
+-template::[header-declarations]
+-<refentry>
+-<refmeta>
+-<refentrytitle>{mantitle}</refentrytitle>
+-<manvolnum>{manvolnum}</manvolnum>
+-<refmiscinfo class="source">{mansource}</refmiscinfo>
+-<refmiscinfo class="version">{manversion}</refmiscinfo>
+-<refmiscinfo class="manual">{manmanual}</refmiscinfo>
+-</refmeta>
+-<refnamediv>
+-  <refname>{manname}</refname>
+-  <refpurpose>{manpurpose}</refpurpose>
+-</refnamediv>
+-endif::backend-docbook[]
+-endif::doctype-manpage[]
+-
+ ifdef::backend-xhtml11[]
+ [attributes]
+ git-relative-html-prefix=
+-- 
+2.39.3 (Apple Git-145)
+

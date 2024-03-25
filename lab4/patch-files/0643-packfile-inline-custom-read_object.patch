@@ -1,0 +1,75 @@
+From c2f32bef9cbed13f21b2308cc3c02158c338f70f Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 7 Jan 2023 08:50:53 -0500
+Subject: [PATCH 0643/2871] packfile: inline custom read_object()
+
+When the pack code was split into its own file[1], it got a copy of the
+static read_object() function. But there's only one caller here, so we
+could just inline it. And it's worth doing so, as the name read_object()
+invites comparisons to the public read_object_file(), but the two don't
+behave quite the same.
+
+[1] The move happened over several commits, but the relevant one here is
+    f1d8130be0 (pack: move clear_delta_base_cache(), packed_object_info(),
+    unpack_entry(), 2017-08-18).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ packfile.c | 26 +++++++++-----------------
+ 1 file changed, 9 insertions(+), 17 deletions(-)
+
+diff --git a/packfile.c b/packfile.c
+index c0d7dd93f4..79e21ab18e 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -1650,22 +1650,6 @@ struct unpack_entry_stack_ent {
+ 	unsigned long size;
+ };
+ 
+-static void *read_object(struct repository *r,
+-			 const struct object_id *oid,
+-			 enum object_type *type,
+-			 unsigned long *size)
+-{
+-	struct object_info oi = OBJECT_INFO_INIT;
+-	void *content;
+-	oi.typep = type;
+-	oi.sizep = size;
+-	oi.contentp = &content;
+-
+-	if (oid_object_info_extended(r, oid, &oi, 0) < 0)
+-		return NULL;
+-	return content;
+-}
+-
+ void *unpack_entry(struct repository *r, struct packed_git *p, off_t obj_offset,
+ 		   enum object_type *final_type, unsigned long *final_size)
+ {
+@@ -1798,6 +1782,8 @@ void *unpack_entry(struct repository *r, struct packed_git *p, off_t obj_offset,
+ 			uint32_t pos;
+ 			struct object_id base_oid;
+ 			if (!(offset_to_pack_pos(p, obj_offset, &pos))) {
++				struct object_info oi = OBJECT_INFO_INIT;
++
+ 				nth_packed_object_id(&base_oid, p,
+ 						     pack_pos_to_index(p, pos));
+ 				error("failed to read delta base object %s"
+@@ -1805,7 +1791,13 @@ void *unpack_entry(struct repository *r, struct packed_git *p, off_t obj_offset,
+ 				      oid_to_hex(&base_oid), (uintmax_t)obj_offset,
+ 				      p->pack_name);
+ 				mark_bad_packed_object(p, &base_oid);
+-				base = read_object(r, &base_oid, &type, &base_size);
++
++				oi.typep = &type;
++				oi.sizep = &base_size;
++				oi.contentp = &base;
++				if (oid_object_info_extended(r, &base_oid, &oi, 0) < 0)
++					base = NULL;
++
+ 				external_base = base;
+ 			}
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

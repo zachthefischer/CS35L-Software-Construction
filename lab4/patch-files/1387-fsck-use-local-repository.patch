@@ -1,0 +1,50 @@
+From cf9cd8b55c55794cc5eb38a157855f1ca2edd5ab Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 2 May 2023 13:27:22 +0000
+Subject: [PATCH 1387/2871] fsck: use local repository
+
+In 0d30feef3c5 (fsck: create scaffolding for rev-index checks,
+2023-04-17) and later 5a6072f631d (fsck: validate .rev file header,
+2023-04-17), the check_pack_rev_indexes() method was created with a
+'struct repository *r' parameter. However, this parameter was unused and
+instead 'the_repository' was used in its place.
+
+Fix this situation with the obvious replacement.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsck.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/fsck.c b/builtin/fsck.c
+index 75b30d1d00..dcc165bf0c 100644
+--- a/builtin/fsck.c
++++ b/builtin/fsck.c
+@@ -869,20 +869,20 @@ static int check_pack_rev_indexes(struct repository *r, int show_progress)
+ 	int res = 0;
+ 
+ 	if (show_progress) {
+-		for (struct packed_git *p = get_all_packs(the_repository); p; p = p->next)
++		for (struct packed_git *p = get_all_packs(r); p; p = p->next)
+ 			pack_count++;
+ 		progress = start_delayed_progress("Verifying reverse pack-indexes", pack_count);
+ 		pack_count = 0;
+ 	}
+ 
+-	for (struct packed_git *p = get_all_packs(the_repository); p; p = p->next) {
++	for (struct packed_git *p = get_all_packs(r); p; p = p->next) {
+ 		int load_error = load_pack_revindex_from_disk(p);
+ 
+ 		if (load_error < 0) {
+ 			error(_("unable to load rev-index for pack '%s'"), p->pack_name);
+ 			res = ERROR_PACK_REV_INDEX;
+ 		} else if (!load_error &&
+-			   !load_pack_revindex(the_repository, p) &&
++			   !load_pack_revindex(r, p) &&
+ 			   verify_pack_revindex(p)) {
+ 			error(_("invalid rev-index for pack '%s'"), p->pack_name);
+ 			res = ERROR_PACK_REV_INDEX;
+-- 
+2.39.3 (Apple Git-145)
+

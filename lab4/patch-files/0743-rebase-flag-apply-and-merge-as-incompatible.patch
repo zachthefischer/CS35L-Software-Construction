@@ -1,0 +1,73 @@
+From 7d718c552b8fa084f2d5bb9c3e3872cfe558a1eb Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:46 +0000
+Subject: [PATCH 0743/2871] rebase: flag --apply and --merge as incompatible
+
+Previously, we flagged options which implied --apply as being
+incompatible with options which implied --merge.  But if both options
+were given explicitly, then we didn't flag the incompatibility.  The
+same is true with --apply and --interactive.  Add the check, and add
+some testcases to verify these are also caught.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c                       | 12 ++++++++++--
+ t/t3422-rebase-incompatible-options.sh |  3 +++
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index c111b89e13..b742cc8fb5 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -907,6 +907,9 @@ static int parse_opt_am(const struct option *opt, const char *arg, int unset)
+ 	BUG_ON_OPT_NEG(unset);
+ 	BUG_ON_OPT_ARG(arg);
+ 
++	if (opts->type != REBASE_UNSPECIFIED && opts->type != REBASE_APPLY)
++	    die(_("apply options and merge options cannot be used together"));
++
+ 	opts->type = REBASE_APPLY;
+ 
+ 	return 0;
+@@ -920,8 +923,10 @@ static int parse_opt_merge(const struct option *opt, const char *arg, int unset)
+ 	BUG_ON_OPT_NEG(unset);
+ 	BUG_ON_OPT_ARG(arg);
+ 
+-	if (!is_merge(opts))
+-		opts->type = REBASE_MERGE;
++	if (opts->type != REBASE_UNSPECIFIED && opts->type != REBASE_MERGE)
++	    die(_("apply options and merge options cannot be used together"));
++
++	opts->type = REBASE_MERGE;
+ 
+ 	return 0;
+ }
+@@ -935,6 +940,9 @@ static int parse_opt_interactive(const struct option *opt, const char *arg,
+ 	BUG_ON_OPT_NEG(unset);
+ 	BUG_ON_OPT_ARG(arg);
+ 
++	if (opts->type != REBASE_UNSPECIFIED && opts->type != REBASE_MERGE)
++	    die(_("apply options and merge options cannot be used together"));
++
+ 	opts->type = REBASE_MERGE;
+ 	opts->flags |= REBASE_INTERACTIVE_EXPLICIT;
+ 
+diff --git a/t/t3422-rebase-incompatible-options.sh b/t/t3422-rebase-incompatible-options.sh
+index 9da39cd91c..9b9e78479f 100755
+--- a/t/t3422-rebase-incompatible-options.sh
++++ b/t/t3422-rebase-incompatible-options.sh
+@@ -67,7 +67,10 @@ test_rebase_am_only () {
+ 
+ }
+ 
++# Check options which imply --apply
+ test_rebase_am_only --whitespace=fix
+ test_rebase_am_only -C4
++# Also check an explicit --apply
++test_rebase_am_only --apply
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

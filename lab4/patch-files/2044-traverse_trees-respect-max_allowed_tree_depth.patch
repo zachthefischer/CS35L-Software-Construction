@@ -1,0 +1,127 @@
+From f1f63a481bcaaa2124b5f0395abec6b457888bf1 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 31 Aug 2023 02:21:40 -0400
+Subject: [PATCH 2044/2871] traverse_trees(): respect max_allowed_tree_depth
+
+The tree-walk.c code walks trees recursively, and may run out of stack
+space. The easiest way to see this is with git-archive; on my 64-bit
+Linux system it runs out of stack trying to generate a tarfile with a
+tree depth of 13,772.
+
+I've picked 4100 as the depth for our "big" test. I ran it with a much
+higher value to confirm that we do get a segfault without this patch.
+But really anything over 4096 is sufficient for its stated purpose,
+which is to find out if our default limit of 4096 is low enough to
+prevent segfaults on all platforms. Keeping it small saves us time on
+the test setup.
+
+The tree-walk code that's touched here underlies unpack_trees(), so this
+protects any programs which use it, not just git-archive (but archive is
+easy to test, and was what alerted me to this issue in a real-world
+case).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6700-tree-depth.sh | 66 +++++++++++++++++++++++++++++++++++++++++++
+ tree-walk.c           |  4 +++
+ 2 files changed, 70 insertions(+)
+ create mode 100755 t/t6700-tree-depth.sh
+
+diff --git a/t/t6700-tree-depth.sh b/t/t6700-tree-depth.sh
+new file mode 100755
+index 0000000000..d4d17db2ae
+--- /dev/null
++++ b/t/t6700-tree-depth.sh
+@@ -0,0 +1,66 @@
++#!/bin/sh
++
++test_description='handling of deep trees in various commands'
++. ./test-lib.sh
++
++# We'll test against two depths here: a small one that will let us check the
++# behavior of the config setting easily, and a large one that should be
++# forbidden by default. Testing the default depth will let us know whether our
++# default is enough to prevent segfaults on systems that run the tests.
++small_depth=50
++big_depth=4100
++
++small_ok="-c core.maxtreedepth=$small_depth"
++small_no="-c core.maxtreedepth=$((small_depth-1))"
++
++# usage: mkdeep <name> <depth>
++#   Create a tag <name> containing a file whose path has depth <depth>.
++#
++# We'll use fast-import here for two reasons:
++#
++#   1. It's faster than creating $big_depth tree objects.
++#
++#   2. As we tighten tree limits, it's more likely to allow large sizes
++#      than trying to stuff a deep path into the index.
++mkdeep () {
++	{
++		echo "commit refs/tags/$1" &&
++		echo "committer foo <foo@example.com> 1234 -0000" &&
++		echo "data <<EOF" &&
++		echo "the commit message" &&
++		echo "EOF" &&
++
++		printf 'M 100644 inline ' &&
++		i=0 &&
++		while test $i -lt $2
++		do
++			printf 'a/'
++			i=$((i+1))
++		done &&
++		echo "file" &&
++
++		echo "data <<EOF" &&
++		echo "the file contents" &&
++		echo "EOF" &&
++		echo
++	} | git fast-import
++}
++
++test_expect_success 'create small tree' '
++	mkdeep small $small_depth
++'
++
++test_expect_success 'create big tree' '
++	mkdeep big $big_depth
++'
++
++test_expect_success 'limit recursion of git-archive' '
++	git $small_ok archive small >/dev/null &&
++	test_must_fail git $small_no archive small >/dev/null
++'
++
++test_expect_success 'default limit for git-archive fails gracefully' '
++	test_must_fail git archive big >/dev/null
++'
++
++test_done
+diff --git a/tree-walk.c b/tree-walk.c
+index 4efd0fc391..b517792ba2 100644
+--- a/tree-walk.c
++++ b/tree-walk.c
+@@ -9,6 +9,7 @@
+ #include "tree.h"
+ #include "pathspec.h"
+ #include "json-writer.h"
++#include "environment.h"
+ 
+ static const char *get_mode(const char *str, unsigned int *modep)
+ {
+@@ -449,6 +450,9 @@ int traverse_trees(struct index_state *istate,
+ 	int interesting = 1;
+ 	char *traverse_path;
+ 
++	if (traverse_trees_cur_depth > max_allowed_tree_depth)
++		return error("exceeded maximum allowed tree depth");
++
+ 	traverse_trees_count++;
+ 	traverse_trees_cur_depth++;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

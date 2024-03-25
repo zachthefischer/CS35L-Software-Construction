@@ -1,0 +1,65 @@
+From 32bff3675e6b4dc5ae93f0777e5da709f6576275 Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
+Date: Tue, 3 Oct 2023 20:50:46 +0200
+Subject: [PATCH 2198/2871] t7419: test that we correctly handle renamed
+ submodules
+
+Add the submodule again with an explicitly different name and path. Test
+that calling set-branch modifies the correct .gitmodules entries. Make
+sure we don't create a section named after the path instead of the name.
+
+Signed-off-by: Jan Alexander Steffens (heftig) <heftig@archlinux.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7419-submodule-set-branch.sh | 30 +++++++++++++++++++++++++++++-
+ 1 file changed, 29 insertions(+), 1 deletion(-)
+
+diff --git a/t/t7419-submodule-set-branch.sh b/t/t7419-submodule-set-branch.sh
+index 3cd30865a7..a5d1bc5c54 100755
+--- a/t/t7419-submodule-set-branch.sh
++++ b/t/t7419-submodule-set-branch.sh
+@@ -38,7 +38,8 @@ test_expect_success 'submodule config cache setup' '
+ 	(cd super &&
+ 		git init &&
+ 		git submodule add ../submodule &&
+-		git commit -m "add submodule"
++		git submodule add --name thename ../submodule thepath &&
++		git commit -m "add submodules"
+ 	)
+ '
+ 
+@@ -100,4 +101,31 @@ test_expect_success 'test submodule set-branch -d' '
+ 	)
+ '
+ 
++test_expect_success 'test submodule set-branch --branch with named submodule' '
++	(cd super &&
++		git submodule set-branch --branch topic thepath &&
++		test_cmp_config topic -f .gitmodules submodule.thename.branch &&
++		test_cmp_config "" -f .gitmodules --default "" submodule.thepath.branch &&
++		git submodule update --remote &&
++		cat <<-\EOF >expect &&
++		b
++		EOF
++		git -C thepath show -s --pretty=%s >actual &&
++		test_cmp expect actual
++	)
++'
++
++test_expect_success 'test submodule set-branch --default with named submodule' '
++	(cd super &&
++		git submodule set-branch --default thepath &&
++		test_cmp_config "" -f .gitmodules --default "" submodule.thename.branch &&
++		git submodule update --remote &&
++		cat <<-\EOF >expect &&
++		a
++		EOF
++		git -C thepath show -s --pretty=%s >actual &&
++		test_cmp expect actual
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

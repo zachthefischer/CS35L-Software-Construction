@@ -1,0 +1,51 @@
+From 0ddd73fa9f9581f9b978515f10ddba881b85b037 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 8 Nov 2022 10:13:28 +0000
+Subject: [PATCH 0533/2871] ci: use a newer `github-script` version
+
+The old version we currently use runs in node.js v12.x, which is being
+deprecated in GitHub Actions. The new version uses node.js v16.x.
+
+Incidentally, this also avoids the warning about the deprecated
+`::set-output::` workflow command because the newer version of the
+`github-script` Action uses the recommended new way to specify outputs.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ .github/workflows/main.yml | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 51d99a56c0..eed522f321 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -37,14 +37,14 @@ jobs:
+           echo "enabled=$enabled" >>$GITHUB_OUTPUT
+       - name: skip if the commit or tree was already tested
+         id: skip-if-redundant
+-        uses: actions/github-script@v3
++        uses: actions/github-script@v6
+         if: steps.check-ref.outputs.enabled == 'yes'
+         with:
+           github-token: ${{secrets.GITHUB_TOKEN}}
+           script: |
+             try {
+               // Figure out workflow ID, commit and tree
+-              const { data: run } = await github.actions.getWorkflowRun({
++              const { data: run } = await github.rest.actions.getWorkflowRun({
+                 owner: context.repo.owner,
+                 repo: context.repo.repo,
+                 run_id: context.runId,
+@@ -54,7 +54,7 @@ jobs:
+               const tree_id = run.head_commit.tree_id;
+ 
+               // See whether there is a successful run for that commit or tree
+-              const { data: runs } = await github.actions.listWorkflowRuns({
++              const { data: runs } = await github.rest.actions.listWorkflowRuns({
+                 owner: context.repo.owner,
+                 repo: context.repo.repo,
+                 per_page: 500,
+-- 
+2.39.3 (Apple Git-145)
+

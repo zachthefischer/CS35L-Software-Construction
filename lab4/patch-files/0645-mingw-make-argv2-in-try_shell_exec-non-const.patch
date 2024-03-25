@@ -1,0 +1,46 @@
+From 09884f352eb36cf2579d819595e9b7e1656a28b6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 8 Jan 2023 11:10:59 +0100
+Subject: [PATCH 0645/2871] mingw: make argv2 in try_shell_exec() non-const
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Prepare for a stricter type check in COPY_ARRAY by removing the const
+qualifier of argv2, like we already do to placate Visual Studio.  We
+have to add it back using explicit casts when actually using the
+variable, unfortunately, because GCC (rightly) refuses to add it
+implicitly.  Similar casts are already used in mingw_execv().
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/mingw.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/compat/mingw.c b/compat/mingw.c
+index d614f156df..e131eb9b07 100644
+--- a/compat/mingw.c
++++ b/compat/mingw.c
+@@ -1839,16 +1839,13 @@ static int try_shell_exec(const char *cmd, char *const *argv)
+ 	if (prog) {
+ 		int exec_id;
+ 		int argc = 0;
+-#ifndef _MSC_VER
+-		const
+-#endif
+ 		char **argv2;
+ 		while (argv[argc]) argc++;
+ 		ALLOC_ARRAY(argv2, argc + 1);
+ 		argv2[0] = (char *)cmd;	/* full path to the script file */
+ 		COPY_ARRAY(&argv2[1], &argv[1], argc);
+-		exec_id = trace2_exec(prog, argv2);
+-		pid = mingw_spawnv(prog, argv2, 1);
++		exec_id = trace2_exec(prog, (const char **)argv2);
++		pid = mingw_spawnv(prog, (const char **)argv2, 1);
+ 		if (pid >= 0) {
+ 			int status;
+ 			if (waitpid(pid, &status, 0) < 0)
+-- 
+2.39.3 (Apple Git-145)
+

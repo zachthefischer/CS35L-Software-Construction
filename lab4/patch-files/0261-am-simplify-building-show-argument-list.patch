@@ -1,0 +1,45 @@
+From 75c92a0540dd866b1ccf5454c4cc540d926a6139 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 30 Oct 2022 12:46:11 +0100
+Subject: [PATCH 0261/2871] am: simplify building "show" argument list
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Build the string array av during initialization, without any magic
+numbers or heap allocations.  Not duplicating the result of oid_to_hex()
+is safe because run_command_v_opt() duplicates all arguments already.
+(It would even be safe if it didn't, but that's a different story.)
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/am.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/am.c b/builtin/am.c
+index 39fea24833..5781e7a95e 100644
+--- a/builtin/am.c
++++ b/builtin/am.c
+@@ -2187,14 +2187,11 @@ static int show_patch(struct am_state *state, enum show_patch_type sub_mode)
+ 	int len;
+ 
+ 	if (!is_null_oid(&state->orig_commit)) {
+-		const char *av[4] = { "show", NULL, "--", NULL };
+-		char *new_oid_str;
+-		int ret;
++		const char *av[] = {
++			"show", oid_to_hex(&state->orig_commit), "--", NULL
++		};
+ 
+-		av[1] = new_oid_str = xstrdup(oid_to_hex(&state->orig_commit));
+-		ret = run_command_v_opt(av, RUN_GIT_CMD);
+-		free(new_oid_str);
+-		return ret;
++		return run_command_v_opt(av, RUN_GIT_CMD);
+ 	}
+ 
+ 	switch (sub_mode) {
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,32 @@
+From d0ea2ca1cf489d37bab186b3bf0c26601a548b20 Mon Sep 17 00:00:00 2001
+From: Daniel Watson <ozzloy@gmail.com>
+Date: Wed, 5 Apr 2023 01:34:03 -0700
+Subject: [PATCH 1200/2871] SubmittingPatches: clarify MUA discussion with
+ "the"
+
+Without the word "the", the sentence is a little harder to read. The
+word "the" makes it clearer that the comment refers to discrete patches,
+and not portions of individual patches.
+
+Signed-off-by: Daniel Watson <ozzloy@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index 927f7329a5..b218e27357 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -543,7 +543,7 @@ trigger a new CI build to ensure all tests pass.
+ [[mua]]
+ == MUA specific hints
+ 
+-Some of patches I receive or pick up from the list share common
++Some of the patches I receive or pick up from the list share common
+ patterns of breakage.  Please make sure your MUA is set up
+ properly not to corrupt whitespaces.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

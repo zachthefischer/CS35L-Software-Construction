@@ -1,0 +1,110 @@
+From 5143ac07b17e2b025865378fce24cc11ac7bf8b1 Mon Sep 17 00:00:00 2001
+From: Jason Hatton <jhatton@globalfinishing.com>
+Date: Thu, 12 Oct 2023 16:09:30 +0000
+Subject: [PATCH 2282/2871] Prevent git from rehashing 4GiB files
+
+The index stores file sizes using a uint32_t. This causes any file
+that is a multiple of 2^32 to have a cached file size of zero.
+Zero is a special value used by racily clean. This causes git to
+rehash every file that is a multiple of 2^32 every time git status
+or git commit is run.
+
+This patch mitigates the problem by making all files that are a
+multiple of 2^32 appear to have a size of 1<<31 instead of zero.
+
+The value of 1<<31 is chosen to keep it as far away from zero
+as possible to help prevent things getting mixed up with unpatched
+versions of git.
+
+An example would be to have a 2^32 sized file in the index of
+patched git. Patched git would save the file as 2^31 in the cache.
+An unpatched git would very much see the file has changed in size
+and force it to rehash the file, which is safe. The file would
+have to grow or shrink by exactly 2^31 and retain all of its
+ctime, mtime, and other attributes for old git to not notice
+the change.
+
+This patch does not change the behavior of any file that is not
+an exact multiple of 2^32.
+
+Signed-off-by: Jason D. Hatton <jhatton@globalfinishing.com>
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ statinfo.c        | 20 ++++++++++++++++++--
+ t/t7508-status.sh | 16 ++++++++++++++++
+ 2 files changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/statinfo.c b/statinfo.c
+index 17bb8966c3..9367ca099c 100644
+--- a/statinfo.c
++++ b/statinfo.c
+@@ -2,6 +2,22 @@
+ #include "environment.h"
+ #include "statinfo.h"
+ 
++/*
++ * Munge st_size into an unsigned int.
++ */
++static unsigned int munge_st_size(off_t st_size) {
++	unsigned int sd_size = st_size;
++
++	/*
++	 * If the file is an exact multiple of 4 GiB, modify the value so it
++	 * doesn't get marked as racily clean (zero).
++	 */
++	if (!sd_size && st_size)
++		return 0x80000000;
++	else
++		return sd_size;
++}
++
+ void fill_stat_data(struct stat_data *sd, struct stat *st)
+ {
+ 	sd->sd_ctime.sec = (unsigned int)st->st_ctime;
+@@ -12,7 +28,7 @@ void fill_stat_data(struct stat_data *sd, struct stat *st)
+ 	sd->sd_ino = st->st_ino;
+ 	sd->sd_uid = st->st_uid;
+ 	sd->sd_gid = st->st_gid;
+-	sd->sd_size = st->st_size;
++	sd->sd_size = munge_st_size(st->st_size);
+ }
+ 
+ int match_stat_data(const struct stat_data *sd, struct stat *st)
+@@ -51,7 +67,7 @@ int match_stat_data(const struct stat_data *sd, struct stat *st)
+ 			changed |= INODE_CHANGED;
+ #endif
+ 
+-	if (sd->sd_size != (unsigned int) st->st_size)
++	if (sd->sd_size != munge_st_size(st->st_size))
+ 		changed |= DATA_CHANGED;
+ 
+ 	return changed;
+diff --git a/t/t7508-status.sh b/t/t7508-status.sh
+index 6928fd89f5..6c46648e11 100755
+--- a/t/t7508-status.sh
++++ b/t/t7508-status.sh
+@@ -1745,4 +1745,20 @@ test_expect_success 'slow status advice when core.untrackedCache true, and fsmon
+ 	)
+ '
+ 
++test_expect_success EXPENSIVE 'status does not re-read unchanged 4 or 8 GiB file' '
++	(
++		mkdir large-file &&
++		cd large-file &&
++		# Files are 2 GiB, 4 GiB, and 8 GiB sparse files.
++		test-tool truncate file-a 0x080000000 &&
++		test-tool truncate file-b 0x100000000 &&
++		test-tool truncate file-c 0x200000000 &&
++		# This will be slow.
++		git add file-a file-b file-c &&
++		git commit -m "add large files" &&
++		git diff-index HEAD file-a file-b file-c >actual &&
++		test_must_be_empty actual
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

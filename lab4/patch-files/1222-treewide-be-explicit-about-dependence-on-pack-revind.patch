@@ -1,0 +1,67 @@
+From 75f273d9b7ce1d63c0c94e0e196107e90b3b9538 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 03:00:41 +0000
+Subject: [PATCH 1222/2871] treewide: be explicit about dependence on
+ pack-revindex.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/index-pack.c | 1 +
+ cache.h              | 1 -
+ pack-write.c         | 1 +
+ packfile.c           | 1 +
+ 4 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/index-pack.c b/builtin/index-pack.c
+index b17e79cd40..ceb0f120ed 100644
+--- a/builtin/index-pack.c
++++ b/builtin/index-pack.c
+@@ -17,6 +17,7 @@
+ #include "streaming.h"
+ #include "thread-utils.h"
+ #include "packfile.h"
++#include "pack-revindex.h"
+ #include "object-store.h"
+ #include "replace-object.h"
+ #include "promisor-remote.h"
+diff --git a/cache.h b/cache.h
+index 415f0f8567..5f1279454a 100644
+--- a/cache.h
++++ b/cache.h
+@@ -7,7 +7,6 @@
+ #include "list.h"
+ #include "gettext.h"
+ #include "string-list.h"
+-#include "pack-revindex.h"
+ #include "hash.h"
+ #include "path.h"
+ #include "pathspec.h"
+diff --git a/pack-write.c b/pack-write.c
+index f171405495..152c14aa7a 100644
+--- a/pack-write.c
++++ b/pack-write.c
+@@ -9,6 +9,7 @@
+ #include "pack-mtimes.h"
+ #include "oidmap.h"
+ #include "pack-objects.h"
++#include "pack-revindex.h"
+ 
+ void reset_pack_idx_option(struct pack_idx_option *opts)
+ {
+diff --git a/packfile.c b/packfile.c
+index 2d3dabb1ae..02afbe7713 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -21,6 +21,7 @@
+ #include "object-store.h"
+ #include "midx.h"
+ #include "commit-graph.h"
++#include "pack-revindex.h"
+ #include "promisor-remote.h"
+ #include "wrapper.h"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

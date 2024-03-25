@@ -1,0 +1,80 @@
+From faa4d5983bc1739351f49269660285a2628a3d72 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 25 Feb 2023 15:22:02 +0100
+Subject: [PATCH 0951/2871] branch: fix die_if_checked_out() when
+ ignore_current_worktree
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In 8d9fdd7 (worktree.c: check whether branch is rebased in another
+worktree, 2016-04-22) die_if_checked_out() learned a new option
+ignore_current_worktree, to modify the operation from "die() if the
+branch is checked out in any worktree" to "die() if the branch is
+checked out in any worktree other than the current one".
+
+Unfortunately we implemented it by checking the flag is_current in the
+worktree that find_shared_symref() returns.
+
+When the same branch is checked out in several worktrees simultaneously,
+find_shared_symref() will return the first matching worktree in the list
+composed by get_worktrees().  If one of the worktrees with the checked
+out branch is the current worktree, find_shared_symref() may or may not
+return it, depending on the order in the list.
+
+Instead of find_shared_symref(), let's do the search using use the
+recently introduced API is_shared_symref(), and consider
+ignore_current_worktree when necessary.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c   | 14 +++++++++-----
+ worktree.c |  3 +--
+ 2 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/branch.c b/branch.c
+index d182756827..e04710b2b5 100644
+--- a/branch.c
++++ b/branch.c
+@@ -820,12 +820,16 @@ void remove_branch_state(struct repository *r, int verbose)
+ void die_if_checked_out(const char *branch, int ignore_current_worktree)
+ {
+ 	struct worktree **worktrees = get_worktrees();
+-	const struct worktree *wt;
+ 
+-	wt = find_shared_symref(worktrees, "HEAD", branch);
+-	if (wt && (!ignore_current_worktree || !wt->is_current)) {
+-		skip_prefix(branch, "refs/heads/", &branch);
+-		die(_("'%s' is already checked out at '%s'"), branch, wt->path);
++	for (int i = 0; worktrees[i]; i++) {
++		if (worktrees[i]->is_current && ignore_current_worktree)
++			continue;
++
++		if (is_shared_symref(worktrees[i], "HEAD", branch)) {
++			skip_prefix(branch, "refs/heads/", &branch);
++			die(_("'%s' is already checked out at '%s'"),
++				branch, worktrees[i]->path);
++		}
+ 	}
+ 
+ 	free_worktrees(worktrees);
+diff --git a/worktree.c b/worktree.c
+index 40cb9874b7..34043d8fe0 100644
+--- a/worktree.c
++++ b/worktree.c
+@@ -435,10 +435,9 @@ const struct worktree *find_shared_symref(struct worktree **worktrees,
+ 					  const char *target)
+ {
+ 
+-	for (int i = 0; worktrees[i]; i++) {
++	for (int i = 0; worktrees[i]; i++)
+ 		if (is_shared_symref(worktrees[i], symref, target))
+ 			return worktrees[i];
+-	}
+ 
+ 	return NULL;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

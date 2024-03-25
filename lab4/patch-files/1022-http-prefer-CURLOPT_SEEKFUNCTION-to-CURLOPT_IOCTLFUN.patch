@@ -1,0 +1,198 @@
+From b0e3e2d06ba3b71079d7b9b6402a0f410180c09b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 16 Jan 2023 22:04:44 -0500
+Subject: [PATCH 1022/2871] http: prefer CURLOPT_SEEKFUNCTION to
+ CURLOPT_IOCTLFUNCTION
+
+The IOCTLFUNCTION option has been deprecated, and generates a compiler
+warning in recent versions of curl. We can switch to using SEEKFUNCTION
+instead. It was added in 2008 via curl 7.18.0; our INSTALL file already
+indicates we require at least curl 7.19.4.
+
+But there's one catch: curl says we should use CURL_SEEKFUNC_{OK,FAIL},
+and those didn't arrive until 7.19.5. One workaround would be to use a
+bare 0/1 here (or define our own macros).  But let's just bump the
+minimum required version to 7.19.5. That version is only a minor version
+bump from our existing requirement, and is only a 2 month time bump for
+versions that are almost 13 years old. So it's not likely that anybody
+cares about the distinction.
+
+Switching means we have to rewrite the ioctl functions into seek
+functions. In some ways they are simpler (seeking is the only
+operation), but in some ways more complex (the ioctl allowed only a full
+rewind, but now we can seek to arbitrary offsets).
+
+Curl will only ever use SEEK_SET (per their documentation), so I didn't
+bother implementing anything else, since it would naturally be
+completely untested. This seems unlikely to change, but I added an
+assertion just in case.
+
+Likewise, I doubt curl will ever try to seek outside of the buffer sizes
+we've told it, but I erred on the defensive side here, rather than do an
+out-of-bounds read.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ INSTALL       |  4 ++++
+ http-push.c   |  6 +++---
+ http.c        | 22 ++++++++++------------
+ http.h        |  8 ++++----
+ remote-curl.c | 32 +++++++++++++++-----------------
+ 5 files changed, 36 insertions(+), 36 deletions(-)
+
+diff --git a/INSTALL b/INSTALL
+index 8474ad01bf..88c8b3cd46 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -145,6 +145,10 @@ Issues of note:
+ 	  patches into an IMAP mailbox, you do not have to have them
+ 	  (use NO_CURL).
+ 
++	  Git requires version "7.19.5" or later of "libcurl" to build
++	  without NO_CURL. This version requirement may be bumped in
++	  the future.
++
+ 	- "expat" library; git-http-push uses it for remote lock
+ 	  management over DAV.  Similar to "curl" above, this is optional
+ 	  (with NO_EXPAT).
+diff --git a/http-push.c b/http-push.c
+index 585fbd57e3..756779bb19 100644
+--- a/http-push.c
++++ b/http-push.c
+@@ -203,9 +203,9 @@ static void curl_setup_http(CURL *curl, const char *url,
+ 	curl_easy_setopt(curl, CURLOPT_INFILE, buffer);
+ 	curl_easy_setopt(curl, CURLOPT_INFILESIZE, buffer->buf.len);
+ 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, fread_buffer);
+-#ifndef NO_CURL_IOCTL
+-	curl_easy_setopt(curl, CURLOPT_IOCTLFUNCTION, ioctl_buffer);
+-	curl_easy_setopt(curl, CURLOPT_IOCTLDATA, buffer);
++#ifndef NO_CURL_SEEK
++	curl_easy_setopt(curl, CURLOPT_SEEKFUNCTION, seek_buffer);
++	curl_easy_setopt(curl, CURLOPT_SEEKDATA, buffer);
+ #endif
+ 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_fn);
+ 	curl_easy_setopt(curl, CURLOPT_NOBODY, 0);
+diff --git a/http.c b/http.c
+index 8b23a546af..b228137388 100644
+--- a/http.c
++++ b/http.c
+@@ -186,22 +186,20 @@ size_t fread_buffer(char *ptr, size_t eltsize, size_t nmemb, void *buffer_)
+ 	return size / eltsize;
+ }
+ 
+-#ifndef NO_CURL_IOCTL
+-curlioerr ioctl_buffer(CURL *handle, int cmd, void *clientp)
++#ifndef NO_CURL_SEEK
++int seek_buffer(void *clientp, curl_off_t offset, int origin)
+ {
+ 	struct buffer *buffer = clientp;
+ 
+-	switch (cmd) {
+-	case CURLIOCMD_NOP:
+-		return CURLIOE_OK;
+-
+-	case CURLIOCMD_RESTARTREAD:
+-		buffer->posn = 0;
+-		return CURLIOE_OK;
+-
+-	default:
+-		return CURLIOE_UNKNOWNCMD;
++	if (origin != SEEK_SET)
++		BUG("seek_buffer only handles SEEK_SET");
++	if (offset < 0 || offset >= buffer->buf.len) {
++		error("curl seek would be outside of buffer");
++		return CURL_SEEKFUNC_FAIL;
+ 	}
++
++	buffer->posn = offset;
++	return CURL_SEEKFUNC_OK;
+ }
+ #endif
+ 
+diff --git a/http.h b/http.h
+index 5de792ef3f..90679e1410 100644
+--- a/http.h
++++ b/http.h
+@@ -41,8 +41,8 @@
+ #define CURLE_HTTP_RETURNED_ERROR CURLE_HTTP_NOT_FOUND
+ #endif
+ 
+-#if LIBCURL_VERSION_NUM < 0x070c03
+-#define NO_CURL_IOCTL
++#if LIBCURL_VERSION_NUM < 0x071200
++#define NO_CURL_SEEK
+ #endif
+ 
+ /*
+@@ -82,8 +82,8 @@ struct buffer {
+ size_t fread_buffer(char *ptr, size_t eltsize, size_t nmemb, void *strbuf);
+ size_t fwrite_buffer(char *ptr, size_t eltsize, size_t nmemb, void *strbuf);
+ size_t fwrite_null(char *ptr, size_t eltsize, size_t nmemb, void *strbuf);
+-#ifndef NO_CURL_IOCTL
+-curlioerr ioctl_buffer(CURL *handle, int cmd, void *clientp);
++#ifndef NO_CURL_SEEK
++int seek_buffer(void *clientp, curl_off_t offset, int origin);
+ #endif
+ 
+ /* Slot lifecycle functions */
+diff --git a/remote-curl.c b/remote-curl.c
+index 0290b04891..f50531624a 100644
+--- a/remote-curl.c
++++ b/remote-curl.c
+@@ -707,26 +707,24 @@ static size_t rpc_out(void *ptr, size_t eltsize,
+ 	return avail;
+ }
+ 
+-#ifndef NO_CURL_IOCTL
+-static curlioerr rpc_ioctl(CURL *handle, int cmd, void *clientp)
++#ifndef NO_CURL_SEEK
++static int rpc_seek(void *clientp, curl_off_t offset, int origin)
+ {
+ 	struct rpc_state *rpc = clientp;
+ 
+-	switch (cmd) {
+-	case CURLIOCMD_NOP:
+-		return CURLIOE_OK;
++	if (origin != SEEK_SET)
++		BUG("rpc_seek only handles SEEK_SET, not %d", origin);
+ 
+-	case CURLIOCMD_RESTARTREAD:
+-		if (rpc->initial_buffer) {
+-			rpc->pos = 0;
+-			return CURLIOE_OK;
++	if (rpc->initial_buffer) {
++		if (offset < 0 || offset > rpc->len) {
++			error("curl seek would be outside of rpc buffer");
++			return CURL_SEEKFUNC_FAIL;
+ 		}
+-		error(_("unable to rewind rpc post data - try increasing http.postBuffer"));
+-		return CURLIOE_FAILRESTART;
+-
+-	default:
+-		return CURLIOE_UNKNOWNCMD;
++		rpc->pos = offset;
++		return CURL_SEEKFUNC_OK;
+ 	}
++	error(_("unable to rewind rpc post data - try increasing http.postBuffer"));
++	return CURL_SEEKFUNC_FAIL;
+ }
+ #endif
+ 
+@@ -947,9 +945,9 @@ static int post_rpc(struct rpc_state *rpc, int stateless_connect, int flush_rece
+ 		rpc->initial_buffer = 1;
+ 		curl_easy_setopt(slot->curl, CURLOPT_READFUNCTION, rpc_out);
+ 		curl_easy_setopt(slot->curl, CURLOPT_INFILE, rpc);
+-#ifndef NO_CURL_IOCTL
+-		curl_easy_setopt(slot->curl, CURLOPT_IOCTLFUNCTION, rpc_ioctl);
+-		curl_easy_setopt(slot->curl, CURLOPT_IOCTLDATA, rpc);
++#ifndef NO_CURL_SEEK
++		curl_easy_setopt(slot->curl, CURLOPT_SEEKFUNCTION, rpc_seek);
++		curl_easy_setopt(slot->curl, CURLOPT_SEEKDATA, rpc);
+ #endif
+ 		if (options.verbosity > 1) {
+ 			fprintf(stderr, "POST %s (chunked)\n", rpc->service_name);
+-- 
+2.39.3 (Apple Git-145)
+

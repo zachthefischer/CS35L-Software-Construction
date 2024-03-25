@@ -1,0 +1,101 @@
+From 8d2863e4ed7f35baeb2604ee8ed39fe6aa5e62c7 Mon Sep 17 00:00:00 2001
+From: Nsengiyumva Wilberforce <nsengiyumvawilberforce@gmail.com>
+Date: Fri, 14 Oct 2022 08:01:42 +0000
+Subject: [PATCH 0149/2871] t1002: modernize outdated conditional
+
+Tests in this script use an unusual and hard to reason about
+conditional construct
+
+    if expression; then false; else :; fi
+
+Change them to use more idiomatic construct:
+
+    ! expression
+
+Cc: Christian Couder  <christian.couder@gmail.com>
+Cc: Hariom Verma <hariom18599@gmail.com>
+Signed-off-by: Nsengiyumva  Wilberforce <nsengiyumvawilberforce@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1002-read-tree-m-u-2way.sh | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/t/t1002-read-tree-m-u-2way.sh b/t/t1002-read-tree-m-u-2way.sh
+index bd5313caec..cdc077ce12 100755
+--- a/t/t1002-read-tree-m-u-2way.sh
++++ b/t/t1002-read-tree-m-u-2way.sh
+@@ -154,7 +154,7 @@ test_expect_success \
+      read_tree_u_must_succeed --reset -u $treeH &&
+      echo frotz frotz >frotz &&
+      git update-index --add frotz &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ test_expect_success \
+     '9 - conflicting addition.' \
+@@ -163,7 +163,7 @@ test_expect_success \
+      echo frotz frotz >frotz &&
+      git update-index --add frotz &&
+      echo frotz >frotz &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ test_expect_success \
+     '10 - path removed.' \
+@@ -186,7 +186,7 @@ test_expect_success \
+      echo rezrov >rezrov &&
+      git update-index --add rezrov &&
+      echo rezrov rezrov >rezrov &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ test_expect_success \
+     '12 - unmatching local changes being removed.' \
+@@ -194,7 +194,7 @@ test_expect_success \
+      read_tree_u_must_succeed --reset -u $treeH &&
+      echo rezrov rezrov >rezrov &&
+      git update-index --add rezrov &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ test_expect_success \
+     '13 - unmatching local changes being removed.' \
+@@ -203,7 +203,7 @@ test_expect_success \
+      echo rezrov rezrov >rezrov &&
+      git update-index --add rezrov &&
+      echo rezrov >rezrov &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ cat >expected <<EOF
+ -100644 X 0	nitfol
+@@ -251,7 +251,7 @@ test_expect_success \
+      read_tree_u_must_succeed --reset -u $treeH &&
+      echo bozbar bozbar >bozbar &&
+      git update-index --add bozbar &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ test_expect_success \
+     '17 - conflicting local change.' \
+@@ -260,7 +260,7 @@ test_expect_success \
+      echo bozbar bozbar >bozbar &&
+      git update-index --add bozbar &&
+      echo bozbar bozbar bozbar >bozbar &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ test_expect_success \
+     '18 - local change already having a good result.' \
+@@ -316,7 +316,7 @@ test_expect_success \
+      echo bozbar >bozbar &&
+      git update-index --add bozbar &&
+      echo gnusto gnusto >bozbar &&
+-     if read_tree_u_must_succeed -m -u $treeH $treeM; then false; else :; fi'
++     ! read_tree_u_must_succeed -m -u $treeH $treeM'
+ 
+ # Also make sure we did not break DF vs DF/DF case.
+ test_expect_success \
+-- 
+2.39.3 (Apple Git-145)
+

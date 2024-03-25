@@ -1,0 +1,32 @@
+From 68b51172e310beeb4ace56645a9f2b823e6fe12d Mon Sep 17 00:00:00 2001
+From: Mike Hommey <mh@glandium.org>
+Date: Sat, 3 Jun 2023 09:28:19 +0900
+Subject: [PATCH 1548/2871] commit-reach: fix memory leak in
+ get_reachable_subset()
+
+This is a leak that has existed since the method was first created
+in fcb2c0769db (commit-reach: implement get_reachable_subset,
+2018-11-02).
+
+Signed-off-by: Mike Hommey <mh@glandium.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-reach.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/commit-reach.c b/commit-reach.c
+index 2e33c599a8..58267d5420 100644
+--- a/commit-reach.c
++++ b/commit-reach.c
+@@ -936,6 +936,8 @@ struct commit_list *get_reachable_subset(struct commit **from, int nr_from,
+ 		}
+ 	}
+ 
++	clear_prio_queue(&queue);
++
+ 	clear_commit_marks_many(nr_to, to, PARENT1);
+ 	clear_commit_marks_many(nr_from, from, PARENT2);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

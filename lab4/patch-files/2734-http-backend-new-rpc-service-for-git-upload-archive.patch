@@ -1,0 +1,116 @@
+From 24f275ab33cd06f399a87a8384443e74da5f3545 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 21 Jan 2024 21:15:36 +0800
+Subject: [PATCH 2734/2871] http-backend: new rpc-service for
+ git-upload-archive
+
+Add new rpc-service "upload-archive" in http-backend to add server side
+support for remote archive over HTTP/HTTPS protocols.
+
+Also add new test cases in t5003. In the test case "archive remote http
+repository", git-archive exits with a non-0 exit code even though we
+create the archive correctly. It will be fixed in a later commit.
+
+Helped-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http-backend.c         | 13 ++++++++++---
+ t/t5003-archive-zip.sh | 34 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 44 insertions(+), 3 deletions(-)
+
+diff --git a/http-backend.c b/http-backend.c
+index ff07b87e64..1ed1e29d07 100644
+--- a/http-backend.c
++++ b/http-backend.c
+@@ -38,6 +38,7 @@ struct rpc_service {
+ static struct rpc_service rpc_service[] = {
+ 	{ "upload-pack", "uploadpack", 1, 1 },
+ 	{ "receive-pack", "receivepack", 0, -1 },
++	{ "upload-archive", "uploadarchive", 0, -1 },
+ };
+ 
+ static struct string_list *get_parameters(void)
+@@ -639,10 +640,15 @@ static void check_content_type(struct strbuf *hdr, const char *accepted_type)
+ 
+ static void service_rpc(struct strbuf *hdr, char *service_name)
+ {
+-	const char *argv[] = {NULL, "--stateless-rpc", ".", NULL};
++	struct strvec argv = STRVEC_INIT;
+ 	struct rpc_service *svc = select_service(hdr, service_name);
+ 	struct strbuf buf = STRBUF_INIT;
+ 
++	strvec_push(&argv, svc->name);
++	if (strcmp(service_name, "git-upload-archive"))
++		strvec_push(&argv, "--stateless-rpc");
++	strvec_push(&argv, ".");
++
+ 	strbuf_reset(&buf);
+ 	strbuf_addf(&buf, "application/x-git-%s-request", svc->name);
+ 	check_content_type(hdr, buf.buf);
+@@ -655,9 +661,9 @@ static void service_rpc(struct strbuf *hdr, char *service_name)
+ 
+ 	end_headers(hdr);
+ 
+-	argv[0] = svc->name;
+-	run_service(argv, svc->buffer_input);
++	run_service(argv.v, svc->buffer_input);
+ 	strbuf_release(&buf);
++	strvec_clear(&argv);
+ }
+ 
+ static int dead;
+@@ -723,6 +729,7 @@ static struct service_cmd {
+ 	{"GET", "/objects/pack/pack-[0-9a-f]{64}\\.idx$", get_idx_file},
+ 
+ 	{"POST", "/git-upload-pack$", service_rpc},
++	{"POST", "/git-upload-archive$", service_rpc},
+ 	{"POST", "/git-receive-pack$", service_rpc}
+ };
+ 
+diff --git a/t/t5003-archive-zip.sh b/t/t5003-archive-zip.sh
+index fc499cdff0..6f85bd3463 100755
+--- a/t/t5003-archive-zip.sh
++++ b/t/t5003-archive-zip.sh
+@@ -239,4 +239,38 @@ check_zip with_untracked2
+ check_added with_untracked2 untracked one/untracked
+ check_added with_untracked2 untracked two/untracked
+ 
++# Test remote archive over HTTP protocol.
++#
++# Note: this should be the last part of this test suite, because
++# by including lib-httpd.sh, the test may end early if httpd tests
++# should not be run.
++#
++. "$TEST_DIRECTORY"/lib-httpd.sh
++start_httpd
++
++test_expect_success "setup for HTTP protocol" '
++	cp -R bare.git "$HTTPD_DOCUMENT_ROOT_PATH/bare.git" &&
++	git -C "$HTTPD_DOCUMENT_ROOT_PATH/bare.git" \
++		config http.uploadpack true &&
++	set_askpass user@host pass@host
++'
++
++setup_askpass_helper
++
++test_expect_success 'remote archive does not work with protocol v1' '
++	test_must_fail git -c protocol.version=1 archive \
++		--remote="$HTTPD_URL/auth/smart/bare.git" \
++		--output=remote-http.zip HEAD >actual 2>&1 &&
++	cat >expect <<-EOF &&
++	fatal: can${SQ}t connect to subservice git-upload-archive
++	EOF
++	test_cmp expect actual
++'
++
++test_expect_success 'archive remote http repository' '
++	test_must_fail git archive --remote="$HTTPD_URL/auth/smart/bare.git" \
++		--output=remote-http.zip HEAD &&
++	test_cmp_bin d.zip remote-http.zip
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

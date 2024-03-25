@@ -1,0 +1,193 @@
+From 990adccbdf0d8d1056c49a5ed546e744f542ba8f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 9 Sep 2023 22:12:47 +0200
+Subject: [PATCH 2287/2871] status: fix branch shown when not only bisecting
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In 83c750acde (wt-status.*: better advice for git status added,
+2012-06-05), git-status received new informative messages to describe
+the ongoing work in a worktree.
+
+These messages were enhanced in 0722c805d6 (status: show the branch name
+if possible in in-progress info, 2013-02-03), to show, if possible, the
+branch where the operation was initiated.
+
+Since then, we show incorrect information when several operations are in
+progress and one of them is bisect:
+
+   $ git checkout -b foo
+   $ GIT_SEQUENCE_EDITOR='echo break >' git rebase -i HEAD~
+   $ git checkout -b bar
+   $ git bisect start
+   $ git status
+   ...
+
+   You are currently editing a commit while rebasing branch 'bar' on '...'.
+
+   You are currently bisecting, started from branch 'bar'.
+
+   ...
+
+Note that we erroneously say "while rebasing branch 'bar'" when we
+should be referring to "foo".
+
+This must have gone unnoticed for so long because it must be unusual to
+start a bisection while another operation is in progress.  And even less
+usual to involve different branches.
+
+It caught my attention reviewing a leak introduced in 8b87cfd000
+(wt-status: move strbuf into read_and_strip_branch(), 2013-03-16).
+
+A simple change to deal with this situation can be to record in struct
+wt_status_state, the branch where the bisect starts separately from the
+branch related to other operations.
+
+Let's do it and so we'll be able to display correct information and
+we'll avoid the leak as well.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c               |  4 ++--
+ ref-filter.c           |  2 +-
+ t/t7512-status-help.sh | 28 ++++++++++++++++++++++++++++
+ worktree.c             |  4 ++--
+ wt-status.c            |  7 ++++---
+ wt-status.h            |  1 +
+ 6 files changed, 38 insertions(+), 8 deletions(-)
+
+diff --git a/branch.c b/branch.c
+index ba3914adf5..c243f940cd 100644
+--- a/branch.c
++++ b/branch.c
+@@ -419,9 +419,9 @@ static void prepare_checked_out_branches(void)
+ 		wt_status_state_free_buffers(&state);
+ 
+ 		if (wt_status_check_bisect(wt, &state) &&
+-		    state.branch) {
++		    state.bisecting_from) {
+ 			struct strbuf ref = STRBUF_INIT;
+-			strbuf_addf(&ref, "refs/heads/%s", state.branch);
++			strbuf_addf(&ref, "refs/heads/%s", state.bisecting_from);
+ 			old = strmap_put(&current_checked_out_branches,
+ 					 ref.buf,
+ 					 xstrdup(wt->path));
+diff --git a/ref-filter.c b/ref-filter.c
+index 4991cd4f7a..2347774b8a 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -1773,7 +1773,7 @@ char *get_head_description(void)
+ 				    state.detached_from);
+ 	} else if (state.bisect_in_progress)
+ 		strbuf_addf(&desc, _("(no branch, bisect started on %s)"),
+-			    state.branch);
++			    state.bisecting_from);
+ 	else if (state.detached_from) {
+ 		if (state.detached_at)
+ 			strbuf_addf(&desc, _("(HEAD detached at %s)"),
+diff --git a/t/t7512-status-help.sh b/t/t7512-status-help.sh
+index 2f16d5787e..beab147856 100755
+--- a/t/t7512-status-help.sh
++++ b/t/t7512-status-help.sh
+@@ -692,6 +692,34 @@ EOF
+ '
+ 
+ 
++test_expect_success 'status when bisecting while rebasing' '
++	git reset --hard main &&
++	test_when_finished "git rebase --abort" &&
++	ONTO=$(git rev-parse --short HEAD^) &&
++	FAKE_LINES="break" git rebase -i HEAD^ &&
++	test_when_finished "git checkout -" &&
++	git checkout -b bisect_while_rebasing &&
++	test_when_finished "git bisect reset" &&
++	git bisect start &&
++	cat >expected <<EOF &&
++On branch bisect_while_rebasing
++Last command done (1 command done):
++   break
++No commands remaining.
++You are currently editing a commit while rebasing branch '\''bisect'\'' on '\''$ONTO'\''.
++  (use "git commit --amend" to amend the current commit)
++  (use "git rebase --continue" once you are satisfied with your changes)
++
++You are currently bisecting, started from branch '\''bisect_while_rebasing'\''.
++  (use "git bisect reset" to get back to the original branch)
++
++nothing to commit (use -u to show untracked files)
++EOF
++	git status --untracked-files=no >actual &&
++	test_cmp expected actual
++'
++
++
+ test_expect_success 'status when rebase --apply conflicts with statushints disabled' '
+ 	git reset --hard main &&
+ 	git checkout -b statushints_disabled &&
+diff --git a/worktree.c b/worktree.c
+index b5ee71c5eb..4a80ea681e 100644
+--- a/worktree.c
++++ b/worktree.c
+@@ -396,9 +396,9 @@ int is_worktree_being_bisected(const struct worktree *wt,
+ 
+ 	memset(&state, 0, sizeof(state));
+ 	found_bisect = wt_status_check_bisect(wt, &state) &&
+-		       state.branch &&
++		       state.bisecting_from &&
+ 		       skip_prefix(target, "refs/heads/", &target) &&
+-		       !strcmp(state.branch, target);
++		       !strcmp(state.bisecting_from, target);
+ 	wt_status_state_free_buffers(&state);
+ 	return found_bisect;
+ }
+diff --git a/wt-status.c b/wt-status.c
+index 068b76ef6d..2e4825e3d4 100644
+--- a/wt-status.c
++++ b/wt-status.c
+@@ -858,6 +858,7 @@ void wt_status_state_free_buffers(struct wt_status_state *state)
+ 	FREE_AND_NULL(state->branch);
+ 	FREE_AND_NULL(state->onto);
+ 	FREE_AND_NULL(state->detached_from);
++	FREE_AND_NULL(state->bisecting_from);
+ }
+ 
+ static void wt_longstatus_print_unmerged(struct wt_status *s)
+@@ -1565,10 +1566,10 @@ static void show_revert_in_progress(struct wt_status *s,
+ static void show_bisect_in_progress(struct wt_status *s,
+ 				    const char *color)
+ {
+-	if (s->state.branch)
++	if (s->state.bisecting_from)
+ 		status_printf_ln(s, color,
+ 				 _("You are currently bisecting, started from branch '%s'."),
+-				 s->state.branch);
++				 s->state.bisecting_from);
+ 	else
+ 		status_printf_ln(s, color,
+ 				 _("You are currently bisecting."));
+@@ -1729,7 +1730,7 @@ int wt_status_check_bisect(const struct worktree *wt,
+ 
+ 	if (!stat(worktree_git_path(wt, "BISECT_LOG"), &st)) {
+ 		state->bisect_in_progress = 1;
+-		state->branch = get_branch(wt, "BISECT_START");
++		state->bisecting_from = get_branch(wt, "BISECT_START");
+ 		return 1;
+ 	}
+ 	return 0;
+diff --git a/wt-status.h b/wt-status.h
+index ab9cc9d8f0..819dcad723 100644
+--- a/wt-status.h
++++ b/wt-status.h
+@@ -94,6 +94,7 @@ struct wt_status_state {
+ 	char *branch;
+ 	char *onto;
+ 	char *detached_from;
++	char *bisecting_from;
+ 	struct object_id detached_oid;
+ 	struct object_id revert_head_oid;
+ 	struct object_id cherry_pick_head_oid;
+-- 
+2.39.3 (Apple Git-145)
+

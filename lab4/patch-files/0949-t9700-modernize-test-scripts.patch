@@ -1,0 +1,96 @@
+From 509d3f510325a69a72b367d157ef55fae7b6285a Mon Sep 17 00:00:00 2001
+From: Zhang Yi <18994118902@163.com>
+Date: Sat, 25 Feb 2023 09:30:03 +0800
+Subject: [PATCH 0949/2871] t9700: modernize test scripts
+
+The style of t9700-perl-git.sh is old. There are 3 problems:
+* A title is not on the same line with test_expect_success command.
+* A test body is indented by whitespaces.
+* There are whitespaces after redirect operators.
+
+Modernize test scripts by:
+* Combine the title with test_expect_success command.
+* Replace whitespace indents with TAB.
+* Delete whitespaces after redirect operators.
+
+Signed-off-by: Zhang Yi <18994118902@163.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9700-perl-git.sh | 61 ++++++++++++++++++++++-----------------------
+ 1 file changed, 30 insertions(+), 31 deletions(-)
+
+diff --git a/t/t9700-perl-git.sh b/t/t9700-perl-git.sh
+index b105d6d9d5..ccc8212d73 100755
+--- a/t/t9700-perl-git.sh
++++ b/t/t9700-perl-git.sh
+@@ -13,37 +13,36 @@ skip_all_if_no_Test_More
+ 
+ # set up test repository
+ 
+-test_expect_success \
+-    'set up test repository' \
+-    'echo "test file 1" > file1 &&
+-     echo "test file 2" > file2 &&
+-     mkdir directory1 &&
+-     echo "in directory1" >> directory1/file &&
+-     mkdir directory2 &&
+-     echo "in directory2" >> directory2/file &&
+-     git add . &&
+-     git commit -m "first commit" &&
+-
+-     echo "new file in subdir 2" > directory2/file2 &&
+-     git add . &&
+-     git commit -m "commit in directory2" &&
+-
+-     echo "changed file 1" > file1 &&
+-     git commit -a -m "second commit" &&
+-
+-     git config --add color.test.slot1 green &&
+-     git config --add test.string value &&
+-     git config --add test.dupstring value1 &&
+-     git config --add test.dupstring value2 &&
+-     git config --add test.booltrue true &&
+-     git config --add test.boolfalse no &&
+-     git config --add test.boolother other &&
+-     git config --add test.int 2k &&
+-     git config --add test.path "~/foo" &&
+-     git config --add test.pathexpanded "$HOME/foo" &&
+-     git config --add test.pathmulti foo &&
+-     git config --add test.pathmulti bar
+-     '
++test_expect_success 'set up test repository' '
++	echo "test file 1" >file1 &&
++	echo "test file 2" >file2 &&
++	mkdir directory1 &&
++	echo "in directory1" >>directory1/file &&
++	mkdir directory2 &&
++	echo "in directory2" >>directory2/file &&
++	git add . &&
++	git commit -m "first commit" &&
++
++	echo "new file in subdir 2" >directory2/file2 &&
++	git add . &&
++	git commit -m "commit in directory2" &&
++
++	echo "changed file 1" >file1 &&
++	git commit -a -m "second commit" &&
++
++	git config --add color.test.slot1 green &&
++	git config --add test.string value &&
++	git config --add test.dupstring value1 &&
++	git config --add test.dupstring value2 &&
++	git config --add test.booltrue true &&
++	git config --add test.boolfalse no &&
++	git config --add test.boolother other &&
++	git config --add test.int 2k &&
++	git config --add test.path "~/foo" &&
++	git config --add test.pathexpanded "$HOME/foo" &&
++	git config --add test.pathmulti foo &&
++	git config --add test.pathmulti bar
++'
+ 
+ test_expect_success 'set up bare repository' '
+ 	git init --bare bare.git
+-- 
+2.39.3 (Apple Git-145)
+

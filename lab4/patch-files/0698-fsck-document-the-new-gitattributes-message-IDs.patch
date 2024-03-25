@@ -1,0 +1,37 @@
+From c6ab91335a16ea889134c74f1b9a2aaa7ff236a7 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Date: Thu, 12 Jan 2023 20:43:31 +0100
+Subject: [PATCH 0698/2871] fsck: document the new `gitattributes` message IDs
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/fsck-msgids.txt | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Documentation/fsck-msgids.txt b/Documentation/fsck-msgids.txt
+index 7af76ff99a..12eae8a222 100644
+--- a/Documentation/fsck-msgids.txt
++++ b/Documentation/fsck-msgids.txt
+@@ -46,6 +46,18 @@
+ `fullPathname`::
+ 	(WARN) A path contains the full path starting with "/".
+ 
++`gitattributesBlob`::
++	(ERROR) A non-blob found at `.gitattributes`.
++
++`gitattributesLarge`::
++	(ERROR) The `.gitattributes` blob is too large.
++
++`gitattributesLineLength`::
++	(ERROR) The `.gitattributes` blob contains too long lines.
++
++`gitattributesMissing`::
++	(ERROR) Unable to read `.gitattributes` blob.
++
+ `gitattributesSymlink`::
+ 	(INFO) `.gitattributes` is a symlink.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

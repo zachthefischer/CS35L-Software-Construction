@@ -1,0 +1,51 @@
+From 8f241151656053e3ae130e9e0025b9cf71ccc3ce Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Wed, 26 Oct 2022 00:57:18 +0200
+Subject: [PATCH 0250/2871] branch: error code with --edit-description
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since c2d17ba3db0d (branch --edit-description: protect against mistyped
+branch name, 2012-02-05) we return -1 on error editing the branch
+description.
+
+Let's change to 1, which follows the established convention and it is
+better for portability reasons.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c  | 2 +-
+ t/t3200-branch.sh | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index 407517ba68..4df001f579 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -816,7 +816,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 
+ 		strbuf_addf(&branch_ref, "refs/heads/%s", branch_name);
+ 		if (!ref_exists(branch_ref.buf))
+-			ret = error((!argc || !strcmp(head, branch_name))
++			error((!argc || !strcmp(head, branch_name))
+ 			      ? _("No commit on branch '%s' yet.")
+ 			      : _("No branch named '%s'."),
+ 			      branch_name);
+diff --git a/t/t3200-branch.sh b/t/t3200-branch.sh
+index 7d8edff9c3..a390394b4c 100755
+--- a/t/t3200-branch.sh
++++ b/t/t3200-branch.sh
+@@ -1383,7 +1383,7 @@ test_expect_success 'branch --delete --force removes dangling branch' '
+ 
+ test_expect_success 'use --edit-description' '
+ 	EDITOR=: git branch --edit-description &&
+-	test_must_fail git config branch.main.description &&
++	test_expect_code 1 git config branch.main.description &&
+ 
+ 	write_script editor <<-\EOF &&
+ 		echo "New contents" >"$1"
+-- 
+2.39.3 (Apple Git-145)
+

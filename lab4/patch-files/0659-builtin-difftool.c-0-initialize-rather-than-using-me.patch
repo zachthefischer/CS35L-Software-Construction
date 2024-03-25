@@ -1,0 +1,46 @@
+From 0dda3ac92564e4e3f26a341103c67629e926ab40 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 12 Jan 2023 13:55:23 +0100
+Subject: [PATCH 0659/2871] builtin/difftool.c: { 0 }-initialize rather than
+ using memset()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Refactor an initialization of a variable added in
+03831ef7b50 (difftool: implement the functionality in the builtin,
+2017-01-19). This refactoring makes a subsequent change smaller.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/difftool.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/builtin/difftool.c b/builtin/difftool.c
+index d9b76226f6..1f9d4324df 100644
+--- a/builtin/difftool.c
++++ b/builtin/difftool.c
+@@ -361,7 +361,7 @@ static int run_dir_diff(const char *extcmd, int symlinks, const char *prefix,
+ 	struct hashmap symlinks2 = HASHMAP_INIT(pair_cmp, NULL);
+ 	struct hashmap_iter iter;
+ 	struct pair_entry *entry;
+-	struct index_state wtindex;
++	struct index_state wtindex = { 0 };
+ 	struct checkout lstate, rstate;
+ 	int err = 0;
+ 	struct child_process cmd = CHILD_PROCESS_INIT;
+@@ -387,8 +387,6 @@ static int run_dir_diff(const char *extcmd, int symlinks, const char *prefix,
+ 	mkdir(ldir.buf, 0700);
+ 	mkdir(rdir.buf, 0700);
+ 
+-	memset(&wtindex, 0, sizeof(wtindex));
+-
+ 	memset(&lstate, 0, sizeof(lstate));
+ 	lstate.base_dir = lbase_dir = xstrdup(ldir.buf);
+ 	lstate.base_dir_len = ldir.len;
+-- 
+2.39.3 (Apple Git-145)
+

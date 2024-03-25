@@ -1,0 +1,82 @@
+From fbc6526ea651565889e437ce7b12c762ef858813 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 12 Dec 2023 18:04:55 +0100
+Subject: [PATCH 2534/2871] t6300: avoid hard-coding object sizes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+f4ee22b526 (ref-filter: add tests for objectsize:disk, 2018-12-24)
+hard-coded the expected object sizes.  Coincidentally the size of commit
+and tag is the same with zlib at the default compression level.
+
+1f5f8f3e85 (t6300: abstract away SHA-1-specific constants, 2020-02-22)
+encoded the sizes as a single value, which coincidentally also works
+with sha256.
+
+Different compression libraries like zlib-ng may arrive at different
+values.  Get them from the file system instead of hard-coding them to
+make switching the compression library (or changing the compression
+level) easier.
+
+Reported-by: Ondrej Pohorelsky <opohorel@redhat.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6300-for-each-ref.sh | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 00a060df0b..c65c795fce 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -20,12 +20,13 @@ setdate_and_increment () {
+     export GIT_COMMITTER_DATE GIT_AUTHOR_DATE
+ }
+ 
+-test_expect_success setup '
+-	test_oid_cache <<-EOF &&
+-	disklen sha1:138
+-	disklen sha256:154
+-	EOF
++test_object_file_size () {
++	oid=$(git rev-parse "$1")
++	path=".git/objects/$(test_oid_to_path $oid)"
++	test_file_size "$path"
++}
+ 
++test_expect_success setup '
+ 	# setup .mailmap
+ 	cat >.mailmap <<-EOF &&
+ 	A Thor <athor@example.com> A U Thor <author@example.com>
+@@ -94,7 +95,6 @@ test_atom () {
+ }
+ 
+ hexlen=$(test_oid hexsz)
+-disklen=$(test_oid disklen)
+ 
+ test_atom head refname refs/heads/main
+ test_atom head refname: refs/heads/main
+@@ -129,7 +129,7 @@ test_atom head push:strip=1 remotes/myfork/main
+ test_atom head push:strip=-1 main
+ test_atom head objecttype commit
+ test_atom head objectsize $((131 + hexlen))
+-test_atom head objectsize:disk $disklen
++test_atom head objectsize:disk $(test_object_file_size refs/heads/main)
+ test_atom head deltabase $ZERO_OID
+ test_atom head objectname $(git rev-parse refs/heads/main)
+ test_atom head objectname:short $(git rev-parse --short refs/heads/main)
+@@ -203,8 +203,8 @@ test_atom tag upstream ''
+ test_atom tag push ''
+ test_atom tag objecttype tag
+ test_atom tag objectsize $((114 + hexlen))
+-test_atom tag objectsize:disk $disklen
+-test_atom tag '*objectsize:disk' $disklen
++test_atom tag objectsize:disk $(test_object_file_size refs/tags/testtag)
++test_atom tag '*objectsize:disk' $(test_object_file_size refs/heads/main)
+ test_atom tag deltabase $ZERO_OID
+ test_atom tag '*deltabase' $ZERO_OID
+ test_atom tag objectname $(git rev-parse refs/tags/testtag)
+-- 
+2.39.3 (Apple Git-145)
+

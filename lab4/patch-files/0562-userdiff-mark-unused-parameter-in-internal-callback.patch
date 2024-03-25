@@ -1,0 +1,38 @@
+From c25d9e529d531adf0697e0c09ba292227c835164 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 13 Dec 2022 06:16:57 -0500
+Subject: [PATCH 0562/2871] userdiff: mark unused parameter in internal
+ callback
+
+Since f12fa9ee6c (userdiff: add and use for_each_userdiff_driver(),
+2021-04-08), lookup of userdiffs is done with a generic
+for_each_userdiff_driver(). But the name lookup doesn't use the "type"
+field, of course.
+
+We can't get rid of that field from the generic interface because it is
+used by t/helper/test-userdiff.c. So mark it as unused in this instance
+to silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ userdiff.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/userdiff.c b/userdiff.c
+index 151d9a5278..e25356a061 100644
+--- a/userdiff.c
++++ b/userdiff.c
+@@ -315,7 +315,8 @@ struct find_by_namelen_data {
+ };
+ 
+ static int userdiff_find_by_namelen_cb(struct userdiff_driver *driver,
+-				       enum userdiff_driver_type type, void *priv)
++				       enum userdiff_driver_type type UNUSED,
++				       void *priv)
+ {
+ 	struct find_by_namelen_data *cb_data = priv;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

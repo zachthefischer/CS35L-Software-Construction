@@ -1,0 +1,38 @@
+From 1779deed39e68b8eab886aba8d9a903905e42cf3 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:44:02 -0400
+Subject: [PATCH 1773/2871] do_for_each_ref_helper(): mark unused repository
+ parameter
+
+This function gets a repository parameter because it's a callback for
+do_for_each_repo_ref_iterator(). But it's just a wrapper that passes
+along each call to a regular each_ref_fn callback, and the latter
+doesn't accept a repository argument.
+
+Probably in the long run all of the each_ref_fn callbacks should get a
+repository parameter, too. But changing that now would require updates
+all over the code base. Until that happens, let's annotate this wrapper
+callback to quiet the compiler's -Wunused-parameter warning.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/refs.c b/refs.c
+index c029f64982..edeae90ebb 100644
+--- a/refs.c
++++ b/refs.c
+@@ -1588,7 +1588,7 @@ struct do_for_each_ref_help {
+ 	void *cb_data;
+ };
+ 
+-static int do_for_each_ref_helper(struct repository *r,
++static int do_for_each_ref_helper(struct repository *r UNUSED,
+ 				  const char *refname,
+ 				  const struct object_id *oid,
+ 				  int flags,
+-- 
+2.39.3 (Apple Git-145)
+

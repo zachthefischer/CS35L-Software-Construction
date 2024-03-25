@@ -1,0 +1,45 @@
+From f7e552d7ca8ca76cb3d080be14d2a89c311d667f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 21 Mar 2023 06:25:59 +0000
+Subject: [PATCH 1081/2871] cache.h: remove expand_user_path()
+
+expand_user_path() was renamed to interpolate_path() back in mid-2021,
+but reinstated with a #define and a NEEDSWORK comment that we would
+eventually want to get rid of it.  Do so now.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h         | 2 --
+ gpg-interface.c | 2 +-
+ 2 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 260203c7a6..978aa01712 100644
+--- a/cache.h
++++ b/cache.h
+@@ -1142,8 +1142,6 @@ enum scld_error safe_create_leading_directories_no_share(char *path);
+ 
+ int mkdir_in_gitdir(const char *path);
+ char *interpolate_path(const char *path, int real_home);
+-/* NEEDSWORK: remove this synonym once in-flight topics have migrated */
+-#define expand_user_path interpolate_path
+ const char *enter_repo(const char *path, int strict);
+ const char *remove_leading_path(const char *in, const char *prefix);
+ const char *relative_path(const char *in, const char *prefix, struct strbuf *sb);
+diff --git a/gpg-interface.c b/gpg-interface.c
+index 632265691e..f9c5b6c3f5 100644
+--- a/gpg-interface.c
++++ b/gpg-interface.c
+@@ -1049,7 +1049,7 @@ static int sign_buffer_ssh(struct strbuf *buffer, struct strbuf *signature,
+ 		ssh_signing_key_file = strbuf_detach(&key_file->filename, NULL);
+ 	} else {
+ 		/* We assume a file */
+-		ssh_signing_key_file = expand_user_path(signing_key, 1);
++		ssh_signing_key_file = interpolate_path(signing_key, 1);
+ 	}
+ 
+ 	buffer_file = mks_tempfile_t(".git_signing_buffer_tmpXXXXXX");
+-- 
+2.39.3 (Apple Git-145)
+

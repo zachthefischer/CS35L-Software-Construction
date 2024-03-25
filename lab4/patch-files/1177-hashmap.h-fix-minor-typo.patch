@@ -1,0 +1,29 @@
+From ec063d259108c6c9b96dbaddbd1ae76748d309ec Mon Sep 17 00:00:00 2001
+From: Siddharth Singh <siddhartth@google.com>
+Date: Thu, 30 Mar 2023 15:28:03 +0000
+Subject: [PATCH 1177/2871] hashmap.h: fix minor typo
+
+The word "no" should be "not".
+
+Signed-off-by: Siddharth Singh <siddhartth@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ hashmap.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hashmap.h b/hashmap.h
+index 7251687d73..e2cf9c78d8 100644
+--- a/hashmap.h
++++ b/hashmap.h
+@@ -270,7 +270,7 @@ void hashmap_clear_(struct hashmap *map, ssize_t offset);
+ #define hashmap_clear(map) hashmap_clear_(map, -1)
+ 
+ /*
+- * Similar to hashmap_clear(), except that the table is no deallocated; it
++ * Similar to hashmap_clear(), except that the table is not deallocated; it
+  * is merely zeroed out but left the same size as before.  If the hashmap
+  * will be reused, this avoids the overhead of deallocating and
+  * reallocating map->table.  As with hashmap_clear(), you may need to free
+-- 
+2.39.3 (Apple Git-145)
+

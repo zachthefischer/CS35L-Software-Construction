@@ -1,0 +1,128 @@
+From 606e088d5d9af2393b4b05a8a180162c129cd734 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 12 Sep 2023 12:32:34 -0700
+Subject: [PATCH 2098/2871] update-index: add --show-index-version
+
+"git update-index --index-version N" is used to set the index format
+version to a specific version, but there was no way to query the
+current version used in the on-disk index file.
+
+Teach the command a new "--show-index-version" option, and also
+teach the "--index-version N" option to report what the version was
+when run with the "--verbose" option.
+
+Helped-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-update-index.txt |  6 +++++-
+ builtin/update-index.c             | 19 ++++++++++++------
+ t/t2107-update-index-basic.sh      | 31 ++++++++++++++++++++++++++++++
+ 3 files changed, 49 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/git-update-index.txt b/Documentation/git-update-index.txt
+index 71d6ef9457..1271486ae9 100644
+--- a/Documentation/git-update-index.txt
++++ b/Documentation/git-update-index.txt
+@@ -162,7 +162,8 @@ you will need to handle the situation manually.
+ 	Write the resulting index out in the named on-disk format version.
+ 	Supported versions are 2, 3 and 4. The current default version is 2
+ 	or 3, depending on whether extra features are used, such as
+-	`git add -N`.
++	`git add -N`.  With `--verbose`, also report the version the index
++	file uses before and after this command.
+ +
+ Version 4 performs a simple pathname compression that reduces index
+ size by 30%-50% on large repositories, which results in faster load
+@@ -171,6 +172,9 @@ and support for it was added to libgit2 in 2016 and to JGit in 2020.
+ Older versions of this manual page called it "relatively young", but
+ it should be considered mature technology these days.
+ 
++--show-index-version::
++	Report the index format version used by the on-disk index file.
++	See `--index-version` above.
+ 
+ -z::
+ 	Only meaningful with `--stdin` or `--index-info`; paths are
+diff --git a/builtin/update-index.c b/builtin/update-index.c
+index 5fab9ad2ec..8c3454c1c1 100644
+--- a/builtin/update-index.c
++++ b/builtin/update-index.c
+@@ -1089,6 +1089,8 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
+ 			resolve_undo_clear_callback),
+ 		OPT_INTEGER(0, "index-version", &preferred_index_format,
+ 			N_("write index in this format")),
++		OPT_SET_INT(0, "show-index-version", &preferred_index_format,
++			    N_("report on-disk index format version"), -1),
+ 		OPT_BOOL(0, "split-index", &split_index,
+ 			N_("enable or disable split index")),
+ 		OPT_BOOL(0, "untracked-cache", &untracked_cache,
+@@ -1181,15 +1183,20 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
+ 
+ 	getline_fn = nul_term_line ? strbuf_getline_nul : strbuf_getline_lf;
+ 	if (preferred_index_format) {
+-		if (preferred_index_format < INDEX_FORMAT_LB ||
+-		    INDEX_FORMAT_UB < preferred_index_format)
++		if (preferred_index_format < 0) {
++			printf(_("%d\n"), the_index.version);
++		} else if (preferred_index_format < INDEX_FORMAT_LB ||
++			   INDEX_FORMAT_UB < preferred_index_format) {
+ 			die("index-version %d not in range: %d..%d",
+ 			    preferred_index_format,
+ 			    INDEX_FORMAT_LB, INDEX_FORMAT_UB);
+-
+-		if (the_index.version != preferred_index_format)
+-			the_index.cache_changed |= SOMETHING_CHANGED;
+-		the_index.version = preferred_index_format;
++		} else {
++			if (the_index.version != preferred_index_format)
++				the_index.cache_changed |= SOMETHING_CHANGED;
++			report(_("index-version: was %d, set to %d"),
++			       the_index.version, preferred_index_format);
++			the_index.version = preferred_index_format;
++		}
+ 	}
+ 
+ 	if (read_from_stdin) {
+diff --git a/t/t2107-update-index-basic.sh b/t/t2107-update-index-basic.sh
+index 89b285fa3a..22f4c92399 100755
+--- a/t/t2107-update-index-basic.sh
++++ b/t/t2107-update-index-basic.sh
+@@ -111,4 +111,35 @@ test_expect_success '--chmod=+x and chmod=-x in the same argument list' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success '--index-version' '
++	git commit --allow-empty -m snap &&
++	git reset --hard &&
++	git rm -f -r --cached . &&
++
++	# The default index version is 2 --- update this test
++	# when you change it in the code
++	git update-index --show-index-version >actual &&
++	echo 2 >expect &&
++	test_cmp expect actual &&
++
++	# The next test wants us to be using version 2
++	git update-index --index-version 2 &&
++
++	git update-index --index-version 4 --verbose >actual &&
++	echo "index-version: was 2, set to 4" >expect &&
++	test_cmp expect actual &&
++
++	git update-index --index-version 4 --verbose >actual &&
++	echo "index-version: was 4, set to 4" >expect &&
++	test_cmp expect actual &&
++
++	git update-index --index-version 2 --verbose >actual &&
++	echo "index-version: was 4, set to 2" >expect &&
++	test_cmp expect actual &&
++
++	# non-verbose should be silent
++	git update-index --index-version 4 >actual &&
++	test_must_be_empty actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

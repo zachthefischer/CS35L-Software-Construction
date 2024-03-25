@@ -1,0 +1,101 @@
+From 52e2e8d43dbae8c05b68efd60cde2aacf3a23890 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 16:59:51 -0400
+Subject: [PATCH 2255/2871] commit-graph: check size of oid fanout chunk
+
+We load the oid fanout chunk with pair_chunk(), which means we never see
+the size of the chunk. We just assume the on-disk file uses the
+appropriate size, and if it's too small we'll access random memory.
+
+It's easy to check this up-front; the fanout always consists of 256
+uint32's, since it is a fanout of the first byte of the hash pointing
+into the oid index. These parameters can't be changed without
+introducing a new chunk type.
+
+This matches the similar check in the midx OIDF chunk (but note that
+rather than checking for the error immediately, the graph code just
+leaves parts of the struct NULL and checks for required fields later).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c          | 13 +++++++++++--
+ t/t5318-commit-graph.sh | 26 ++++++++++++++++++++++++++
+ 2 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index a689a55b79..9b3b01da61 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -305,6 +305,16 @@ static int verify_commit_graph_lite(struct commit_graph *g)
+ 	return 0;
+ }
+ 
++static int graph_read_oid_fanout(const unsigned char *chunk_start,
++				 size_t chunk_size, void *data)
++{
++	struct commit_graph *g = data;
++	if (chunk_size != 256 * sizeof(uint32_t))
++		return error("commit-graph oid fanout chunk is wrong size");
++	g->chunk_oid_fanout = (const uint32_t *)chunk_start;
++	return 0;
++}
++
+ static int graph_read_oid_lookup(const unsigned char *chunk_start,
+ 				 size_t chunk_size, void *data)
+ {
+@@ -394,8 +404,7 @@ struct commit_graph *parse_commit_graph(struct repo_settings *s,
+ 				   GRAPH_HEADER_SIZE, graph->num_chunks))
+ 		goto free_and_return;
+ 
+-	pair_chunk_unsafe(cf, GRAPH_CHUNKID_OIDFANOUT,
+-		   (const unsigned char **)&graph->chunk_oid_fanout);
++	read_chunk(cf, GRAPH_CHUNKID_OIDFANOUT, graph_read_oid_fanout, graph);
+ 	read_chunk(cf, GRAPH_CHUNKID_OIDLOOKUP, graph_read_oid_lookup, graph);
+ 	pair_chunk_unsafe(cf, GRAPH_CHUNKID_DATA, &graph->chunk_commit_data);
+ 	pair_chunk_unsafe(cf, GRAPH_CHUNKID_EXTRAEDGES, &graph->chunk_extra_edges);
+diff --git a/t/t5318-commit-graph.sh b/t/t5318-commit-graph.sh
+index ba65f17dd9..d25bea3ec5 100755
+--- a/t/t5318-commit-graph.sh
++++ b/t/t5318-commit-graph.sh
+@@ -2,6 +2,7 @@
+ 
+ test_description='commit graph'
+ . ./test-lib.sh
++. "$TEST_DIRECTORY"/lib-chunk.sh
+ 
+ GIT_TEST_COMMIT_GRAPH_CHANGED_PATHS=0
+ 
+@@ -821,4 +822,29 @@ test_expect_success 'overflow during generation version upgrade' '
+ 	)
+ '
+ 
++corrupt_chunk () {
++	graph=full/.git/objects/info/commit-graph &&
++	test_when_finished "rm -rf $graph" &&
++	git -C full commit-graph write --reachable &&
++	corrupt_chunk_file $graph "$@"
++}
++
++check_corrupt_chunk () {
++	corrupt_chunk "$@" &&
++	git -C full -c core.commitGraph=false log >expect.out &&
++	git -C full -c core.commitGraph=true log >out 2>err &&
++	test_cmp expect.out out
++}
++
++test_expect_success 'reader notices too-small oid fanout chunk' '
++	# make it big enough that the graph file is plausible,
++	# otherwise we hit an earlier check
++	check_corrupt_chunk OIDF clear $(printf "000000%02x" $(test_seq 250)) &&
++	cat >expect.err <<-\EOF &&
++	error: commit-graph oid fanout chunk is wrong size
++	error: commit-graph is missing the OID Fanout chunk
++	EOF
++	test_cmp expect.err err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

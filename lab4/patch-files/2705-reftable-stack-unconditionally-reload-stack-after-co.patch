@@ -1,0 +1,39 @@
+From 456333eb4d00a2bc8a71134bedfe5d3bc13a1932 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 18 Jan 2024 14:41:51 +0100
+Subject: [PATCH 2705/2871] reftable/stack: unconditionally reload stack after
+ commit
+
+After we have committed an addition to the reftable stack we call
+`reftable_stack_reload()` to reload the stack and thus reflect the
+changes that were just added. This function will only conditionally
+reload the stack in case `stack_uptodate()` tells us that the stack
+needs reloading. This check is wasteful though because we already know
+that the stack needs reloading.
+
+Call `reftable_stack_reload_maybe_reuse()` instead, which will
+unconditionally reload the stack. This is merely a conceptual fix, the
+code in question was not found to cause any problems in practice.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index c28d82299d..705cfb6caa 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -585,7 +585,7 @@ int reftable_addition_commit(struct reftable_addition *add)
+ 	add->new_tables = NULL;
+ 	add->new_tables_len = 0;
+ 
+-	err = reftable_stack_reload(add->stack);
++	err = reftable_stack_reload_maybe_reuse(add->stack, 1);
+ 	if (err)
+ 		goto done;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,27 @@
+From dadc8e6dacb629f46aee39bde90b6f09b73722eb Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 24 Feb 2023 22:53:08 -0800
+Subject: [PATCH 0948/2871] A few more topics post 2.40-rc0
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index 95c029adfe..922cf22af3 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -54,6 +54,9 @@ UI, Workflows & Features
+ 
+  * Userdiff regexp update for Java language.
+ 
++ * "git fetch --jobs=0" used to hit a BUG(), which has been corrected
++   to use the available CPUs.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

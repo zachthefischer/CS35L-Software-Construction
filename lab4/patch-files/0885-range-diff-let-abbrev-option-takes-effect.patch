@@ -1,0 +1,119 @@
+From 2b15969f61425afb2f1e67aa48ea73d2f10d8eb9 Mon Sep 17 00:00:00 2001
+From: Teng Long <dyroneteng@gmail.com>
+Date: Mon, 20 Feb 2023 22:24:44 +0800
+Subject: [PATCH 0885/2871] range-diff: let '--abbrev' option takes effect
+
+As mentioned in 'git-range-diff.txt': "`git range-diff` also accepts the
+regular diff options (see linkgit:git-diff[1])...", but '--abbrev' is not
+in the "regular" scope.
+
+In Git, the "abbrev" of an object may not be a fixed value in different
+repositories, depending on the needs of the them(Linus mentioned in
+e6c587c7 in 2016: "the Linux kernel project needs 11 to 12 hexdigits"
+at that time ), that's why a user may want to display abbrev according
+to a specified length.
+
+Although a similar effect can be achieved through configuration (like:
+git -c core.abbrev=<abbrev>), but based on ease of use (many users may not
+know that the -c option can be specified) and the description in existing
+document, supporting users to directly use '--abbrev', could be a good way.
+
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ range-diff.c          | 11 +++++++----
+ t/t3206-range-diff.sh | 32 ++++++++++++++++++++++++++++++++
+ 2 files changed, 39 insertions(+), 4 deletions(-)
+
+diff --git a/range-diff.c b/range-diff.c
+index 8255ab4349..086365dffb 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -383,11 +383,14 @@ static void output_pair_header(struct diff_options *diffopt,
+ 	const char *color_new = diff_get_color_opt(diffopt, DIFF_FILE_NEW);
+ 	const char *color_commit = diff_get_color_opt(diffopt, DIFF_COMMIT);
+ 	const char *color;
++	char abbrev = diffopt->abbrev;
++
++	if (abbrev < 0)
++		abbrev = DEFAULT_ABBREV;
+ 
+ 	if (!dashes->len)
+ 		strbuf_addchars(dashes, '-',
+-				strlen(find_unique_abbrev(oid,
+-							  DEFAULT_ABBREV)));
++				strlen(find_unique_abbrev(oid, abbrev)));
+ 
+ 	if (!b_util) {
+ 		color = color_old;
+@@ -409,7 +412,7 @@ static void output_pair_header(struct diff_options *diffopt,
+ 		strbuf_addf(buf, "%*s:  %s ", patch_no_width, "-", dashes->buf);
+ 	else
+ 		strbuf_addf(buf, "%*d:  %s ", patch_no_width, a_util->i + 1,
+-			    find_unique_abbrev(&a_util->oid, DEFAULT_ABBREV));
++			    find_unique_abbrev(&a_util->oid, abbrev));
+ 
+ 	if (status == '!')
+ 		strbuf_addf(buf, "%s%s", color_reset, color);
+@@ -421,7 +424,7 @@ static void output_pair_header(struct diff_options *diffopt,
+ 		strbuf_addf(buf, " %*s:  %s", patch_no_width, "-", dashes->buf);
+ 	else
+ 		strbuf_addf(buf, " %*d:  %s", patch_no_width, b_util->i + 1,
+-			    find_unique_abbrev(&b_util->oid, DEFAULT_ABBREV));
++			    find_unique_abbrev(&b_util->oid, abbrev));
+ 
+ 	commit = lookup_commit_reference(the_repository, oid);
+ 	if (commit) {
+diff --git a/t/t3206-range-diff.sh b/t/t3206-range-diff.sh
+index 84dd0cd26d..b5f4d6a653 100755
+--- a/t/t3206-range-diff.sh
++++ b/t/t3206-range-diff.sh
+@@ -33,6 +33,26 @@ test_expect_success 'setup' '
+ 	u3 sha256:736c4bc
+ 	u4 sha256:673e77d
+ 
++	# topic (abbrev=10)
++	t1_abbrev sha1:4de457d2c0
++	t2_abbrev sha1:fccce22f8c
++	t3_abbrev sha1:147e64ef53
++	t4_abbrev sha1:a63e992599
++	t1_abbrev sha256:b89f8b9092
++	t2_abbrev sha256:5f12aadf34
++	t3_abbrev sha256:ea8b273a6c
++	t4_abbrev sha256:14b73361fc
++
++	# unmodified (abbrev=10)
++	u1_abbrev sha1:35b9b25f76
++	u2_abbrev sha1:de345ab3de
++	u3_abbrev sha1:9af6654000
++	u4_abbrev sha1:2901f773f3
++	u1_abbrev sha256:e3731be242
++	u2_abbrev sha256:14fadf8cee
++	u3_abbrev sha256:736c4bcb44
++	u4_abbrev sha256:673e77d589
++
+ 	# reordered
+ 	r1 sha1:aca177a
+ 	r2 sha1:14ad629
+@@ -153,6 +173,18 @@ test_expect_success 'simple A B C (unmodified)' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'simple A..B A..C (unmodified) with --abbrev' '
++	git range-diff --no-color --abbrev=10 main..topic main..unmodified \
++		>actual &&
++	cat >expect <<-EOF &&
++	1:  $(test_oid t1_abbrev) = 1:  $(test_oid u1_abbrev) s/5/A/
++	2:  $(test_oid t2_abbrev) = 2:  $(test_oid u2_abbrev) s/4/A/
++	3:  $(test_oid t3_abbrev) = 3:  $(test_oid u3_abbrev) s/11/B/
++	4:  $(test_oid t4_abbrev) = 4:  $(test_oid u4_abbrev) s/12/B/
++	EOF
++	test_cmp expect actual
++'
++
+ test_expect_success 'A^! and A^-<n> (unmodified)' '
+ 	git range-diff --no-color topic^! unmodified^-1 >actual &&
+ 	cat >expect <<-EOF &&
+-- 
+2.39.3 (Apple Git-145)
+

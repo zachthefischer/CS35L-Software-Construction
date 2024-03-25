@@ -1,0 +1,43 @@
+From 9e37969e4b1ef56a2fae6cdf7d5d082c449be1b8 Mon Sep 17 00:00:00 2001
+From: Yutaro Ohno <yutaro.ono.418@gmail.com>
+Date: Mon, 9 Jan 2023 10:47:17 +0000
+Subject: [PATCH 0656/2871] doc: add "git switch -c" as another option on
+ detached HEAD
+
+In the "DETACHED HEAD" section in the git-checkout doc, it suggests
+using "git checkout -b <branch-name>" to create a new branch on the
+detached head.
+
+On the other hand, when you checkout a commit that is not at the tip of
+any named branch (e.g., when you checkout a tag), git suggests using
+"git switch -c <branch-name>".
+
+Add "git switch -c" as another option and mitigate this inconsistency.
+
+Signed-off-by: Yutaro Ohno <yutaro.ono.418@gmail.com>
+Acked-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-checkout.txt | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-checkout.txt b/Documentation/git-checkout.txt
+index 4cb9d555b4..9f116acdbd 100644
+--- a/Documentation/git-checkout.txt
++++ b/Documentation/git-checkout.txt
+@@ -477,9 +477,9 @@ before that happens. If we have not yet moved away from commit `f`,
+ any of these will create a reference to it:
+ 
+ ------------
+-$ git checkout -b foo   <1>
+-$ git branch foo        <2>
+-$ git tag foo           <3>
++$ git checkout -b foo  # or "git switch -c foo"  <1>
++$ git branch foo                                 <2>
++$ git tag foo                                    <3>
+ ------------
+ 
+ <1> creates a new branch `foo`, which refers to commit `f`, and then
+-- 
+2.39.3 (Apple Git-145)
+

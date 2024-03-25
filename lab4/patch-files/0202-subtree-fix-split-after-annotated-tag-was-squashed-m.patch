@@ -1,0 +1,169 @@
+From 1762382ab19dd6d5d84dd32e35e25c2b55b651f0 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Fri, 21 Oct 2022 15:13:39 +0000
+Subject: [PATCH 0202/2871] subtree: fix split after annotated tag was squashed
+ merged
+
+The previous commit fixed a failure in 'git subtree merge --squash' when
+the previous squash-merge merged an annotated tag of the subtree
+repository which is missing locally.
+
+The same failure happens in 'git subtree split', either directly or when
+called by 'git subtree push', under the same circumstances: 'cmd_split'
+invokes 'find_existing_splits', which loops through previous commits and
+invokes 'git rev-parse' (via 'process_subtree_split_trailer') on the
+value of any 'git subtree-split' trailer it finds. This fails if this
+value is the hash of an annotated tag which is missing locally.
+
+Add a new optional argument 'repository' to 'cmd_split' and
+'find_existing_splits', and invoke 'cmd_split' with that argument from
+'cmd_push'. This allows 'process_subtree_split_trailer' to try to fetch
+the missing tag from the 'repository' if it's not available locally,
+mirroring the new behaviour of 'git subtree pull' and 'git subtree
+merge'.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/git-subtree.sh     | 26 ++++++++++++++++++--------
+ contrib/subtree/git-subtree.txt    |  7 ++++++-
+ contrib/subtree/t/t7900-subtree.sh | 12 ++++++++++++
+ 3 files changed, 36 insertions(+), 9 deletions(-)
+
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index 2c67989fe8..10c9c87839 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -453,14 +453,19 @@ find_latest_squash () {
+ 	done || exit $?
+ }
+ 
+-# Usage: find_existing_splits DIR REV
++# Usage: find_existing_splits DIR REV [REPOSITORY]
+ find_existing_splits () {
+-	assert test $# = 2
++	assert test $# = 2 -o $# = 3
+ 	debug "Looking for prior splits..."
+ 	local indent=$(($indent + 1))
+ 
+ 	dir="$1"
+ 	rev="$2"
++	repository=""
++	if test "$#" = 3
++	then
++		repository="$3"
++	fi
+ 	main=
+ 	sub=
+ 	local grep_format="^git-subtree-dir: $dir/*\$"
+@@ -480,7 +485,7 @@ find_existing_splits () {
+ 			main="$b"
+ 			;;
+ 		git-subtree-split:)
+-			process_subtree_split_trailer "$b" "$sq"
++			process_subtree_split_trailer "$b" "$sq" "$repository"
+ 			;;
+ 		END)
+ 			debug "Main is: '$main'"
+@@ -906,17 +911,22 @@ cmd_add_commit () {
+ 	say >&2 "Added dir '$dir'"
+ }
+ 
+-# Usage: cmd_split [REV]
++# Usage: cmd_split [REV] [REPOSITORY]
+ cmd_split () {
+ 	if test $# -eq 0
+ 	then
+ 		rev=$(git rev-parse HEAD)
+-	elif test $# -eq 1
++	elif test $# -eq 1 -o $# -eq 2
+ 	then
+ 		rev=$(git rev-parse -q --verify "$1^{commit}") ||
+ 			die "fatal: '$1' does not refer to a commit"
+ 	else
+-		die "fatal: you must provide exactly one revision.  Got: '$*'"
++		die "fatal: you must provide exactly one revision, and optionnally a repository.  Got: '$*'"
++	fi
++	repository=""
++	if test "$#" = 2
++	then
++		repository="$2"
+ 	fi
+ 
+ 	if test -n "$arg_split_rejoin"
+@@ -940,7 +950,7 @@ cmd_split () {
+ 		done || exit $?
+ 	fi
+ 
+-	unrevs="$(find_existing_splits "$dir" "$rev")" || exit $?
++	unrevs="$(find_existing_splits "$dir" "$rev" "$repository")" || exit $?
+ 
+ 	# We can't restrict rev-list to only $dir here, because some of our
+ 	# parents have the $dir contents the root, and those won't match.
+@@ -1072,7 +1082,7 @@ cmd_push () {
+ 			die "fatal: '$localrevname_presplit' does not refer to a commit"
+ 
+ 		echo "git push using: " "$repository" "$refspec"
+-		localrev=$(cmd_split "$localrev_presplit") || die
++		localrev=$(cmd_split "$localrev_presplit" "$repository") || die
+ 		git push "$repository" "$localrev":"refs/heads/$remoteref"
+ 	else
+ 		die "fatal: '$dir' must already exist. Try 'git subtree add'."
+diff --git a/contrib/subtree/git-subtree.txt b/contrib/subtree/git-subtree.txt
+index 0e7524d786..004abf415b 100644
+--- a/contrib/subtree/git-subtree.txt
++++ b/contrib/subtree/git-subtree.txt
+@@ -94,7 +94,7 @@ annotated tag of the subtree repository, that tag needs to be available locally.
+ If <repository> is given, a missing tag will automatically be fetched from that
+ repository.
+ 
+-split [<local-commit>]::
++split [<local-commit>] [<repository>]::
+ 	Extract a new, synthetic project history from the
+ 	history of the <prefix> subtree of <local-commit>, or of
+ 	HEAD if no <local-commit> is given.  The new history
+@@ -114,6 +114,11 @@ settings passed to 'split' (such as '--annotate') are the same.
+ Because of this, if you add new commits and then re-split, the new
+ commits will be attached as commits on top of the history you
+ generated last time, so 'git merge' and friends will work as expected.
+++
++When a previous merge with '--squash' merged an annotated tag of the
++subtree repository, that tag needs to be available locally.
++If <repository> is given, a missing tag will automatically be fetched from that
++repository.
+ 
+ pull <repository> <remote-ref>::
+ 	Exactly like 'merge', but parallels 'git pull' in that
+diff --git a/contrib/subtree/t/t7900-subtree.sh b/contrib/subtree/t/t7900-subtree.sh
+index d0671676c7..341c169eca 100755
+--- a/contrib/subtree/t/t7900-subtree.sh
++++ b/contrib/subtree/t/t7900-subtree.sh
+@@ -582,6 +582,12 @@ test_expect_success 'split "sub dir"/ with --branch for an incompatible branch'
+ 	)
+ '
+ 
++test_expect_success 'split after annotated tag was added/merged with --squash pre-v2.32.0' '
++	test_create_pre2_32_repo "$test_count" &&
++	test_must_fail git -C "$test_count-clone" subtree split --prefix="sub" HEAD &&
++	git -C "$test_count-clone" subtree split --prefix="sub" HEAD "../$test_count-sub"
++'
++
+ #
+ # Tests for 'git subtree pull'
+ #
+@@ -989,6 +995,12 @@ test_expect_success 'push "sub dir"/ with a local rev' '
+ 	)
+ '
+ 
++test_expect_success 'push after annotated tag was added/merged with --squash pre-v2.32.0' '
++	test_create_pre2_32_repo "$test_count" &&
++	test_create_commit "$test_count-clone" sub/main-sub1 &&
++	git -C "$test_count-clone" subtree push --prefix="sub" "../$test_count-sub" from-mainline
++'
++
+ #
+ # Validity checking
+ #
+-- 
+2.39.3 (Apple Git-145)
+

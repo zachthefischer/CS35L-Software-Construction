@@ -1,0 +1,40 @@
+From 9d01cfed6915b1e99c266fd578e39c7aba7767dc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 7 Feb 2023 00:07:46 +0100
+Subject: [PATCH 0820/2871] commit-graph: fix a parse_options_concat() leak
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When the parse_options_concat() was added to this file in
+84e4484f128 (commit-graph: use parse_options_concat(), 2021-08-23) we
+wouldn't free() it if we returned early in these cases.
+
+Since "result" is 0 by default we can "goto cleanup" in both cases,
+and only need to set "result" if write_commit_graph_reachable() fails.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit-graph.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/commit-graph.c b/builtin/commit-graph.c
+index 0102ac8540..93704f95a9 100644
+--- a/builtin/commit-graph.c
++++ b/builtin/commit-graph.c
+@@ -269,8 +269,8 @@ static int graph_write(int argc, const char **argv, const char *prefix)
+ 
+ 	if (opts.reachable) {
+ 		if (write_commit_graph_reachable(odb, flags, &write_opts))
+-			return 1;
+-		return 0;
++			result = 1;
++		goto cleanup;
+ 	}
+ 
+ 	if (opts.stdin_packs) {
+-- 
+2.39.3 (Apple Git-145)
+

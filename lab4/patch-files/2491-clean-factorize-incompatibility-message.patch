@@ -1,0 +1,35 @@
+From f5f9e972bd437f24365a26ebfbfebba4bc260984 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Wed, 6 Dec 2023 12:51:59 +0100
+Subject: [PATCH 2491/2871] clean: factorize incompatibility message
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use the standard parameterized message for reporting incompatible
+options to inform users that they can't use -x and -X together.  This
+reduces the number of strings to translate and makes the UI slightly
+more consistent.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clean.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/clean.c b/builtin/clean.c
+index 49c224e626..d90766cad3 100644
+--- a/builtin/clean.c
++++ b/builtin/clean.c
+@@ -971,7 +971,7 @@ int cmd_clean(int argc, const char **argv, const char *prefix)
+ 	dir.flags |= DIR_SHOW_OTHER_DIRECTORIES;
+ 
+ 	if (ignored && ignored_only)
+-		die(_("-x and -X cannot be used together"));
++		die(_("options '%s' and '%s' cannot be used together"), "-x", "-X");
+ 	if (!ignored)
+ 		setup_standard_excludes(&dir);
+ 	if (ignored_only)
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,38 @@
+From 6032aee65ec5c68c2f43761d1df4d227f7b5966e Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 7 Feb 2024 19:42:17 +0000
+Subject: [PATCH 2840/2871] l10n: bump Actions versions in l10n.yml
+
+This avoids the "Node.js 16 Actions are deprecated" warnings.
+
+Original-commits-by: dependabot[bot] <support@github.com>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ .github/workflows/l10n.yml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/l10n.yml b/.github/workflows/l10n.yml
+index 6c3849658a..3d89758981 100644
+--- a/.github/workflows/l10n.yml
++++ b/.github/workflows/l10n.yml
+@@ -63,7 +63,7 @@ jobs:
+             origin \
+             ${{ github.ref }} \
+             $args
+-      - uses: actions/setup-go@v2
++      - uses: actions/setup-go@v5
+         with:
+           go-version: '>=1.16'
+       - name: Install git-po-helper
+@@ -91,7 +91,7 @@ jobs:
+           cat git-po-helper.out
+           exit $exit_code
+       - name: Create comment in pull request for report
+-        uses: mshick/add-pr-comment@v1
++        uses: mshick/add-pr-comment@v2
+         if: >-
+           always() &&
+           github.event_name == 'pull_request_target' &&
+-- 
+2.39.3 (Apple Git-145)
+

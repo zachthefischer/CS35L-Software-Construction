@@ -1,0 +1,131 @@
+From 666b6e1135c12925efe608c4d5f03234c54e2d0c Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Thu, 23 Feb 2023 20:55:01 +0000
+Subject: [PATCH 0905/2871] rebase -i: fix parsing of "fixup -C<commit>"
+
+If the user omits the space between "-C" and the commit in a fixup
+command then it is parsed as an ordinary fixup and the commit message is
+not updated as it should be. Fix this by making the space between "-C"
+and "<commit>" optional as it is for the "merge" command.
+
+Note that set_replace_editor() is changed to set $GIT_SEQUENCE_EDITOR
+instead of $EDITOR in order to be able to replace the todo list and
+reword commits with $FAKE_COMMIT_MESSAGE. This is safe as all the
+existing users are using set_replace_editor() to replace the todo list.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c                     |  6 ++----
+ t/lib-rebase.sh                 |  8 ++++++--
+ t/t3437-rebase-fixup-options.sh | 26 ++++++++++++++++++++++++++
+ t/test-lib-functions.sh         |  8 ++++++++
+ 4 files changed, 42 insertions(+), 6 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index 416412ca33..3c34e70872 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -2532,12 +2532,10 @@ static int parse_insn_line(struct repository *r, struct todo_item *item,
+ 	}
+ 
+ 	if (item->command == TODO_FIXUP) {
+-		if (skip_prefix(bol, "-C", &bol) &&
+-		   (*bol == ' ' || *bol == '\t')) {
++		if (skip_prefix(bol, "-C", &bol)) {
+ 			bol += strspn(bol, " \t");
+ 			item->flags |= TODO_REPLACE_FIXUP_MSG;
+-		} else if (skip_prefix(bol, "-c", &bol) &&
+-				  (*bol == ' ' || *bol == '\t')) {
++		} else if (skip_prefix(bol, "-c", &bol)) {
+ 			bol += strspn(bol, " \t");
+ 			item->flags |= TODO_EDIT_FIXUP_MSG;
+ 		}
+diff --git a/t/lib-rebase.sh b/t/lib-rebase.sh
+index 1d2f0429ae..7ca5b918f0 100644
+--- a/t/lib-rebase.sh
++++ b/t/lib-rebase.sh
+@@ -211,6 +211,9 @@ check_reworded_commits () {
+ # usage: set_replace_editor <file>
+ #
+ # Replace the todo file with the exact contents of the given file.
++# N.B. sets GIT_SEQUENCE_EDITOR rather than EDITOR so it can be
++# combined with set_fake_editor to reword commits and replace the
++# todo list
+ set_replace_editor () {
+ 	cat >script <<-\EOF &&
+ 	cat FILENAME >"$1"
+@@ -219,6 +222,7 @@ set_replace_editor () {
+ 	cat "$1"
+ 	EOF
+ 
+-	sed -e "s/FILENAME/$1/g" <script | write_script fake-editor.sh &&
+-	test_set_editor "$(pwd)/fake-editor.sh"
++	sed -e "s/FILENAME/$1/g" script |
++		write_script fake-sequence-editor.sh &&
++	test_set_sequence_editor "$(pwd)/fake-sequence-editor.sh"
+ }
+diff --git a/t/t3437-rebase-fixup-options.sh b/t/t3437-rebase-fixup-options.sh
+index c023fefd68..ef39d80a8b 100755
+--- a/t/t3437-rebase-fixup-options.sh
++++ b/t/t3437-rebase-fixup-options.sh
+@@ -50,6 +50,7 @@ test_expect_success 'setup' '
+ 	body
+ 	EOF
+ 
++	test_commit initial &&
+ 	test_commit A A &&
+ 	test_commit B B &&
+ 	get_author HEAD >expected-author &&
+@@ -208,4 +209,29 @@ test_expect_success 'fixup -C works upon --autosquash with amend!' '
+ 		actual-squash-message
+ '
+ 
++test_expect_success 'fixup -[Cc]<commit> works' '
++	test_when_finished "test_might_fail git rebase --abort" &&
++	cat >todo <<-\EOF &&
++	pick A
++	fixup -CA1
++	pick B
++	fixup -cA2
++	EOF
++	(
++		set_replace_editor todo &&
++		FAKE_COMMIT_MESSAGE="edited and fixed up" \
++			git rebase -i initial initial
++	) &&
++	git log --pretty=format:%B initial.. >actual &&
++	cat >expect <<-EOF &&
++	edited and fixed up
++	$EMPTY
++	new subject
++	$EMPTY
++	new
++	body
++	EOF
++	test_cmp expect actual
++'
++
+ test_done
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 796093a7b3..c249fc8aba 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -32,6 +32,14 @@ test_set_editor () {
+ 	export EDITOR
+ }
+ 
++# Like test_set_editor but sets GIT_SEQUENCE_EDITOR instead of EDITOR
++test_set_sequence_editor () {
++	FAKE_SEQUENCE_EDITOR="$1"
++	export FAKE_SEQUENCE_EDITOR
++	GIT_SEQUENCE_EDITOR='"$FAKE_SEQUENCE_EDITOR"'
++	export GIT_SEQUENCE_EDITOR
++}
++
+ test_decode_color () {
+ 	awk '
+ 		function name(n) {
+-- 
+2.39.3 (Apple Git-145)
+

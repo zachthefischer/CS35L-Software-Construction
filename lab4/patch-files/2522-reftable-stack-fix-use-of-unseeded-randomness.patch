@@ -1,0 +1,63 @@
+From 9abda98149e0f164ac0532fc6ca89b337049b9c3 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 11 Dec 2023 10:07:59 +0100
+Subject: [PATCH 2522/2871] reftable/stack: fix use of unseeded randomness
+
+When writing a new reftable stack, Git will first create the stack with
+a random suffix so that concurrent updates will not try to write to the
+same file. This random suffix is computed via a call to rand(3P). But we
+never seed the function via srand(3P), which means that the suffix is in
+fact always the same.
+
+Fix this bug by using `git_rand()` instead, which does not need to be
+initialized. While this function is likely going to be slower depending
+on the platform, this slowness should not matter in practice as we only
+use it when writing a new reftable stack.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/readwrite_test.c | 6 +++---
+ reftable/stack.c          | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/reftable/readwrite_test.c b/reftable/readwrite_test.c
+index 469ab79a5a..278663f22d 100644
+--- a/reftable/readwrite_test.c
++++ b/reftable/readwrite_test.c
+@@ -141,8 +141,8 @@ static void test_log_buffer_size(void)
+ 	*/
+ 	uint8_t hash1[GIT_SHA1_RAWSZ], hash2[GIT_SHA1_RAWSZ];
+ 	for (i = 0; i < GIT_SHA1_RAWSZ; i++) {
+-		hash1[i] = (uint8_t)(rand() % 256);
+-		hash2[i] = (uint8_t)(rand() % 256);
++		hash1[i] = (uint8_t)(git_rand() % 256);
++		hash2[i] = (uint8_t)(git_rand() % 256);
+ 	}
+ 	log.value.update.old_hash = hash1;
+ 	log.value.update.new_hash = hash2;
+@@ -320,7 +320,7 @@ static void test_log_zlib_corruption(void)
+ 	};
+ 
+ 	for (i = 0; i < sizeof(message) - 1; i++)
+-		message[i] = (uint8_t)(rand() % 64 + ' ');
++		message[i] = (uint8_t)(git_rand() % 64 + ' ');
+ 
+ 	reftable_writer_set_limits(w, 1, 1);
+ 
+diff --git a/reftable/stack.c b/reftable/stack.c
+index 0c235724e2..16bab82063 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -434,7 +434,7 @@ int reftable_stack_add(struct reftable_stack *st,
+ static void format_name(struct strbuf *dest, uint64_t min, uint64_t max)
+ {
+ 	char buf[100];
+-	uint32_t rnd = (uint32_t)rand();
++	uint32_t rnd = (uint32_t)git_rand();
+ 	snprintf(buf, sizeof(buf), "0x%012" PRIx64 "-0x%012" PRIx64 "-%08x",
+ 		 min, max, rnd);
+ 	strbuf_reset(dest);
+-- 
+2.39.3 (Apple Git-145)
+

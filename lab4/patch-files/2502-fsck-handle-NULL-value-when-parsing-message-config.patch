@@ -1,0 +1,126 @@
+From d49cb162fa752d62cf20548ae057471d348e42ae Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:11:35 -0500
+Subject: [PATCH 2502/2871] fsck: handle NULL value when parsing message config
+
+When parsing fsck.*, receive.fsck.*, or fetch.fsck.*, we don't check for
+an implicit bool. So any of:
+
+  [fsck]
+  badTree
+  [receive "fsck"]
+  badTree
+  [fetch "fsck"]
+  badTree
+
+will cause us to segfault. We can fix it with config_error_nonbool() in
+the usual way, but we have to make a few more changes to get good error
+messages. The problem is that all three spots do:
+
+  if (skip_prefix(var, "fsck.", &var))
+
+to match and parse the actual message id. But that means that "var" now
+just says "badTree" instead of "receive.fsck.badTree", making the
+resulting message confusing. We can fix that by storing the parsed
+message id in its own separate variable.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c | 11 +++++++----
+ fetch-pack.c           | 12 ++++++++----
+ fsck.c                 |  8 ++++++--
+ 3 files changed, 21 insertions(+), 10 deletions(-)
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index 8c4f0cb90a..ccf9738bce 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -142,6 +142,7 @@ static enum deny_action parse_deny_action(const char *var, const char *value)
+ static int receive_pack_config(const char *var, const char *value,
+ 			       const struct config_context *ctx, void *cb)
+ {
++	const char *msg_id;
+ 	int status = parse_hide_refs_config(var, value, "receive", &hidden_refs);
+ 
+ 	if (status)
+@@ -178,12 +179,14 @@ static int receive_pack_config(const char *var, const char *value,
+ 		return 0;
+ 	}
+ 
+-	if (skip_prefix(var, "receive.fsck.", &var)) {
+-		if (is_valid_msg_type(var, value))
++	if (skip_prefix(var, "receive.fsck.", &msg_id)) {
++		if (!value)
++			return config_error_nonbool(var);
++		if (is_valid_msg_type(msg_id, value))
+ 			strbuf_addf(&fsck_msg_types, "%c%s=%s",
+-				fsck_msg_types.len ? ',' : '=', var, value);
++				fsck_msg_types.len ? ',' : '=', msg_id, value);
+ 		else
+-			warning("skipping unknown msg id '%s'", var);
++			warning("skipping unknown msg id '%s'", msg_id);
+ 		return 0;
+ 	}
+ 
+diff --git a/fetch-pack.c b/fetch-pack.c
+index 26999e3b65..31a72d43de 100644
+--- a/fetch-pack.c
++++ b/fetch-pack.c
+@@ -1862,6 +1862,8 @@ static struct ref *do_fetch_pack_v2(struct fetch_pack_args *args,
+ static int fetch_pack_config_cb(const char *var, const char *value,
+ 				const struct config_context *ctx, void *cb)
+ {
++	const char *msg_id;
++
+ 	if (strcmp(var, "fetch.fsck.skiplist") == 0) {
+ 		const char *path;
+ 
+@@ -1873,12 +1875,14 @@ static int fetch_pack_config_cb(const char *var, const char *value,
+ 		return 0;
+ 	}
+ 
+-	if (skip_prefix(var, "fetch.fsck.", &var)) {
+-		if (is_valid_msg_type(var, value))
++	if (skip_prefix(var, "fetch.fsck.", &msg_id)) {
++		if (!value)
++			return config_error_nonbool(var);
++		if (is_valid_msg_type(msg_id, value))
+ 			strbuf_addf(&fsck_msg_types, "%c%s=%s",
+-				fsck_msg_types.len ? ',' : '=', var, value);
++				fsck_msg_types.len ? ',' : '=', msg_id, value);
+ 		else
+-			warning("Skipping unknown msg id '%s'", var);
++			warning("Skipping unknown msg id '%s'", msg_id);
+ 		return 0;
+ 	}
+ 
+diff --git a/fsck.c b/fsck.c
+index 6a0bbc5087..b624083a13 100644
+--- a/fsck.c
++++ b/fsck.c
+@@ -1403,6 +1403,8 @@ int git_fsck_config(const char *var, const char *value,
+ 		    const struct config_context *ctx, void *cb)
+ {
+ 	struct fsck_options *options = cb;
++	const char *msg_id;
++
+ 	if (strcmp(var, "fsck.skiplist") == 0) {
+ 		const char *path;
+ 		struct strbuf sb = STRBUF_INIT;
+@@ -1416,8 +1418,10 @@ int git_fsck_config(const char *var, const char *value,
+ 		return 0;
+ 	}
+ 
+-	if (skip_prefix(var, "fsck.", &var)) {
+-		fsck_set_msg_type(options, var, value);
++	if (skip_prefix(var, "fsck.", &msg_id)) {
++		if (!value)
++			return config_error_nonbool(var);
++		fsck_set_msg_type(options, msg_id, value);
+ 		return 0;
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

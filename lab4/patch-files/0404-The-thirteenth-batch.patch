@@ -1,0 +1,59 @@
+From a0789512c5a4ae7da935cd2e419f253cb3cb4ce7 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 18 Nov 2022 18:48:53 -0500
+Subject: [PATCH 0404/2871] The thirteenth batch
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/RelNotes/2.39.0.txt | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.39.0.txt b/Documentation/RelNotes/2.39.0.txt
+index f9bc29f7d2..153bf6d89b 100644
+--- a/Documentation/RelNotes/2.39.0.txt
++++ b/Documentation/RelNotes/2.39.0.txt
+@@ -32,6 +32,9 @@ UI, Workflows & Features
+  * Enable gc.cruftpacks by default for those who opt into
+    feature.experimental setting.
+ 
++ * "git repack" learns to send cruft objects out of the way into
++   packfiles outside the repository.
++
+ Performance, Internal Implementation, Development Support etc.
+ --------------------------------------------------------------
+ 
+@@ -109,6 +112,18 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * Modernize test script to avoid "test -f" and friends.
+ 
++ * Avoid calling 'cache_tree_update()' when doing so would be
++   redundant.
++
++ * Update the credential-cache documentation to provide a more
++   realistic example.
++
++ * Makefile comments updates and reordering to clarify knobs used to
++   choose SHA implementations.
++
++ * A design document for sparse-checkout's future directions has been
++   added.
++
+ Fixes since v2.38
+ -----------------
+ 
+@@ -250,6 +265,12 @@ Fixes since v2.38
+  * "git archive" mistakenly complained twice about a missing
+    executable, which has been corrected.
+ 
++ * Fix a bug where `git branch -d` did not work on an orphaned HEAD.
++
++ * `git rebase --update-refs` would delete references when all
++   `update-ref` commands in the sequencer were removed, which has been
++   corrected.
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge 413bc6d20a ds/cmd-main-reorder later to maint).
+    (merge 8d2863e4ed nw/t1002-cleanup later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

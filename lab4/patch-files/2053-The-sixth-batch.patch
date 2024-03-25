@@ -1,0 +1,40 @@
+From 1fc548b2d6a3596f3e1c1f8b1930d8dbd1e30bf3 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 5 Sep 2023 14:37:49 -0700
+Subject: [PATCH 2053/2871] The sixth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.43.0.txt | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.43.0.txt b/Documentation/RelNotes/2.43.0.txt
+index 8c6fafa4bf..91d7bc9b24 100644
+--- a/Documentation/RelNotes/2.43.0.txt
++++ b/Documentation/RelNotes/2.43.0.txt
+@@ -34,6 +34,22 @@ Performance, Internal Implementation, Development Support etc.
+ 
+  * "git check-attr" has been taught to work better with sparse-index.
+ 
++ * It may be tempting to leave the help text NULL for a command line
++   option that is either hidden or too obvious, but "git subcmd -h"
++   and "git subcmd --help-all" would have segfaulted if done so.  Now
++   the help text is optional.
++
++ * Tests that are known to pass with LSan are now marked as such.
++   (merge 5fafe8c95f tb/mark-more-tests-as-leak-free later to maint).
++
++ * Flakey "git p4" tests, as well as "git svn" tests, are now skipped
++   in the (rather expensive) sanitizer CI job.
++   (merge 6ba913629f js/ci-san-skip-p4-and-svn-tests later to maint).
++
++ * Tests with LSan from time to time seem to emit harmless message
++   that makes our tests unnecessarily flakey; we work it around by
++   filtering the uninteresting output.
++   (merge 370ef7e40d jk/test-lsan-denoise-output later to maint).
+ 
+ 
+ Fixes since v2.42
+-- 
+2.39.3 (Apple Git-145)
+

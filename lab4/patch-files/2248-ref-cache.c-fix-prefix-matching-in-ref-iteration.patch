@@ -1,0 +1,153 @@
+From 5305474ec4650755f2c0437c004cabfb1c60cf6a Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Mon, 9 Oct 2023 21:58:53 +0000
+Subject: [PATCH 2248/2871] ref-cache.c: fix prefix matching in ref iteration
+
+Update 'cache_ref_iterator_advance' to skip over refs that are not matched
+by the given prefix.
+
+Currently, a ref entry is considered "matched" if the entry name is fully
+contained within the prefix:
+
+* prefix: "refs/heads/v1"
+* entry: "refs/heads/v1.0"
+
+OR if the prefix is fully contained in the entry name:
+
+* prefix: "refs/heads/v1.0"
+* entry: "refs/heads/v1"
+
+The first case is always correct, but the second is only correct if the ref
+cache entry is a directory, for example:
+
+* prefix: "refs/heads/example"
+* entry: "refs/heads/"
+
+Modify the logic in 'cache_ref_iterator_advance' to reflect these
+expectations:
+
+1. If 'overlaps_prefix' returns 'PREFIX_EXCLUDES_DIR', then the prefix and
+   ref cache entry do not overlap at all. Skip this entry.
+2. If 'overlaps_prefix' returns 'PREFIX_WITHIN_DIR', then the prefix matches
+   inside this entry if it is a directory. Skip if the entry is not a
+   directory, otherwise iterate over it.
+3. Otherwise, 'overlaps_prefix' returned 'PREFIX_CONTAINS_DIR', indicating
+   that the cache entry (directory or not) is fully contained by or equal to
+   the prefix. Iterate over this entry.
+
+Note that condition 2 relies on the names of directory entries having the
+appropriate trailing slash. The existing function documentation of
+'create_dir_entry' explicitly calls out the trailing slash requirement, so
+this is a safe assumption to make.
+
+This bug generally doesn't have any user-facing impact, since it requires:
+
+1. using a non-empty prefix without a trailing slash in an iteration like
+   'for_each_fullref_in',
+2. the callback to said iteration not reapplying the original filter (as
+   for-each-ref does) to ensure unmatched refs are skipped, and
+3. the repository having one or more refs that match part of, but not all
+   of, the prefix.
+
+However, there are some niche scenarios that meet those criteria
+(specifically, 'rev-parse --bisect' and '(log|show|shortlog) --bisect'). Add
+tests covering those cases to demonstrate the fix in this patch.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs/ref-cache.c              |  3 ++-
+ t/t1500-rev-parse.sh          | 23 +++++++++++++++++++++++
+ t/t4205-log-pretty-formats.sh | 30 ++++++++++++++++++++++++++++++
+ 3 files changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/refs/ref-cache.c b/refs/ref-cache.c
+index 2294c4564f..6e3b725245 100644
+--- a/refs/ref-cache.c
++++ b/refs/ref-cache.c
+@@ -412,7 +412,8 @@ static int cache_ref_iterator_advance(struct ref_iterator *ref_iterator)
+ 
+ 		if (level->prefix_state == PREFIX_WITHIN_DIR) {
+ 			entry_prefix_state = overlaps_prefix(entry->name, iter->prefix);
+-			if (entry_prefix_state == PREFIX_EXCLUDES_DIR)
++			if (entry_prefix_state == PREFIX_EXCLUDES_DIR ||
++			    (entry_prefix_state == PREFIX_WITHIN_DIR && !(entry->flag & REF_DIR)))
+ 				continue;
+ 		} else {
+ 			entry_prefix_state = level->prefix_state;
+diff --git a/t/t1500-rev-parse.sh b/t/t1500-rev-parse.sh
+index 37ee5091b5..3f9e7f62e4 100755
+--- a/t/t1500-rev-parse.sh
++++ b/t/t1500-rev-parse.sh
+@@ -264,4 +264,27 @@ test_expect_success 'rev-parse --since= unsqueezed ordering' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'rev-parse --bisect includes bad, excludes good' '
++	test_commit_bulk 6 &&
++
++	git update-ref refs/bisect/bad-1 HEAD~1 &&
++	git update-ref refs/bisect/b HEAD~2 &&
++	git update-ref refs/bisect/bad-3 HEAD~3 &&
++	git update-ref refs/bisect/good-3 HEAD~3 &&
++	git update-ref refs/bisect/bad-4 HEAD~4 &&
++	git update-ref refs/bisect/go HEAD~4 &&
++
++	# Note: refs/bisect/b and refs/bisect/go should be ignored because they
++	# do not match the refs/bisect/bad or refs/bisect/good prefixes.
++	cat >expect <<-EOF &&
++	refs/bisect/bad-1
++	refs/bisect/bad-3
++	refs/bisect/bad-4
++	^refs/bisect/good-3
++	EOF
++
++	git rev-parse --symbolic-full-name --bisect >actual &&
++	test_cmp expect actual
++'
++
+ test_done
+diff --git a/t/t4205-log-pretty-formats.sh b/t/t4205-log-pretty-formats.sh
+index dd9035aa38..b431a22bbd 100755
+--- a/t/t4205-log-pretty-formats.sh
++++ b/t/t4205-log-pretty-formats.sh
+@@ -924,6 +924,36 @@ test_expect_success '%S in git log --format works with other placeholders (part
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'setup more commits for %S with --bisect' '
++	test_commit four &&
++	test_commit five &&
++
++	head1=$(git rev-parse --verify HEAD~0) &&
++	head2=$(git rev-parse --verify HEAD~1) &&
++	head3=$(git rev-parse --verify HEAD~2) &&
++	head4=$(git rev-parse --verify HEAD~3)
++'
++
++test_expect_success '%S with --bisect labels commits with refs/bisect/bad ref' '
++	git update-ref refs/bisect/bad-$head1 $head1 &&
++	git update-ref refs/bisect/go $head1 &&
++	git update-ref refs/bisect/bad-$head2 $head2 &&
++	git update-ref refs/bisect/b $head3 &&
++	git update-ref refs/bisect/bad-$head4 $head4 &&
++	git update-ref refs/bisect/good-$head4 $head4 &&
++
++	# We expect to see the range of commits betwee refs/bisect/good-$head4
++	# and refs/bisect/bad-$head1. The "source" ref is the nearest bisect ref
++	# from which the commit is reachable.
++	cat >expect <<-EOF &&
++	$head1 refs/bisect/bad-$head1
++	$head2 refs/bisect/bad-$head2
++	$head3 refs/bisect/bad-$head2
++	EOF
++	git log --bisect --format="%H %S" >actual &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'log --pretty=reference' '
+ 	git log --pretty="tformat:%h (%s, %as)" >expect &&
+ 	git log --pretty=reference >actual &&
+-- 
+2.39.3 (Apple Git-145)
+

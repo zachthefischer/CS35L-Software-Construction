@@ -1,0 +1,50 @@
+From 116761ba9cdee81e0d7b4671f14f9bd256f2cb36 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 6 Oct 2022 09:11:31 -0400
+Subject: [PATCH 0050/2871] commit: avoid writing to global in option callback
+
+The callback function for --trailer writes directly to the global
+trailer_args and ignores opt->value completely. This is OK, since that's
+where we expect to find the value. But it does mean the option
+declaration isn't as clear. E.g., we have:
+
+    OPT_BOOL(0, "reset-author", &renew_authorship, ...),
+    OPT_CALLBACK_F(0, "trailer", NULL, ..., opt_pass_trailer)
+
+In the first one we can see where the result will be stored, but in the
+second, we get only NULL, and you have to go read the callback.
+
+Let's pass &trailer_args, and use it in the callback. As a bonus, this
+silences a -Wunused-parameter warning.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/commit.c b/builtin/commit.c
+index fcf9c85947..d9de4ef008 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -139,7 +139,7 @@ static int opt_pass_trailer(const struct option *opt, const char *arg, int unset
+ {
+ 	BUG_ON_OPT_NEG(unset);
+ 
+-	strvec_pushl(&trailer_args, "--trailer", arg, NULL);
++	strvec_pushl(opt->value, "--trailer", arg, NULL);
+ 	return 0;
+ }
+ 
+@@ -1633,7 +1633,7 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
+ 		OPT_STRING(0, "fixup", &fixup_message, N_("[(amend|reword):]commit"), N_("use autosquash formatted message to fixup or amend/reword specified commit")),
+ 		OPT_STRING(0, "squash", &squash_message, N_("commit"), N_("use autosquash formatted message to squash specified commit")),
+ 		OPT_BOOL(0, "reset-author", &renew_authorship, N_("the commit is authored by me now (used with -C/-c/--amend)")),
+-		OPT_CALLBACK_F(0, "trailer", NULL, N_("trailer"), N_("add custom trailer(s)"), PARSE_OPT_NONEG, opt_pass_trailer),
++		OPT_CALLBACK_F(0, "trailer", &trailer_args, N_("trailer"), N_("add custom trailer(s)"), PARSE_OPT_NONEG, opt_pass_trailer),
+ 		OPT_BOOL('s', "signoff", &signoff, N_("add a Signed-off-by trailer")),
+ 		OPT_FILENAME('t', "template", &template_file, N_("use specified template file")),
+ 		OPT_BOOL('e', "edit", &edit_flag, N_("force edit of commit")),
+-- 
+2.39.3 (Apple Git-145)
+

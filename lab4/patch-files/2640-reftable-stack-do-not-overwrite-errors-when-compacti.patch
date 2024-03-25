@@ -1,0 +1,77 @@
+From d26c21483d327fdecb52a98be8239f0f224423f9 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 3 Jan 2024 07:22:13 +0100
+Subject: [PATCH 2640/2871] reftable/stack: do not overwrite errors when
+ compacting
+
+In order to compact multiple stacks we iterate through the merged ref
+and log records. When there is any error either when reading the records
+from the old merged table or when writing the records to the new table
+then we break out of the respective loops. When breaking out of the loop
+for the ref records though the error code will be overwritten, which may
+cause us to inadvertently skip over bad ref records. In the worst case,
+this can lead to a compacted stack that is missing records.
+
+Fix the code by using `goto done` instead so that any potential error
+codes are properly returned to the caller.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c | 20 ++++++++------------
+ 1 file changed, 8 insertions(+), 12 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index 16bab82063..8729508dc3 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -801,18 +801,16 @@ static int stack_write_compact(struct reftable_stack *st,
+ 			err = 0;
+ 			break;
+ 		}
+-		if (err < 0) {
+-			break;
+-		}
++		if (err < 0)
++			goto done;
+ 
+ 		if (first == 0 && reftable_ref_record_is_deletion(&ref)) {
+ 			continue;
+ 		}
+ 
+ 		err = reftable_writer_add_ref(wr, &ref);
+-		if (err < 0) {
+-			break;
+-		}
++		if (err < 0)
++			goto done;
+ 		entries++;
+ 	}
+ 	reftable_iterator_destroy(&it);
+@@ -827,9 +825,8 @@ static int stack_write_compact(struct reftable_stack *st,
+ 			err = 0;
+ 			break;
+ 		}
+-		if (err < 0) {
+-			break;
+-		}
++		if (err < 0)
++			goto done;
+ 		if (first == 0 && reftable_log_record_is_deletion(&log)) {
+ 			continue;
+ 		}
+@@ -845,9 +842,8 @@ static int stack_write_compact(struct reftable_stack *st,
+ 		}
+ 
+ 		err = reftable_writer_add_log(wr, &log);
+-		if (err < 0) {
+-			break;
+-		}
++		if (err < 0)
++			goto done;
+ 		entries++;
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

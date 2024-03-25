@@ -1,0 +1,154 @@
+From bc7f5db896f59275fb0e4093dfd6891bfcece63d Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Fri, 9 Feb 2024 16:19:39 +0000
+Subject: [PATCH 2838/2871] prune: mark rebase autostash and orig-head as
+ reachable
+
+Rebase records the oid of HEAD before rebasing and the commit created by
+"--autostash" in files in the rebase state directory. This means that
+the autostash commit is never reachable from any ref or reflog and when
+rebasing a detached HEAD the original HEAD can become unreachable if the
+user expires HEAD's the reflog while the rebase is running. Fix this by
+reading the relevant files when marking reachable commits.
+
+Note that it is possible for the commit recorded in
+.git/rebase-merge/amend to be unreachable but pruning that object does
+not affect the operation of "git rebase --continue" as we're only
+interested in the object id, not in the object itself.
+
+Reported-by: Orgad Shaneh <orgads@gmail.com>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reachable.c                 | 50 +++++++++++++++++++++++++++++++++++++
+ t/t3407-rebase-abort.sh     | 17 ++++++++++++-
+ t/t3420-rebase-autostash.sh | 10 ++++++++
+ 3 files changed, 76 insertions(+), 1 deletion(-)
+
+diff --git a/reachable.c b/reachable.c
+index f29b06a5d0..3b85add243 100644
+--- a/reachable.c
++++ b/reachable.c
+@@ -17,6 +17,7 @@
+ #include "pack-mtimes.h"
+ #include "config.h"
+ #include "run-command.h"
++#include "sequencer.h"
+ 
+ struct connectivity_progress {
+ 	struct progress *progress;
+@@ -30,6 +31,52 @@ static void update_progress(struct connectivity_progress *cp)
+ 		display_progress(cp->progress, cp->count);
+ }
+ 
++static void add_one_file(const char *path, struct rev_info *revs)
++{
++	struct strbuf buf = STRBUF_INIT;
++	struct object_id oid;
++	struct object *object;
++
++	if (!read_oneliner(&buf, path, READ_ONELINER_SKIP_IF_EMPTY)) {
++		strbuf_release(&buf);
++		return;
++	}
++	strbuf_trim(&buf);
++	if (!get_oid_hex(buf.buf, &oid)) {
++		object = parse_object_or_die(&oid, buf.buf);
++		add_pending_object(revs, object, "");
++	}
++	strbuf_release(&buf);
++}
++
++/* Mark objects recorded in rebase state files as reachable. */
++static void add_rebase_files(struct rev_info *revs)
++{
++	struct strbuf buf = STRBUF_INIT;
++	size_t len;
++	const char *path[] = {
++		"rebase-apply/autostash",
++		"rebase-apply/orig-head",
++		"rebase-merge/autostash",
++		"rebase-merge/orig-head",
++	};
++	struct worktree **worktrees = get_worktrees();
++
++	for (struct worktree **wt = worktrees; *wt; wt++) {
++		strbuf_reset(&buf);
++		strbuf_addstr(&buf, get_worktree_git_dir(*wt));
++		strbuf_complete(&buf, '/');
++		len = buf.len;
++		for (size_t i = 0; i < ARRAY_SIZE(path); i++) {
++			strbuf_setlen(&buf, len);
++			strbuf_addstr(&buf, path[i]);
++			add_one_file(buf.buf, revs);
++		}
++	}
++	strbuf_release(&buf);
++	free_worktrees(worktrees);
++}
++
+ static int add_one_ref(const char *path, const struct object_id *oid,
+ 		       int flag, void *cb_data)
+ {
+@@ -322,6 +369,9 @@ void mark_reachable_objects(struct rev_info *revs, int mark_reflog,
+ 	head_ref(add_one_ref, revs);
+ 	other_head_refs(add_one_ref, revs);
+ 
++	/* rebase autostash and orig-head */
++	add_rebase_files(revs);
++
+ 	/* Add all reflog info */
+ 	if (mark_reflog)
+ 		add_reflogs_to_pending(revs, 0);
+diff --git a/t/t3407-rebase-abort.sh b/t/t3407-rebase-abort.sh
+index ebbaed147a..9f49c4228b 100755
+--- a/t/t3407-rebase-abort.sh
++++ b/t/t3407-rebase-abort.sh
+@@ -40,9 +40,24 @@ testrebase() {
+ 		test_path_is_missing "$state_dir"
+ 	'
+ 
++	test_expect_success "pre rebase$type head is marked as reachable" '
++		# Clean up the state from the previous one
++		git checkout -f --detach pre-rebase &&
++		test_tick &&
++		git commit --amend --only -m "reworded" &&
++		orig_head=$(git rev-parse HEAD) &&
++		test_must_fail git rebase$type main &&
++		# Stop ORIG_HEAD marking $state_dir/orig-head as reachable
++		git update-ref -d ORIG_HEAD &&
++		git reflog expire --expire="$GIT_COMMITTER_DATE" --all &&
++		git prune --expire=now &&
++		git rebase --abort &&
++		test_cmp_rev $orig_head HEAD
++	'
++
+ 	test_expect_success "rebase$type --abort after --skip" '
+ 		# Clean up the state from the previous one
+-		git reset --hard pre-rebase &&
++		git checkout -B to-rebase pre-rebase &&
+ 		test_must_fail git rebase$type main &&
+ 		test_path_is_dir "$state_dir" &&
+ 		test_must_fail git rebase --skip &&
+diff --git a/t/t3420-rebase-autostash.sh b/t/t3420-rebase-autostash.sh
+index 693934ee8b..1a820f1481 100755
+--- a/t/t3420-rebase-autostash.sh
++++ b/t/t3420-rebase-autostash.sh
+@@ -333,4 +333,14 @@ test_expect_success 'never change active branch' '
+ 	test_cmp_rev not-the-feature-branch unrelated-onto-branch
+ '
+ 
++test_expect_success 'autostash commit is marked as reachable' '
++	echo changed >file0 &&
++	git rebase --autostash --exec "git prune --expire=now" \
++		feature-branch^ feature-branch &&
++	# git rebase succeeds if the stash cannot be applied so we need to check
++	# the contents of file0
++	echo changed >expect &&
++	test_cmp expect file0
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

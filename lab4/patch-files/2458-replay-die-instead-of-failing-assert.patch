@@ -1,0 +1,39 @@
+From a9df61ace31b84c9609dfa4875e93b8c92e06e56 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:33 +0100
+Subject: [PATCH 2458/2871] replay: die() instead of failing assert()
+
+It's not a good idea for regular Git commands to use an assert() to
+check for things that could happen but are not supported.
+
+Let's die() with an explanation of the issue instead.
+
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/replay.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/replay.c b/builtin/replay.c
+index 7998f6ed04..f48c5ed255 100644
+--- a/builtin/replay.c
++++ b/builtin/replay.c
+@@ -179,7 +179,12 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 
+ 		fprintf(stderr, "Rebasing %s...\r",
+ 			oid_to_hex(&commit->object.oid));
+-		assert(commit->parents && !commit->parents->next);
++
++		if (!commit->parents)
++			die(_("replaying down to root commit is not supported yet!"));
++		if (commit->parents->next)
++			die(_("replaying merge commits is not supported yet!"));
++
+ 		base = commit->parents->item;
+ 
+ 		next_tree = repo_get_commit_tree(the_repository, commit);
+-- 
+2.39.3 (Apple Git-145)
+

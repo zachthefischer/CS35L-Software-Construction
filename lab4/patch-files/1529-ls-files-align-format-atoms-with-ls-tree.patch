@@ -1,0 +1,149 @@
+From 4d28c4f75fc12e7795fb2c1db2caedb6d9648af8 Mon Sep 17 00:00:00 2001
+From: ZheNing Hu <adlternative@gmail.com>
+Date: Tue, 23 May 2023 09:00:18 +0000
+Subject: [PATCH 1529/2871] ls-files: align format atoms with ls-tree
+
+"git ls-files --format" can be used to format the output of
+multiple file entries in the index, while "git ls-tree --format"
+can be used to format the contents of a tree object. However,
+the current set of %(objecttype), "(objectsize)", and
+"%(objectsize:padded)" atoms supported by "git ls-files --format"
+is a subset of what is available in "git ls-tree --format".
+
+Users sometimes need to establish a unified view between the index
+and tree, which can help with comparison or conversion between the two.
+
+Therefore, this patch adds the missing atoms to "git ls-files --format".
+"%(objecttype)" can be used to retrieve the object type corresponding
+to a file in the index, "(objectsize)" can be used to retrieve the
+object size corresponding to a file in the index, and "%(objectsize:padded)"
+is the same as "(objectsize)", except with padded format.
+
+Signed-off-by: ZheNing Hu <adlternative@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-ls-files.txt |  6 ++++++
+ builtin/ls-files.c             | 27 ++++++++++++++++++++++++++
+ t/t3013-ls-files-format.sh     | 35 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 68 insertions(+)
+
+diff --git a/Documentation/git-ls-files.txt b/Documentation/git-ls-files.txt
+index 1abdd3c21c..1bc0328bb7 100644
+--- a/Documentation/git-ls-files.txt
++++ b/Documentation/git-ls-files.txt
+@@ -270,8 +270,14 @@ interpolated.  The following "fieldname" are understood:
+ 
+ objectmode::
+ 	The mode of the file which is recorded in the index.
++objecttype::
++	The object type of the file which is recorded in the index.
+ objectname::
+ 	The name of the file which is recorded in the index.
++objectsize[:padded]::
++	The object size of the file which is recorded in the index
++	("-" if the object is a `commit` or `tree`).
++	It also supports a padded format of size with "%(objectsize:padded)".
+ stage::
+ 	The stage of the file which is recorded in the index.
+ eolinfo:index::
+diff --git a/builtin/ls-files.c b/builtin/ls-files.c
+index 625f48f0d6..72012c0f0f 100644
+--- a/builtin/ls-files.c
++++ b/builtin/ls-files.c
+@@ -25,6 +25,9 @@
+ #include "setup.h"
+ #include "submodule.h"
+ #include "submodule-config.h"
++#include "object-store.h"
++#include "hex.h"
++
+ 
+ static int abbrev;
+ static int show_deleted;
+@@ -241,6 +244,24 @@ static void show_submodule(struct repository *superproject,
+ 	repo_clear(&subrepo);
+ }
+ 
++static void expand_objectsize(struct strbuf *line, const struct object_id *oid,
++			      const enum object_type type, unsigned int padded)
++{
++	if (type == OBJ_BLOB) {
++		unsigned long size;
++		if (oid_object_info(the_repository, oid, &size) < 0)
++			die(_("could not get object info about '%s'"),
++			    oid_to_hex(oid));
++		if (padded)
++			strbuf_addf(line, "%7"PRIuMAX, (uintmax_t)size);
++		else
++			strbuf_addf(line, "%"PRIuMAX, (uintmax_t)size);
++	} else if (padded) {
++		strbuf_addf(line, "%7s", "-");
++	} else {
++		strbuf_addstr(line, "-");
++	}
++}
+ struct show_index_data {
+ 	const char *pathname;
+ 	struct index_state *istate;
+@@ -272,6 +293,12 @@ static size_t expand_show_index(struct strbuf *sb, const char *start,
+ 		strbuf_addf(sb, "%06o", data->ce->ce_mode);
+ 	else if (skip_prefix(start, "(objectname)", &p))
+ 		strbuf_add_unique_abbrev(sb, &data->ce->oid, abbrev);
++	else if (skip_prefix(start, "(objecttype)", &p))
++		strbuf_addstr(sb, type_name(object_type(data->ce->ce_mode)));
++	else if (skip_prefix(start, "(objectsize:padded)", &p))
++		expand_objectsize(sb, &data->ce->oid, object_type(data->ce->ce_mode), 1);
++	else if (skip_prefix(start, "(objectsize)", &p))
++		expand_objectsize(sb, &data->ce->oid, object_type(data->ce->ce_mode), 0);
+ 	else if (skip_prefix(start, "(stage)", &p))
+ 		strbuf_addf(sb, "%d", ce_stage(data->ce));
+ 	else if (skip_prefix(start, "(eolinfo:index)", &p))
+diff --git a/t/t3013-ls-files-format.sh b/t/t3013-ls-files-format.sh
+index ef6fb53f7f..6e6ea0b6f3 100755
+--- a/t/t3013-ls-files-format.sh
++++ b/t/t3013-ls-files-format.sh
+@@ -38,6 +38,41 @@ test_expect_success 'git ls-files --format objectname v.s. -s' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'git ls-files --format objecttype' '
++	git ls-files --format="%(objectname)" o1.txt o4.txt o6.txt >objectname &&
++	git cat-file --batch-check="%(objecttype)" >expect <objectname &&
++	git ls-files --format="%(objecttype)" o1.txt o4.txt o6.txt >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'git ls-files --format objectsize' '
++	cat>expect <<-\EOF &&
++26
++29
++27
++26
++-
++26
++	EOF
++	git ls-files --format="%(objectsize)" >actual &&
++
++	test_cmp expect actual
++'
++
++test_expect_success 'git ls-files --format objectsize:padded' '
++	cat>expect <<-\EOF &&
++     26
++     29
++     27
++     26
++      -
++     26
++	EOF
++	git ls-files --format="%(objectsize:padded)" >actual &&
++
++	test_cmp expect actual
++'
++
+ test_expect_success 'git ls-files --format v.s. --eol' '
+ 	git ls-files --eol >tmp &&
+ 	sed -e "s/	/ /g" -e "s/  */ /g" tmp >expect 2>err &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,30 @@
+From 71006d77c5d02fff51e036919632c5e3dad5d551 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:20 -0400
+Subject: [PATCH 2016/2871] stash: mark unused parameter in diff callback
+
+This is similar to the cases in 61bdc7c5d8 (diff: mark unused parameters
+in callbacks, 2022-12-13), but I missed it when making that commit.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/stash.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/stash.c b/builtin/stash.c
+index fe64cde9ce..c9365bea13 100644
+--- a/builtin/stash.c
++++ b/builtin/stash.c
+@@ -362,7 +362,7 @@ static int is_path_a_directory(const char *path)
+ }
+ 
+ static void add_diff_to_buf(struct diff_queue_struct *q,
+-			    struct diff_options *options,
++			    struct diff_options *options UNUSED,
+ 			    void *data)
+ {
+ 	int i;
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,40 @@
+From 5626558e639cb34a8e32f52260fa7d7393b1982c Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 18 Aug 2023 16:59:31 -0700
+Subject: [PATCH 1957/2871] t4040: remove test that succeeded for a wrong
+ reason
+
+"diff-tree -b --exit-code" without "--patch" exits with 0 status,
+not because it finds that the two input files are equivalent while
+ignoring whitespaces, but because the implied "--raw" mode always
+exits with 0 when whitespace tweaking options like "-b" and "-w"
+are given, which is a long-standing bug.
+
+We are about to fix it so that "--raw" and friends report the
+differences with the exit status (even though they ignore the
+whitespace tweaking options when producing their output), which
+will make this test, which succeeded for a wrong reason, start
+failing.  Remove it.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4040-whitespace-status.sh | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/t/t4040-whitespace-status.sh b/t/t4040-whitespace-status.sh
+index e70e020ae9..eec3d73dc2 100755
+--- a/t/t4040-whitespace-status.sh
++++ b/t/t4040-whitespace-status.sh
+@@ -28,8 +28,7 @@ test_expect_success 'diff-tree --exit-code' '
+ 
+ test_expect_success 'diff-tree -b --exit-code' '
+ 	git diff -b --exit-code HEAD^ HEAD &&
+-	git diff-tree -b -p --exit-code HEAD^ HEAD &&
+-	git diff-tree -b --exit-code HEAD^ HEAD
++	git diff-tree -b -p --exit-code HEAD^ HEAD
+ '
+ 
+ test_expect_success 'diff-index --cached --exit-code' '
+-- 
+2.39.3 (Apple Git-145)
+

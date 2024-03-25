@@ -1,0 +1,43 @@
+From 10c89a02b046e67c861f226064180c4f978a9cc3 Mon Sep 17 00:00:00 2001
+From: Matthew McClain <mmcclain@noprivs.com>
+Date: Wed, 18 Oct 2023 19:25:58 -0500
+Subject: [PATCH 2293/2871] git-p4 shouldn't attempt to store symlinks in LFS
+
+git-p4.py would attempt to put a symlink in LFS if its file extension
+matched git-p4.largeFileExtensions.
+
+Git LFS doesn't store symlinks because smudge/clean filters don't handle
+symlinks. They never get passed to the filter process nor the
+smudge/clean filters, nor could that occur without a change to the
+protocol or command-line interface. Unless Git learned how to send them
+to the filters, Git LFS would have a hard time using them in any useful
+way.
+
+Git LFS's goal is to move large files out of the repository history, and
+symlinks are functionally limited to 4 KiB or a similar size on most
+systems.
+
+Signed-off-by: Matthew McClain <mmcclain@noprivs.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-p4.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/git-p4.py b/git-p4.py
+index d26a980e5a..0eb3bb4c47 100755
+--- a/git-p4.py
++++ b/git-p4.py
+@@ -1522,6 +1522,10 @@ def processContent(self, git_mode, relPath, contents):
+            file is stored in the large file system and handles all necessary
+            steps.
+            """
++        # symlinks aren't processed by smudge/clean filters
++        if git_mode == "120000":
++            return (git_mode, contents)
++
+         if self.exceedsLargeFileThreshold(relPath, contents) or self.hasLargeFileExtension(relPath):
+             contentTempFile = self.generateTempFile(contents)
+             pointer_git_mode, contents, localLargeFile = self.generatePointer(contentTempFile)
+-- 
+2.39.3 (Apple Git-145)
+

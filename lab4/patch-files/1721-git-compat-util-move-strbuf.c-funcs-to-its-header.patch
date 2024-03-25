@@ -1,0 +1,155 @@
+From fda5d9595d5172fcbba34742e92d6c7ed4cbe5ef Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Wed, 5 Jul 2023 17:09:19 +0000
+Subject: [PATCH 1721/2871] git-compat-util: move strbuf.c funcs to its header
+
+While functions like starts_with() probably should not belong in the
+boundaries of the strbuf library, this commit focuses on first splitting
+out headers from git-compat-util.h.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/symbolic-ref.c   |  1 +
+ builtin/unpack-objects.c |  1 +
+ git-compat-util.h        | 32 --------------------------------
+ strbuf.h                 | 32 ++++++++++++++++++++++++++++++++
+ versioncmp.c             |  1 +
+ 5 files changed, 35 insertions(+), 32 deletions(-)
+
+diff --git a/builtin/symbolic-ref.c b/builtin/symbolic-ref.c
+index a61fa3c0f8..c9defe4d2e 100644
+--- a/builtin/symbolic-ref.c
++++ b/builtin/symbolic-ref.c
+@@ -3,6 +3,7 @@
+ #include "gettext.h"
+ #include "refs.h"
+ #include "parse-options.h"
++#include "strbuf.h"
+ 
+ static const char * const git_symbolic_ref_usage[] = {
+ 	N_("git symbolic-ref [-m <reason>] <name> <ref>"),
+diff --git a/builtin/unpack-objects.c b/builtin/unpack-objects.c
+index 1979532a9d..84b68304ed 100644
+--- a/builtin/unpack-objects.c
++++ b/builtin/unpack-objects.c
+@@ -12,6 +12,7 @@
+ #include "blob.h"
+ #include "commit.h"
+ #include "replace-object.h"
++#include "strbuf.h"
+ #include "tag.h"
+ #include "tree.h"
+ #include "tree-walk.h"
+diff --git a/git-compat-util.h b/git-compat-util.h
+index 1889da7986..fe9e86bad0 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -677,9 +677,6 @@ void set_warn_routine(report_fn routine);
+ report_fn get_warn_routine(void);
+ void set_die_is_recursing_routine(int (*routine)(void));
+ 
+-int starts_with(const char *str, const char *prefix);
+-int istarts_with(const char *str, const char *prefix);
+-
+ /*
+  * If the string "str" begins with the string found in "prefix", return 1.
+  * The "out" parameter is set to "str + strlen(prefix)" (i.e., to the point in
+@@ -708,29 +705,6 @@ static inline int skip_prefix(const char *str, const char *prefix,
+ 	return 0;
+ }
+ 
+-/*
+- * If the string "str" is the same as the string in "prefix", then the "arg"
+- * parameter is set to the "def" parameter and 1 is returned.
+- * If the string "str" begins with the string found in "prefix" and then a
+- * "=" sign, then the "arg" parameter is set to "str + strlen(prefix) + 1"
+- * (i.e., to the point in the string right after the prefix and the "=" sign),
+- * and 1 is returned.
+- *
+- * Otherwise, return 0 and leave "arg" untouched.
+- *
+- * When we accept both a "--key" and a "--key=<val>" option, this function
+- * can be used instead of !strcmp(arg, "--key") and then
+- * skip_prefix(arg, "--key=", &arg) to parse such an option.
+- */
+-int skip_to_optional_arg_default(const char *str, const char *prefix,
+-				 const char **arg, const char *def);
+-
+-static inline int skip_to_optional_arg(const char *str, const char *prefix,
+-				       const char **arg)
+-{
+-	return skip_to_optional_arg_default(str, prefix, arg, "");
+-}
+-
+ /*
+  * Like skip_prefix, but promises never to read past "len" bytes of the input
+  * buffer, and returns the remaining number of bytes in "out" via "outlen".
+@@ -775,12 +749,6 @@ static inline int strip_suffix(const char *str, const char *suffix, size_t *len)
+ 	return strip_suffix_mem(str, len, suffix);
+ }
+ 
+-static inline int ends_with(const char *str, const char *suffix)
+-{
+-	size_t len;
+-	return strip_suffix(str, suffix, &len);
+-}
+-
+ #define SWAP(a, b) do {						\
+ 	void *_swap_a_ptr = &(a);				\
+ 	void *_swap_b_ptr = &(b);				\
+diff --git a/strbuf.h b/strbuf.h
+index 507670ce3c..a2544484f8 100644
+--- a/strbuf.h
++++ b/strbuf.h
+@@ -735,4 +735,36 @@ char *xstrvfmt(const char *fmt, va_list ap);
+ __attribute__((format (printf, 1, 2)))
+ char *xstrfmt(const char *fmt, ...);
+ 
++int starts_with(const char *str, const char *prefix);
++int istarts_with(const char *str, const char *prefix);
++
++/*
++ * If the string "str" is the same as the string in "prefix", then the "arg"
++ * parameter is set to the "def" parameter and 1 is returned.
++ * If the string "str" begins with the string found in "prefix" and then a
++ * "=" sign, then the "arg" parameter is set to "str + strlen(prefix) + 1"
++ * (i.e., to the point in the string right after the prefix and the "=" sign),
++ * and 1 is returned.
++ *
++ * Otherwise, return 0 and leave "arg" untouched.
++ *
++ * When we accept both a "--key" and a "--key=<val>" option, this function
++ * can be used instead of !strcmp(arg, "--key") and then
++ * skip_prefix(arg, "--key=", &arg) to parse such an option.
++ */
++int skip_to_optional_arg_default(const char *str, const char *prefix,
++				 const char **arg, const char *def);
++
++static inline int skip_to_optional_arg(const char *str, const char *prefix,
++				       const char **arg)
++{
++	return skip_to_optional_arg_default(str, prefix, arg, "");
++}
++
++static inline int ends_with(const char *str, const char *suffix)
++{
++	size_t len;
++	return strip_suffix(str, suffix, &len);
++}
++
+ #endif /* STRBUF_H */
+diff --git a/versioncmp.c b/versioncmp.c
+index 74cc7c43f0..45e676cbca 100644
+--- a/versioncmp.c
++++ b/versioncmp.c
+@@ -1,5 +1,6 @@
+ #include "git-compat-util.h"
+ #include "config.h"
++#include "strbuf.h"
+ #include "string-list.h"
+ #include "versioncmp.h"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

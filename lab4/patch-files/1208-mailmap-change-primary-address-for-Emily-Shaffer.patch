@@ -1,0 +1,31 @@
+From f285f68a132109c234d93490671c00218066ace9 Mon Sep 17 00:00:00 2001
+From: Emily Shaffer <nasamuffin@google.com>
+Date: Fri, 7 Apr 2023 14:22:49 -0700
+Subject: [PATCH 1208/2871] mailmap: change primary address for Emily Shaffer
+
+Emily finally figured out how to set up their alias at DayJob, and would
+prefer to use nasamuffin@google.com, partially to reduce confusion
+between IRC and list, and partially because they just like the alias a
+lot more.
+
+Signed-off-by: Emily Shaffer <nasamuffin@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .mailmap | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.mailmap b/.mailmap
+index 95aaa1c833..733e047aa8 100644
+--- a/.mailmap
++++ b/.mailmap
+@@ -65,6 +65,7 @@ Derrick Stolee <derrickstolee@github.com> <dstolee@microsoft.com>
+ Deskin Miller <deskinm@umich.edu>
+ Đoàn Trần Công Danh <congdanhqx@gmail.com> Doan Tran Cong Danh
+ Dirk Süsserott <newsletter@dirk.my1.cc>
++Emily Shaffer <nasamuffin@google.com> <emilyshaffer@google.com>
+ Eric Blake <eblake@redhat.com> <ebb9@byu.net>
+ Eric Hanchrow <eric.hanchrow@gmail.com> <offby1@blarg.net>
+ Eric S. Raymond <esr@thyrsus.com>
+-- 
+2.39.3 (Apple Git-145)
+

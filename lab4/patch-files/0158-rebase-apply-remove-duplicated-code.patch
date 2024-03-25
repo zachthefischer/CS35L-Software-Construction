@@ -1,0 +1,53 @@
+From 57a1498592986c7532a37dd7f3eb96dc72d75878 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 12 Oct 2022 09:35:05 +0000
+Subject: [PATCH 0158/2871] rebase --apply: remove duplicated code
+
+Use move_to_original_branch() when reattaching HEAD after a fast-forward
+rather than open coding a copy of that code. move_to_original_branch()
+does not call reset_head() if head_name is NULL but there should be no
+user visible changes even though we currently call reset_head() in that
+case. The reason for this is that the reset_head() call does not add a
+message to the reflog because we're not changing the commit that HEAD
+points to and so lock_ref_for_update() elides the update. When head_name
+is not NULL then reset_head() behaves like "git symbolic-ref" and so the
+reflog is updated.
+
+Note that the removal of "strbuf_release(&msg)" is safe as there is an
+identical call just above this hunk which can be seen by viewing the
+diff with -U6.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 11 +----------
+ 1 file changed, 1 insertion(+), 10 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index ef520f66fb..e67020b358 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1811,19 +1811,10 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	 * If the onto is a proper descendant of the tip of the branch, then
+ 	 * we just fast-forwarded.
+ 	 */
+-	strbuf_reset(&msg);
+ 	if (oideq(&branch_base, &options.orig_head->object.oid)) {
+ 		printf(_("Fast-forwarded %s to %s.\n"),
+ 			branch_name, options.onto_name);
+-		strbuf_addf(&msg, "rebase finished: %s onto %s",
+-			options.head_name ? options.head_name : "detached HEAD",
+-			oid_to_hex(&options.onto->object.oid));
+-		memset(&ropts, 0, sizeof(ropts));
+-		ropts.branch = options.head_name;
+-		ropts.flags = RESET_HEAD_REFS_ONLY;
+-		ropts.head_msg = msg.buf;
+-		reset_head(the_repository, &ropts);
+-		strbuf_release(&msg);
++		move_to_original_branch(&options);
+ 		ret = finish_rebase(&options);
+ 		goto cleanup;
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

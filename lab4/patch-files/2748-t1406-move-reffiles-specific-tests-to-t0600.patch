@@ -1,0 +1,122 @@
+From e74d9f57164fac7890946907ab56f5d84fff1b83 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:54 +0000
+Subject: [PATCH 2748/2871] t1406: move reffiles specific tests to t0600
+
+Move this test to t0600 with the rest of the tests that are specific to
+reffiles. This test reaches into reflog directories manually, and so are
+specific to reffiles.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0600-reffiles-backend.sh   | 48 +++++++++++++++++++++++++++++++++++
+ t/t1407-worktree-ref-store.sh | 37 ---------------------------
+ 2 files changed, 48 insertions(+), 37 deletions(-)
+
+diff --git a/t/t0600-reffiles-backend.sh b/t/t0600-reffiles-backend.sh
+index d7491bcc71..dd46b8337d 100755
+--- a/t/t0600-reffiles-backend.sh
++++ b/t/t0600-reffiles-backend.sh
+@@ -260,4 +260,52 @@ test_expect_success 'delete fails cleanly if packed-refs.new write fails' '
+ 	test_cmp unchanged actual
+ '
+ 
++RWT="test-tool ref-store worktree:wt"
++RMAIN="test-tool ref-store worktree:main"
++
++test_expect_success 'setup worktree' '
++	test_commit first &&
++	git worktree add -b wt-main wt &&
++	(
++		cd wt &&
++		test_commit second
++	)
++'
++
++# Some refs (refs/bisect/*, pseudorefs) are kept per worktree, so they should
++# only appear in the for-each-reflog output if it is called from the correct
++# worktree, which is exercised in this test. This test is poorly written for
++# mulitple reasons: 1) it creates invalidly formatted log entres. 2) it uses
++# direct FS access for creating the reflogs. 3) PSEUDO-WT and refs/bisect/random
++# do not create reflogs by default, so it is not testing a realistic scenario.
++test_expect_success 'for_each_reflog()' '
++	echo $ZERO_OID > .git/logs/PSEUDO-MAIN &&
++	mkdir -p     .git/logs/refs/bisect &&
++	echo $ZERO_OID > .git/logs/refs/bisect/random &&
++
++	echo $ZERO_OID > .git/worktrees/wt/logs/PSEUDO-WT &&
++	mkdir -p     .git/worktrees/wt/logs/refs/bisect &&
++	echo $ZERO_OID > .git/worktrees/wt/logs/refs/bisect/wt-random &&
++
++	$RWT for-each-reflog | cut -d" " -f 2- | sort >actual &&
++	cat >expected <<-\EOF &&
++	HEAD 0x1
++	PSEUDO-WT 0x0
++	refs/bisect/wt-random 0x0
++	refs/heads/main 0x0
++	refs/heads/wt-main 0x0
++	EOF
++	test_cmp expected actual &&
++
++	$RMAIN for-each-reflog | cut -d" " -f 2- | sort >actual &&
++	cat >expected <<-\EOF &&
++	HEAD 0x1
++	PSEUDO-MAIN 0x0
++	refs/bisect/random 0x0
++	refs/heads/main 0x0
++	refs/heads/wt-main 0x0
++	EOF
++	test_cmp expected actual
++'
++
+ test_done
+diff --git a/t/t1407-worktree-ref-store.sh b/t/t1407-worktree-ref-store.sh
+index 05b1881c59..48b1c92a41 100755
+--- a/t/t1407-worktree-ref-store.sh
++++ b/t/t1407-worktree-ref-store.sh
+@@ -53,41 +53,4 @@ test_expect_success 'create_symref(FOO, refs/heads/main)' '
+ 	test_cmp expected actual
+ '
+ 
+-# Some refs (refs/bisect/*, pseudorefs) are kept per worktree, so they should
+-# only appear in the for-each-reflog output if it is called from the correct
+-# worktree, which is exercised in this test. This test is poorly written (and
+-# therefore marked REFFILES) for mulitple reasons: 1) it creates invalidly
+-# formatted log entres. 2) it uses direct FS access for creating the reflogs. 3)
+-# PSEUDO-WT and refs/bisect/random do not create reflogs by default, so it is
+-# not testing a realistic scenario.
+-test_expect_success REFFILES 'for_each_reflog()' '
+-	echo $ZERO_OID > .git/logs/PSEUDO-MAIN &&
+-	mkdir -p     .git/logs/refs/bisect &&
+-	echo $ZERO_OID > .git/logs/refs/bisect/random &&
+-
+-	echo $ZERO_OID > .git/worktrees/wt/logs/PSEUDO-WT &&
+-	mkdir -p     .git/worktrees/wt/logs/refs/bisect &&
+-	echo $ZERO_OID > .git/worktrees/wt/logs/refs/bisect/wt-random &&
+-
+-	$RWT for-each-reflog | cut -d" " -f 2- | sort >actual &&
+-	cat >expected <<-\EOF &&
+-	HEAD 0x1
+-	PSEUDO-WT 0x0
+-	refs/bisect/wt-random 0x0
+-	refs/heads/main 0x0
+-	refs/heads/wt-main 0x0
+-	EOF
+-	test_cmp expected actual &&
+-
+-	$RMAIN for-each-reflog | cut -d" " -f 2- | sort >actual &&
+-	cat >expected <<-\EOF &&
+-	HEAD 0x1
+-	PSEUDO-MAIN 0x0
+-	refs/bisect/random 0x0
+-	refs/heads/main 0x0
+-	refs/heads/wt-main 0x0
+-	EOF
+-	test_cmp expected actual
+-'
+-
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

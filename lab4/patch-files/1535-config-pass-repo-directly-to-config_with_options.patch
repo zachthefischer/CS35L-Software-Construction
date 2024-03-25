@@ -1,0 +1,233 @@
+From 9b6b06c159e0a389aaafbce91dd85bb5244ac5ad Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Fri, 26 May 2023 01:32:59 +0000
+Subject: [PATCH 1535/2871] config: pass 'repo' directly to
+ 'config_with_options()'
+
+Add a 'struct repository' argument to 'config_with_options()' and remove the
+'repo' field from 'struct git_config_source'.
+
+A 'struct repository' instance was originally added to the config source in
+e3e8bf046e9 (submodule-config: pass repo upon blob config read, 2021-08-16)
+to improve how submodule blob config content was accessed. At the time, this
+was the only use for a 'repository' instance, so it was naturally added only
+where it was needed: to 'struct git_config_source'. However, in upcoming
+patches, 'config_with_options()' will need the repository instance to access
+extension information (regardless of whether a 'config_source' exists). To
+make the 'struct repository' instance more easily accessible, move it into
+the function's arguments.
+
+Update all callers of 'config_with_options()' to pass the appropriate 'repo'
+value:
+
+* in 'builtin/config.c', use 'the_repository'
+* in 'submodule--config.c', use the 'repo' arg in 'config_from_gitmodules()'
+* in 'read_[very_]early_config()' & 'read_protected_config()', set 'repo' to
+  NULL (repository instances aren't available there)
+* in 'populate_remote_urls()', use the repo instance that has been added to
+  the 'struct config_include_data'
+* in 'repo_read_config()', use the given 'repo' arg
+
+Finally, note that this patch eliminates the fallback to 'the_repository'
+that previously existed for the 'config_source' repo instance if it was
+NULL. The fallback is no longer necessary, as the 'repo' is set explicitly
+in all cases where it is needed.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/config.c   | 14 +++++++++-----
+ config.c           | 16 +++++++++-------
+ config.h           |  4 ++--
+ submodule-config.c |  3 +--
+ 4 files changed, 21 insertions(+), 16 deletions(-)
+
+diff --git a/builtin/config.c b/builtin/config.c
+index ff2fe8ef12..8fc90288f9 100644
+--- a/builtin/config.c
++++ b/builtin/config.c
+@@ -375,7 +375,8 @@ static int get_value(const char *key_, const char *regex_, unsigned flags)
+ 	}
+ 
+ 	config_with_options(collect_config, &values,
+-			    &given_config_source, &config_options);
++			    &given_config_source, the_repository,
++			    &config_options);
+ 
+ 	if (!values.nr && default_value) {
+ 		struct strbuf *item;
+@@ -486,7 +487,8 @@ static void get_color(const char *var, const char *def_color)
+ 	get_color_found = 0;
+ 	parsed_color[0] = '\0';
+ 	config_with_options(git_get_color_config, NULL,
+-			    &given_config_source, &config_options);
++			    &given_config_source, the_repository,
++			    &config_options);
+ 
+ 	if (!get_color_found && def_color) {
+ 		if (color_parse(def_color, parsed_color) < 0)
+@@ -518,7 +520,8 @@ static int get_colorbool(const char *var, int print)
+ 	get_diff_color_found = -1;
+ 	get_color_ui_found = -1;
+ 	config_with_options(git_get_colorbool_config, NULL,
+-			    &given_config_source, &config_options);
++			    &given_config_source, the_repository,
++			    &config_options);
+ 
+ 	if (get_colorbool_found < 0) {
+ 		if (!strcmp(get_colorbool_slot, "color.diff"))
+@@ -607,7 +610,8 @@ static int get_urlmatch(const char *var, const char *url)
+ 	}
+ 
+ 	config_with_options(urlmatch_config_entry, &config,
+-			    &given_config_source, &config_options);
++			    &given_config_source, the_repository,
++			    &config_options);
+ 
+ 	ret = !values.nr;
+ 
+@@ -827,7 +831,7 @@ int cmd_config(int argc, const char **argv, const char *prefix)
+ 	if (actions == ACTION_LIST) {
+ 		check_argc(argc, 0, 0);
+ 		if (config_with_options(show_all_config, NULL,
+-					&given_config_source,
++					&given_config_source, the_repository,
+ 					&config_options) < 0) {
+ 			if (given_config_source.file)
+ 				die_errno(_("unable to read config file '%s'"),
+diff --git a/config.c b/config.c
+index a93f7bfa3a..67e60e131c 100644
+--- a/config.c
++++ b/config.c
+@@ -199,6 +199,7 @@ struct config_include_data {
+ 	void *data;
+ 	const struct config_options *opts;
+ 	struct git_config_source *config_source;
++	struct repository *repo;
+ 	struct config_reader *config_reader;
+ 
+ 	/*
+@@ -415,7 +416,8 @@ static void populate_remote_urls(struct config_include_data *inc)
+ 
+ 	inc->remote_urls = xmalloc(sizeof(*inc->remote_urls));
+ 	string_list_init_dup(inc->remote_urls);
+-	config_with_options(add_remote_url, inc->remote_urls, inc->config_source, &opts);
++	config_with_options(add_remote_url, inc->remote_urls,
++			    inc->config_source, inc->repo, &opts);
+ 
+ 	config_reader_set_scope(inc->config_reader, store_scope);
+ }
+@@ -2261,6 +2263,7 @@ static int do_git_config_sequence(struct config_reader *reader,
+ 
+ int config_with_options(config_fn_t fn, void *data,
+ 			struct git_config_source *config_source,
++			struct repository *repo,
+ 			const struct config_options *opts)
+ {
+ 	struct config_include_data inc = CONFIG_INCLUDE_INIT;
+@@ -2271,6 +2274,7 @@ int config_with_options(config_fn_t fn, void *data,
+ 		inc.fn = fn;
+ 		inc.data = data;
+ 		inc.opts = opts;
++		inc.repo = repo;
+ 		inc.config_source = config_source;
+ 		inc.config_reader = &the_reader;
+ 		fn = git_config_include;
+@@ -2289,8 +2293,6 @@ int config_with_options(config_fn_t fn, void *data,
+ 	} else if (config_source && config_source->file) {
+ 		ret = git_config_from_file(fn, config_source->file, data);
+ 	} else if (config_source && config_source->blob) {
+-		struct repository *repo = config_source->repo ?
+-			config_source->repo : the_repository;
+ 		ret = git_config_from_blob_ref(fn, repo, config_source->blob,
+ 						data);
+ 	} else {
+@@ -2353,7 +2355,7 @@ void read_early_config(config_fn_t cb, void *data)
+ 		opts.git_dir = gitdir.buf;
+ 	}
+ 
+-	config_with_options(cb, data, NULL, &opts);
++	config_with_options(cb, data, NULL, NULL, &opts);
+ 
+ 	strbuf_release(&commondir);
+ 	strbuf_release(&gitdir);
+@@ -2373,7 +2375,7 @@ void read_very_early_config(config_fn_t cb, void *data)
+ 	opts.ignore_cmdline = 1;
+ 	opts.system_gently = 1;
+ 
+-	config_with_options(cb, data, NULL, &opts);
++	config_with_options(cb, data, NULL, NULL, &opts);
+ }
+ 
+ RESULT_MUST_BE_USED
+@@ -2681,7 +2683,7 @@ static void repo_read_config(struct repository *repo)
+ 	data.config_set = repo->config;
+ 	data.config_reader = &the_reader;
+ 
+-	if (config_with_options(config_set_callback, &data, NULL, &opts) < 0)
++	if (config_with_options(config_set_callback, &data, NULL, repo, &opts) < 0)
+ 		/*
+ 		 * config_with_options() normally returns only
+ 		 * zero, as most errors are fatal, and
+@@ -2825,7 +2827,7 @@ static void read_protected_config(void)
+ 	git_configset_init(&protected_config);
+ 	data.config_set = &protected_config;
+ 	data.config_reader = &the_reader;
+-	config_with_options(config_set_callback, &data, NULL, &opts);
++	config_with_options(config_set_callback, &data, NULL, NULL, &opts);
+ }
+ 
+ void git_protected_config(config_fn_t fn, void *data)
+diff --git a/config.h b/config.h
+index 247b572b37..d1c5577589 100644
+--- a/config.h
++++ b/config.h
+@@ -3,6 +3,7 @@
+ 
+ #include "hashmap.h"
+ #include "string-list.h"
++#include "repository.h"
+ 
+ 
+ /**
+@@ -49,8 +50,6 @@ const char *config_scope_name(enum config_scope scope);
+ struct git_config_source {
+ 	unsigned int use_stdin:1;
+ 	const char *file;
+-	/* The repository if blob is not NULL; leave blank for the_repository */
+-	struct repository *repo;
+ 	const char *blob;
+ 	enum config_scope scope;
+ };
+@@ -196,6 +195,7 @@ void git_config(config_fn_t fn, void *);
+  */
+ int config_with_options(config_fn_t fn, void *,
+ 			struct git_config_source *config_source,
++			struct repository *repo,
+ 			const struct config_options *opts);
+ 
+ /**
+diff --git a/submodule-config.c b/submodule-config.c
+index 58dfbde9ae..7eb7a0d88d 100644
+--- a/submodule-config.c
++++ b/submodule-config.c
+@@ -659,7 +659,6 @@ static void config_from_gitmodules(config_fn_t fn, struct repository *repo, void
+ 			config_source.file = file;
+ 		} else if (repo_get_oid(repo, GITMODULES_INDEX, &oid) >= 0 ||
+ 			   repo_get_oid(repo, GITMODULES_HEAD, &oid) >= 0) {
+-			config_source.repo = repo;
+ 			config_source.blob = oidstr = xstrdup(oid_to_hex(&oid));
+ 			if (repo != the_repository)
+ 				add_submodule_odb_by_path(repo->objects->odb->path);
+@@ -667,7 +666,7 @@ static void config_from_gitmodules(config_fn_t fn, struct repository *repo, void
+ 			goto out;
+ 		}
+ 
+-		config_with_options(fn, data, &config_source, &opts);
++		config_with_options(fn, data, &config_source, repo, &opts);
+ 
+ out:
+ 		free(oidstr);
+-- 
+2.39.3 (Apple Git-145)
+

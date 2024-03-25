@@ -1,0 +1,55 @@
+From 69747653523afa3322e0f8dd6a5a7d30184694c3 Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Sat, 19 Nov 2022 20:12:13 +0000
+Subject: [PATCH 0431/2871] prune: quiet ENOENT on missing directories
+
+$GIT_DIR/objects/pack may be removed to save inodes in shared
+repositories.  Quiet down prune in cases where either
+$GIT_DIR/objects or $GIT_DIR/objects/pack is non-existent,
+but emit the system error in other cases to help users diagnose
+permissions problems or resource constraints.
+
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/prune.c  | 4 +++-
+ t/t5304-prune.sh | 8 ++++++++
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/prune.c b/builtin/prune.c
+index df376b2ed1..2719220108 100644
+--- a/builtin/prune.c
++++ b/builtin/prune.c
+@@ -127,7 +127,9 @@ static void remove_temporary_files(const char *path)
+ 
+ 	dir = opendir(path);
+ 	if (!dir) {
+-		fprintf(stderr, "Unable to open directory %s\n", path);
++		if (errno != ENOENT)
++			fprintf(stderr, "Unable to open directory %s: %s\n",
++				path, strerror(errno));
+ 		return;
+ 	}
+ 	while ((de = readdir(dir)) != NULL)
+diff --git a/t/t5304-prune.sh b/t/t5304-prune.sh
+index 8ae314af58..d65a5f94b4 100755
+--- a/t/t5304-prune.sh
++++ b/t/t5304-prune.sh
+@@ -29,6 +29,14 @@ test_expect_success setup '
+ 	git gc
+ '
+ 
++test_expect_success 'bare repo prune is quiet without $GIT_DIR/objects/pack' '
++	git clone -q --shared --template= --bare . bare.git &&
++	rmdir bare.git/objects/pack &&
++	git --git-dir=bare.git prune --no-progress 2>prune.err &&
++	test_must_be_empty prune.err &&
++	rm -r bare.git prune.err
++'
++
+ test_expect_success 'prune stale packs' '
+ 	orig_pack=$(echo .git/objects/pack/*.pack) &&
+ 	>.git/objects/tmp_1.pack &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,38 @@
+From 238a9dfe86d18214bc0b8be079feee01a2fdc407 Mon Sep 17 00:00:00 2001
+From: Seija Kijin <doremylover123@gmail.com>
+Date: Tue, 3 Jan 2023 16:20:19 +0000
+Subject: [PATCH 0623/2871] win32: close handles of threads that have been
+ joined
+
+After the thread terminates, the handle to the
+original thread should be closed.
+
+This change makes win32_pthread_join POSIX compliant.
+
+Signed-off-by: Seija Kijin <doremylover123@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/win32/pthread.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/compat/win32/pthread.c b/compat/win32/pthread.c
+index cf53bc61d8..85f8f7920c 100644
+--- a/compat/win32/pthread.c
++++ b/compat/win32/pthread.c
+@@ -42,10 +42,13 @@ int win32_pthread_join(pthread_t *thread, void **value_ptr)
+ 	case WAIT_OBJECT_0:
+ 		if (value_ptr)
+ 			*value_ptr = thread->arg;
++		CloseHandle(thread->handle);
+ 		return 0;
+ 	case WAIT_ABANDONED:
++		CloseHandle(thread->handle);
+ 		return EINVAL;
+ 	default:
++		/* the wait failed, so do not detach */
+ 		return err_win_to_posix(GetLastError());
+ 	}
+ }
+-- 
+2.39.3 (Apple Git-145)
+

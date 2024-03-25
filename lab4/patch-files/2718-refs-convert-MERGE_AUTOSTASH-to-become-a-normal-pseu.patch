@@ -1,0 +1,192 @@
+From 3f921c75913a4ba7b73cb0d8ec05a2cf24d1f4d4 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 19 Jan 2024 11:40:19 +0100
+Subject: [PATCH 2718/2871] refs: convert MERGE_AUTOSTASH to become a normal
+ pseudo-ref
+
+Similar to the preceding conversion of the AUTO_MERGE pseudo-ref, let's
+convert the MERGE_AUTOSTASH ref to become a normal pseudo-ref as well.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c         |  2 +-
+ builtin/commit.c |  2 +-
+ builtin/merge.c  | 27 +++++++++++++--------------
+ path.c           |  1 -
+ path.h           |  1 -
+ refs.c           |  1 -
+ repository.c     |  1 -
+ repository.h     |  1 -
+ 8 files changed, 15 insertions(+), 21 deletions(-)
+
+diff --git a/branch.c b/branch.c
+index c8bd9519e6..6719a181bd 100644
+--- a/branch.c
++++ b/branch.c
+@@ -819,7 +819,7 @@ void remove_merge_branch_state(struct repository *r)
+ 	unlink(git_path_merge_mode(r));
+ 	refs_delete_ref(get_main_ref_store(r), "", "AUTO_MERGE",
+ 			NULL, REF_NO_DEREF);
+-	save_autostash(git_path_merge_autostash(r));
++	save_autostash_ref(r, "MERGE_AUTOSTASH");
+ }
+ 
+ void remove_branch_state(struct repository *r, int verbose)
+diff --git a/builtin/commit.c b/builtin/commit.c
+index 65196a2827..6d1fa71676 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -1877,7 +1877,7 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
+ 				     &oid, flags);
+ 	}
+ 
+-	apply_autostash(git_path_merge_autostash(the_repository));
++	apply_autostash_ref(the_repository, "MERGE_AUTOSTASH");
+ 
+ cleanup:
+ 	strbuf_release(&author_ident);
+diff --git a/builtin/merge.c b/builtin/merge.c
+index ebbe05033e..8f819781cc 100644
+--- a/builtin/merge.c
++++ b/builtin/merge.c
+@@ -476,7 +476,7 @@ static void finish(struct commit *head_commit,
+ 	run_hooks_l("post-merge", squash ? "1" : "0", NULL);
+ 
+ 	if (new_head)
+-		apply_autostash(git_path_merge_autostash(the_repository));
++		apply_autostash_ref(the_repository, "MERGE_AUTOSTASH");
+ 	strbuf_release(&reflog_message);
+ }
+ 
+@@ -1315,7 +1315,8 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
+ 	if (abort_current_merge) {
+ 		int nargc = 2;
+ 		const char *nargv[] = {"reset", "--merge", NULL};
+-		struct strbuf stash_oid = STRBUF_INIT;
++		char stash_oid_hex[GIT_MAX_HEXSZ + 1];
++		struct object_id stash_oid = {0};
+ 
+ 		if (orig_argc != 2)
+ 			usage_msg_opt(_("--abort expects no arguments"),
+@@ -1324,17 +1325,17 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
+ 		if (!file_exists(git_path_merge_head(the_repository)))
+ 			die(_("There is no merge to abort (MERGE_HEAD missing)."));
+ 
+-		if (read_oneliner(&stash_oid, git_path_merge_autostash(the_repository),
+-		    READ_ONELINER_SKIP_IF_EMPTY))
+-			unlink(git_path_merge_autostash(the_repository));
++		if (!read_ref("MERGE_AUTOSTASH", &stash_oid))
++			delete_ref("", "MERGE_AUTOSTASH", &stash_oid, REF_NO_DEREF);
+ 
+ 		/* Invoke 'git reset --merge' */
+ 		ret = cmd_reset(nargc, nargv, prefix);
+ 
+-		if (stash_oid.len)
+-			apply_autostash_oid(stash_oid.buf);
++		if (!is_null_oid(&stash_oid)) {
++			oid_to_hex_r(stash_oid_hex, &stash_oid);
++			apply_autostash_oid(stash_oid_hex);
++		}
+ 
+-		strbuf_release(&stash_oid);
+ 		goto done;
+ 	}
+ 
+@@ -1563,13 +1564,12 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
+ 		}
+ 
+ 		if (autostash)
+-			create_autostash(the_repository,
+-					 git_path_merge_autostash(the_repository));
++			create_autostash_ref(the_repository, "MERGE_AUTOSTASH");
+ 		if (checkout_fast_forward(the_repository,
+ 					  &head_commit->object.oid,
+ 					  &commit->object.oid,
+ 					  overwrite_ignore)) {
+-			apply_autostash(git_path_merge_autostash(the_repository));
++			apply_autostash_ref(the_repository, "MERGE_AUTOSTASH");
+ 			ret = 1;
+ 			goto done;
+ 		}
+@@ -1655,8 +1655,7 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
+ 		die_ff_impossible();
+ 
+ 	if (autostash)
+-		create_autostash(the_repository,
+-				 git_path_merge_autostash(the_repository));
++		create_autostash_ref(the_repository, "MERGE_AUTOSTASH");
+ 
+ 	/* We are going to make a new commit. */
+ 	git_committer_info(IDENT_STRICT);
+@@ -1741,7 +1740,7 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
+ 		else
+ 			fprintf(stderr, _("Merge with strategy %s failed.\n"),
+ 				use_strategies[0]->name);
+-		apply_autostash(git_path_merge_autostash(the_repository));
++		apply_autostash_ref(the_repository, "MERGE_AUTOSTASH");
+ 		ret = 2;
+ 		goto done;
+ 	} else if (best_strategy == wt_strategy)
+diff --git a/path.c b/path.c
+index f881c03171..0fb527918b 100644
+--- a/path.c
++++ b/path.c
+@@ -1588,6 +1588,5 @@ REPO_GIT_PATH_FUNC(merge_msg, "MERGE_MSG")
+ REPO_GIT_PATH_FUNC(merge_rr, "MERGE_RR")
+ REPO_GIT_PATH_FUNC(merge_mode, "MERGE_MODE")
+ REPO_GIT_PATH_FUNC(merge_head, "MERGE_HEAD")
+-REPO_GIT_PATH_FUNC(merge_autostash, "MERGE_AUTOSTASH")
+ REPO_GIT_PATH_FUNC(fetch_head, "FETCH_HEAD")
+ REPO_GIT_PATH_FUNC(shallow, "shallow")
+diff --git a/path.h b/path.h
+index f387410f8c..b3233c51fa 100644
+--- a/path.h
++++ b/path.h
+@@ -175,7 +175,6 @@ const char *git_path_merge_msg(struct repository *r);
+ const char *git_path_merge_rr(struct repository *r);
+ const char *git_path_merge_mode(struct repository *r);
+ const char *git_path_merge_head(struct repository *r);
+-const char *git_path_merge_autostash(struct repository *r);
+ const char *git_path_fetch_head(struct repository *r);
+ const char *git_path_shallow(struct repository *r);
+ 
+diff --git a/refs.c b/refs.c
+index 906c7e5f27..047c81b1c1 100644
+--- a/refs.c
++++ b/refs.c
+@@ -1875,7 +1875,6 @@ static int is_special_ref(const char *refname)
+ 	 */
+ 	static const char * const special_refs[] = {
+ 		"FETCH_HEAD",
+-		"MERGE_AUTOSTASH",
+ 		"MERGE_HEAD",
+ 	};
+ 	size_t i;
+diff --git a/repository.c b/repository.c
+index a931e3b1b3..7aacb51b65 100644
+--- a/repository.c
++++ b/repository.c
+@@ -262,7 +262,6 @@ static void repo_clear_path_cache(struct repo_path_cache *cache)
+ 	FREE_AND_NULL(cache->merge_rr);
+ 	FREE_AND_NULL(cache->merge_mode);
+ 	FREE_AND_NULL(cache->merge_head);
+-	FREE_AND_NULL(cache->merge_autostash);
+ 	FREE_AND_NULL(cache->fetch_head);
+ 	FREE_AND_NULL(cache->shallow);
+ }
+diff --git a/repository.h b/repository.h
+index 47e7d20b59..7a250a6605 100644
+--- a/repository.h
++++ b/repository.h
+@@ -67,7 +67,6 @@ struct repo_path_cache {
+ 	char *merge_rr;
+ 	char *merge_mode;
+ 	char *merge_head;
+-	char *merge_autostash;
+ 	char *fetch_head;
+ 	char *shallow;
+ };
+-- 
+2.39.3 (Apple Git-145)
+

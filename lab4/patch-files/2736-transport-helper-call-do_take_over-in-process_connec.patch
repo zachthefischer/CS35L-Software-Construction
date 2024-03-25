@@ -1,0 +1,104 @@
+From 176cd68634c4641cc45030dc7f287be47d1809d1 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 21 Jan 2024 21:15:38 +0800
+Subject: [PATCH 2736/2871] transport-helper: call do_take_over() in
+ process_connect
+
+The existing pattern among all callers of process_connect() seems to be
+
+        if (process_connect(...)) {
+                do_take_over();
+                ... dispatch to the underlying method ...
+        }
+        ... otherwise implement the fallback ...
+
+where the return value from process_connect() is the return value of the
+call it makes to process_connect_service().
+
+Move the call of do_take_over() inside process_connect(), so that
+calling the process_connect() function is more concise and will not
+miss do_take_over().
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ transport-helper.c | 22 +++++++++-------------
+ 1 file changed, 9 insertions(+), 13 deletions(-)
+
+diff --git a/transport-helper.c b/transport-helper.c
+index 91381be622..566f7473df 100644
+--- a/transport-helper.c
++++ b/transport-helper.c
+@@ -646,6 +646,7 @@ static int process_connect(struct transport *transport,
+ 	struct helper_data *data = transport->data;
+ 	const char *name;
+ 	const char *exec;
++	int ret;
+ 
+ 	name = for_push ? "git-receive-pack" : "git-upload-pack";
+ 	if (for_push)
+@@ -653,7 +654,10 @@ static int process_connect(struct transport *transport,
+ 	else
+ 		exec = data->transport_options.uploadpack;
+ 
+-	return process_connect_service(transport, name, exec);
++	ret = process_connect_service(transport, name, exec);
++	if (ret)
++		do_take_over(transport);
++	return ret;
+ }
+ 
+ static int connect_helper(struct transport *transport, const char *name,
+@@ -685,10 +689,8 @@ static int fetch_refs(struct transport *transport,
+ 
+ 	get_helper(transport);
+ 
+-	if (process_connect(transport, 0)) {
+-		do_take_over(transport);
++	if (process_connect(transport, 0))
+ 		return transport->vtable->fetch_refs(transport, nr_heads, to_fetch);
+-	}
+ 
+ 	/*
+ 	 * If we reach here, then the server, the client, and/or the transport
+@@ -1145,10 +1147,8 @@ static int push_refs(struct transport *transport,
+ {
+ 	struct helper_data *data = transport->data;
+ 
+-	if (process_connect(transport, 1)) {
+-		do_take_over(transport);
++	if (process_connect(transport, 1))
+ 		return transport->vtable->push_refs(transport, remote_refs, flags);
+-	}
+ 
+ 	if (!remote_refs) {
+ 		fprintf(stderr,
+@@ -1189,11 +1189,9 @@ static struct ref *get_refs_list(struct transport *transport, int for_push,
+ {
+ 	get_helper(transport);
+ 
+-	if (process_connect(transport, for_push)) {
+-		do_take_over(transport);
++	if (process_connect(transport, for_push))
+ 		return transport->vtable->get_refs_list(transport, for_push,
+ 							transport_options);
+-	}
+ 
+ 	return get_refs_list_using_list(transport, for_push);
+ }
+@@ -1277,10 +1275,8 @@ static int get_bundle_uri(struct transport *transport)
+ {
+ 	get_helper(transport);
+ 
+-	if (process_connect(transport, 0)) {
+-		do_take_over(transport);
++	if (process_connect(transport, 0))
+ 		return transport->vtable->get_bundle_uri(transport);
+-	}
+ 
+ 	return -1;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

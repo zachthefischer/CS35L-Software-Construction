@@ -1,0 +1,41 @@
+From a90085b68cdd32fb138b81371b7622be66db1191 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 10 Nov 2022 07:28:47 +0000
+Subject: [PATCH 0374/2871] tests(scalar): tighten the stale `scalar.repo` test
+ some
+
+As pointed out by Stolee, the previous incarnation of this test case was
+not stringent enough: we want to verify that _only_ the stale entries
+are removed (previously, the test case would have succeeded even if all
+entries had been removed).
+
+Let's rectify this and verify that the other entries are left intact.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t9210-scalar.sh | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/t/t9210-scalar.sh b/t/t9210-scalar.sh
+index c7f8a37910..25f500cf68 100755
+--- a/t/t9210-scalar.sh
++++ b/t/t9210-scalar.sh
+@@ -171,10 +171,13 @@ test_expect_success '`reconfigure -a` removes stale config entries' '
+ 	scalar register stale &&
+ 	scalar list >scalar.repos &&
+ 	grep stale scalar.repos &&
++
++	grep -v stale scalar.repos >expect &&
++
+ 	rm -rf stale &&
+ 	scalar reconfigure -a &&
+ 	scalar list >scalar.repos &&
+-	! grep stale scalar.repos
++	test_cmp expect scalar.repos
+ '
+ 
+ test_expect_success 'scalar delete without enlistment shows a usage' '
+-- 
+2.39.3 (Apple Git-145)
+

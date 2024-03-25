@@ -1,0 +1,206 @@
+From 3b7a4475b0912d6d78c5e2354599dbc8f1ade479 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Sun, 26 Mar 2023 22:45:41 +0000
+Subject: [PATCH 1121/2871] split-index; stop abusing the `base_oid` to strip
+ the "link" extension
+
+When a split-index is in effect, the `$GIT_DIR/index` file needs to
+contain a "link" extension that contains all the information about the
+split-index, including the information about the shared index.
+
+However, in some cases Git needs to suppress writing that "link"
+extension (i.e. to fall back to writing a full index) even if the
+in-memory index structure _has_ a `split_index` configured. This is the
+case e.g. when "too many not shared" index entries exist.
+
+In such instances, the current code sets the `base_oid` field of said
+`split_index` structure to all-zero to indicate that `do_write_index()`
+should skip writing the "link" extension.
+
+This can lead to problems later on, when the in-memory index is still
+used to perform other operations and eventually wants to write a
+split-index, detects the presence of the `split_index` and reuses that,
+too (under the assumption that it has been initialized correctly and
+still has a non-null `base_oid`).
+
+Let's stop zeroing out the `base_oid` to indicate that the "link"
+extension should not be written.
+
+One might be tempted to simply call `discard_split_index()` instead,
+under the assumption that Git decided to write a non-split index and
+therefore the `split_index` structure might no longer be wanted.
+However, that is not possible because that would release index entries
+in `split_index->base` that are likely to still be in use. Therefore we
+cannot do that.
+
+The next best thing we _can_ do is to introduce a bit field to indicate
+specifically which index extensions (not) to write. So that's what we do
+here.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ read-cache.c                 | 49 +++++++++++++++++++++++-------------
+ t/t7527-builtin-fsmonitor.sh |  2 +-
+ 2 files changed, 33 insertions(+), 18 deletions(-)
+
+diff --git a/read-cache.c b/read-cache.c
+index b09128b188..7c9a0eeeac 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -2868,6 +2868,16 @@ static int record_ieot(void)
+ 	return !git_config_get_index_threads(&val) && val != 1;
+ }
+ 
++enum write_extensions {
++	WRITE_NO_EXTENSION =              0,
++	WRITE_SPLIT_INDEX_EXTENSION =     1<<0,
++	WRITE_CACHE_TREE_EXTENSION =      1<<1,
++	WRITE_RESOLVE_UNDO_EXTENSION =    1<<2,
++	WRITE_UNTRACKED_CACHE_EXTENSION = 1<<3,
++	WRITE_FSMONITOR_EXTENSION =       1<<4,
++};
++#define WRITE_ALL_EXTENSIONS ((enum write_extensions)-1)
++
+ /*
+  * On success, `tempfile` is closed. If it is the temporary file
+  * of a `struct lock_file`, we will therefore effectively perform
+@@ -2876,7 +2886,7 @@ static int record_ieot(void)
+  * rely on it.
+  */
+ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
+-			  int strip_extensions, unsigned flags)
++			  enum write_extensions write_extensions, unsigned flags)
+ {
+ 	uint64_t start = getnanotime();
+ 	struct hashfile *f;
+@@ -3045,8 +3055,8 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
+ 			return -1;
+ 	}
+ 
+-	if (!strip_extensions && istate->split_index &&
+-	    !is_null_oid(&istate->split_index->base_oid)) {
++	if (write_extensions & WRITE_SPLIT_INDEX_EXTENSION &&
++	    istate->split_index) {
+ 		struct strbuf sb = STRBUF_INIT;
+ 
+ 		if (istate->sparse_index)
+@@ -3060,7 +3070,8 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
+ 		if (err)
+ 			return -1;
+ 	}
+-	if (!strip_extensions && !drop_cache_tree && istate->cache_tree) {
++	if (write_extensions & WRITE_CACHE_TREE_EXTENSION &&
++	    !drop_cache_tree && istate->cache_tree) {
+ 		struct strbuf sb = STRBUF_INIT;
+ 
+ 		cache_tree_write(&sb, istate->cache_tree);
+@@ -3070,7 +3081,8 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
+ 		if (err)
+ 			return -1;
+ 	}
+-	if (!strip_extensions && istate->resolve_undo) {
++	if (write_extensions & WRITE_RESOLVE_UNDO_EXTENSION &&
++	    istate->resolve_undo) {
+ 		struct strbuf sb = STRBUF_INIT;
+ 
+ 		resolve_undo_write(&sb, istate->resolve_undo);
+@@ -3081,7 +3093,8 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
+ 		if (err)
+ 			return -1;
+ 	}
+-	if (!strip_extensions && istate->untracked) {
++	if (write_extensions & WRITE_UNTRACKED_CACHE_EXTENSION &&
++	    istate->untracked) {
+ 		struct strbuf sb = STRBUF_INIT;
+ 
+ 		write_untracked_extension(&sb, istate->untracked);
+@@ -3092,7 +3105,8 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
+ 		if (err)
+ 			return -1;
+ 	}
+-	if (!strip_extensions && istate->fsmonitor_last_update) {
++	if (write_extensions & WRITE_FSMONITOR_EXTENSION &&
++	    istate->fsmonitor_last_update) {
+ 		struct strbuf sb = STRBUF_INIT;
+ 
+ 		write_fsmonitor_extension(&sb, istate);
+@@ -3166,8 +3180,10 @@ static int commit_locked_index(struct lock_file *lk)
+ 		return commit_lock_file(lk);
+ }
+ 
+-static int do_write_locked_index(struct index_state *istate, struct lock_file *lock,
+-				 unsigned flags)
++static int do_write_locked_index(struct index_state *istate,
++				 struct lock_file *lock,
++				 unsigned flags,
++				 enum write_extensions write_extensions)
+ {
+ 	int ret;
+ 	int was_full = istate->sparse_index == INDEX_EXPANDED;
+@@ -3185,7 +3201,7 @@ static int do_write_locked_index(struct index_state *istate, struct lock_file *l
+ 	 */
+ 	trace2_region_enter_printf("index", "do_write_index", the_repository,
+ 				   "%s", get_lock_file_path(lock));
+-	ret = do_write_index(istate, lock->tempfile, 0, flags);
++	ret = do_write_index(istate, lock->tempfile, write_extensions, flags);
+ 	trace2_region_leave_printf("index", "do_write_index", the_repository,
+ 				   "%s", get_lock_file_path(lock));
+ 
+@@ -3214,7 +3230,7 @@ static int write_split_index(struct index_state *istate,
+ {
+ 	int ret;
+ 	prepare_to_write_split_index(istate);
+-	ret = do_write_locked_index(istate, lock, flags);
++	ret = do_write_locked_index(istate, lock, flags, WRITE_ALL_EXTENSIONS);
+ 	finish_writing_split_index(istate);
+ 	return ret;
+ }
+@@ -3289,7 +3305,7 @@ static int write_shared_index(struct index_state *istate,
+ 
+ 	trace2_region_enter_printf("index", "shared/do_write_index",
+ 				   the_repository, "%s", get_tempfile_path(*temp));
+-	ret = do_write_index(si->base, *temp, 1, flags);
++	ret = do_write_index(si->base, *temp, WRITE_NO_EXTENSION, flags);
+ 	trace2_region_leave_printf("index", "shared/do_write_index",
+ 				   the_repository, "%s", get_tempfile_path(*temp));
+ 
+@@ -3366,9 +3382,8 @@ int write_locked_index(struct index_state *istate, struct lock_file *lock,
+ 	if ((!si && !test_split_index_env) ||
+ 	    alternate_index_output ||
+ 	    (istate->cache_changed & ~EXTMASK)) {
+-		if (si)
+-			oidclr(&si->base_oid);
+-		ret = do_write_locked_index(istate, lock, flags);
++		ret = do_write_locked_index(istate, lock, flags,
++					    ~WRITE_SPLIT_INDEX_EXTENSION);
+ 		goto out;
+ 	}
+ 
+@@ -3394,8 +3409,8 @@ int write_locked_index(struct index_state *istate, struct lock_file *lock,
+ 		/* Same initial permissions as the main .git/index file */
+ 		temp = mks_tempfile_sm(git_path("sharedindex_XXXXXX"), 0, 0666);
+ 		if (!temp) {
+-			oidclr(&si->base_oid);
+-			ret = do_write_locked_index(istate, lock, flags);
++			ret = do_write_locked_index(istate, lock, flags,
++						    ~WRITE_SPLIT_INDEX_EXTENSION);
+ 			goto out;
+ 		}
+ 		ret = write_shared_index(istate, &temp, flags);
+diff --git a/t/t7527-builtin-fsmonitor.sh b/t/t7527-builtin-fsmonitor.sh
+index cbafdd6960..9fab9a2ab3 100755
+--- a/t/t7527-builtin-fsmonitor.sh
++++ b/t/t7527-builtin-fsmonitor.sh
+@@ -1003,7 +1003,7 @@ test_expect_success !UNICODE_COMPOSITION_SENSITIVE 'Unicode nfc/nfd' '
+ 	egrep "^event: nfd/d_${utf8_nfc}/?$" ./unicode.trace
+ '
+ 
+-test_expect_failure 'split-index and FSMonitor work well together' '
++test_expect_success 'split-index and FSMonitor work well together' '
+ 	git init split-index &&
+ 	test_when_finished "git -C \"$PWD/split-index\" \
+ 		fsmonitor--daemon stop" &&
+-- 
+2.39.3 (Apple Git-145)
+

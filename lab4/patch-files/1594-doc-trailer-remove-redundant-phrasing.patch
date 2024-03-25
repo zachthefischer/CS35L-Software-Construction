@@ -1,0 +1,33 @@
+From 74a50fbd7f2a4a32ef6a5d7d10afa4cdaf00f8e4 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 15 Jun 2023 02:53:46 +0000
+Subject: [PATCH 1594/2871] doc: trailer: remove redundant phrasing
+
+The phrase "many rules" gets essentially repeated again with "many other
+rules", so remove this repetition.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 58a9c69149..7516593c47 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -72,9 +72,8 @@ inside or after the value. The value may be split over multiple lines
+ with each subsequent line starting with at least one whitespace, like
+ the "folding" in RFC 822.
+ 
+-Note that 'trailers' do not follow and are not intended to follow many
+-rules for RFC 822 headers. For example they do not follow
+-the encoding rules and probably many other rules.
++Note that trailers do not follow (nor are they intended to follow) many of the
++rules for RFC 822 headers. For example they do not follow the encoding rule.
+ 
+ OPTIONS
+ -------
+-- 
+2.39.3 (Apple Git-145)
+

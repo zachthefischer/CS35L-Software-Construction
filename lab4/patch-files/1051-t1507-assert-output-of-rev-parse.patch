@@ -1,0 +1,47 @@
+From a93cbe8d78a42bb016f62b755421bdd4fd7d5d14 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sat, 18 Mar 2023 16:46:46 +0100
+Subject: [PATCH 1051/2871] t1507: assert output of rev-parse
+
+Tests in t1507-rev-parse-upstream.sh compare files "expect" and "actual"
+to assert the output of "git rev-parse", "git show", and "git log".
+However, two of the tests '@{reflog}-parsing does not look beyond colon'
+and '@{upstream}-parsing does not look beyond colon' don't inspect the
+contents of the created files.
+
+Assert output of "git rev-parse" in tests in t1507-rev-parse-upstream.sh
+to improve test coverage.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1507-rev-parse-upstream.sh | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/t/t1507-rev-parse-upstream.sh b/t/t1507-rev-parse-upstream.sh
+index c34714ffe3..4458820168 100755
+--- a/t/t1507-rev-parse-upstream.sh
++++ b/t/t1507-rev-parse-upstream.sh
+@@ -258,7 +258,8 @@ test_expect_success '@{reflog}-parsing does not look beyond colon' '
+ 	git add @{yesterday} &&
+ 	git commit -m "funny reflog file" &&
+ 	git hash-object @{yesterday} >expect &&
+-	git rev-parse HEAD:@{yesterday} >actual
++	git rev-parse HEAD:@{yesterday} >actual &&
++	test_cmp expect actual
+ '
+ 
+ test_expect_success '@{upstream}-parsing does not look beyond colon' '
+@@ -266,7 +267,8 @@ test_expect_success '@{upstream}-parsing does not look beyond colon' '
+ 	git add @{upstream} &&
+ 	git commit -m "funny upstream file" &&
+ 	git hash-object @{upstream} >expect &&
+-	git rev-parse HEAD:@{upstream} >actual
++	git rev-parse HEAD:@{upstream} >actual &&
++	test_cmp expect actual
+ '
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

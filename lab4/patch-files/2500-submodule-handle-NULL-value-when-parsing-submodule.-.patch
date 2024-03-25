@@ -1,0 +1,50 @@
+From 34b1a0d320e3a1531997d6681bacffbe9da7a046 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:11:29 -0500
+Subject: [PATCH 2500/2871] submodule: handle NULL value when parsing
+ submodule.*.branch
+
+We record the submodule branch config value as a string, so config that
+uses an implicit bool like:
+
+  [submodule "foo"]
+  branch
+
+will cause us to segfault. Note that unlike most other config-parsing
+bugs of this class, this can be triggered by parsing a bogus .gitmodules
+file (which we might do after cloning a malicious repository).
+
+I don't think the security implications are important, though. It's
+always a strict NULL dereference, not an out-of-bounds read or write. So
+we should reliably kill the process. That may be annoying, but the
+impact is limited to the attacker preventing the victim from
+successfully using "git clone --recurse-submodules", etc, on the
+malicious repo.
+
+The "branch" entry is the only one with this problem; other strings like
+"path" and "url" already check for NULL.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ submodule-config.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/submodule-config.c b/submodule-config.c
+index 6a48fd12f6..f4dd482abc 100644
+--- a/submodule-config.c
++++ b/submodule-config.c
+@@ -516,7 +516,9 @@ static int parse_config(const char *var, const char *value,
+ 			submodule->recommend_shallow =
+ 				git_config_bool(var, value);
+ 	} else if (!strcmp(item.buf, "branch")) {
+-		if (!me->overwrite && submodule->branch)
++		if (!value)
++			ret = config_error_nonbool(var);
++		else if (!me->overwrite && submodule->branch)
+ 			warn_multiple_config(me->treeish_name, submodule->name,
+ 					     "branch");
+ 		else {
+-- 
+2.39.3 (Apple Git-145)
+

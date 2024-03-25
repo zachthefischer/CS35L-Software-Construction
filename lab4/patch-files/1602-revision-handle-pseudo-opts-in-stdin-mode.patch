@@ -1,0 +1,178 @@
+From c40f0b78771ecc8696014e2e0aa37e78417b4723 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 15 Jun 2023 16:39:59 +0200
+Subject: [PATCH 1602/2871] revision: handle pseudo-opts in `--stdin` mode
+
+While both git-rev-list(1) and git-log(1) support `--stdin`, it only
+accepts commits and files. Most notably, it is impossible to pass any of
+the pseudo-opts like `--all`, `--glob=` or others via stdin.
+
+This makes it hard to use this function in certain scripted scenarios,
+like when one wants to support queries against specific revisions, but
+also against reference patterns. While this is theoretically possible by
+using arguments, this may run into issues once we hit platform limits
+with sufficiently large queries. And because `--stdin` cannot handle
+pseudo-opts, the only alternative would be to use a mixture of arguments
+and standard input, which is cumbersome.
+
+Implement support for handling pseudo-opts in both commands to support
+this usecase better. One notable restriction here is that `--stdin` only
+supports "stuck" arguments in the form of `--glob=foo`. This is because
+"unstuck" arguments would also require us to read the next line, which
+would add quite some complexity to the code. This restriction should be
+fine for scripted usage though.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/rev-list-options.txt |  9 +++---
+ revision.c                         | 21 +++++++++---
+ t/t6017-rev-list-stdin.sh          | 51 +++++++++++++++++++++++++++++-
+ 3 files changed, 72 insertions(+), 9 deletions(-)
+
+diff --git a/Documentation/rev-list-options.txt b/Documentation/rev-list-options.txt
+index 3000888a90..e6468bf0eb 100644
+--- a/Documentation/rev-list-options.txt
++++ b/Documentation/rev-list-options.txt
+@@ -236,10 +236,11 @@ ifndef::git-rev-list[]
+ endif::git-rev-list[]
+ 
+ --stdin::
+-	In addition to the '<commit>' listed on the command
+-	line, read them from the standard input. If a `--` separator is
+-	seen, stop reading commits and start reading paths to limit the
+-	result.
++	In addition to getting arguments from the command line, read
++	them for standard input as well. This accepts commits and
++	pseudo-options like `--all` and `--glob=`. When a `--` separator
++	is seen, the following input is treated as paths and used to
++	limit the result.
+ 
+ ifdef::git-rev-list[]
+ --quiet::
+diff --git a/revision.c b/revision.c
+index 3a39f41bb8..a0b147913f 100644
+--- a/revision.c
++++ b/revision.c
+@@ -2784,10 +2784,12 @@ static int handle_revision_pseudo_opt(struct rev_info *revs,
+ }
+ 
+ static void read_revisions_from_stdin(struct rev_info *revs,
+-				      struct strvec *prune)
++				      struct strvec *prune,
++				      int *flags)
+ {
+ 	struct strbuf sb;
+ 	int seen_dashdash = 0;
++	int seen_end_of_options = 0;
+ 	int save_warning;
+ 
+ 	save_warning = warn_on_object_refname_ambiguity;
+@@ -2803,8 +2805,19 @@ static void read_revisions_from_stdin(struct rev_info *revs,
+ 			break;
+ 		}
+ 
+-		if (sb.buf[0] == '-')
+-			die("options not supported in --stdin mode");
++		if (!seen_end_of_options && sb.buf[0] == '-') {
++			const char *argv[] = { sb.buf, NULL };
++
++			if (!strcmp(sb.buf, "--end-of-options")) {
++				seen_end_of_options = 1;
++				continue;
++			}
++
++			if (handle_revision_pseudo_opt(revs, argv, flags) > 0)
++				continue;
++
++			die(_("invalid option '%s' in --stdin mode"), sb.buf);
++		}
+ 
+ 		if (handle_revision_arg(sb.buf, revs, 0,
+ 					REVARG_CANNOT_BE_FILENAME))
+@@ -2889,7 +2902,7 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
+ 				}
+ 				if (revs->read_from_stdin++)
+ 					die("--stdin given twice?");
+-				read_revisions_from_stdin(revs, &prune_data);
++				read_revisions_from_stdin(revs, &prune_data, &flags);
+ 				continue;
+ 			}
+ 
+diff --git a/t/t6017-rev-list-stdin.sh b/t/t6017-rev-list-stdin.sh
+index 05162512a0..a57f1ae2ba 100755
+--- a/t/t6017-rev-list-stdin.sh
++++ b/t/t6017-rev-list-stdin.sh
+@@ -48,7 +48,9 @@ test_expect_success setup '
+ 			git add file-$i &&
+ 			test_tick &&
+ 			git commit -m side-$i || exit
+-		done
++		done &&
++
++		git update-ref refs/heads/-dashed-branch HEAD
+ 	)
+ '
+ 
+@@ -60,6 +62,12 @@ check side-1 ^side-7 -- file-2
+ check side-3 ^side-4 -- file-3
+ check side-3 ^side-2
+ check side-3 ^side-2 -- file-1
++check --all
++check --all --not --branches
++check --glob=refs/heads
++check --glob=refs/heads --
++check --glob=refs/heads -- file-1
++check --end-of-options -dashed-branch
+ 
+ test_expect_success 'not only --stdin' '
+ 	cat >expect <<-EOF &&
+@@ -78,4 +86,45 @@ test_expect_success 'not only --stdin' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'pseudo-opt with missing value' '
++	cat >input <<-EOF &&
++	--glob
++	refs/heads
++	EOF
++
++	cat >expect <<-EOF &&
++	fatal: Option ${SQ}--glob${SQ} requires a value
++	EOF
++
++	test_must_fail git rev-list --stdin <input 2>error &&
++	test_cmp expect error
++'
++
++test_expect_success 'pseudo-opt with invalid value' '
++	cat >input <<-EOF &&
++	--no-walk=garbage
++	EOF
++
++	cat >expect <<-EOF &&
++	error: invalid argument to --no-walk
++	fatal: invalid option ${SQ}--no-walk=garbage${SQ} in --stdin mode
++	EOF
++
++	test_must_fail git rev-list --stdin <input 2>error &&
++	test_cmp expect error
++'
++
++test_expect_success 'unknown option without --end-of-options' '
++	cat >input <<-EOF &&
++	-dashed-branch
++	EOF
++
++	cat >expect <<-EOF &&
++	fatal: invalid option ${SQ}-dashed-branch${SQ} in --stdin mode
++	EOF
++
++	test_must_fail git rev-list --stdin <input 2>error &&
++	test_cmp expect error
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

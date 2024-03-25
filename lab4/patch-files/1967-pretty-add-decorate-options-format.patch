@@ -1,0 +1,185 @@
+From a58dd835e9536cf9e7adcd404d008a44d29af804 Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Sun, 20 Aug 2023 19:50:07 +0100
+Subject: [PATCH 1967/2871] pretty: add %(decorate[:<options>]) format
+
+Add %(decorate[:<options>]) format that lists ref names similarly to the
+%d format, but which allows the otherwise fixed prefix, suffix and
+separator strings to be customized. Omitted options default to the
+strings used in %d.
+
+Rename expand_separator() function used to expand %x literal formatting
+codes to expand_string_arg(), as it is now used on strings other than
+separators.
+
+Examples:
+- %(decorate) is equivalent to %d.
+- %(decorate:prefix=,suffix=) is equivalent to %D.
+- %(decorate:prefix=[,suffix=],separator=%x3B) produces a list enclosed
+in square brackets and separated by semicolons.
+
+Test the format in t4205-log-pretty-formats.sh and document it in
+pretty-formats.txt.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/pretty-formats.txt | 10 ++++++
+ pretty.c                         | 59 +++++++++++++++++++++++++++++---
+ t/t4205-log-pretty-formats.sh    | 27 +++++++++++++++
+ 3 files changed, 92 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/pretty-formats.txt b/Documentation/pretty-formats.txt
+index 851a9878e6..709d85af21 100644
+--- a/Documentation/pretty-formats.txt
++++ b/Documentation/pretty-formats.txt
+@@ -224,6 +224,16 @@ The placeholders are:
+ 	linkgit:git-rev-list[1])
+ '%d':: ref names, like the --decorate option of linkgit:git-log[1]
+ '%D':: ref names without the " (", ")" wrapping.
++'%(decorate[:<options>])'::
++ref names with custom decorations. The `decorate` string may be followed by a
++colon and zero or more comma-separated options. Option values may contain
++literal formatting codes. These must be used for commas (`%x2C`) and closing
++parentheses (`%x29`), due to their role in the option syntax.
+++
++** 'prefix=<value>': Shown before the list of ref names.  Defaults to "{nbsp}`(`".
++** 'suffix=<value>': Shown after the list of ref names.  Defaults to "`)`".
++** 'separator=<value>': Shown between ref names.  Defaults to "`,`{nbsp}".
++
+ '%(describe[:<options>])'::
+ human-readable name, like linkgit:git-describe[1]; empty string for
+ undescribable commits.  The `describe` string may be followed by a colon and
+diff --git a/pretty.c b/pretty.c
+index 69b6db3340..1639efe2f8 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1252,8 +1252,8 @@ static int format_trailer_match_cb(const struct strbuf *key, void *ud)
+ 	return 0;
+ }
+ 
+-static struct strbuf *expand_separator(struct strbuf *sb,
+-				       const char *argval, size_t arglen)
++static struct strbuf *expand_string_arg(struct strbuf *sb,
++					const char *argval, size_t arglen)
+ {
+ 	char *fmt = xstrndup(argval, arglen);
+ 	const char *format = fmt;
+@@ -1301,9 +1301,9 @@ int format_set_trailers_options(struct process_trailer_options *opts,
+ 			opts->filter_data = filter_list;
+ 			opts->only_trailers = 1;
+ 		} else if (match_placeholder_arg_value(*arg, "separator", arg, &argval, &arglen)) {
+-			opts->separator = expand_separator(sepbuf, argval, arglen);
++			opts->separator = expand_string_arg(sepbuf, argval, arglen);
+ 		} else if (match_placeholder_arg_value(*arg, "key_value_separator", arg, &argval, &arglen)) {
+-			opts->key_value_separator = expand_separator(kvsepbuf, argval, arglen);
++			opts->key_value_separator = expand_string_arg(kvsepbuf, argval, arglen);
+ 		} else if (!match_placeholder_bool_arg(*arg, "only", arg, &opts->only_trailers) &&
+ 			   !match_placeholder_bool_arg(*arg, "unfold", arg, &opts->unfold) &&
+ 			   !match_placeholder_bool_arg(*arg, "keyonly", arg, &opts->key_only) &&
+@@ -1384,6 +1384,40 @@ static size_t parse_describe_args(const char *start, struct strvec *args)
+ 	return arg - start;
+ }
+ 
++
++static int parse_decoration_option(const char **arg,
++				   const char *name,
++				   char **opt)
++{
++	const char *argval;
++	size_t arglen;
++
++	if (match_placeholder_arg_value(*arg, name, arg, &argval, &arglen)) {
++		struct strbuf sb = STRBUF_INIT;
++
++		expand_string_arg(&sb, argval, arglen);
++		*opt = strbuf_detach(&sb, NULL);
++		return 1;
++	}
++	return 0;
++}
++
++static void parse_decoration_options(const char **arg,
++				     struct decoration_options *opts)
++{
++	while (parse_decoration_option(arg, "prefix", &opts->prefix) ||
++	       parse_decoration_option(arg, "suffix", &opts->suffix) ||
++	       parse_decoration_option(arg, "separator", &opts->separator))
++		;
++}
++
++static void free_decoration_options(const struct decoration_options *opts)
++{
++	free(opts->prefix);
++	free(opts->suffix);
++	free(opts->separator);
++}
++
+ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
+ 				const char *placeholder,
+ 				void *context)
+@@ -1645,6 +1679,23 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
+ 		return 2;
+ 	}
+ 
++	if (skip_prefix(placeholder, "(decorate", &arg)) {
++		struct decoration_options opts = { NULL };
++		size_t ret = 0;
++
++		if (*arg == ':') {
++			arg++;
++			parse_decoration_options(&arg, &opts);
++		}
++		if (*arg == ')') {
++			format_decorations(sb, commit, c->auto_color, &opts);
++			ret = arg - placeholder + 1;
++		}
++
++		free_decoration_options(&opts);
++		return ret;
++	}
++
+ 	/* For the rest we have to parse the commit header. */
+ 	if (!c->commit_header_parsed) {
+ 		msg = c->message =
+diff --git a/t/t4205-log-pretty-formats.sh b/t/t4205-log-pretty-formats.sh
+index dd9035aa38..6ba399c5be 100755
+--- a/t/t4205-log-pretty-formats.sh
++++ b/t/t4205-log-pretty-formats.sh
+@@ -576,6 +576,33 @@ test_expect_success 'clean log decoration' '
+ 	test_cmp expected actual1
+ '
+ 
++test_expect_success 'pretty format %decorate' '
++	git checkout -b foo &&
++	git commit --allow-empty -m "new commit" &&
++	git tag bar &&
++	git branch qux &&
++
++	echo " (HEAD -> foo, tag: bar, qux)" >expect1 &&
++	git log --format="%(decorate)" -1 >actual1 &&
++	test_cmp expect1 actual1 &&
++
++	echo "HEAD -> foo, tag: bar, qux" >expect2 &&
++	git log --format="%(decorate:prefix=,suffix=)" -1 >actual2 &&
++	test_cmp expect2 actual2 &&
++
++	echo "[ HEAD -> foo; tag: bar; qux ]" >expect3 &&
++	git log --format="%(decorate:prefix=[ ,suffix= ],separator=%x3B )" \
++		-1 >actual3 &&
++	test_cmp expect3 actual3 &&
++
++	# Try with a typo (in "separator"), in which case the placeholder should
++	# not be replaced.
++	echo "%(decorate:prefix=[ ,suffix= ],separater=; )" >expect4 &&
++	git log --format="%(decorate:prefix=[ ,suffix= ],separater=%x3B )" \
++		-1 >actual4 &&
++	test_cmp expect4 actual4
++'
++
+ cat >trailers <<EOF
+ Signed-off-by: A U Thor <author@example.com>
+ Acked-by: A U Thor <author@example.com>
+-- 
+2.39.3 (Apple Git-145)
+

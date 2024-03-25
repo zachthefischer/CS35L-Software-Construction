@@ -1,0 +1,35 @@
+From c90d81f8bb691b6627497e69d599e1f7fa7e9dfa Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Tue, 8 Nov 2022 19:08:27 +0000
+Subject: [PATCH 0331/2871] chainlint: add explanatory comments
+
+The logic in TestParser::accumulate() for detecting broken &&-chains is
+mostly well-commented, but a couple branches which were deemed obvious
+and straightforward lack comments. In retrospect, though, these cases
+may give future readers pause, so comment them, as well.
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/chainlint.pl | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/t/chainlint.pl b/t/chainlint.pl
+index 976db4b8a0..9908de6c75 100755
+--- a/t/chainlint.pl
++++ b/t/chainlint.pl
+@@ -505,7 +505,11 @@ sub parse_loop_body {
+ 
+ sub accumulate {
+ 	my ($self, $tokens, $cmd) = @_;
++
++	# no previous command to check for missing "&&"
+ 	goto DONE unless @$tokens;
++
++	# new command is empty line; can't yet check if previous is missing "&&"
+ 	goto DONE if @$cmd == 1 && $$cmd[0] eq "\n";
+ 
+ 	# did previous command end with "&&", "|", "|| return" or similar?
+-- 
+2.39.3 (Apple Git-145)
+

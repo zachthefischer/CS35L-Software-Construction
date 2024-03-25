@@ -1,0 +1,142 @@
+From e7485601ca4da6a09c6488add181609cffec5799 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 1 Feb 2024 08:52:08 +0100
+Subject: [PATCH 2797/2871] reftable/writer: fix writing multi-level indices
+
+When finishing a section we will potentially write an index that makes
+it more efficient to look up relevant blocks. The index records written
+will encode, for each block of the indexed section, what the offset of
+that block is as well as the last key of that block. Thus, the reader
+would iterate through the index records to find the first key larger or
+equal to the wanted key and then use the encoded offset to look up the
+desired block.
+
+When there are a lot of blocks to index though we may end up writing
+multiple index blocks, too. To not require a linear search across all
+index blocks we instead end up writing a multi-level index. Instead of
+referring to the block we are after, an index record may point to
+another index block. The reader will then access the highest-level index
+and follow down the chain of index blocks until it hits the sought-after
+block.
+
+It has been observed though that it is impossible to seek ref records of
+the last ref block when using a multi-level index. While the multi-level
+index exists and looks fine for most of the part, the highest-level
+index was missing an index record pointing to the last block of the next
+index. Thus, every additional level made more refs become unseekable at
+the end of the ref section.
+
+The root cause is that we are not flushing the last block of the current
+level once done writing the level. Consequently, it wasn't recorded in
+the blocks that need to be indexed by the next-higher level and thus we
+forgot about it.
+
+Fix this bug by flushing blocks after we have written all index records.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/readwrite_test.c | 56 +++++++++++++++++++++++++++++++++++++++
+ reftable/writer.c         |  8 +++---
+ 2 files changed, 60 insertions(+), 4 deletions(-)
+
+diff --git a/reftable/readwrite_test.c b/reftable/readwrite_test.c
+index 6b99daeaf2..853923397e 100644
+--- a/reftable/readwrite_test.c
++++ b/reftable/readwrite_test.c
+@@ -866,6 +866,61 @@ static void test_write_multiple_indices(void)
+ 	strbuf_release(&buf);
+ }
+ 
++static void test_write_multi_level_index(void)
++{
++	struct reftable_write_options opts = {
++		.block_size = 100,
++	};
++	struct strbuf writer_buf = STRBUF_INIT, buf = STRBUF_INIT;
++	struct reftable_block_source source = { 0 };
++	struct reftable_iterator it = { 0 };
++	const struct reftable_stats *stats;
++	struct reftable_writer *writer;
++	struct reftable_reader *reader;
++	int err;
++
++	writer = reftable_new_writer(&strbuf_add_void, &noop_flush, &writer_buf, &opts);
++	reftable_writer_set_limits(writer, 1, 1);
++	for (size_t i = 0; i < 200; i++) {
++		struct reftable_ref_record ref = {
++			.update_index = 1,
++			.value_type = REFTABLE_REF_VAL1,
++			.value.val1 = {i},
++		};
++
++		strbuf_reset(&buf);
++		strbuf_addf(&buf, "refs/heads/%03" PRIuMAX, (uintmax_t)i);
++		ref.refname = buf.buf,
++
++		err = reftable_writer_add_ref(writer, &ref);
++		EXPECT_ERR(err);
++	}
++	reftable_writer_close(writer);
++
++	/*
++	 * The written refs should be sufficiently large to result in a
++	 * multi-level index.
++	 */
++	stats = reftable_writer_stats(writer);
++	EXPECT(stats->ref_stats.max_index_level == 2);
++
++	block_source_from_strbuf(&source, &writer_buf);
++	err = reftable_new_reader(&reader, &source, "filename");
++	EXPECT_ERR(err);
++
++	/*
++	 * Seeking the last ref should work as expected.
++	 */
++	err = reftable_reader_seek_ref(reader, &it, "refs/heads/199");
++	EXPECT_ERR(err);
++
++	reftable_iterator_destroy(&it);
++	reftable_writer_free(writer);
++	reftable_reader_free(reader);
++	strbuf_release(&writer_buf);
++	strbuf_release(&buf);
++}
++
+ static void test_corrupt_table_empty(void)
+ {
+ 	struct strbuf buf = STRBUF_INIT;
+@@ -916,5 +971,6 @@ int readwrite_test_main(int argc, const char *argv[])
+ 	RUN_TEST(test_write_object_id_length);
+ 	RUN_TEST(test_write_object_id_min_length);
+ 	RUN_TEST(test_write_multiple_indices);
++	RUN_TEST(test_write_multi_level_index);
+ 	return 0;
+ }
+diff --git a/reftable/writer.c b/reftable/writer.c
+index b5bcce0292..0349094d29 100644
+--- a/reftable/writer.c
++++ b/reftable/writer.c
+@@ -418,15 +418,15 @@ static int writer_finish_section(struct reftable_writer *w)
+ 				return err;
+ 		}
+ 
++		err = writer_flush_block(w);
++		if (err < 0)
++			return err;
++
+ 		for (i = 0; i < idx_len; i++)
+ 			strbuf_release(&idx[i].last_key);
+ 		reftable_free(idx);
+ 	}
+ 
+-	err = writer_flush_block(w);
+-	if (err < 0)
+-		return err;
+-
+ 	writer_clear_index(w);
+ 
+ 	bstats = writer_reftable_block_stats(w, typ);
+-- 
+2.39.3 (Apple Git-145)
+

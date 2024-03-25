@@ -1,0 +1,50 @@
+From 98456eff08069696708b24ab4f1152f06a3b47f9 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 10 Jul 2023 17:12:48 -0400
+Subject: [PATCH 1764/2871] ls-refs.c: avoid enumerating hidden refs where
+ possible
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In a similar fashion as in previous commits, teach `ls-refs` to avoid
+enumerating hidden references where possible.
+
+As before, this is linux.git with one hidden reference per commit.
+
+    $ hyperfine -L v ,.compile 'git{v} -c protocol.version=2 ls-remote .'
+    Benchmark 1: git -c protocol.version=2 ls-remote .
+      Time (mean ± σ):      89.8 ms ±   0.6 ms    [User: 84.3 ms, System: 5.7 ms]
+      Range (min … max):    88.8 ms …  91.3 ms    32 runs
+
+    Benchmark 2: git.compile -c protocol.version=2 ls-remote .
+      Time (mean ± σ):       6.5 ms ±   0.1 ms    [User: 2.4 ms, System: 4.3 ms]
+      Range (min … max):     6.2 ms …   8.3 ms    397 runs
+
+    Summary
+      'git.compile -c protocol.version=2 ls-remote .' ran
+       13.85 ± 0.33 times faster than 'git -c protocol.version=2 ls-remote .'
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ls-refs.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/ls-refs.c b/ls-refs.c
+index 8c3181d051..ee19c510d4 100644
+--- a/ls-refs.c
++++ b/ls-refs.c
+@@ -193,7 +193,8 @@ int ls_refs(struct repository *r, struct packet_reader *request)
+ 		strvec_push(&data.prefixes, "");
+ 	refs_for_each_fullref_in_prefixes(get_main_ref_store(r),
+ 					  get_git_namespace(), data.prefixes.v,
+-					  NULL, send_ref, &data);
++					  hidden_refs_to_excludes(&data.hidden_refs),
++					  send_ref, &data);
+ 	packet_fflush(stdout);
+ 	strvec_clear(&data.prefixes);
+ 	strbuf_release(&data.buf);
+-- 
+2.39.3 (Apple Git-145)
+

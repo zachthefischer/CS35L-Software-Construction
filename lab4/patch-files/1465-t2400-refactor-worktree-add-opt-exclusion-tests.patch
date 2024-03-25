@@ -1,0 +1,52 @@
+From ed6db0e9fff14590f501eba24f91be1867e5e346 Mon Sep 17 00:00:00 2001
+From: Jacob Abel <jacobabel@nullpo.dev>
+Date: Wed, 17 May 2023 21:48:35 +0000
+Subject: [PATCH 1465/2871] t2400: refactor "worktree add" opt exclusion tests
+
+Pull duplicate test code into a function so that additional opt
+combinations can be tested succinctly.
+
+Signed-off-by: Jacob Abel <jacobabel@nullpo.dev>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2400-worktree-add.sh | 23 +++++++++++++----------
+ 1 file changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index a3f108347a..0ca3ec2022 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -298,17 +298,20 @@ test_expect_success '"add" no auto-vivify with --detach and <branch> omitted' '
+ 	test_must_fail git -C mish/mash symbolic-ref HEAD
+ '
+ 
+-test_expect_success '"add" -b/-B mutually exclusive' '
+-	test_must_fail git worktree add -b poodle -B poodle bamboo main
+-'
+-
+-test_expect_success '"add" -b/--detach mutually exclusive' '
+-	test_must_fail git worktree add -b poodle --detach bamboo main
+-'
++# Helper function to test mutually exclusive options.
++#
++# Note: Quoted arguments containing spaces are not supported.
++test_wt_add_excl () {
++	local opts="$*" &&
++	test_expect_success "'worktree add' with '$opts' has mutually exclusive options" '
++		test_must_fail git worktree add $opts 2>actual &&
++		grep -E "fatal:( options)? .* cannot be used together" actual
++	'
++}
+ 
+-test_expect_success '"add" -B/--detach mutually exclusive' '
+-	test_must_fail git worktree add -B poodle --detach bamboo main
+-'
++test_wt_add_excl -b poodle -B poodle bamboo main
++test_wt_add_excl -b poodle --detach bamboo main
++test_wt_add_excl -B poodle --detach bamboo main
+ 
+ test_expect_success '"add -B" fails if the branch is checked out' '
+ 	git rev-parse newmain >before &&
+-- 
+2.39.3 (Apple Git-145)
+

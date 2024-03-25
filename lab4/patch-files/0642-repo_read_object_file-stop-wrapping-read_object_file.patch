@@ -1,0 +1,76 @@
+From 0ba05cf2e0d077bedbc1ee2521b3e5b5dc883250 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 7 Jan 2023 08:50:33 -0500
+Subject: [PATCH 0642/2871] repo_read_object_file(): stop wrapping
+ read_object_file_extended()
+
+The only caller of read_object_file_extended() is the thin wrapper of
+repo_read_object_file(). Instead of wrapping, let's just rename the
+inner function and let people call it directly. This cleans up the
+namespace and reduces confusion.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-file.c  |  8 ++++----
+ object-store.h | 18 +++++-------------
+ 2 files changed, 9 insertions(+), 17 deletions(-)
+
+diff --git a/object-file.c b/object-file.c
+index f472f2d6a0..80b08fc389 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -1695,10 +1695,10 @@ int pretend_object_file(void *buf, unsigned long len, enum object_type type,
+  * deal with them should arrange to call oid_object_info_extended() and give
+  * error messages themselves.
+  */
+-void *read_object_file_extended(struct repository *r,
+-				const struct object_id *oid,
+-				enum object_type *type,
+-				unsigned long *size)
++void *repo_read_object_file(struct repository *r,
++			    const struct object_id *oid,
++			    enum object_type *type,
++			    unsigned long *size)
+ {
+ 	struct object_info oi = OBJECT_INFO_INIT;
+ 	unsigned flags = OBJECT_INFO_DIE_IF_CORRUPT | OBJECT_INFO_LOOKUP_REPLACE;
+diff --git a/object-store.h b/object-store.h
+index 6ccacc947b..1a713d89d7 100644
+--- a/object-store.h
++++ b/object-store.h
+@@ -241,17 +241,10 @@ const char *loose_object_path(struct repository *r, struct strbuf *buf,
+ void *map_loose_object(struct repository *r, const struct object_id *oid,
+ 		       unsigned long *size);
+ 
+-void *read_object_file_extended(struct repository *r,
+-				const struct object_id *oid,
+-				enum object_type *type,
+-				unsigned long *size);
+-static inline void *repo_read_object_file(struct repository *r,
+-					  const struct object_id *oid,
+-					  enum object_type *type,
+-					  unsigned long *size)
+-{
+-	return read_object_file_extended(r, oid, type, size);
+-}
++void *repo_read_object_file(struct repository *r,
++			    const struct object_id *oid,
++			    enum object_type *type,
++			    unsigned long *size);
+ #ifndef NO_THE_REPOSITORY_COMPATIBILITY_MACROS
+ #define read_object_file(oid, type, size) repo_read_object_file(the_repository, oid, type, size)
+ #endif
+@@ -358,8 +351,7 @@ void assert_oid_type(const struct object_id *oid, enum object_type expect);
+ /*
+  * Enabling the object read lock allows multiple threads to safely call the
+  * following functions in parallel: repo_read_object_file(), read_object_file(),
+- * read_object_file_extended(), read_object_with_reference(),
+- * oid_object_info() and oid_object_info_extended().
++ * read_object_with_reference(), oid_object_info() and oid_object_info_extended().
+  *
+  * obj_read_lock() and obj_read_unlock() may also be used to protect other
+  * section which cannot execute in parallel with object reading. Since the used
+-- 
+2.39.3 (Apple Git-145)
+

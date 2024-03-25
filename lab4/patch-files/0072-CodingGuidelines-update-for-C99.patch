@@ -1,0 +1,48 @@
+From e88a2d02dc5fb1043e6871159a8d41657baa7449 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Mon, 10 Oct 2022 13:37:56 -0700
+Subject: [PATCH 0072/2871] CodingGuidelines: update for C99
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 7bc341e21b5 (git-compat-util: add a test balloon for C99
+support, 2021-12-01) we've had a hard dependency on C99, but the prose
+in CodingGuidelines was written under the assumption that we were
+using C89 with a few C99 features.
+
+As the updated prose notes we'd still like to hold off on novel C99
+features, but let's make it clear that we target that C version, and
+then enumerate new C99 features that are safe to use.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/CodingGuidelines | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/CodingGuidelines b/Documentation/CodingGuidelines
+index 9fca21cc5f..386ca0a0d2 100644
+--- a/Documentation/CodingGuidelines
++++ b/Documentation/CodingGuidelines
+@@ -204,10 +204,14 @@ For C programs:
+    by e.g. "echo DEVELOPER=1 >>config.mak".
+ 
+  - We try to support a wide range of C compilers to compile Git with,
+-   including old ones.  You should not use features from newer C
++   including old ones.  As of Git v2.35.0 Git requires C99 (we check
++   "__STDC_VERSION__"). You should not use features from a newer C
+    standard, even if your compiler groks them.
+ 
+-   There are a few exceptions to this guideline:
++   New C99 features have been phased in gradually, if something's new
++   in C99 but not used yet don't assume that it's safe to use, some
++   compilers we target have only partial support for it. These are
++   considered safe to use:
+ 
+    . since early 2012 with e1327023ea, we have been using an enum
+      definition whose last element is followed by a comma.  This, like
+-- 
+2.39.3 (Apple Git-145)
+

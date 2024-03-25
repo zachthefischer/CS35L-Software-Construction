@@ -1,0 +1,49 @@
+From 4ef97dc4cd958fc6da8a9fba700ead586c21b879 Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Thu, 18 Jan 2024 17:12:49 +0100
+Subject: [PATCH 2707/2871] config: format newlines
+
+Remove unneeded newlines according to `clang-format`.
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/config.c | 1 -
+ config.c         | 2 --
+ 2 files changed, 3 deletions(-)
+
+diff --git a/builtin/config.c b/builtin/config.c
+index 11a4d4ef14..87d0dc92d9 100644
+--- a/builtin/config.c
++++ b/builtin/config.c
+@@ -760,7 +760,6 @@ int cmd_config(int argc, const char **argv, const char *prefix)
+ 		given_config_source.scope = CONFIG_SCOPE_COMMAND;
+ 	}
+ 
+-
+ 	if (respect_includes_opt == -1)
+ 		config_options.respect_includes = !given_config_source.file;
+ 	else
+diff --git a/config.c b/config.c
+index 9ff6ae1cb9..d26e16e3ce 100644
+--- a/config.c
++++ b/config.c
+@@ -95,7 +95,6 @@ static long config_file_ftell(struct config_source *conf)
+ 	return ftell(conf->u.file);
+ }
+ 
+-
+ static int config_buf_fgetc(struct config_source *conf)
+ {
+ 	if (conf->u.buf.pos < conf->u.buf.len)
+@@ -3418,7 +3417,6 @@ int git_config_set_multivar_in_file_gently(const char *config_filename,
+ write_err_out:
+ 	ret = write_error(get_lock_file_path(&lock));
+ 	goto out_free;
+-
+ }
+ 
+ void git_config_set_multivar_in_file(const char *config_filename,
+-- 
+2.39.3 (Apple Git-145)
+

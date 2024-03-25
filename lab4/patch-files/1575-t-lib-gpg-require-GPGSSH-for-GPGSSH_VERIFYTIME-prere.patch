@@ -1,0 +1,35 @@
+From 78e56cff69df290058ddefe18637de973f91b39d Mon Sep 17 00:00:00 2001
+From: Todd Zullinger <tmz@pobox.com>
+Date: Tue, 6 Jun 2023 17:47:07 -0400
+Subject: [PATCH 1575/2871] t/lib-gpg: require GPGSSH for GPGSSH_VERIFYTIME
+ prereq
+
+The GPGSSH_VERIFYTIME prequeq makes use of "${GNUPGHOME}" but does not
+create it.  Require GPGSSH which creates the "${GNUPGHOME}" directory.
+
+Additionally, it makes sense to require GPGSSH in GPGSSH_VERIFYTIME
+because the latter builds on the former.  If we can't use GPGSSH,
+there's little point in checking whether GPGSSH_VERIFYTIME is usable.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Todd Zullinger <tmz@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-gpg.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/lib-gpg.sh b/t/lib-gpg.sh
+index 114785586a..db63aeb6ed 100644
+--- a/t/lib-gpg.sh
++++ b/t/lib-gpg.sh
+@@ -135,6 +135,7 @@ test_lazy_prereq GPGSSH '
+ '
+ 
+ test_lazy_prereq GPGSSH_VERIFYTIME '
++	test_have_prereq GPGSSH &&
+ 	# Check if ssh-keygen has a verify-time option by passing an invalid date to it
+ 	ssh-keygen -Overify-time=INVALID -Y check-novalidate -s doesnotmatter 2>&1 | grep -q -F "Invalid \"verify-time\"" &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

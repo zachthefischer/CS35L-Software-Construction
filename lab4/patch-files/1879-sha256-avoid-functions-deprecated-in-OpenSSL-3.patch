@@ -1,0 +1,109 @@
+From 3e440ea0aba0660f356a3e5b9fc366d5d6960847 Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Tue, 1 Aug 2023 02:54:53 +0000
+Subject: [PATCH 1879/2871] sha256: avoid functions deprecated in OpenSSL 3+
+
+OpenSSL 3+ deprecates the SHA256_Init, SHA256_Update, and SHA256_Final
+functions, leading to errors when building with `DEVELOPER=1'.
+
+Use the newer EVP_* API with OpenSSL 3+ despite being more
+error-prone and less efficient due to heap allocations.
+
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile         |  3 +++
+ hash-ll.h        |  6 +++++-
+ sha256/openssl.h | 49 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 57 insertions(+), 1 deletion(-)
+ create mode 100644 sha256/openssl.h
+
+diff --git a/Makefile b/Makefile
+index e440728c24..29f6d3b31e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3215,6 +3215,9 @@ $(SP_OBJ): %.sp: %.c %.o
+ sparse: $(SP_OBJ)
+ 
+ EXCEPT_HDRS := $(GENERATED_H) unicode-width.h compat/% xdiff/%
++ifndef OPENSSL_SHA256
++	EXCEPT_HDRS += sha256/openssl.h
++endif
+ ifndef NETTLE_SHA256
+ 	EXCEPT_HDRS += sha256/nettle.h
+ endif
+diff --git a/hash-ll.h b/hash-ll.h
+index 8050925137..5173a2698c 100644
+--- a/hash-ll.h
++++ b/hash-ll.h
+@@ -17,7 +17,11 @@
+ #define SHA256_NEEDS_CLONE_HELPER
+ #include "sha256/gcrypt.h"
+ #elif defined(SHA256_OPENSSL)
+-#include <openssl/sha.h>
++#  include <openssl/sha.h>
++#  if defined(OPENSSL_API_LEVEL) && OPENSSL_API_LEVEL >= 3
++#    define SHA256_NEEDS_CLONE_HELPER
++#    include "sha256/openssl.h"
++#  endif
+ #else
+ #include "sha256/block/sha256.h"
+ #endif
+diff --git a/sha256/openssl.h b/sha256/openssl.h
+new file mode 100644
+index 0000000000..c1083d9491
+--- /dev/null
++++ b/sha256/openssl.h
+@@ -0,0 +1,49 @@
++/* wrappers for the EVP API of OpenSSL 3+ */
++#ifndef SHA256_OPENSSL_H
++#define SHA256_OPENSSL_H
++#include <openssl/evp.h>
++
++struct openssl_SHA256_CTX {
++	EVP_MD_CTX *ectx;
++};
++
++typedef struct openssl_SHA256_CTX openssl_SHA256_CTX;
++
++static inline void openssl_SHA256_Init(struct openssl_SHA256_CTX *ctx)
++{
++	const EVP_MD *type = EVP_sha256();
++
++	ctx->ectx = EVP_MD_CTX_new();
++	if (!ctx->ectx)
++		die("EVP_MD_CTX_new: out of memory");
++
++	EVP_DigestInit_ex(ctx->ectx, type, NULL);
++}
++
++static inline void openssl_SHA256_Update(struct openssl_SHA256_CTX *ctx,
++					const void *data,
++					size_t len)
++{
++	EVP_DigestUpdate(ctx->ectx, data, len);
++}
++
++static inline void openssl_SHA256_Final(unsigned char *digest,
++				       struct openssl_SHA256_CTX *ctx)
++{
++	EVP_DigestFinal_ex(ctx->ectx, digest, NULL);
++	EVP_MD_CTX_free(ctx->ectx);
++}
++
++static inline void openssl_SHA256_Clone(struct openssl_SHA256_CTX *dst,
++					const struct openssl_SHA256_CTX *src)
++{
++	EVP_MD_CTX_copy_ex(dst->ectx, src->ectx);
++}
++
++#define platform_SHA256_CTX openssl_SHA256_CTX
++#define platform_SHA256_Init openssl_SHA256_Init
++#define platform_SHA256_Clone openssl_SHA256_Clone
++#define platform_SHA256_Update openssl_SHA256_Update
++#define platform_SHA256_Final openssl_SHA256_Final
++
++#endif /* SHA256_OPENSSL_H */
+-- 
+2.39.3 (Apple Git-145)
+

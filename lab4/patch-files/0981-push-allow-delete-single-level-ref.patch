@@ -1,0 +1,95 @@
+From 7c3c55026c25f038d790d21fb7242229a9a08fed Mon Sep 17 00:00:00 2001
+From: ZheNing Hu <adlternative@gmail.com>
+Date: Wed, 1 Mar 2023 10:20:29 +0000
+Subject: [PATCH 0981/2871] push: allow delete single-level ref
+
+We discourage the creation/update of single-level refs
+because some upper-layer applications only work in specified
+reference namespaces, such as "refs/heads/*" or "refs/tags/*",
+these single-level refnames may not be recognized. However,
+we still hope users can delete them which have been created
+by mistake.
+
+Therefore, when updating branches on the server with
+"git receive-pack", by checking whether it is a branch deletion
+operation, it will determine whether to allow the update of
+a single-level refs. This avoids creating/updating such
+single-level refs, but allows them to be deleted.
+
+On the client side, "git push" also does not properly fill in
+the old-oid of single-level refs, which causes the server-side
+"git receive-pack" to think that the ref's old-oid has changed
+when deleting single-level refs, this causes the push to be
+rejected. So the solution is to fix the client to be able to
+delete single-level refs by properly filling old-oid.
+
+Signed-off-by: ZheNing Hu <adlternative@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c |  4 +++-
+ connect.c              |  3 ++-
+ t/t5516-fetch-push.sh  | 12 ++++++++++++
+ 3 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index c24616a3ac..af61725a38 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -1463,7 +1463,9 @@ static const char *update(struct command *cmd, struct shallow_info *si)
+ 		find_shared_symref(worktrees, "HEAD", name);
+ 
+ 	/* only refs/... are allowed */
+-	if (!starts_with(name, "refs/") || check_refname_format(name + 5, 0)) {
++	if (!starts_with(name, "refs/") ||
++	    check_refname_format(name + 5, is_null_oid(new_oid) ?
++				 REFNAME_ALLOW_ONELEVEL : 0)) {
+ 		rp_error("refusing to update funny ref '%s' remotely", name);
+ 		ret = "funny refname";
+ 		goto out;
+diff --git a/connect.c b/connect.c
+index 63e59641c0..7a396ad72e 100644
+--- a/connect.c
++++ b/connect.c
+@@ -30,7 +30,8 @@ static int check_ref(const char *name, unsigned int flags)
+ 		return 0;
+ 
+ 	/* REF_NORMAL means that we don't want the magic fake tag refs */
+-	if ((flags & REF_NORMAL) && check_refname_format(name, 0))
++	if ((flags & REF_NORMAL) && check_refname_format(name,
++							 REFNAME_ALLOW_ONELEVEL))
+ 		return 0;
+ 
+ 	/* REF_HEADS means that we want regular branch heads */
+diff --git a/t/t5516-fetch-push.sh b/t/t5516-fetch-push.sh
+index 98a27a2948..19ebefa5ac 100755
+--- a/t/t5516-fetch-push.sh
++++ b/t/t5516-fetch-push.sh
+@@ -401,6 +401,11 @@ test_expect_success 'push with ambiguity' '
+ 
+ '
+ 
++test_expect_success 'push with onelevel ref' '
++	mk_test testrepo heads/main &&
++	test_must_fail git push testrepo HEAD:refs/onelevel
++'
++
+ test_expect_success 'push with colon-less refspec (1)' '
+ 
+ 	mk_test testrepo heads/frotz tags/frotz &&
+@@ -898,6 +903,13 @@ test_expect_success 'push --delete refuses empty string' '
+ 	test_must_fail git push testrepo --delete ""
+ '
+ 
++test_expect_success 'push --delete onelevel refspecs' '
++	mk_test testrepo heads/main &&
++	git -C testrepo update-ref refs/onelevel refs/heads/main &&
++	git push testrepo --delete refs/onelevel &&
++	test_must_fail git -C testrepo rev-parse --verify refs/onelevel
++'
++
+ test_expect_success 'warn on push to HEAD of non-bare repository' '
+ 	mk_test testrepo heads/main &&
+ 	(
+-- 
+2.39.3 (Apple Git-145)
+

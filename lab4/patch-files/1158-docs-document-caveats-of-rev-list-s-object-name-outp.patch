@@ -1,0 +1,57 @@
+From 15364d2a3cef397442033a3fec27d57007ca1c51 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 28 Mar 2023 14:26:50 -0400
+Subject: [PATCH 1158/2871] docs: document caveats of rev-list's object-name
+ output
+
+At first glance, the names given by "rev-list --objects" seem like a
+good way to see which paths are present in a set of commits. But there
+are some subtle gotchas there. We do not document the format of the
+names at all, so let's do so, along with warning of these problems.
+
+I intentionally did not document the exact format of the names here, as
+I don't think it's something we want people to rely on (though I doubt
+in practice that we'd change it at this point).
+
+Though all of this is historically tied to "--objects", these days we
+have a separate "--object-names" flag which can turn the names off or
+on. So I put the detailed documentation there, but added a note from
+--objects (which did not otherwise mention the names at all, even though
+they are on by default).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/rev-list-options.txt | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/rev-list-options.txt b/Documentation/rev-list-options.txt
+index 1837509566..43f293e701 100644
+--- a/Documentation/rev-list-options.txt
++++ b/Documentation/rev-list-options.txt
+@@ -882,7 +882,7 @@ ifdef::git-rev-list[]
+ 	Print the object IDs of any object referenced by the listed
+ 	commits.  `--objects foo ^bar` thus means ``send me
+ 	all object IDs which I need to download if I have the commit
+-	object _bar_ but not _foo_''.
++	object _bar_ but not _foo_''. See also `--object-names` below.
+ 
+ --in-commit-order::
+ 	Print tree and blob ids in order of the commits. The tree
+@@ -912,7 +912,12 @@ ifdef::git-rev-list[]
+ 
+ --object-names::
+ 	Only useful with `--objects`; print the names of the object IDs
+-	that are found. This is the default behavior.
++	that are found. This is the default behavior. Note that the
++	"name" of each object is ambiguous, and mostly intended as a
++	hint for packing objects. In particular: no distinction is made between
++	the names of tags, trees, and blobs; path names may be modified
++	to remove newlines; and if an object would appear multiple times
++	with different names, only one name is shown.
+ 
+ --no-object-names::
+ 	Only useful with `--objects`; does not print the names of the object
+-- 
+2.39.3 (Apple Git-145)
+

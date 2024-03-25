@@ -1,0 +1,44 @@
+From e16be13cfaf1102340c7816d14cec2009a864faf Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Fri, 29 Sep 2023 14:20:50 -0700
+Subject: [PATCH 2168/2871] config: correct bad boolean env value error message
+
+An incorrectly defined boolean environment value would result in the
+following error message:
+
+bad boolean config value '%s' for '%s'
+
+This is a misnomer since environment value != config value. Instead of
+calling git_config_bool() to parse the environment value, mimic the
+functionality inside of git_config_bool() but with the correct error
+message.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/config.c b/config.c
+index 3846a37be9..7dde0aaa02 100644
+--- a/config.c
++++ b/config.c
+@@ -2133,7 +2133,14 @@ void git_global_config(char **user_out, char **xdg_out)
+ int git_env_bool(const char *k, int def)
+ {
+ 	const char *v = getenv(k);
+-	return v ? git_config_bool(k, v) : def;
++	int val;
++	if (!v)
++		return def;
++	val = git_parse_maybe_bool(v);
++	if (val < 0)
++		die(_("bad boolean environment value '%s' for '%s'"),
++		    v, k);
++	return val;
+ }
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

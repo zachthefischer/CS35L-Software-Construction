@@ -1,0 +1,97 @@
+From c358d165f2a4b3176b527e18c207105f6821335e Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 8 Jan 2024 11:05:30 +0100
+Subject: [PATCH 2658/2871] setup: move creation of "refs/" into the files
+ backend
+
+When creating the ref database we unconditionally create the "refs/"
+directory in "setup.c". This is a mandatory prerequisite for all Git
+repositories regardless of the ref backend in use, because Git will be
+unable to detect the directory as a repository if "refs/" doesn't exist.
+
+We are about to add another new caller that will want to create a ref
+database when creating worktrees. We would require the same logic to
+create the "refs/" directory even though the caller really should not
+care about such low-level details. Ideally, the ref database should be
+fully initialized after calling `refs_init_db()`.
+
+Move the code to create the directory into the files backend itself to
+make it so. This means that future ref backends will also need to have
+equivalent logic around to ensure that the directory exists, but it
+seems a lot more sensible to have it this way round than to require
+callers to create the directory themselves.
+
+An alternative to this would be to create "refs/" in `refs_init_db()`
+directly. This feels conceptually unclean though as the creation of the
+refdb is now cluttered across different callsites. Furthermore, both the
+"files" and the upcoming "reftable" backend write backend-specific data
+into the "refs/" directory anyway, so splitting up this logic would only
+make it harder to reason about.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs/files-backend.c | 17 +++++++++++++++++
+ setup.c              | 15 ---------------
+ 2 files changed, 17 insertions(+), 15 deletions(-)
+
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index 153efe6662..054ecdbca3 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -3228,9 +3228,26 @@ static int files_init_db(struct ref_store *ref_store,
+ 		files_downcast(ref_store, REF_STORE_WRITE, "init_db");
+ 	struct strbuf sb = STRBUF_INIT;
+ 
++	/*
++	 * We need to create a "refs" dir in any case so that older versions of
++	 * Git can tell that this is a repository. This serves two main purposes:
++	 *
++	 * - Clients will know to stop walking the parent-directory chain when
++	 *   detecting the Git repository. Otherwise they may end up detecting
++	 *   a Git repository in a parent directory instead.
++	 *
++	 * - Instead of failing to detect a repository with unknown reference
++	 *   format altogether, old clients will print an error saying that
++	 *   they do not understand the reference format extension.
++	 */
++	strbuf_addf(&sb, "%s/refs", ref_store->gitdir);
++	safe_create_dir(sb.buf, 1);
++	adjust_shared_perm(sb.buf);
++
+ 	/*
+ 	 * Create .git/refs/{heads,tags}
+ 	 */
++	strbuf_reset(&sb);
+ 	files_ref_path(refs, &sb, "refs/heads");
+ 	safe_create_dir(sb.buf, 1);
+ 
+diff --git a/setup.c b/setup.c
+index 6c8f656f7c..abb271e017 100644
+--- a/setup.c
++++ b/setup.c
+@@ -1927,21 +1927,6 @@ void create_reference_database(unsigned int ref_storage_format,
+ 	struct strbuf err = STRBUF_INIT;
+ 	int reinit = is_reinit();
+ 
+-	/*
+-	 * We need to create a "refs" dir in any case so that older versions of
+-	 * Git can tell that this is a repository. This serves two main purposes:
+-	 *
+-	 * - Clients will know to stop walking the parent-directory chain when
+-	 *   detecting the Git repository. Otherwise they may end up detecting
+-	 *   a Git repository in a parent directory instead.
+-	 *
+-	 * - Instead of failing to detect a repository with unknown reference
+-	 *   format altogether, old clients will print an error saying that
+-	 *   they do not understand the reference format extension.
+-	 */
+-	safe_create_dir(git_path("refs"), 1);
+-	adjust_shared_perm(git_path("refs"));
+-
+ 	repo_set_ref_storage_format(the_repository, ref_storage_format);
+ 	if (refs_init_db(get_main_ref_store(the_repository), 0, &err))
+ 		die("failed to set up refs db: %s", err.buf);
+-- 
+2.39.3 (Apple Git-145)
+

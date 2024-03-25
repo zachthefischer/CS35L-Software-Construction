@@ -1,0 +1,178 @@
+From b8f58c200cd3493ccf3c1669aa3c34927c884018 Mon Sep 17 00:00:00 2001
+From: Robert Coup <robert@coup.net.nz>
+Date: Tue, 17 Oct 2023 21:12:47 +0000
+Subject: [PATCH 2318/2871] upload-pack: add tracing for fetches
+
+Information on how users are accessing hosted repositories can be
+helpful to server operators. For example, being able to broadly
+differentiate between fetches and initial clones; the use of shallow
+repository features; or partial clone filters.
+
+a29263c (fetch-pack: add tracing for negotiation rounds, 2022-08-02)
+added some information on have counts to fetch-pack itself to help
+diagnose negotiation; but from a git-upload-pack (server) perspective,
+there's no means of accessing such information without using
+GIT_TRACE_PACKET to examine the protocol packets.
+
+Improve this by emitting a Trace2 JSON event from upload-pack with
+summary information on the contents of a fetch request.
+
+* haves, wants, and want-ref counts can help determine (broadly) between
+  fetches and clones, and the use of single-branch, etc.
+* shallow clone depth, tip counts, and deepening options.
+* any partial clone filter type.
+
+Signed-off-by: Robert Coup <robert@coup.net.nz>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5500-fetch-pack.sh | 38 +++++++++++++++++++++++++++-----------
+ upload-pack.c         | 28 ++++++++++++++++++++++++++++
+ 2 files changed, 55 insertions(+), 11 deletions(-)
+
+diff --git a/t/t5500-fetch-pack.sh b/t/t5500-fetch-pack.sh
+index d18f2823d8..bb15ac34f7 100755
+--- a/t/t5500-fetch-pack.sh
++++ b/t/t5500-fetch-pack.sh
+@@ -132,13 +132,18 @@ test_expect_success 'single branch object count' '
+ '
+ 
+ test_expect_success 'single given branch clone' '
+-	git clone --single-branch --branch A "file://$(pwd)/." branch-a &&
+-	test_must_fail git --git-dir=branch-a/.git rev-parse origin/B
++	GIT_TRACE2_EVENT="$(pwd)/branch-a/trace2_event" \
++		git clone --single-branch --branch A "file://$(pwd)/." branch-a &&
++	test_must_fail git --git-dir=branch-a/.git rev-parse origin/B &&
++	grep \"fetch-info\".*\"haves\":0 branch-a/trace2_event &&
++	grep \"fetch-info\".*\"wants\":1 branch-a/trace2_event
+ '
+ 
+ test_expect_success 'clone shallow depth 1' '
+-	git clone --no-single-branch --depth 1 "file://$(pwd)/." shallow0 &&
+-	test "$(git --git-dir=shallow0/.git rev-list --count HEAD)" = 1
++	GIT_TRACE2_EVENT="$(pwd)/shallow0/trace2_event" \
++		git clone --no-single-branch --depth 1 "file://$(pwd)/." shallow0 &&
++	test "$(git --git-dir=shallow0/.git rev-list --count HEAD)" = 1 &&
++	grep \"fetch-info\".*\"depth\":1 shallow0/trace2_event
+ '
+ 
+ test_expect_success 'clone shallow depth 1 with fsck' '
+@@ -235,7 +240,10 @@ test_expect_success 'add two more (part 2)' '
+ test_expect_success 'deepening pull in shallow repo' '
+ 	(
+ 		cd shallow &&
+-		git pull --depth 4 .. B
++		GIT_TRACE2_EVENT="$(pwd)/trace2_event" \
++			git pull --depth 4 .. B &&
++		grep \"fetch-info\".*\"depth\":4 trace2_event &&
++		grep \"fetch-info\".*\"shallows\":2 trace2_event
+ 	)
+ '
+ 
+@@ -306,9 +314,12 @@ test_expect_success 'fetch --depth --no-shallow' '
+ test_expect_success 'turn shallow to complete repository' '
+ 	(
+ 		cd shallow &&
+-		git fetch --unshallow &&
++		GIT_TRACE2_EVENT="$(pwd)/trace2_event" \
++			git fetch --unshallow &&
+ 		! test -f .git/shallow &&
+-		git fsck --full
++		git fsck --full &&
++		grep \"fetch-info\".*\"shallows\":2 trace2_event &&
++		grep \"fetch-info\".*\"depth\":2147483647 trace2_event
+ 	)
+ '
+ 
+@@ -826,13 +837,15 @@ test_expect_success 'clone shallow since ...' '
+ '
+ 
+ test_expect_success 'fetch shallow since ...' '
+-	git -C shallow11 fetch --shallow-since "200000000 +0700" origin &&
++	GIT_TRACE2_EVENT=$(pwd)/shallow11/trace2_event \
++		git -C shallow11 fetch --shallow-since "200000000 +0700" origin &&
+ 	git -C shallow11 log --pretty=tformat:%s origin/main >actual &&
+ 	cat >expected <<-\EOF &&
+ 	three
+ 	two
+ 	EOF
+-	test_cmp expected actual
++	test_cmp expected actual &&
++	grep \"fetch-info\".*\"deepen-since\":true shallow11/trace2_event
+ '
+ 
+ test_expect_success 'clone shallow since selects no commits' '
+@@ -987,13 +1000,16 @@ test_expect_success 'filtering by size' '
+ 	test_config -C server uploadpack.allowfilter 1 &&
+ 
+ 	test_create_repo client &&
+-	git -C client fetch-pack --filter=blob:limit=0 ../server HEAD &&
++	GIT_TRACE2_EVENT=$(pwd)/client/trace2_event \
++		git -C client fetch-pack --filter=blob:limit=0 ../server HEAD &&
+ 
+ 	# Ensure that object is not inadvertently fetched
+ 	commit=$(git -C server rev-parse HEAD) &&
+ 	blob=$(git hash-object server/one.t) &&
+ 	git -C client rev-list --objects --missing=allow-any "$commit" >oids &&
+-	! grep "$blob" oids
++	! grep "$blob" oids &&
++
++	grep \"fetch-info\".*\"filter\":\"blob:limit\" client/trace2_event
+ '
+ 
+ test_expect_success 'filtering by size has no effect if support for it is not advertised' '
+diff --git a/upload-pack.c b/upload-pack.c
+index 83f3d2651a..ea234ab6a4 100644
+--- a/upload-pack.c
++++ b/upload-pack.c
+@@ -33,6 +33,7 @@
+ #include "commit-reach.h"
+ #include "shallow.h"
+ #include "write-or-die.h"
++#include "json-writer.h"
+ 
+ /* Remember to update object flag allocation in object.h */
+ #define THEY_HAVE	(1u << 11)
+@@ -1552,6 +1553,30 @@ static int parse_have(const char *line, struct oid_array *haves)
+ 	return 0;
+ }
+ 
++static void trace2_fetch_info(struct upload_pack_data *data)
++{
++	struct json_writer jw = JSON_WRITER_INIT;
++
++	jw_object_begin(&jw, 0);
++	jw_object_intmax(&jw, "haves", data->haves.nr);
++	jw_object_intmax(&jw, "wants", data->want_obj.nr);
++	jw_object_intmax(&jw, "want-refs", data->wanted_refs.nr);
++	jw_object_intmax(&jw, "depth", data->depth);
++	jw_object_intmax(&jw, "shallows", data->shallows.nr);
++	jw_object_bool(&jw, "deepen-since", data->deepen_since);
++	jw_object_intmax(&jw, "deepen-not", data->deepen_not.nr);
++	jw_object_bool(&jw, "deepen-relative", data->deepen_relative);
++	if (data->filter_options.choice)
++		jw_object_string(&jw, "filter", list_object_filter_config_name(data->filter_options.choice));
++	else
++		jw_object_null(&jw, "filter");
++	jw_end(&jw);
++
++	trace2_data_json("upload-pack", the_repository, "fetch-info", &jw);
++
++	jw_release(&jw);
++}
++
+ static void process_args(struct packet_reader *request,
+ 			 struct upload_pack_data *data)
+ {
+@@ -1640,6 +1665,9 @@ static void process_args(struct packet_reader *request,
+ 
+ 	if (request->status != PACKET_READ_FLUSH)
+ 		die(_("expected flush after fetch arguments"));
++
++	if (trace2_is_enabled())
++		trace2_fetch_info(data);
+ }
+ 
+ static int process_haves(struct upload_pack_data *data, struct oid_array *common)
+-- 
+2.39.3 (Apple Git-145)
+

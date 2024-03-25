@@ -1,0 +1,8 @@
+#!/bin/bash
+
+git diff $(git rev-parse HEAD~1) $(git rev-parse HEAD)
+
+#diff gets the difference between two commits
+#git rev-parse HEAD~1 gets the commit hash of the file right before the HEAD;
+#which would be the most previous commit.
+#git rev-parse HEAD gets the commit hash of the HEAD, which is the current commit

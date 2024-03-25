@@ -1,0 +1,167 @@
+From a3795bf0e6abdd9094cf95de053d1d5b29f55d21 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 6 Dec 2022 15:07:47 +0000
+Subject: [PATCH 0537/2871] tests(mingw): avoid very slow `mingw_test_cmp`
+
+When Git's test suite uses `test_cmp`, it is not actually trying to
+compare binary files as the name `cmp` would suggest to users familiar
+with Unix' tools, but the tests instead verify that actual output
+matches the expected text.
+
+On Unix, `cmp` works well enough for Git's purposes because only Line
+Feed characters are used as line endings. However, on Windows, while
+most tools accept Line Feeds as line endings, many tools produce
+Carriage Return + Line Feed line endings, including some of the tools
+used by the test suite (which are therefore provided via Git for Windows
+SDK). Therefore, `cmp` would frequently fail merely due to different
+line endings.
+
+To accommodate for that, the `mingw_test_cmp` function was introduced
+into Git's test suite to perform a line-by-line comparison that ignores
+line endings. This function is a Bash function that is only used on
+Windows, everywhere else `cmp` is used.
+
+This is a double whammy because `cmp` is fast, and `mingw_test_cmp` is
+slow, even more so on Windows because it is a Bash script function, and
+Bash scripts are known to run particularly slowly on Windows due to
+Bash's need for the POSIX emulation layer provided by the MSYS2 runtime.
+
+The commit message of 32ed3314c104 (t5351: avoid using `test_cmp` for
+binary data, 2022-07-29) provides an illuminating account of the
+consequences: On Windows, the platform on which Git could really use all
+the help it can get to improve its performance, the time spent on one
+entire test script was reduced from half an hour to less than half a
+minute merely by avoiding a single call to `mingw_test_cmp` in but a
+single test case.
+
+Learning the lesson to avoid shell scripting wherever possible, the Git
+for Windows project implemented a minimal replacement for
+`mingw_test_cmp` in the form of a `test-tool` subcommand that parses the
+input files line by line, ignoring line endings, and compares them.
+Essentially the same thing as `mingw_test_cmp`, but implemented in
+C instead of Bash. This solution served the Git for Windows project
+well, over years.
+
+However, when this solution was finally upstreamed, the conclusion was
+reached that a change to use `git diff --no-index` instead of
+`mingw_test_cmp` was more easily reviewed and hence should be used
+instead.
+
+The reason why this approach was not even considered in Git for Windows
+is that in 2007, there was already a motion on the table to use Git's
+own diff machinery to perform comparisons in Git's test suite, but it
+was dismissed in https://lore.kernel.org/git/xmqqbkrpo9or.fsf@gitster.g/
+as undesirable because tests might potentially succeed due to bugs in
+the diff machinery when they should not succeed, and those bugs could
+therefore hide regressions that the tests try to prevent.
+
+By the time Git for Windows' `mingw-test-cmp` in C was finally
+contributed to the Git mailing list, reviewers agreed that the diff
+machinery had matured enough and should be used instead.
+
+When the concern was raised that the diff machinery, due to its
+complexity, would perform substantially worse than the test helper
+originally implemented in the Git for Windows project, a test
+demonstrated that these performance differences are well lost within the
+100+ minutes it takes to run Git's test suite on Windows.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/test-lib-functions.sh | 66 -----------------------------------------
+ t/test-lib.sh           |  2 +-
+ 2 files changed, 1 insertion(+), 67 deletions(-)
+
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index c6479f24eb..bb3c3ee36a 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1454,72 +1454,6 @@ test_skip_or_die () {
+ 	error "$2"
+ }
+ 
+-# The following mingw_* functions obey POSIX shell syntax, but are actually
+-# bash scripts, and are meant to be used only with bash on Windows.
+-
+-# A test_cmp function that treats LF and CRLF equal and avoids to fork
+-# diff when possible.
+-mingw_test_cmp () {
+-	# Read text into shell variables and compare them. If the results
+-	# are different, use regular diff to report the difference.
+-	local test_cmp_a= test_cmp_b=
+-
+-	# When text came from stdin (one argument is '-') we must feed it
+-	# to diff.
+-	local stdin_for_diff=
+-
+-	# Since it is difficult to detect the difference between an
+-	# empty input file and a failure to read the files, we go straight
+-	# to diff if one of the inputs is empty.
+-	if test -s "$1" && test -s "$2"
+-	then
+-		# regular case: both files non-empty
+-		mingw_read_file_strip_cr_ test_cmp_a <"$1"
+-		mingw_read_file_strip_cr_ test_cmp_b <"$2"
+-	elif test -s "$1" && test "$2" = -
+-	then
+-		# read 2nd file from stdin
+-		mingw_read_file_strip_cr_ test_cmp_a <"$1"
+-		mingw_read_file_strip_cr_ test_cmp_b
+-		stdin_for_diff='<<<"$test_cmp_b"'
+-	elif test "$1" = - && test -s "$2"
+-	then
+-		# read 1st file from stdin
+-		mingw_read_file_strip_cr_ test_cmp_a
+-		mingw_read_file_strip_cr_ test_cmp_b <"$2"
+-		stdin_for_diff='<<<"$test_cmp_a"'
+-	fi
+-	test -n "$test_cmp_a" &&
+-	test -n "$test_cmp_b" &&
+-	test "$test_cmp_a" = "$test_cmp_b" ||
+-	eval "diff -u \"\$@\" $stdin_for_diff"
+-}
+-
+-# $1 is the name of the shell variable to fill in
+-mingw_read_file_strip_cr_ () {
+-	# Read line-wise using LF as the line separator
+-	# and use IFS to strip CR.
+-	local line
+-	while :
+-	do
+-		if IFS=$'\r' read -r -d $'\n' line
+-		then
+-			# good
+-			line=$line$'\n'
+-		else
+-			# we get here at EOF, but also if the last line
+-			# was not terminated by LF; in the latter case,
+-			# some text was read
+-			if test -z "$line"
+-			then
+-				# EOF, really
+-				break
+-			fi
+-		fi
+-		eval "$1=\$$1\$line"
+-	done
+-}
+-
+ # Like "env FOO=BAR some-program", but run inside a subshell, which means
+ # it also works for shell functions (though those functions cannot impact
+ # the environment outside of the test_env invocation).
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 6ca68311eb..4064f508b3 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -1711,7 +1711,7 @@ case $uname_s in
+ 	test_set_prereq SED_STRIPS_CR
+ 	test_set_prereq GREP_STRIPS_CR
+ 	test_set_prereq WINDOWS
+-	GIT_TEST_CMP=mingw_test_cmp
++	GIT_TEST_CMP="GIT_DIR=/dev/null git diff --no-index --ignore-cr-at-eol --"
+ 	;;
+ *CYGWIN*)
+ 	test_set_prereq POSIXPERM
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,92 @@
+From 35898ad24d83317135d7fdad601dc17375ac373e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 15 Dec 2022 09:43:05 +0100
+Subject: [PATCH 0577/2871] Makefile: use sha1collisiondetection by default on
+ OSX and Darwin
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When the sha1collisiondetection library was added and made the default
+in [1] the interaction with APPLE_COMMON_CRYPTO added in [2] and [3]
+seems to have been missed. On modern OSX and Darwin we are able to use
+Apple's CommonCrypto both for SHA-1, and as a generic (but partial)
+OpenSSL replacement.
+
+This left OSX and Darwin without protection against the SHAttered
+attack when building Git in its default configuration.
+
+Let's also use sha1collisiondetection on OSX, to do so we'll need to
+split up the "APPLE_COMMON_CRYPTO" flag into that flag and a new
+"APPLE_COMMON_CRYPTO_SHA1".
+
+Because of this we can stop conflating whether we want to use Apple's
+CommonCrypto at all, and whether we want to use it for SHA-1.  This
+makes the CI recipe added in [4] simpler.
+
+1. e6b07da2780 (Makefile: make DC_SHA1 the default, 2017-03-17)
+2. 4dcd7732db0 (Makefile: add support for Apple CommonCrypto facility, 2013-05-19)
+3. 61067954ce1 (cache.h: eliminate SHA-1 deprecation warnings on Mac OS X, 2013-05-19)
+4. 1ad5c3df35a (ci: use DC_SHA1=YesPlease on osx-clang job for CI,
+   2022-10-20)
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile  | 10 ++++------
+ ci/lib.sh |  3 +--
+ 2 files changed, 5 insertions(+), 8 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index b258fdbed8..05f2b82177 100644
+--- a/Makefile
++++ b/Makefile
+@@ -511,10 +511,8 @@ include shared.mak
+ # Define BLK_SHA1 to make use of optimized C SHA-1 routines bundled
+ # with git (in the block-sha1/ directory).
+ #
+-# Define NO_APPLE_COMMON_CRYPTO on OSX to opt-out of using the
+-# "APPLE_COMMON_CRYPTO" backend for SHA-1, which is currently the
+-# default on that OS. On macOS 01.4 (Tiger) or older,
+-# NO_APPLE_COMMON_CRYPTO is defined by default.
++# Define APPLE_COMMON_CRYPTO_SHA1 to use Apple's CommonCrypto for
++# SHA-1.
+ #
+ # If don't enable any of the *_SHA1 settings in this section, Git will
+ # default to its built-in sha1collisiondetection library, which is a
+@@ -1912,7 +1910,7 @@ ifdef NO_POSIX_GOODIES
+ 	BASIC_CFLAGS += -DNO_POSIX_GOODIES
+ endif
+ 
+-ifdef APPLE_COMMON_CRYPTO
++ifdef APPLE_COMMON_CRYPTO_SHA1
+ 	# Apple CommonCrypto requires chunking
+ 	SHA1_MAX_BLOCK_SIZE = 1024L*1024L*1024L
+ endif
+@@ -1929,7 +1927,7 @@ ifdef BLK_SHA1
+ 	LIB_OBJS += block-sha1/sha1.o
+ 	BASIC_CFLAGS += -DSHA1_BLK
+ else
+-ifdef APPLE_COMMON_CRYPTO
++ifdef APPLE_COMMON_CRYPTO_SHA1
+ 	COMPAT_CFLAGS += -DCOMMON_DIGEST_FOR_OPENSSL
+ 	BASIC_CFLAGS += -DSHA1_APPLE
+ else
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 706e3ba7e9..db7105e8a8 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -258,8 +258,7 @@ macos-*)
+ 		MAKEFLAGS="$MAKEFLAGS PYTHON_PATH=$(which python3)"
+ 	else
+ 		MAKEFLAGS="$MAKEFLAGS PYTHON_PATH=$(which python2)"
+-		MAKEFLAGS="$MAKEFLAGS NO_APPLE_COMMON_CRYPTO=NoThanks"
+-		MAKEFLAGS="$MAKEFLAGS NO_OPENSSL=NoThanks"
++		MAKEFLAGS="$MAKEFLAGS APPLE_COMMON_CRYPTO_SHA1=Yes"
+ 	fi
+ 	;;
+ esac
+-- 
+2.39.3 (Apple Git-145)
+

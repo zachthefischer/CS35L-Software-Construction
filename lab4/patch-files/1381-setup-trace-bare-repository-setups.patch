@@ -1,0 +1,120 @@
+From e35f202b4503256db148ad61487fe13aa75960f2 Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Mon, 1 May 2023 10:30:37 -0700
+Subject: [PATCH 1381/2871] setup: trace bare repository setups
+
+safe.bareRepository=explicit is a safer default mode of operation, since
+it guards against the embedded bare repository attack [1]. Most end
+users don't use bare repositories directly, so they should be able to
+set safe.bareRepository=explicit, with the expectation that they can
+reenable bare repositories by specifying GIT_DIR or --git-dir.
+
+However, the user might use a tool that invokes Git on bare repositories
+without setting GIT_DIR (e.g. "go mod" will clone bare repositories
+[2]), so even if a user wanted to use safe.bareRepository=explicit, it
+wouldn't be feasible until their tools learned to set GIT_DIR.
+
+To make this transition easier, add a trace message to note when we
+attempt to set up a bare repository without setting GIT_DIR. This allows
+users and tool developers to audit which of their tools are problematic
+and report/fix the issue.  When they are sufficiently confident, they
+would switch over to "safe.bareRepository=explicit".
+
+Note that this uses trace2_data_string(), which isn't supported by the
+"normal" GIT_TRACE2 target, only _EVENT or _PERF.
+
+[1] https://lore.kernel.org/git/kl6lsfqpygsj.fsf@chooglen-macbookpro.roam.corp.google.com/
+[2] https://go.dev/ref/mod
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Josh Steadmon <steadmon@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ setup.c                         |  1 +
+ t/t0035-safe-bare-repository.sh | 32 +++++++++++++++++++++++++-------
+ 2 files changed, 26 insertions(+), 7 deletions(-)
+
+diff --git a/setup.c b/setup.c
+index 59abc16ba6..458582207e 100644
+--- a/setup.c
++++ b/setup.c
+@@ -1352,6 +1352,7 @@ static enum discovery_result setup_git_directory_gently_1(struct strbuf *dir,
+ 		}
+ 
+ 		if (is_git_directory(dir->buf)) {
++			trace2_data_string("setup", NULL, "implicit-bare-repository", dir->buf);
+ 			if (get_allowed_bare_repo() == ALLOWED_BARE_REPO_EXPLICIT)
+ 				return GIT_DIR_DISALLOWED_BARE;
+ 			if (!ensure_valid_ownership(NULL, NULL, dir->buf, report))
+diff --git a/t/t0035-safe-bare-repository.sh b/t/t0035-safe-bare-repository.sh
+index 11c15a48aa..038b8b788d 100755
+--- a/t/t0035-safe-bare-repository.sh
++++ b/t/t0035-safe-bare-repository.sh
+@@ -7,13 +7,26 @@ TEST_PASSES_SANITIZE_LEAK=true
+ 
+ pwd="$(pwd)"
+ 
+-expect_accepted () {
+-	git "$@" rev-parse --git-dir
++expect_accepted_implicit () {
++	test_when_finished 'rm "$pwd/trace.perf"' &&
++	GIT_TRACE2_PERF="$pwd/trace.perf" git "$@" rev-parse --git-dir &&
++	# Note: we're intentionally only checking that the bare repo has a
++	# directory *prefix* of $pwd
++	grep -F "implicit-bare-repository:$pwd" "$pwd/trace.perf"
++}
++
++expect_accepted_explicit () {
++	test_when_finished 'rm "$pwd/trace.perf"' &&
++	GIT_DIR="$1" GIT_TRACE2_PERF="$pwd/trace.perf" git rev-parse --git-dir &&
++	! grep -F "implicit-bare-repository:$pwd" "$pwd/trace.perf"
+ }
+ 
+ expect_rejected () {
+-	test_must_fail git "$@" rev-parse --git-dir 2>err &&
+-	grep -F "cannot use bare repository" err
++	test_when_finished 'rm "$pwd/trace.perf"' &&
++	test_env GIT_TRACE2_PERF="$pwd/trace.perf" \
++		test_must_fail git "$@" rev-parse --git-dir 2>err &&
++	grep -F "cannot use bare repository" err &&
++	grep -F "implicit-bare-repository:$pwd" "$pwd/trace.perf"
+ }
+ 
+ test_expect_success 'setup bare repo in worktree' '
+@@ -22,12 +35,13 @@ test_expect_success 'setup bare repo in worktree' '
+ '
+ 
+ test_expect_success 'safe.bareRepository unset' '
+-	expect_accepted -C outer-repo/bare-repo
++	test_unconfig --global safe.bareRepository &&
++	expect_accepted_implicit -C outer-repo/bare-repo
+ '
+ 
+ test_expect_success 'safe.bareRepository=all' '
+ 	test_config_global safe.bareRepository all &&
+-	expect_accepted -C outer-repo/bare-repo
++	expect_accepted_implicit -C outer-repo/bare-repo
+ '
+ 
+ test_expect_success 'safe.bareRepository=explicit' '
+@@ -47,7 +61,7 @@ test_expect_success 'safe.bareRepository in the repository' '
+ 
+ test_expect_success 'safe.bareRepository on the command line' '
+ 	test_config_global safe.bareRepository explicit &&
+-	expect_accepted -C outer-repo/bare-repo \
++	expect_accepted_implicit -C outer-repo/bare-repo \
+ 		-c safe.bareRepository=all
+ '
+ 
+@@ -60,4 +74,8 @@ test_expect_success 'safe.bareRepository in included file' '
+ 	expect_rejected -C outer-repo/bare-repo
+ '
+ 
++test_expect_success 'no trace when GIT_DIR is explicitly provided' '
++	expect_accepted_explicit "$pwd/outer-repo/bare-repo"
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

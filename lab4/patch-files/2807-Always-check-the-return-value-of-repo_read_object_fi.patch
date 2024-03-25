@@ -1,0 +1,138 @@
+From 568459bf5e97a4f61429e3bdd1f97b54b39a1383 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 5 Feb 2024 14:35:53 +0000
+Subject: [PATCH 2807/2871] Always check the return value of
+ `repo_read_object_file()`
+
+There are a couple of places in Git's source code where the return value
+is not checked. As a consequence, they are susceptible to segmentation
+faults.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bisect.c           |  3 +++
+ builtin/cat-file.c | 10 ++++++++--
+ builtin/grep.c     |  2 ++
+ builtin/notes.c    |  6 ++++--
+ combine-diff.c     |  2 ++
+ rerere.c           |  3 +++
+ 6 files changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/bisect.c b/bisect.c
+index 1be8e0a271..daa75a6065 100644
+--- a/bisect.c
++++ b/bisect.c
+@@ -159,6 +159,9 @@ static void show_list(const char *debug, int counted, int nr,
+ 		const char *subject_start;
+ 		int subject_len;
+ 
++		if (!buf)
++			die(_("unable to read %s"), oid_to_hex(&commit->object.oid));
++
+ 		fprintf(stderr, "%c%c%c ",
+ 			(commit_flags & TREESAME) ? ' ' : 'T',
+ 			(commit_flags & UNINTERESTING) ? 'U' : ' ',
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index ea8ad601ec..186c364277 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -222,6 +222,10 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
+ 								     &type,
+ 								     &size);
+ 				const char *target;
++
++				if (!buffer)
++					die(_("unable to read %s"), oid_to_hex(&oid));
++
+ 				if (!skip_prefix(buffer, "object ", &target) ||
+ 				    get_oid_hex(target, &blob_oid))
+ 					die("%s not a valid tag", oid_to_hex(&oid));
+@@ -417,6 +421,8 @@ static void print_object_or_die(struct batch_options *opt, struct expand_data *d
+ 
+ 		contents = repo_read_object_file(the_repository, oid, &type,
+ 						 &size);
++		if (!contents)
++			die("object %s disappeared", oid_to_hex(oid));
+ 
+ 		if (use_mailmap) {
+ 			size_t s = size;
+@@ -424,8 +430,6 @@ static void print_object_or_die(struct batch_options *opt, struct expand_data *d
+ 			size = cast_size_t_to_ulong(s);
+ 		}
+ 
+-		if (!contents)
+-			die("object %s disappeared", oid_to_hex(oid));
+ 		if (type != data->type)
+ 			die("object %s changed type!?", oid_to_hex(oid));
+ 		if (data->info.sizep && size != data->size && !use_mailmap)
+@@ -482,6 +486,8 @@ static void batch_object_write(const char *obj_name,
+ 
+ 			buf = repo_read_object_file(the_repository, &data->oid, &data->type,
+ 						    &data->size);
++			if (!buf)
++				die(_("unable to read %s"), oid_to_hex(&data->oid));
+ 			buf = replace_idents_using_mailmap(buf, &s);
+ 			data->size = cast_size_t_to_ulong(s);
+ 
+diff --git a/builtin/grep.c b/builtin/grep.c
+index fe78d4c98b..63d519c933 100644
+--- a/builtin/grep.c
++++ b/builtin/grep.c
+@@ -575,6 +575,8 @@ static int grep_cache(struct grep_opt *opt,
+ 
+ 			data = repo_read_object_file(the_repository, &ce->oid,
+ 						     &type, &size);
++			if (!data)
++				die(_("unable to read tree %s"), oid_to_hex(&ce->oid));
+ 			init_tree_desc(&tree, data, size);
+ 
+ 			hit |= grep_tree(opt, pathspec, &tree, &name, 0, 0);
+diff --git a/builtin/notes.c b/builtin/notes.c
+index 9f38863dd5..40543862d3 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -718,9 +718,11 @@ static int append_edit(int argc, const char **argv, const char *prefix)
+ 		struct strbuf buf = STRBUF_INIT;
+ 		char *prev_buf = repo_read_object_file(the_repository, note, &type, &size);
+ 
+-		if (prev_buf && size)
++		if (!prev_buf)
++			die(_("unable to read %s"), oid_to_hex(note));
++		if (size)
+ 			strbuf_add(&buf, prev_buf, size);
+-		if (d.buf.len && prev_buf && size)
++		if (d.buf.len && size)
+ 			append_separator(&buf);
+ 		strbuf_insert(&d.buf, 0, buf.buf, buf.len);
+ 
+diff --git a/combine-diff.c b/combine-diff.c
+index f90f442482..c5492809e9 100644
+--- a/combine-diff.c
++++ b/combine-diff.c
+@@ -338,6 +338,8 @@ static char *grab_blob(struct repository *r,
+ 		free_filespec(df);
+ 	} else {
+ 		blob = repo_read_object_file(r, oid, &type, size);
++		if (!blob)
++			die(_("unable to read %s"), oid_to_hex(oid));
+ 		if (type != OBJ_BLOB)
+ 			die("object '%s' is not a blob!", oid_to_hex(oid));
+ 	}
+diff --git a/rerere.c b/rerere.c
+index 09e1941285..5d79cc4211 100644
+--- a/rerere.c
++++ b/rerere.c
+@@ -975,6 +975,9 @@ static int handle_cache(struct index_state *istate,
+ 			mmfile[i].ptr = repo_read_object_file(the_repository,
+ 							      &ce->oid, &type,
+ 							      &size);
++			if (!mmfile[i].ptr)
++				die(_("unable to read %s"),
++				    oid_to_hex(&ce->oid));
+ 			mmfile[i].size = size;
+ 		}
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

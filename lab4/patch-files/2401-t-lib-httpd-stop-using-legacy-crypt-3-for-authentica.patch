@@ -1,0 +1,58 @@
+From 5d70afa5d81ee7bbd25e875512f9fc3824b096b6 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Nov 2023 09:17:04 +0100
+Subject: [PATCH 2401/2871] t/lib-httpd: stop using legacy crypt(3) for
+ authentication
+
+When setting up httpd for our tests, we also install a passwd and
+proxy-passwd file that contain the test user's credentials. These
+credentials currently use crypt(3) as the password encryption schema.
+
+This schema can be considered deprecated nowadays as it is not safe
+anymore. Quoting Apache httpd's documentation [1]:
+
+> Unix only. Uses the traditional Unix crypt(3) function with a
+> randomly-generated 32-bit salt (only 12 bits used) and the first 8
+> characters of the password. Insecure.
+
+This is starting to cause issues in modern Linux distributions. glibc
+has deprecated its libcrypt library that used to provide crypt(3) in
+favor of the libxcrypt library. This newer replacement provides a
+compile time switch to disable insecure password encryption schemata,
+which causes crypt(3) to always return `EINVAL`. The end result is that
+httpd tests that exercise authentication will fail on distros that use
+libxcrypt without these insecure encryption schematas.
+
+Regenerate the passwd files to instead use the default password
+encryption schema, which is md5. While it feels kind of funny that an
+MD5-based encryption schema should be more secure than anything else, it
+is the current default and supported by all platforms. Furthermore, it
+really doesn't matter all that much given that these files are only used
+for testing purposes anyway.
+
+[1]: https://httpd.apache.org/docs/2.4/misc/password_encryptions.html
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-httpd/passwd       | 2 +-
+ t/lib-httpd/proxy-passwd | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/lib-httpd/passwd b/t/lib-httpd/passwd
+index 99a34d6487..d9c122f348 100644
+--- a/t/lib-httpd/passwd
++++ b/t/lib-httpd/passwd
+@@ -1 +1 @@
+-user@host:xb4E8pqD81KQs
++user@host:$apr1$LGPmCZWj$9vxEwj5Z5GzQLBMxp3mCx1
+diff --git a/t/lib-httpd/proxy-passwd b/t/lib-httpd/proxy-passwd
+index 77c25138e0..2ad7705d9a 100644
+--- a/t/lib-httpd/proxy-passwd
++++ b/t/lib-httpd/proxy-passwd
+@@ -1 +1 @@
+-proxuser:2x7tAukjAED5M
++proxuser:$apr1$RxS6MLkD$DYsqQdflheq4GPNxzJpx5.
+-- 
+2.39.3 (Apple Git-145)
+

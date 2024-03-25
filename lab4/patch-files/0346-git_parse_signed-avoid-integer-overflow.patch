@@ -1,0 +1,54 @@
+From 14770cf0de218cc373e7d286b864f526e5ea2840 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 9 Nov 2022 14:16:28 +0000
+Subject: [PATCH 0346/2871] git_parse_signed(): avoid integer overflow
+
+git_parse_signed() checks that the absolute value of the parsed string
+is less than or equal to a caller supplied maximum value. When
+calculating the absolute value there is a integer overflow if `val ==
+INTMAX_MIN`. To fix this avoid negating `val` when it is negative by
+having separate overflow checks for positive and negative values.
+
+An alternative would be to special case INTMAX_MIN before negating `val`
+as it is always out of range. That would enable us to keep the existing
+code but I'm not sure that the current two-stage check is any clearer
+than the new version.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ config.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/config.c b/config.c
+index b7fb68026d..aad3e00341 100644
+--- a/config.c
++++ b/config.c
+@@ -1160,8 +1160,10 @@ static int git_parse_signed(const char *value, intmax_t *ret, intmax_t max)
+ 	if (value && *value) {
+ 		char *end;
+ 		intmax_t val;
+-		uintmax_t uval;
+-		uintmax_t factor;
++		intmax_t factor;
++
++		if (max < 0)
++			BUG("max must be a positive integer");
+ 
+ 		errno = 0;
+ 		val = strtoimax(value, &end, 0);
+@@ -1176,9 +1178,8 @@ static int git_parse_signed(const char *value, intmax_t *ret, intmax_t max)
+ 			errno = EINVAL;
+ 			return 0;
+ 		}
+-		uval = val < 0 ? -val : val;
+-		if (unsigned_mult_overflows(factor, uval) ||
+-		    factor * uval > max) {
++		if ((val < 0 && -max / factor > val) ||
++		    (val > 0 && max / factor < val)) {
+ 			errno = ERANGE;
+ 			return 0;
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

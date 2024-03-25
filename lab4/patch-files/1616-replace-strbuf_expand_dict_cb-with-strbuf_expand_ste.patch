@@ -1,0 +1,182 @@
+From 39dbd49b4138b6cdc9fb73e317d4e9f06df0c5c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 17 Jun 2023 22:42:26 +0200
+Subject: [PATCH 1616/2871] replace strbuf_expand_dict_cb() with
+ strbuf_expand_step()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Avoid the overhead of setting up a dictionary and passing it via
+strbuf_expand() to strbuf_expand_dict_cb() by using strbuf_expand_step()
+in a loop instead.  It requires explicit handling of %% and unrecognized
+placeholders, but is more direct and simpler overall, and expands only
+on demand.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ convert.c  | 22 ++++++++++------------
+ ll-merge.c | 32 ++++++++++++++++++--------------
+ strbuf.c   | 16 ----------------
+ strbuf.h   | 14 --------------
+ 4 files changed, 28 insertions(+), 56 deletions(-)
+
+diff --git a/convert.c b/convert.c
+index 9ee79fe469..455d05cf6b 100644
+--- a/convert.c
++++ b/convert.c
+@@ -633,23 +633,21 @@ static int filter_buffer_or_fd(int in UNUSED, int out, void *data)
+ 	 */
+ 	struct child_process child_process = CHILD_PROCESS_INIT;
+ 	struct filter_params *params = (struct filter_params *)data;
++	const char *format = params->cmd;
+ 	int write_err, status;
+ 
+ 	/* apply % substitution to cmd */
+ 	struct strbuf cmd = STRBUF_INIT;
+-	struct strbuf path = STRBUF_INIT;
+-	struct strbuf_expand_dict_entry dict[] = {
+-		{ "f", NULL, },
+-		{ NULL, NULL, },
+-	};
+-
+-	/* quote the path to preserve spaces, etc. */
+-	sq_quote_buf(&path, params->path);
+-	dict[0].value = path.buf;
+ 
+-	/* expand all %f with the quoted path */
+-	strbuf_expand(&cmd, params->cmd, strbuf_expand_dict_cb, &dict);
+-	strbuf_release(&path);
++	/* expand all %f with the quoted path; quote to preserve space, etc. */
++	while (strbuf_expand_step(&cmd, &format)) {
++		if (skip_prefix(format, "%", &format))
++			strbuf_addch(&cmd, '%');
++		else if (skip_prefix(format, "f", &format))
++			sq_quote_buf(&cmd, params->path);
++		else
++			strbuf_addch(&cmd, '%');
++	}
+ 
+ 	strvec_push(&child_process.args, cmd.buf);
+ 	child_process.use_shell = 1;
+diff --git a/ll-merge.c b/ll-merge.c
+index 07ec16e8e5..b307ad293c 100644
+--- a/ll-merge.c
++++ b/ll-merge.c
+@@ -192,24 +192,15 @@ static enum ll_merge_result ll_ext_merge(const struct ll_merge_driver *fn,
+ 			const struct ll_merge_options *opts,
+ 			int marker_size)
+ {
+-	char temp[4][50];
++	char temp[3][50];
+ 	struct strbuf cmd = STRBUF_INIT;
+-	struct strbuf_expand_dict_entry dict[6];
+-	struct strbuf path_sq = STRBUF_INIT;
++	const char *format = fn->cmdline;
+ 	struct child_process child = CHILD_PROCESS_INIT;
+ 	int status, fd, i;
+ 	struct stat st;
+ 	enum ll_merge_result ret;
+ 	assert(opts);
+ 
+-	sq_quote_buf(&path_sq, path);
+-	dict[0].placeholder = "O"; dict[0].value = temp[0];
+-	dict[1].placeholder = "A"; dict[1].value = temp[1];
+-	dict[2].placeholder = "B"; dict[2].value = temp[2];
+-	dict[3].placeholder = "L"; dict[3].value = temp[3];
+-	dict[4].placeholder = "P"; dict[4].value = path_sq.buf;
+-	dict[5].placeholder = NULL; dict[5].value = NULL;
+-
+ 	if (!fn->cmdline)
+ 		die("custom merge driver %s lacks command line.", fn->name);
+ 
+@@ -218,9 +209,23 @@ static enum ll_merge_result ll_ext_merge(const struct ll_merge_driver *fn,
+ 	create_temp(orig, temp[0], sizeof(temp[0]));
+ 	create_temp(src1, temp[1], sizeof(temp[1]));
+ 	create_temp(src2, temp[2], sizeof(temp[2]));
+-	xsnprintf(temp[3], sizeof(temp[3]), "%d", marker_size);
+ 
+-	strbuf_expand(&cmd, fn->cmdline, strbuf_expand_dict_cb, &dict);
++	while (strbuf_expand_step(&cmd, &format)) {
++		if (skip_prefix(format, "%", &format))
++			strbuf_addch(&cmd, '%');
++		else if (skip_prefix(format, "O", &format))
++			strbuf_addstr(&cmd, temp[0]);
++		else if (skip_prefix(format, "A", &format))
++			strbuf_addstr(&cmd, temp[1]);
++		else if (skip_prefix(format, "B", &format))
++			strbuf_addstr(&cmd, temp[2]);
++		else if (skip_prefix(format, "L", &format))
++			strbuf_addf(&cmd, "%d", marker_size);
++		else if (skip_prefix(format, "P", &format))
++			sq_quote_buf(&cmd, path);
++		else
++			strbuf_addch(&cmd, '%');
++	}
+ 
+ 	child.use_shell = 1;
+ 	strvec_push(&child.args, cmd.buf);
+@@ -242,7 +247,6 @@ static enum ll_merge_result ll_ext_merge(const struct ll_merge_driver *fn,
+ 	for (i = 0; i < 3; i++)
+ 		unlink_or_warn(temp[i]);
+ 	strbuf_release(&cmd);
+-	strbuf_release(&path_sq);
+ 	ret = (status > 0) ? LL_MERGE_CONFLICT : status;
+ 	return ret;
+ }
+diff --git a/strbuf.c b/strbuf.c
+index a90b597da1..972366b410 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -468,22 +468,6 @@ size_t strbuf_expand_literal_cb(struct strbuf *sb,
+ 	return 0;
+ }
+ 
+-size_t strbuf_expand_dict_cb(struct strbuf *sb, const char *placeholder,
+-		void *context)
+-{
+-	struct strbuf_expand_dict_entry *e = context;
+-	size_t len;
+-
+-	for (; e->placeholder && (len = strlen(e->placeholder)); e++) {
+-		if (!strncmp(placeholder, e->placeholder, len)) {
+-			if (e->value)
+-				strbuf_addstr(sb, e->value);
+-			return len;
+-		}
+-	}
+-	return 0;
+-}
+-
+ void strbuf_addbuf_percentquote(struct strbuf *dst, const struct strbuf *src)
+ {
+ 	size_t i, len = src->len;
+diff --git a/strbuf.h b/strbuf.h
+index a189f12b84..e293117f07 100644
+--- a/strbuf.h
++++ b/strbuf.h
+@@ -357,20 +357,6 @@ size_t strbuf_expand_literal_cb(struct strbuf *sb,
+ 				const char *placeholder,
+ 				void *context);
+ 
+-/**
+- * Used as callback for `strbuf_expand()`, expects an array of
+- * struct strbuf_expand_dict_entry as context, i.e. pairs of
+- * placeholder and replacement string.  The array needs to be
+- * terminated by an entry with placeholder set to NULL.
+- */
+-struct strbuf_expand_dict_entry {
+-	const char *placeholder;
+-	const char *value;
+-};
+-size_t strbuf_expand_dict_cb(struct strbuf *sb,
+-			     const char *placeholder,
+-			     void *context);
+-
+ /**
+  * If the string pointed to by `formatp` contains a percent sign ("%"),
+  * advance it to point to the character following the next one and
+-- 
+2.39.3 (Apple Git-145)
+

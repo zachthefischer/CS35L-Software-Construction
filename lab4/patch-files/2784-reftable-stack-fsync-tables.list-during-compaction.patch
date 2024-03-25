@@ -1,0 +1,48 @@
+From 7fa52fdad5065382f2b27b14cc0ecd225ea0ce4d Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 30 Jan 2024 06:22:47 +0100
+Subject: [PATCH 2784/2871] reftable/stack: fsync "tables.list" during
+ compaction
+
+In 1df18a1c9a (reftable: honor core.fsync, 2024-01-23), we have added
+code to fsync both newly written reftables as well as "tables.list" to
+disk. But there are two code paths where "tables.list" is being written:
+
+  - When appending a new table due to a normal ref update.
+
+  - When compacting a range of tables during compaction.
+
+We have only addressed the former code path, but do not yet sync the new
+"tables.list" file in the latter. Fix this omission.
+
+Note that we are not yet adding any tests. These tests will be added
+once the "reftable" backend has been upstreamed.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index ab295341cc..01d05933f6 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -1018,6 +1018,14 @@ static int stack_compact_range(struct reftable_stack *st, int first, int last,
+ 		unlink(new_table_path.buf);
+ 		goto done;
+ 	}
++
++	err = fsync_component(FSYNC_COMPONENT_REFERENCE, lock_file_fd);
++	if (err < 0) {
++		err = REFTABLE_IO_ERROR;
++		unlink(new_table_path.buf);
++		goto done;
++	}
++
+ 	err = close(lock_file_fd);
+ 	lock_file_fd = -1;
+ 	if (err < 0) {
+-- 
+2.39.3 (Apple Git-145)
+

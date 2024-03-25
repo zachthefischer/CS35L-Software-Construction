@@ -1,0 +1,83 @@
+From c08645b353514fe14dbd62cf52afd49d0e88146b Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 20 Mar 2023 11:26:52 +0000
+Subject: [PATCH 1071/2871] commit-graph: introduce
+ `ensure_generations_valid()`
+
+Use the just-introduced compute_reachable_generation_numbers_1() to
+implement a function which dynamically computes topological levels (or
+corrected commit dates) for out-of-graph commits.
+
+This will be useful for the ahead-behind algorithm we are about to
+introduce, which needs accurate topological levels on _all_ commits
+reachable from the tips in order to avoid over-counting.
+
+Co-authored-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 29 +++++++++++++++++++++++++++++
+ commit-graph.h |  8 ++++++++
+ 2 files changed, 37 insertions(+)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 63a56483cf..172e679db1 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -1604,6 +1604,35 @@ static void compute_generation_numbers(struct write_commit_graph_context *ctx)
+ 	stop_progress(&ctx->progress);
+ }
+ 
++static void set_generation_in_graph_data(struct commit *c, timestamp_t t,
++					 void *data)
++{
++	commit_graph_data_at(c)->generation = t;
++}
++
++/*
++ * After this method, all commits reachable from those in the given
++ * list will have non-zero, non-infinite generation numbers.
++ */
++void ensure_generations_valid(struct repository *r,
++			      struct commit **commits, size_t nr)
++{
++	int generation_version = get_configured_generation_version(r);
++	struct packed_commit_list list = {
++		.list = commits,
++		.alloc = nr,
++		.nr = nr,
++	};
++	struct compute_generation_info info = {
++		.r = r,
++		.commits = &list,
++		.get_generation = get_generation_from_graph_data,
++		.set_generation = set_generation_in_graph_data,
++	};
++
++	compute_reachable_generation_numbers(&info, generation_version);
++}
++
+ static void trace2_bloom_filter_write_statistics(struct write_commit_graph_context *ctx)
+ {
+ 	trace2_data_intmax("commit-graph", ctx->r, "filter-computed",
+diff --git a/commit-graph.h b/commit-graph.h
+index 37faee6b66..73e182ab2d 100644
+--- a/commit-graph.h
++++ b/commit-graph.h
+@@ -190,4 +190,12 @@ struct commit_graph_data {
+  */
+ timestamp_t commit_graph_generation(const struct commit *);
+ uint32_t commit_graph_position(const struct commit *);
++
++/*
++ * After this method, all commits reachable from those in the given
++ * list will have non-zero, non-infinite generation numbers.
++ */
++void ensure_generations_valid(struct repository *r,
++			      struct commit **commits, size_t nr);
++
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

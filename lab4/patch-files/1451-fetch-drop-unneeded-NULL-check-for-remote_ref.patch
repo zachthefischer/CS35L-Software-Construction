@@ -1,0 +1,38 @@
+From 6bc7a37e79876092b42a89156a8c24d0a60bd672 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 17 May 2023 13:48:46 +0200
+Subject: [PATCH 1451/2871] fetch: drop unneeded NULL-check for `remote_ref`
+
+Drop the `NULL` check for `remote_ref` in `update_local_ref()`. The
+function only has a single caller, and that caller always passes in a
+non-`NULL` value.
+
+This fixes a false positive in Coverity.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 9147b700e5..f268322e6f 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -953,11 +953,10 @@ static int update_local_ref(struct ref *ref,
+ 		 * Base this on the remote's ref name, as it's
+ 		 * more likely to follow a standard layout.
+ 		 */
+-		const char *name = remote_ref ? remote_ref->name : "";
+-		if (starts_with(name, "refs/tags/")) {
++		if (starts_with(remote_ref->name, "refs/tags/")) {
+ 			msg = "storing tag";
+ 			what = _("[new tag]");
+-		} else if (starts_with(name, "refs/heads/")) {
++		} else if (starts_with(remote_ref->name, "refs/heads/")) {
+ 			msg = "storing head";
+ 			what = _("[new branch]");
+ 		} else {
+-- 
+2.39.3 (Apple Git-145)
+

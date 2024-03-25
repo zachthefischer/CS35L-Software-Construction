@@ -1,0 +1,76 @@
+From 835950bd19260426f664a9b0164c580db9f9aacb Mon Sep 17 00:00:00 2001
+From: Han Young <hanyang.tony@bytedance.com>
+Date: Fri, 21 Jul 2023 11:57:58 +0800
+Subject: [PATCH 1838/2871] blame: allow --contents to work with bare repo
+
+The --contents option can be used with git blame to blame the file
+as if it had the contents from the specified file. Since 1a3119ed
+(blame: allow --contents to work with non-HEAD commit, 2023-03-24),
+the --contents option can work with non-HEAD commit. However, if you
+try to use --contents in a bare repository, you get the following
+error:
+
+    fatal: this operation must be run in a work tree
+
+This is because before trying to generate a fake working tree
+commit, we always call setup_work_tree(). But in a bare repo,
+working tree is not available. The call to setup_work_tree is used
+to prepare the reading of the blamed file in the working tree, which
+isn't necessary if we are reading the contents from the specific
+file instead of the file in the working tree.
+
+Add a check in setup_scoreboard to skip setup_work_tree if we are
+reading from the file specified in --contents.
+
+This enables us to use --contents in a bare repo. This is a nice
+addition on top of 1a3119ed, having a working tree to use --contents
+is optional.
+
+Add test for the --contents option with bare repo to the
+annotate-tests.sh test script.
+
+Signed-off-by: Han Young <hanyang.tony@bytedance.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ blame.c             | 4 +++-
+ t/annotate-tests.sh | 9 +++++++++
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/blame.c b/blame.c
+index d12bd9f97b..141756975b 100644
+--- a/blame.c
++++ b/blame.c
+@@ -2806,7 +2806,9 @@ void setup_scoreboard(struct blame_scoreboard *sb,
+ 			parent_oid = &head_oid;
+ 		}
+ 
+-		setup_work_tree();
++		if (!sb->contents_from)
++			setup_work_tree();
++
+ 		sb->final = fake_working_tree_commit(sb->repo,
+ 						     &sb->revs->diffopt,
+ 						     sb->path, sb->contents_from,
+diff --git a/t/annotate-tests.sh b/t/annotate-tests.sh
+index 2ef70235b1..5e21e84f38 100644
+--- a/t/annotate-tests.sh
++++ b/t/annotate-tests.sh
+@@ -83,6 +83,15 @@ test_expect_success 'blame with --contents' '
+ 	check_count --contents=file A 2
+ '
+ 
++test_expect_success 'blame with --contents in a bare repo' '
++	git clone --bare . bare-contents.git &&
++	(
++		cd bare-contents.git &&
++		echo "1A quick brown fox jumps over the" >contents &&
++		check_count --contents=contents A 1
++	)
++'
++
+ test_expect_success 'blame with --contents changed' '
+ 	echo "1A quick brown fox jumps over the" >contents &&
+ 	echo "another lazy dog" >>contents &&
+-- 
+2.39.3 (Apple Git-145)
+

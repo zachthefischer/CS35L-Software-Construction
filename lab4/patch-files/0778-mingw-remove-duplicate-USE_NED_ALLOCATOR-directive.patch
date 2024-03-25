@@ -1,0 +1,34 @@
+From c0b50458b95e33023a9d57cd78dae784ff4b5489 Mon Sep 17 00:00:00 2001
+From: Harshil-Jani <harshiljani2002@gmail.com>
+Date: Thu, 2 Feb 2023 03:51:37 +0000
+Subject: [PATCH 0778/2871] mingw: remove duplicate `USE_NED_ALLOCATOR`
+ directive
+
+nedalloc was added to fix the slowness of memory allocator. Here
+specifically for the MSys2 build there seems to be a duplication of
+USE_NED_ALLOCATOR directive. So this patch intends to remove the
+duplicate USE_NED_ALLOCATOR and keeping it only into the MSys2 config
+section so it still uses the nedalloc.
+
+Signed-off-by: Harshil-Jani <harshiljani2002@gmail.com>
+Acked-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.mak.uname | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/config.mak.uname b/config.mak.uname
+index d63629fe80..377667c4bb 100644
+--- a/config.mak.uname
++++ b/config.mak.uname
+@@ -652,7 +652,6 @@ ifeq ($(uname_S),MINGW)
+ 	USE_WIN32_IPC = YesPlease
+ 	USE_WIN32_MMAP = YesPlease
+ 	MMAP_PREVENTS_DELETE = UnfortunatelyYes
+-	USE_NED_ALLOCATOR = YesPlease
+ 	UNRELIABLE_FSTAT = UnfortunatelyYes
+ 	OBJECT_CREATION_USES_RENAMES = UnfortunatelyNeedsTo
+ 	NO_REGEX = YesPlease
+-- 
+2.39.3 (Apple Git-145)
+

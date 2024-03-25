@@ -1,0 +1,105 @@
+From f2d3bf178aaf4e590f3618d657e14aceb44514f0 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 13 Sep 2023 15:17:51 -0400
+Subject: [PATCH 2108/2871] builtin/repack.c: extract redundant pack cleanup
+ for existing packs
+
+To remove redundant packs at the end of a repacking operation, Git uses
+its `remove_redundant_pack()` function in a loop over the set of
+pre-existing, non-kept packs.
+
+In a later commit, we will split this list into two, one for
+pre-existing cruft pack(s), and another for non-cruft pack(s). Prepare
+for this by factoring out the routine to loop over and delete redundant
+packs into its own function.
+
+Instead of calling `remove_redundant_pack()` directly, we now will call
+`remove_redundant_existing_packs()`, which itself dispatches a call to
+`remove_redundant_packs_1()`. Note that the geometric repacking code
+will still call `remove_redundant_pack()` directly, but see the previous
+commit for more details.
+
+Having `remove_redundant_packs_1()` exist as a separate function may
+seem like overkill in this patch. However, a later patch will call
+`remove_redundant_packs_1()` once over two separate lists, so this
+refactoring sets us up for that.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 45 ++++++++++++++++++++++++++++-----------------
+ 1 file changed, 28 insertions(+), 17 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index d3e6326bb9..f6717e334c 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -135,6 +135,33 @@ static void mark_packs_for_deletion(struct existing_packs *existing,
+ 	mark_packs_for_deletion_1(names, &existing->non_kept_packs);
+ }
+ 
++static void remove_redundant_pack(const char *dir_name, const char *base_name)
++{
++	struct strbuf buf = STRBUF_INIT;
++	struct multi_pack_index *m = get_local_multi_pack_index(the_repository);
++	strbuf_addf(&buf, "%s.pack", base_name);
++	if (m && midx_contains_pack(m, buf.buf))
++		clear_midx_file(the_repository);
++	strbuf_insertf(&buf, 0, "%s/", dir_name);
++	unlink_pack_path(buf.buf, 1);
++	strbuf_release(&buf);
++}
++
++static void remove_redundant_packs_1(struct string_list *packs)
++{
++	struct string_list_item *item;
++	for_each_string_list_item(item, packs) {
++		if (!((uintptr_t)item->util & DELETE_PACK))
++			continue;
++		remove_redundant_pack(packdir, item->string);
++	}
++}
++
++static void remove_redundant_existing_packs(struct existing_packs *existing)
++{
++	remove_redundant_packs_1(&existing->non_kept_packs);
++}
++
+ static void existing_packs_release(struct existing_packs *existing)
+ {
+ 	string_list_clear(&existing->kept_packs, 0);
+@@ -184,18 +211,6 @@ static void collect_pack_filenames(struct existing_packs *existing,
+ 	strbuf_release(&buf);
+ }
+ 
+-static void remove_redundant_pack(const char *dir_name, const char *base_name)
+-{
+-	struct strbuf buf = STRBUF_INIT;
+-	struct multi_pack_index *m = get_local_multi_pack_index(the_repository);
+-	strbuf_addf(&buf, "%s.pack", base_name);
+-	if (m && midx_contains_pack(m, buf.buf))
+-		clear_midx_file(the_repository);
+-	strbuf_insertf(&buf, 0, "%s/", dir_name);
+-	unlink_pack_path(buf.buf, 1);
+-	strbuf_release(&buf);
+-}
+-
+ static void prepare_pack_objects(struct child_process *cmd,
+ 				 const struct pack_objects_args *args,
+ 				 const char *out)
+@@ -1221,11 +1236,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 
+ 	if (delete_redundant) {
+ 		int opts = 0;
+-		for_each_string_list_item(item, &existing.non_kept_packs) {
+-			if (!((uintptr_t)item->util & DELETE_PACK))
+-				continue;
+-			remove_redundant_pack(packdir, item->string);
+-		}
++		remove_redundant_existing_packs(&existing);
+ 
+ 		if (geometry.split_factor)
+ 			geometry_remove_redundant_packs(&geometry, &names,
+-- 
+2.39.3 (Apple Git-145)
+

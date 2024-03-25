@@ -1,0 +1,81 @@
+From 7b6555ab8d166545499e1f504d7b60cbd7cd8a0f Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 30 Mar 2023 15:27:38 -0400
+Subject: [PATCH 1179/2871] tests: run internal chain-linter under "make test"
+
+Since 69b9924b875 (t/Makefile: teach `make test` and `make prove` to run
+chainlint.pl, 2022-09-01), we run a single chainlint.pl process for all
+scripts, and then instruct each individual script to run with the
+equivalent of --no-chain-lint, which tells them not to redundantly run
+the chainlint script themselves.
+
+However, this also disables the internal linter run within the shell by
+eval-ing "(exit 117) && $1" and confirming we get code 117. In theory
+the external linter produces a superset of complaints, and we don't need
+the internal one anymore. However, we know there is at least one case
+where they differ. A test like:
+
+	test_expect_success 'should fail linter' '
+		false &&
+		sleep 2 &
+		pid=$! &&
+		kill $pid
+	'
+
+is buggy (it ignores the failure from "false", because it is
+backgrounded along with the sleep). The internal linter catches this,
+but the external one doesn't (and teaching it to do so is complicated[1]).
+So not only does "make test" miss this problem, but it's doubly
+confusing because running the script standalone does complain.
+
+Let's teach the suppression in the Makefile to only turn off the
+external linter (which we know is redundant, as it was already run) and
+leave the internal one intact.
+
+I've used a new environment variable to do this here, and intentionally
+did not add a "--no-ext-chain-lint" option. This is an internal
+optimization used by the Makefile, and not something that ordinary users
+would need to tweak.
+
+[1] For discussion of chainlint.pl and this case, see:
+    https://lore.kernel.org/git/CAPig+cQtLFX4PgXyyK_AAkCvg4Aw2RAC5MmLbib-aHHgTBcDuw@mail.gmail.com/
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/Makefile    | 4 ++--
+ t/test-lib.sh | 3 ++-
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/t/Makefile b/t/Makefile
+index 2c2b252240..fd7f61cea8 100644
+--- a/t/Makefile
++++ b/t/Makefile
+@@ -44,8 +44,8 @@ CHAINLINT = '$(PERL_PATH_SQ)' chainlint.pl
+ 
+ # `test-chainlint` (which is a dependency of `test-lint`, `test` and `prove`)
+ # checks all tests in all scripts via a single invocation, so tell individual
+-# scripts not to "chainlint" themselves
+-CHAINLINTSUPPRESS = GIT_TEST_CHAIN_LINT=0 && export GIT_TEST_CHAIN_LINT &&
++# scripts not to run the external "chainlint.pl" script themselves
++CHAINLINTSUPPRESS = GIT_TEST_EXT_CHAIN_LINT=0 && export GIT_TEST_EXT_CHAIN_LINT &&
+ 
+ all: $(DEFAULT_TEST_TARGET)
+ 
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 62136caee5..0978956637 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -1593,7 +1593,8 @@ then
+ 	BAIL_OUT_ENV_NEEDS_SANITIZE_LEAK "GIT_TEST_SANITIZE_LEAK_LOG=true"
+ fi
+ 
+-if test "${GIT_TEST_CHAIN_LINT:-1}" != 0
++if test "${GIT_TEST_CHAIN_LINT:-1}" != 0 &&
++   test "${GIT_TEST_EXT_CHAIN_LINT:-1}" != 0
+ then
+ 	"$PERL_PATH" "$TEST_DIRECTORY/chainlint.pl" "$0" ||
+ 		BUG "lint error (see '?!...!? annotations above)"
+-- 
+2.39.3 (Apple Git-145)
+

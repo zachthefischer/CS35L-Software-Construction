@@ -1,0 +1,132 @@
+From 17194b195d5db1cfd19af57e817c29bd3fa75c02 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Fri, 6 Jan 2023 16:31:56 +0000
+Subject: [PATCH 0634/2871] features: feature.manyFiles implies fast index
+ writes
+
+The recent addition of the index.skipHash config option allows index
+writes to speed up by skipping the hash computation for the trailing
+checksum. This is particularly critical for repositories with many files
+at HEAD, so add this config option to two cases where users in that
+scenario may opt-in to such behavior:
+
+ 1. The feature.manyFiles config option enables some options that are
+    helpful for repositories with many files at HEAD.
+
+ 2. 'scalar register' and 'scalar reconfigure' set config options that
+    optimize for large repositories.
+
+In both of these cases, set index.skipHash=true to gain this
+speedup. Add tests that demonstrate the proper way that
+index.skipHash=true can override feature.manyFiles=true.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/feature.txt |  5 +++++
+ read-cache.c                     |  3 ++-
+ repo-settings.c                  |  2 ++
+ repository.h                     |  1 +
+ scalar.c                         |  1 +
+ t/t1600-index.sh                 | 11 +++++++++++
+ 6 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/config/feature.txt b/Documentation/config/feature.txt
+index 95975e5091..e52bc6b858 100644
+--- a/Documentation/config/feature.txt
++++ b/Documentation/config/feature.txt
+@@ -23,6 +23,11 @@ feature.manyFiles::
+ 	working directory. With many files, commands such as `git status` and
+ 	`git checkout` may be slow and these new defaults improve performance:
+ +
++* `index.skipHash=true` speeds up index writes by not computing a trailing
++  checksum. Note that this will cause Git versions earlier than 2.13.0 to
++  refuse to parse the index and Git versions earlier than 2.40.0 will report
++  a corrupted index during `git fsck`.
+++
+ * `index.version=4` enables path-prefix compression in the index.
+ +
+ * `core.untrackedCache=true` enables the untracked cache. This setting assumes
+diff --git a/read-cache.c b/read-cache.c
+index d73a81e41a..feefa0f68b 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -2927,7 +2927,8 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
+ 
+ 	f = hashfd(tempfile->fd, tempfile->filename.buf);
+ 
+-	repo_config_get_bool(r, "index.skiphash", &f->skip_hash);
++	prepare_repo_settings(r);
++	f->skip_hash = r->settings.index_skip_hash;
+ 
+ 	for (i = removed = extended = 0; i < entries; i++) {
+ 		if (cache[i]->ce_flags & CE_REMOVE)
+diff --git a/repo-settings.c b/repo-settings.c
+index 3021921c53..3dbd3f0e2e 100644
+--- a/repo-settings.c
++++ b/repo-settings.c
+@@ -47,6 +47,7 @@ void prepare_repo_settings(struct repository *r)
+ 	}
+ 	if (manyfiles) {
+ 		r->settings.index_version = 4;
++		r->settings.index_skip_hash = 1;
+ 		r->settings.core_untracked_cache = UNTRACKED_CACHE_WRITE;
+ 	}
+ 
+@@ -61,6 +62,7 @@ void prepare_repo_settings(struct repository *r)
+ 	repo_cfg_bool(r, "pack.usesparse", &r->settings.pack_use_sparse, 1);
+ 	repo_cfg_bool(r, "core.multipackindex", &r->settings.core_multi_pack_index, 1);
+ 	repo_cfg_bool(r, "index.sparse", &r->settings.sparse_index, 0);
++	repo_cfg_bool(r, "index.skiphash", &r->settings.index_skip_hash, r->settings.index_skip_hash);
+ 
+ 	/*
+ 	 * The GIT_TEST_MULTI_PACK_INDEX variable is special in that
+diff --git a/repository.h b/repository.h
+index 6c461c5b9d..e8c67ffe16 100644
+--- a/repository.h
++++ b/repository.h
+@@ -42,6 +42,7 @@ struct repo_settings {
+ 	struct fsmonitor_settings *fsmonitor; /* lazily loaded */
+ 
+ 	int index_version;
++	int index_skip_hash;
+ 	enum untracked_cache_setting core_untracked_cache;
+ 
+ 	int pack_use_sparse;
+diff --git a/scalar.c b/scalar.c
+index 6c52243cdf..b49bb8c24e 100644
+--- a/scalar.c
++++ b/scalar.c
+@@ -143,6 +143,7 @@ static int set_recommended_config(int reconfigure)
+ 		{ "credential.validate", "false", 1 }, /* GCM4W-only */
+ 		{ "gc.auto", "0", 1 },
+ 		{ "gui.GCWarning", "false", 1 },
++		{ "index.skipHash", "false", 1 },
+ 		{ "index.threads", "true", 1 },
+ 		{ "index.version", "4", 1 },
+ 		{ "merge.stat", "false", 1 },
+diff --git a/t/t1600-index.sh b/t/t1600-index.sh
+index 2f792bb8ff..0ebbae1305 100755
+--- a/t/t1600-index.sh
++++ b/t/t1600-index.sh
+@@ -73,6 +73,17 @@ test_expect_success 'index.skipHash config option' '
+ 	test_cmp expect hash &&
+ 	git fsck &&
+ 
++	rm -f .git/index &&
++	git -c feature.manyFiles=true add a &&
++	test_trailing_hash .git/index >hash &&
++	cmp expect hash &&
++
++	rm -f .git/index &&
++	git -c feature.manyFiles=true \
++	    -c index.skipHash=false add a &&
++	test_trailing_hash .git/index >hash &&
++	! cmp expect hash &&
++
+ 	test_commit start &&
+ 	git -c protocol.file.allow=always submodule add ./ sub &&
+ 	git config index.skipHash false &&
+-- 
+2.39.3 (Apple Git-145)
+

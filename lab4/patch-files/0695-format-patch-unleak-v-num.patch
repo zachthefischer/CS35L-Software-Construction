@@ -1,0 +1,59 @@
+From 5b8db44bdd619dc5ec4dcdac5cb3ca194ebdd046 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Sun, 15 Jan 2023 00:03:39 -0800
+Subject: [PATCH 0695/2871] format-patch: unleak "-v <num>"
+
+The "subject_prefix" member of "struct revision" usually is set to a
+borrowed string (either a string literal like "PATCH" that appear in
+the program text as a hardcoded default, or the value of
+"format.subjectprefix") and is never freed when the containing
+revision structure is released.  The "-v <num>" codepath however
+violates this rule and stores a pointer to an allocated string to
+this member, relinquishing the responsibility to free it when it is
+done using the revision structure, leading to a small one-time leak.
+
+Instead, keep track of the string it allocates to let the revision
+structure borrow, and clean it up when it is done.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index 89447a5083..e3673e9dc1 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1870,6 +1870,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 	struct strbuf rdiff1 = STRBUF_INIT;
+ 	struct strbuf rdiff2 = STRBUF_INIT;
+ 	struct strbuf rdiff_title = STRBUF_INIT;
++	struct strbuf sprefix = STRBUF_INIT;
+ 	int creation_factor = -1;
+ 
+ 	const struct option builtin_format_patch_options[] = {
+@@ -2010,12 +2011,10 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 		cover_from_description_mode = parse_cover_from_description(cover_from_description_arg);
+ 
+ 	if (reroll_count) {
+-		struct strbuf sprefix = STRBUF_INIT;
+-
+ 		strbuf_addf(&sprefix, "%s v%s",
+ 			    rev.subject_prefix, reroll_count);
+ 		rev.reroll_count = reroll_count;
+-		rev.subject_prefix = strbuf_detach(&sprefix, NULL);
++		rev.subject_prefix = sprefix.buf;
+ 	}
+ 
+ 	for (i = 0; i < extra_hdr.nr; i++) {
+@@ -2376,6 +2375,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 	strbuf_release(&rdiff1);
+ 	strbuf_release(&rdiff2);
+ 	strbuf_release(&rdiff_title);
++	strbuf_release(&sprefix);
+ 	free(to_free);
+ 	if (rev.ref_message_ids)
+ 		string_list_clear(rev.ref_message_ids, 0);
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,35 @@
+From 2b0e46f563c21429e45f7c57a22b1337b039a3f9 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:31 -0400
+Subject: [PATCH 2023/2871] worktree: mark unused parameters in noop repair
+ callback
+
+The noop repair callback unsurprisingly does not look at any of its
+parameters. Mark them as unused to silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ worktree.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/worktree.c b/worktree.c
+index b8cf29e6a1..a56a6c2a3d 100644
+--- a/worktree.c
++++ b/worktree.c
+@@ -581,8 +581,10 @@ static void repair_gitfile(struct worktree *wt,
+ 	strbuf_release(&dotgit);
+ }
+ 
+-static void repair_noop(int iserr, const char *path, const char *msg,
+-			void *cb_data)
++static void repair_noop(int iserr UNUSED,
++			const char *path UNUSED,
++			const char *msg UNUSED,
++			void *cb_data UNUSED)
+ {
+ 	/* nothing */
+ }
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,93 @@
+From cfbd173ccb4dbf9cbaae0640b17d96d7b2ee5a19 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Thu, 17 Nov 2022 02:36:52 +0100
+Subject: [PATCH 0400/2871] branch: force-copy a branch to itself via @{-1} is
+ a no-op
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since 52d59cc645 (branch: add a --copy (-c) option to go with --move
+(-m), 2017-06-18) we can copy a branch to make a new branch with the
+'-c' (copy) option or to overwrite an existing branch using the '-C'
+(force copy) option.  A no-op possibility is considered when we are
+asked to copy a branch to itself, to follow the same no-op introduced
+for the rename (-M) operation in 3f59481e33 (branch: allow a no-op
+"branch -M <current-branch> HEAD", 2011-11-25).  To check for this, in
+52d59cc645 we compared the branch names provided by the user, source
+(HEAD if omitted) and destination, and a match is considered as this
+no-op.
+
+Since ae5a6c3684 (checkout: implement "@{-N}" shortcut name for N-th
+last branch, 2009-01-17) a branch can be specified using shortcuts like
+@{-1}.  This allows this usage:
+
+	$ git checkout -b test
+	$ git checkout -
+	$ git branch -C test test  # no-op
+	$ git branch -C test @{-1} # oops
+	$ git branch -C @{-1} test # oops
+
+As we are using the branch name provided by the user to do the
+comparison, if one of the branches is provided using a shortcut we are
+not going to have a match and a call to git_config_copy_section() will
+happen.  This will make a duplicate of the configuration for that
+branch, and with this progression the second call will produce four
+copies of the configuration, and so on.
+
+Let's use the interpreted branch name instead for this comparison.
+
+The rename operation is not affected.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/branch.c                      |  6 +++---
+ t/t3204-branch-name-interpretation.sh | 10 ++++++++++
+ 2 files changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index 15be0c03ef..a35e174aae 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -584,13 +584,13 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int
+ 	strbuf_release(&logmsg);
+ 
+ 	strbuf_addf(&oldsection, "branch.%s", interpreted_oldname);
+-	strbuf_release(&oldref);
+ 	strbuf_addf(&newsection, "branch.%s", interpreted_newname);
+-	strbuf_release(&newref);
+ 	if (!copy && git_config_rename_section(oldsection.buf, newsection.buf) < 0)
+ 		die(_("Branch is renamed, but update of config-file failed"));
+-	if (copy && strcmp(oldname, newname) && git_config_copy_section(oldsection.buf, newsection.buf) < 0)
++	if (copy && strcmp(interpreted_oldname, interpreted_newname) && git_config_copy_section(oldsection.buf, newsection.buf) < 0)
+ 		die(_("Branch is copied, but update of config-file failed"));
++	strbuf_release(&oldref);
++	strbuf_release(&newref);
+ 	strbuf_release(&oldsection);
+ 	strbuf_release(&newsection);
+ }
+diff --git a/t/t3204-branch-name-interpretation.sh b/t/t3204-branch-name-interpretation.sh
+index 793bf4d269..3399344f25 100755
+--- a/t/t3204-branch-name-interpretation.sh
++++ b/t/t3204-branch-name-interpretation.sh
+@@ -57,6 +57,16 @@ test_expect_success 'create branch with pseudo-qualified name' '
+ 	expect_branch refs/heads/refs/heads/qualified two
+ '
+ 
++test_expect_success 'force-copy a branch to itself via @{-1} is no-op' '
++	git branch -t copiable main &&
++	git checkout copiable &&
++	git checkout - &&
++	git branch -C @{-1} copiable &&
++	git config --get-all branch.copiable.merge >actual &&
++	echo refs/heads/main >expect &&
++	test_cmp expect actual
++'
++
+ test_expect_success 'delete branch via @{-1}' '
+ 	git branch previous-del &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

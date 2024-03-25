@@ -1,0 +1,30 @@
+From 3ca86adc2db4cd184f38596d4ba44c6870b2a7e4 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 2 Nov 2023 20:51:17 +0000
+Subject: [PATCH 2345/2871] strvec: drop unnecessary include of hex.h
+
+In 41771fa435 (cache.h: remove dependence on hex.h; make other files
+include it explicitly, 2023-02-24) we added this as part of a larger
+mechanical refactor. But strvec doesn't actually depend on hex.h, so
+remove it.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ strvec.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/strvec.c b/strvec.c
+index 89dc9e7e75..178f4f3748 100644
+--- a/strvec.c
++++ b/strvec.c
+@@ -1,6 +1,5 @@
+ #include "git-compat-util.h"
+ #include "strvec.h"
+-#include "hex.h"
+ #include "strbuf.h"
+ 
+ const char *empty_strvec[] = { NULL };
+-- 
+2.39.3 (Apple Git-145)
+

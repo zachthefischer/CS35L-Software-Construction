@@ -1,0 +1,48 @@
+From 6df5494f7347cf9a7b9ef2a74bb60cbedd62ae05 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:39:00 +0200
+Subject: [PATCH 0115/2871] doc SYNOPSIS: consistently use ' for commands
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Most of our commands use ''-quotation only for the name of the command
+itself, and not its (optional) arguments. Let's do the same for these.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-fast-export.txt     | 2 +-
+ Documentation/git-sparse-checkout.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-fast-export.txt b/Documentation/git-fast-export.txt
+index 1978dbdc6a..4643ddbe68 100644
+--- a/Documentation/git-fast-export.txt
++++ b/Documentation/git-fast-export.txt
+@@ -9,7 +9,7 @@ git-fast-export - Git data exporter
+ SYNOPSIS
+ --------
+ [verse]
+-'git fast-export [<options>]' | 'git fast-import'
++'git fast-export' [<options>] | 'git fast-import'
+ 
+ DESCRIPTION
+ -----------
+diff --git a/Documentation/git-sparse-checkout.txt b/Documentation/git-sparse-checkout.txt
+index 3776705bf5..872436d742 100644
+--- a/Documentation/git-sparse-checkout.txt
++++ b/Documentation/git-sparse-checkout.txt
+@@ -9,7 +9,7 @@ git-sparse-checkout - Reduce your working tree to a subset of tracked files
+ SYNOPSIS
+ --------
+ [verse]
+-'git sparse-checkout <subcommand> [<options>]'
++'git sparse-checkout' <subcommand> [<options>]
+ 
+ 
+ DESCRIPTION
+-- 
+2.39.3 (Apple Git-145)
+

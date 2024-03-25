@@ -1,0 +1,32 @@
+From 9a167cb7860d7ae7cd5685434d0194c934800128 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 16:47:00 -0400
+Subject: [PATCH 0059/2871] t7527: prepare for changing protocol.file.allow
+
+Explicitly cloning over the "file://" protocol in t7527 in preparation
+for merging a security release which will change the default value of
+this configuration to be "user".
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t7527-builtin-fsmonitor.sh | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/t/t7527-builtin-fsmonitor.sh b/t/t7527-builtin-fsmonitor.sh
+index 56c0dfffea..d419085379 100755
+--- a/t/t7527-builtin-fsmonitor.sh
++++ b/t/t7527-builtin-fsmonitor.sh
+@@ -813,6 +813,10 @@ my_match_and_clean () {
+ 	git -C super/dir_1/dir_2/sub clean -d -f
+ }
+ 
++test_expect_success 'submodule setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'submodule always visited' '
+ 	test_when_finished "git -C super fsmonitor--daemon stop; \
+ 			    rm -rf super; \
+-- 
+2.39.3 (Apple Git-145)
+

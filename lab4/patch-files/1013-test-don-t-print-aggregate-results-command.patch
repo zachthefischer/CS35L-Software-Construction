@@ -1,0 +1,43 @@
+From 90ff7c9898f6dfd76aae39ad06b1d0e746a615b8 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Thu, 9 Mar 2023 11:30:32 -0600
+Subject: [PATCH 1013/2871] test: don't print aggregate-results command
+
+There's no value in it.
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/t/Makefile | 2 +-
+ t/Makefile                 | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/subtree/t/Makefile b/contrib/subtree/t/Makefile
+index aa204d43b6..093399c788 100644
+--- a/contrib/subtree/t/Makefile
++++ b/contrib/subtree/t/Makefile
+@@ -74,7 +74,7 @@ aggregate-results-and-cleanup: $(T)
+ 	$(MAKE) clean
+ 
+ aggregate-results:
+-	'$(SHELL_PATH_SQ)' ../../../t/aggregate-results.sh '$(TEST_RESULTS_DIRECTORY_SQ)'
++	@'$(SHELL_PATH_SQ)' ../../../t/aggregate-results.sh '$(TEST_RESULTS_DIRECTORY_SQ)'
+ 
+ valgrind:
+ 	$(MAKE) GIT_TEST_OPTS="$(GIT_TEST_OPTS) --valgrind"
+diff --git a/t/Makefile b/t/Makefile
+index 6ce79849e1..88fa504957 100644
+--- a/t/Makefile
++++ b/t/Makefile
+@@ -140,7 +140,7 @@ aggregate-results-and-cleanup: $(T)
+ 	$(MAKE) clean
+ 
+ aggregate-results:
+-	'$(SHELL_PATH_SQ)' ./aggregate-results.sh '$(TEST_RESULTS_DIRECTORY_SQ)'
++	@'$(SHELL_PATH_SQ)' ./aggregate-results.sh '$(TEST_RESULTS_DIRECTORY_SQ)'
+ 
+ valgrind:
+ 	$(MAKE) GIT_TEST_OPTS="$(GIT_TEST_OPTS) --valgrind"
+-- 
+2.39.3 (Apple Git-145)
+

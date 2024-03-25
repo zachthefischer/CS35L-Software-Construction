@@ -1,0 +1,73 @@
+From 1e63b34a449afd650b02ab19501e8ccf0c15816e Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Sun, 20 Aug 2023 19:50:09 +0100
+Subject: [PATCH 1969/2871] decorate: use commit color for HEAD arrow
+
+Use the commit color instead of the HEAD color for the arrow or custom
+symbol in "HEAD -> branch" decorations, for visual consistency with the
+prefix, separator and suffix symbols, which are also colored with the
+commit color.
+
+This change was triggered by the possibility that one could choose to
+use the same symbol for the pointer and the separator options in
+%(decorate), in which case they ought to be the same color.
+
+A related precedent is 'ls -l', where the arrow for symlinks gets the
+default color rather than that of the symlink name.
+
+Amend test t4207-log-decoration-colors.sh accordingly.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ log-tree.c                       | 2 +-
+ t/t4207-log-decoration-colors.sh | 6 +++---
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/log-tree.c b/log-tree.c
+index 50b4850eda..504da6b519 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -369,7 +369,7 @@ void format_decorations(struct strbuf *sb,
+ 
+ 			if (current_and_HEAD &&
+ 			    decoration->type == DECORATION_REF_HEAD) {
+-				strbuf_addstr(sb, color);
++				strbuf_addstr(sb, color_commit);
+ 				strbuf_addstr(sb, pointer);
+ 				strbuf_addstr(sb, color_reset);
+ 				strbuf_addstr(sb, decorate_get_color(use_color, current_and_HEAD->type));
+diff --git a/t/t4207-log-decoration-colors.sh b/t/t4207-log-decoration-colors.sh
+index df804f38e2..21986a866d 100755
+--- a/t/t4207-log-decoration-colors.sh
++++ b/t/t4207-log-decoration-colors.sh
+@@ -54,7 +54,7 @@ cmp_filtered_decorations () {
+ test_expect_success 'commit decorations colored correctly' '
+ 	cat >expect <<-EOF &&
+ 	${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}${c_HEAD}HEAD${c_reset}\
+-${c_HEAD} -> ${c_reset}${c_branch}main${c_reset}${c_commit}, \
++${c_commit} -> ${c_reset}${c_branch}main${c_reset}${c_commit}, \
+ ${c_reset}${c_tag}tag: ${c_reset}${c_tag}v1.0${c_reset}${c_commit}, \
+ ${c_reset}${c_tag}tag: ${c_reset}${c_tag}B${c_reset}${c_commit})${c_reset} B
+ ${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}\
+@@ -79,7 +79,7 @@ test_expect_success 'test coloring with replace-objects' '
+ 
+ 	cat >expect <<-EOF &&
+ 	${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}${c_HEAD}HEAD${c_reset}\
+-${c_HEAD} -> ${c_reset}${c_branch}main${c_reset}${c_commit}, \
++${c_commit} -> ${c_reset}${c_branch}main${c_reset}${c_commit}, \
+ ${c_reset}${c_tag}tag: ${c_reset}${c_tag}D${c_reset}${c_commit})${c_reset} D
+ 	${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}\
+ ${c_tag}tag: ${c_reset}${c_tag}C${c_reset}${c_commit}, \
+@@ -105,7 +105,7 @@ test_expect_success 'test coloring with grafted commit' '
+ 
+ 	cat >expect <<-EOF &&
+ 	${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}${c_HEAD}HEAD${c_reset}\
+-${c_HEAD} -> ${c_reset}${c_branch}main${c_reset}${c_commit}, \
++${c_commit} -> ${c_reset}${c_branch}main${c_reset}${c_commit}, \
+ ${c_reset}${c_tag}tag: ${c_reset}${c_tag}D${c_reset}${c_commit}, \
+ ${c_reset}${c_grafted}replaced${c_reset}${c_commit})${c_reset} D
+ 	${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}\
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,44 @@
+From 94f07b55443147fce3c7fb46e97d696da3ce8d55 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sat, 18 Mar 2023 16:46:44 +0100
+Subject: [PATCH 1049/2871] t1400: assert output of update-ref
+
+In t1400-update-ref.sh test 'transaction can create and delete' creates
+files "expect" and "actual", but doesn't compare them.  Similarly, test
+'transaction cannot restart ongoing transaction' redirects output of
+"git update-ref" to file "actual", but doesn't check its contents with
+any assertions.
+
+Assert output of "git update-ref" in tests to improve test coverage in
+t1400-update-ref.sh.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1400-update-ref.sh | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/t/t1400-update-ref.sh b/t/t1400-update-ref.sh
+index cf58cf025c..4d66cd7f4a 100755
+--- a/t/t1400-update-ref.sh
++++ b/t/t1400-update-ref.sh
+@@ -1568,6 +1568,7 @@ test_expect_success 'transaction can create and delete' '
+ 	EOF
+ 	git update-ref --stdin <stdin >actual &&
+ 	printf "%s: ok\n" start commit start commit >expect &&
++	test_cmp expect actual &&
+ 	test_must_fail git show-ref --verify refs/heads/create-and-delete
+ '
+ 
+@@ -1595,6 +1596,8 @@ test_expect_success 'transaction cannot restart ongoing transaction' '
+ 	commit
+ 	EOF
+ 	test_must_fail git update-ref --stdin <stdin >actual &&
++	printf "%s: ok\n" start >expect &&
++	test_cmp expect actual &&
+ 	test_must_fail git show-ref --verify refs/heads/restart
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

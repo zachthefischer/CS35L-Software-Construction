@@ -1,0 +1,50 @@
+First found where the problem was solved:
+
+$ git log --all-match --grep="segfault" --grep="git merge-tree" --grep="which has been corrected"
+
+Which gave me two commits where the commit messages matched what we're looking for.
+bcf22f29df87f25582de0ac9274d1567fa16be6f
+19118cb8570e499e1a56e81740cee3d1c1206b44
+
+https://github.com/git/git/commit/bcf22f29df87f25582de0ac9274d1567fa16be6f
+https://github.com/git/git/commit/19118cb8570e499e1a56e81740cee3d1c1206b44
+
+$git diff bcf22f29df87f25582de0ac9274d1567fa16be6f 19118cb8570e499e1a56e81740cee3d1c1206b44
+to see difference between commits - they're very similar, but most of the applicable changes are made on the earlier commit
+
+The commit where the segfault was fixed is 19118cb8570e499e1a56e81740cee3d1c1206b44
+The file involved is merge-ort.c
+I think the issue involved with the segfault most comes down to
+
+write_tree(&dir_info->result.oid, &info->versions, offset,
+			   opt->repo->hash_algo->rawsz);
+
+which doesn't check if the repo is read-only. I think you could argue that the changes to write_tree are just as important, because it allows this check to work:
+
+if (write_tree(&dir_info->result.oid, &info->versions, offset,
+			       opt->repo->hash_algo->rawsz) < 0)
+			ret = -1;
+			
+merge-ort.c
+$ git blame merge-ort.c  and then looking through it reveals
+0b55d930a69 (Johannes Schindelin     2022-09-28 07:29:21 +0000 3798)            if (write_tree(&dir_info->result.oid, &info->versions, offset,
+
+Johannes Schindelin introduced the fix on 2022-09-28
+The commit ID is: 0b55d930a69
+
+
+WHEN WAS THE ERROR CREATED
+$ git log -S "write_tree(&dir_info->result.oid, &info->versions, offset,"
+--> bb470f4e13e90889030d48f618ded5c0961943a3
+--> https://github.com/git/git/commit/bb470f4e13e90889030d48f618ded5c0961943a3?diff=unified&w=1
+
+And I found that the person who introduced the error "which I am assuming to be failing to check "write_tree(&dir_info->r...")
+
+--> Elijah Newren
+--> Sun Dec 13 08:04:22 2020
+--> bb470f4e13e90889030d48f618ded5c0961943a3
+
+
+
+Create git patch
+$ git format-patch 19118cb8570e499e1a56e81740cee3d1c1206b44

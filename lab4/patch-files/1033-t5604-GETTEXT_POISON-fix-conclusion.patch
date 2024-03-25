@@ -1,0 +1,32 @@
+From 0c8d22abaf155d97a0efd04bae9fcdad1de7956e Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 9 Mar 2023 22:54:32 +0100
+Subject: [PATCH 1033/2871] t5604: GETTEXT_POISON fix, conclusion
+
+In fade728df122 (apply: fix writing behind newly created symbolic links,
+2023-02-02), we backported a patch onto v2.30.* that was originally
+based on a much newer version. The v2.30.* release train still has the
+GETTEXT_POISON CI job, though, and hence needs `test_i18n*` in its
+tests.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ t/t4115-apply-symlink.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t4115-apply-symlink.sh b/t/t4115-apply-symlink.sh
+index 1acb7b2582..14e0f4d705 100755
+--- a/t/t4115-apply-symlink.sh
++++ b/t/t4115-apply-symlink.sh
+@@ -72,7 +72,7 @@ test_expect_success SYMLINKS 'symlink escape when creating new files' '
+ 	cat >expected_stderr <<-EOF &&
+ 	error: affected file ${SQ}renamed-symlink/create-me${SQ} is beyond a symbolic link
+ 	EOF
+-	test_cmp expected_stderr stderr &&
++	test_i18ncmp expected_stderr stderr &&
+ 	! test_path_exists .git/create-me
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

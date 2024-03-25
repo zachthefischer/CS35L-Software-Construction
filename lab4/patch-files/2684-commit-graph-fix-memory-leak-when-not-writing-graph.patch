@@ -1,0 +1,58 @@
+From 4efa9308eabba5b474f7ff5b43a8a7b767b6de79 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 18 Dec 2023 11:02:28 +0100
+Subject: [PATCH 2684/2871] commit-graph: fix memory leak when not writing
+ graph
+
+When `write_commit_graph()` bails out writing a split commit-graph early
+then it may happen that we have already gathered the set of existing
+commit-graph file names without yet determining the new merged set of
+files. This can result in a memory leak though because we only clear the
+preimage of files when we have collected the postimage.
+
+Fix this issue by dropping the condition altogether so that we always
+try to free both preimage and postimage filenames. As the context
+structure is zero-initialized this simplification is safe to do.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 19 ++++++++-----------
+ 1 file changed, 8 insertions(+), 11 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index bba316913c..a30a4fc993 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2616,19 +2616,16 @@ int write_commit_graph(struct object_directory *odb,
+ 	oid_array_clear(&ctx->oids);
+ 	clear_topo_level_slab(&topo_levels);
+ 
+-	if (ctx->commit_graph_filenames_after) {
+-		for (i = 0; i < ctx->num_commit_graphs_after; i++) {
+-			free(ctx->commit_graph_filenames_after[i]);
+-			free(ctx->commit_graph_hash_after[i]);
+-		}
+-
+-		for (i = 0; i < ctx->num_commit_graphs_before; i++)
+-			free(ctx->commit_graph_filenames_before[i]);
++	for (i = 0; i < ctx->num_commit_graphs_before; i++)
++		free(ctx->commit_graph_filenames_before[i]);
++	free(ctx->commit_graph_filenames_before);
+ 
+-		free(ctx->commit_graph_filenames_after);
+-		free(ctx->commit_graph_filenames_before);
+-		free(ctx->commit_graph_hash_after);
++	for (i = 0; i < ctx->num_commit_graphs_after; i++) {
++		free(ctx->commit_graph_filenames_after[i]);
++		free(ctx->commit_graph_hash_after[i]);
+ 	}
++	free(ctx->commit_graph_filenames_after);
++	free(ctx->commit_graph_hash_after);
+ 
+ 	free(ctx);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

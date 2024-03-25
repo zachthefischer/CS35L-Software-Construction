@@ -1,0 +1,42 @@
+From 24a49cf78eef2a13bc3f7c730e236d58b5e2ebbe Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Mon, 27 Feb 2023 15:28:08 +0000
+Subject: [PATCH 0956/2871] t2021: fix platform-specific leftover cruft
+
+t2021.6 existed to test the status of a symlink that was left around by
+previous tests.  It tried to also clean up the symlink after it was done
+so that subsequent tests wouldn't be tripped up by it.  Unfortunately,
+since this test had a SYMLINK prerequisite, that made the cleanup
+platform dependent...and made a testcase I was trying to add to this
+testsuite fail (that testcase will be included in the next patch).
+Before we go and add new testcases, fix this cleanup by moving it into a
+separate test.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2021-checkout-overwrite.sh | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/t/t2021-checkout-overwrite.sh b/t/t2021-checkout-overwrite.sh
+index 713c3fa603..baca66e1a3 100755
+--- a/t/t2021-checkout-overwrite.sh
++++ b/t/t2021-checkout-overwrite.sh
+@@ -50,10 +50,13 @@ test_expect_success 'checkout commit with dir must not remove untracked a/b' '
+ 
+ test_expect_success SYMLINKS 'the symlink remained' '
+ 
+-	test_when_finished "rm a/b" &&
+ 	test -h a/b
+ '
+ 
++test_expect_success 'cleanup after previous symlink tests' '
++	rm a/b
++'
++
+ test_expect_success SYMLINKS 'checkout -f must not follow symlinks when removing entries' '
+ 	git checkout -f start &&
+ 	mkdir dir &&
+-- 
+2.39.3 (Apple Git-145)
+

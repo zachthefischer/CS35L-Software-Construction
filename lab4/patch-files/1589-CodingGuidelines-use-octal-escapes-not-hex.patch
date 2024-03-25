@@ -1,0 +1,33 @@
+From f0b68f0546a44e2bc3a764bd75b3aa4418c01601 Mon Sep 17 00:00:00 2001
+From: Jonathan Tan <jonathantanmy@google.com>
+Date: Wed, 14 Jun 2023 14:31:45 -0700
+Subject: [PATCH 1589/2871] CodingGuidelines: use octal escapes, not hex
+
+Extend the shell-scripting section of CodingGuidelines to suggest octal
+escape sequences (e.g. "\302\242") over hexadecimal (e.g. "\xc2\xa2")
+since the latter can be a source of portability problems.
+
+Signed-off-by: Jonathan Tan <jonathantanmy@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/CodingGuidelines | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Documentation/CodingGuidelines b/Documentation/CodingGuidelines
+index 003393ed16..39ef53c237 100644
+--- a/Documentation/CodingGuidelines
++++ b/Documentation/CodingGuidelines
+@@ -188,6 +188,10 @@ For shell scripts specifically (not exhaustive):
+    hopefully nobody starts using "local" before they are reimplemented
+    in C ;-)
+ 
++ - Use octal escape sequences (e.g. "\302\242"), not hexadecimal (e.g.
++   "\xc2\xa2") in printf format strings, since hexadecimal escape
++   sequences are not portable.
++
+ 
+ For C programs:
+ 
+-- 
+2.39.3 (Apple Git-145)
+

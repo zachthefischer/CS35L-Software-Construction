@@ -1,0 +1,51 @@
+From af3d2c160fd6de6f868cdf17053241ad7663cbd7 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 19 Jan 2024 14:26:45 -0800
+Subject: [PATCH 2727/2871] Docs: majordomo@vger.kernel.org has been
+ decomissioned
+
+Update the instruction for subscribing to the Git mailing list
+we have on a few documentation pages.
+
+Reported-by: Kyle Lippincott <spectral@google.com>
+Helped-by: Konstantin Ryabitsev <konstantin@linuxfoundation.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/MyFirstContribution.txt | 5 +++--
+ README.md                             | 4 ++--
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/MyFirstContribution.txt b/Documentation/MyFirstContribution.txt
+index 7cfed60c2e..5920b57889 100644
+--- a/Documentation/MyFirstContribution.txt
++++ b/Documentation/MyFirstContribution.txt
+@@ -35,8 +35,9 @@ announcements, design discussions, and more take place. Those interested in
+ contributing are welcome to post questions here. The Git list requires
+ plain-text-only emails and prefers inline and bottom-posting when replying to
+ mail; you will be CC'd in all replies to you. Optionally, you can subscribe to
+-the list by sending an email to majordomo@vger.kernel.org with "subscribe git"
+-in the body. The https://lore.kernel.org/git[archive] of this mailing list is
++the list by sending an email to <git+subscribe@vger.kernel.org>
++(see https://subspace.kernel.org/subscribing.html for details).
++The https://lore.kernel.org/git[archive] of this mailing list is
+ available to view in a browser.
+ 
+ ==== https://groups.google.com/forum/#!forum/git-mentoring[git-mentoring@googlegroups.com]
+diff --git a/README.md b/README.md
+index 7ce4f05bae..c833be3353 100644
+--- a/README.md
++++ b/README.md
+@@ -39,8 +39,8 @@ Those wishing to help with error message, usage and informational message
+ string translations (localization l10) should see [po/README.md][]
+ (a `po` file is a Portable Object file that holds the translations).
+ 
+-To subscribe to the list, send an email with just "subscribe git" in
+-the body to majordomo@vger.kernel.org (not the Git list). The mailing
++To subscribe to the list, send an email to <git+subscribe@vger.kernel.org>
++(see https://subspace.kernel.org/subscribing.html for details). The mailing
+ list archives are available at <https://lore.kernel.org/git/>,
+ <http://marc.info/?l=git> and other archival sites.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

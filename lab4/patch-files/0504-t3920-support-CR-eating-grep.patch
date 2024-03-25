@@ -1,0 +1,57 @@
+From 86325d36e604e872e189e8dba6d914007918311f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 2 Dec 2022 17:51:13 +0100
+Subject: [PATCH 0504/2871] t3920: support CR-eating grep
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+grep(1) converts CRLF line endings to LF on current MinGW:
+
+   $ uname -sr
+   MINGW64_NT-10.0-22621 3.3.6-341.x86_64
+
+   $ printf 'a\r\n' | hexdump.exe -C
+   00000000  61 0d 0a                                          |a..|
+   00000003
+
+   $ printf 'a\r\n' | grep . | hexdump.exe -C
+   00000000  61 0a                                             |a.|
+   00000002
+
+Create the intended test file by grepping the original file with LF
+line endings and adding CRs explicitly.
+
+The missing CRs went unnoticed because test_cmp on MinGW ignores line
+endings since 4d715ac05c (Windows: a test_cmp that is agnostic to random
+LF <> CRLF conversions, 2013-10-26).  Fix this test anyway to avoid
+depending on that special test_cmp behavior, especially since this is
+the only test that needs it.
+
+Piping the output of grep(1) through append_cr has the side-effect of
+ignoring its return value.  That means we no longer need the explicit
+"|| true" to support commit messages without a body.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Acked-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3920-crlf-messages.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t3920-crlf-messages.sh b/t/t3920-crlf-messages.sh
+index a58522c163..67fd2345af 100755
+--- a/t/t3920-crlf-messages.sh
++++ b/t/t3920-crlf-messages.sh
+@@ -12,7 +12,7 @@ create_crlf_ref () {
+ 	cat >.crlf-orig-$branch.txt &&
+ 	cat .crlf-orig-$branch.txt | append_cr >.crlf-message-$branch.txt &&
+ 	grep 'Subject' .crlf-orig-$branch.txt | tr '\n' ' ' | sed 's/[ ]*$//' | tr -d '\n' >.crlf-subject-$branch.txt &&
+-	{ grep 'Body' .crlf-message-$branch.txt >.crlf-body-$branch.txt || true; } &&
++	grep 'Body' .crlf-orig-$branch.txt | append_cr >.crlf-body-$branch.txt &&
+ 	LIB_CRLF_BRANCHES="${LIB_CRLF_BRANCHES} ${branch}" &&
+ 	test_tick &&
+ 	hash=$(git commit-tree HEAD^{tree} -p HEAD -F .crlf-message-${branch}.txt) &&
+-- 
+2.39.3 (Apple Git-145)
+

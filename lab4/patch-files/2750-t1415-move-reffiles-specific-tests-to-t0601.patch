@@ -1,0 +1,70 @@
+From f0de10841743afebc629aaf25388f329fb47f4a9 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:56 +0000
+Subject: [PATCH 2750/2871] t1415: move reffiles specific tests to t0601
+
+Move this test into t0601 with other reffiles pack-refs specific tests
+since it checks for individual loose refs and thus is specific to the
+reffiles backend.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0601-reffiles-pack-refs.sh | 20 ++++++++++++++++++++
+ t/t1415-worktree-refs.sh      | 11 -----------
+ 2 files changed, 20 insertions(+), 11 deletions(-)
+
+diff --git a/t/t0601-reffiles-pack-refs.sh b/t/t0601-reffiles-pack-refs.sh
+index 9ec90ba7ce..37de284b86 100755
+--- a/t/t0601-reffiles-pack-refs.sh
++++ b/t/t0601-reffiles-pack-refs.sh
+@@ -308,4 +308,24 @@ test_expect_success SYMLINKS 'pack symlinked packed-refs' '
+ 	test "$(test_readlink .git/packed-refs)" = "my-deviant-packed-refs"
+ '
+ 
++# The 'packed-refs' file is stored directly in .git/. This means it is global
++# to the repository, and can only contain refs that are shared across all
++# worktrees.
++test_expect_success 'refs/worktree must not be packed' '
++	test_commit initial &&
++	test_commit wt1 &&
++	test_commit wt2 &&
++	git worktree add wt1 wt1 &&
++	git worktree add wt2 wt2 &&
++	git checkout initial &&
++	git update-ref refs/worktree/foo HEAD &&
++	git -C wt1 update-ref refs/worktree/foo HEAD &&
++	git -C wt2 update-ref refs/worktree/foo HEAD &&
++	git pack-refs --all &&
++	test_path_is_missing .git/refs/tags/wt1 &&
++	test_path_is_file .git/refs/worktree/foo &&
++	test_path_is_file .git/worktrees/wt1/refs/worktree/foo &&
++	test_path_is_file .git/worktrees/wt2/refs/worktree/foo
++'
++
+ test_done
+diff --git a/t/t1415-worktree-refs.sh b/t/t1415-worktree-refs.sh
+index 3b531842dd..eb4eec8bec 100755
+--- a/t/t1415-worktree-refs.sh
++++ b/t/t1415-worktree-refs.sh
+@@ -17,17 +17,6 @@ test_expect_success 'setup' '
+ 	git -C wt2 update-ref refs/worktree/foo HEAD
+ '
+ 
+-# The 'packed-refs' file is stored directly in .git/. This means it is global
+-# to the repository, and can only contain refs that are shared across all
+-# worktrees.
+-test_expect_success REFFILES 'refs/worktree must not be packed' '
+-	git pack-refs --all &&
+-	test_path_is_missing .git/refs/tags/wt1 &&
+-	test_path_is_file .git/refs/worktree/foo &&
+-	test_path_is_file .git/worktrees/wt1/refs/worktree/foo &&
+-	test_path_is_file .git/worktrees/wt2/refs/worktree/foo
+-'
+-
+ test_expect_success 'refs/worktree are per-worktree' '
+ 	test_cmp_rev worktree/foo initial &&
+ 	( cd wt1 && test_cmp_rev worktree/foo wt1 ) &&
+-- 
+2.39.3 (Apple Git-145)
+

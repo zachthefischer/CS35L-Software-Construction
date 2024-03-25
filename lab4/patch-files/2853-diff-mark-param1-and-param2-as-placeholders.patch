@@ -1,0 +1,59 @@
+From 5e7013aa14739c3505a35b35ca095eeaace5d181 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <worldhello.net@gmail.com>
+Date: Wed, 14 Feb 2024 16:46:41 +0800
+Subject: [PATCH 2853/2871] diff: mark param1 and param2 as placeholders
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Some l10n translators translated the parameters "files", "param1" and
+"param2" in the following message:
+
+    "synonym for --dirstat=files,param1,param2..."
+
+Translating "param1" and "param2" is OK, but changing the parameter
+"files" is wrong. The parameters that are not meant to be used verbatim
+should be marked as placeholders, but the verbatim parameter not marked
+as a placeholder should be left as is.
+
+This change is a complement for commit 51e846e673 (doc: enforce
+placeholders in documentation, 2023-12-25).
+
+With the help of Jean-Noël,some parameter combinations in one
+placeholder (e.g. "<param1,param2>...") are splited into seperate
+placeholders.
+
+Helped-by: Jean-Noël Avila <jn.avila@free.fr>
+Signed-off-by: Jiang Xin <worldhello.net@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index bccb018da4..20d39ccbe4 100644
+--- a/diff.c
++++ b/diff.c
+@@ -5567,7 +5567,7 @@ struct option *add_diff_options(const struct option *opts,
+ 		OPT_BITOP(0, "shortstat", &options->output_format,
+ 			  N_("output only the last line of --stat"),
+ 			  DIFF_FORMAT_SHORTSTAT, DIFF_FORMAT_NO_OUTPUT),
+-		OPT_CALLBACK_F('X', "dirstat", options, N_("<param1,param2>..."),
++		OPT_CALLBACK_F('X', "dirstat", options, N_("<param1>,<param2>..."),
+ 			       N_("output the distribution of relative amount of changes for each sub-directory"),
+ 			       PARSE_OPT_NONEG | PARSE_OPT_OPTARG,
+ 			       diff_opt_dirstat),
+@@ -5575,8 +5575,8 @@ struct option *add_diff_options(const struct option *opts,
+ 			       N_("synonym for --dirstat=cumulative"),
+ 			       PARSE_OPT_NONEG | PARSE_OPT_NOARG,
+ 			       diff_opt_dirstat),
+-		OPT_CALLBACK_F(0, "dirstat-by-file", options, N_("<param1,param2>..."),
+-			       N_("synonym for --dirstat=files,param1,param2..."),
++		OPT_CALLBACK_F(0, "dirstat-by-file", options, N_("<param1>,<param2>..."),
++			       N_("synonym for --dirstat=files,<param1>,<param2>..."),
+ 			       PARSE_OPT_NONEG | PARSE_OPT_OPTARG,
+ 			       diff_opt_dirstat),
+ 		OPT_BIT_F(0, "check", &options->output_format,
+-- 
+2.39.3 (Apple Git-145)
+

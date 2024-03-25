@@ -1,0 +1,38 @@
+From a38d39a4c50d1275833aba54c4dbdfce9e2e9ca1 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Sun, 8 Jan 2023 12:38:15 +0900
+Subject: [PATCH 0644/2871] The sixth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.40.0.txt | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.40.0.txt b/Documentation/RelNotes/2.40.0.txt
+index 5193a99dff..d7685b82b0 100644
+--- a/Documentation/RelNotes/2.40.0.txt
++++ b/Documentation/RelNotes/2.40.0.txt
+@@ -48,6 +48,20 @@ Performance, Internal Implementation, Development Support etc.
+  * Stop using "git --super-prefix" and narrow the scope of its use to
+    the submodule--helper.
+ 
++ * Stop running win+VS build by default.
++   (merge a0da6deeec js/ci-disable-cmake-by-default later to maint).
++
++ * CI updates.  We probably want a clean-up to move the long shell
++   script embedded in yaml file into a separate file, but that can
++   come later.
++   (merge 4542582e59 cw/ci-whitespace later to maint).
++
++ * Use `git diff --no-index` as a test_cmp on Windows.
++
++   We'd probably need to revisit "do we really want to, and have to,
++   lose CRLF vs LF?" later, at which time we may be able to further
++   clean this up by replacing "git diff --no-index" with "diff -u".
++
+ 
+ Fixes since v2.39
+ -----------------
+-- 
+2.39.3 (Apple Git-145)
+

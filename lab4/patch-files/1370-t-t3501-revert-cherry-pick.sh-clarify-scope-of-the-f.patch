@@ -1,0 +1,55 @@
+From 8bb19c14fb38645ad708d97b06664bf1a736c02f Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Sun, 30 Apr 2023 12:00:34 +0200
+Subject: [PATCH 1370/2871] t/t3501-revert-cherry-pick.sh: clarify scope of the
+ file
+
+The file started out as a test for picks and reverts with renames, but
+has been subsequently populated with all kinds of basic tests, in
+accordance with its generic name. Adjust the description to reflect
+that.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3501-revert-cherry-pick.sh | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/t/t3501-revert-cherry-pick.sh b/t/t3501-revert-cherry-pick.sh
+index 2f3e3e2416..e2ef619323 100755
+--- a/t/t3501-revert-cherry-pick.sh
++++ b/t/t3501-revert-cherry-pick.sh
+@@ -1,14 +1,6 @@
+ #!/bin/sh
+ 
+-test_description='test cherry-pick and revert with renames
+-
+-  --
+-   + rename2: renames oops to opos
+-  +  rename1: renames oops to spoo
+-  +  added:   adds extra line to oops
+-  ++ initial: has lines in oops
+-
+-'
++test_description='miscellaneous basic tests for cherry-pick and revert'
+ 
+ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+@@ -63,6 +55,14 @@ test_expect_success 'revert --nonsense' '
+ 	test_i18ngrep "[Uu]sage:" msg
+ '
+ 
++# the following two test cherry-pick and revert with renames
++#
++# --
++#  + rename2: renames oops to opos
++# +  rename1: renames oops to spoo
++# +  added:   adds extra line to oops
++# ++ initial: has lines in oops
++
+ test_expect_success 'cherry-pick after renaming branch' '
+ 
+ 	git checkout rename2 &&
+-- 
+2.39.3 (Apple Git-145)
+

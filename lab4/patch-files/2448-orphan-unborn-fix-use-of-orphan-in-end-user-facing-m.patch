@@ -1,0 +1,98 @@
+From d44b517137ab0d869c81bd532163c3e3e85481e6 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 24 Nov 2023 12:10:42 +0900
+Subject: [PATCH 2448/2871] orphan/unborn: fix use of 'orphan' in end-user
+ facing messages
+
+"orphan branch" is not even grammatical ("orphaned branch" is), and
+we have been using "unborn branch" to mean the state where the HEAD
+points at a branch that does not yet exist.
+
+Update end-user facing messages to correct them.  There are cases
+other random words are used (e.g., "unparented branch") but now we
+have a glossary entry, use the term "unborn branch" consistently.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/checkout.c      | 2 +-
+ builtin/worktree.c      | 6 +++---
+ t/t2400-worktree-add.sh | 6 +++---
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/checkout.c b/builtin/checkout.c
+index f02434bc15..8ba57a1160 100644
+--- a/builtin/checkout.c
++++ b/builtin/checkout.c
+@@ -1627,7 +1627,7 @@ static struct option *add_common_switch_branch_options(
+ 			parse_opt_tracking_mode),
+ 		OPT__FORCE(&opts->force, N_("force checkout (throw away local modifications)"),
+ 			   PARSE_OPT_NOCOMPLETE),
+-		OPT_STRING(0, "orphan", &opts->new_orphan_branch, N_("new-branch"), N_("new unparented branch")),
++		OPT_STRING(0, "orphan", &opts->new_orphan_branch, N_("new-branch"), N_("new unborn branch")),
+ 		OPT_BOOL_F(0, "overwrite-ignore", &opts->overwrite_ignore,
+ 			   N_("update ignored files (default)"),
+ 			   PARSE_OPT_NOCOMPLETE),
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 62b7e26f4b..71e0552a54 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -49,14 +49,14 @@
+ 	_("No possible source branch, inferring '--orphan'")
+ 
+ #define WORKTREE_ADD_ORPHAN_WITH_DASH_B_HINT_TEXT \
+-	_("If you meant to create a worktree containing a new orphan branch\n" \
++	_("If you meant to create a worktree containing a new unborn branch\n" \
+ 	"(branch with no commits) for this repository, you can do so\n" \
+ 	"using the --orphan flag:\n" \
+ 	"\n" \
+ 	"    git worktree add --orphan -b %s %s\n")
+ 
+ #define WORKTREE_ADD_ORPHAN_NO_DASH_B_HINT_TEXT \
+-	_("If you meant to create a worktree containing a new orphan branch\n" \
++	_("If you meant to create a worktree containing a new unborn branch\n" \
+ 	"(branch with no commits) for this repository, you can do so\n" \
+ 	"using the --orphan flag:\n" \
+ 	"\n" \
+@@ -784,7 +784,7 @@ static int add(int ac, const char **av, const char *prefix)
+ 			   N_("create a new branch")),
+ 		OPT_STRING('B', NULL, &new_branch_force, N_("branch"),
+ 			   N_("create or reset a branch")),
+-		OPT_BOOL(0, "orphan", &opts.orphan, N_("create unborn/orphaned branch")),
++		OPT_BOOL(0, "orphan", &opts.orphan, N_("create unborn branch")),
+ 		OPT_BOOL('d', "detach", &opts.detach, N_("detach HEAD at named commit")),
+ 		OPT_BOOL(0, "checkout", &opts.checkout, N_("populate the new working tree")),
+ 		OPT_BOOL(0, "lock", &keep_locked, N_("keep the new working tree locked")),
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index df4aff7825..cbad2bd22b 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -415,7 +415,7 @@ test_wt_add_orphan_hint () {
+ 		git -C repo switch --orphan noref &&
+ 		test_must_fail git -C repo worktree add $opts foobar/ 2>actual &&
+ 		! grep "error: unknown switch" actual &&
+-		grep "hint: If you meant to create a worktree containing a new orphan branch" actual &&
++		grep "hint: If you meant to create a worktree containing a new unborn branch" actual &&
+ 		if [ $use_branch -eq 1 ]
+ 		then
+ 			grep -E "^hint: +git worktree add --orphan -b [^ ]+ [^ ]+$" actual
+@@ -436,7 +436,7 @@ test_expect_success "'worktree add' doesn't show orphan hint in bad/orphan HEAD
+ 	(cd repo && test_commit commit) &&
+ 	test_must_fail git -C repo worktree add --quiet foobar_branch foobar/ 2>actual &&
+ 	! grep "error: unknown switch" actual &&
+-	! grep "hint: If you meant to create a worktree containing a new orphan branch" actual
++	! grep "hint: If you meant to create a worktree containing a new unborn branch" actual
+ '
+ 
+ test_expect_success 'local clone from linked checkout' '
+@@ -709,7 +709,7 @@ test_expect_success 'git worktree --no-guess-remote option overrides config' '
+ test_dwim_orphan () {
+ 	local info_text="No possible source branch, inferring '--orphan'" &&
+ 	local fetch_error_text="fatal: No local or remote refs exist despite at least one remote" &&
+-	local orphan_hint="hint: If you meant to create a worktree containing a new orphan branch" &&
++	local orphan_hint="hint: If you meant to create a worktree containing a new unborn branch" &&
+ 	local invalid_ref_regex="^fatal: invalid reference: " &&
+ 	local bad_combo_regex="^fatal: '[-a-z]*' and '[-a-z]*' cannot be used together" &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

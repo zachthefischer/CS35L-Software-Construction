@@ -1,0 +1,65 @@
+From 1fc3c0ad407008c2f71dd9ae1241d8b75f8ef886 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 21 Oct 2022 11:37:36 -0700
+Subject: [PATCH 0192/2871] The fifth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.39.0.txt | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/RelNotes/2.39.0.txt b/Documentation/RelNotes/2.39.0.txt
+index 04ef0edcb4..8153661826 100644
+--- a/Documentation/RelNotes/2.39.0.txt
++++ b/Documentation/RelNotes/2.39.0.txt
+@@ -10,6 +10,16 @@ UI, Workflows & Features
+  * By default, use of fsmonitor on a repository on networked
+    filesystem is disabled. Add knobs to make it workable on macOS.
+ 
++ * After checking out a "branch" that is a symbolic-ref that points at
++   another branch, "git symbolic-ref HEAD" reports the underlying
++   branch, not the symbolic-ref the user gave checkout as argument.
++   The command learned the "--no-recurse" option to stop after
++   dereferencing a symbolic-ref only once.
++
++ * "git branch --edit-description @{-1}" is now a way to edit branch
++   description of the branch you were on before switching to the
++   current branch.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ --------------------------------------------------------------
+@@ -37,6 +47,9 @@ Performance, Internal Implementation, Development Support etc.
+    in C99.
+    (merge 438c2f859b ab/coding-guidelines-c99 later to maint).
+ 
++ * Avoid false-positive from LSan whose assumption may be broken with
++   higher optimization levels.
++
+ 
+ Fixes since v2.38
+ -----------------
+@@ -116,6 +129,12 @@ Fixes since v2.38
+    syntax for struct.
+    (merge 54795d37d9 jh/struct-zero-init-with-older-clang later to maint).
+ 
++ * Giving "--invert-grep" and "--all-match" without "--grep" to the
++   "git log" command resulted in an attempt to access grep pattern
++   expression structure that has not been allocated, which has been
++   corrected.
++   (merge db84376f98 ab/grep-simplify-extended-expression later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge c34a6bd291 so/diff-merges-cleanup later to maint).
+    (merge 5e7c8b75e7 ab/test-malloc-with-sanitize-leak later to maint).
+@@ -130,4 +149,5 @@ Fixes since v2.38
+    (merge 7c07f36ad2 ab/unused-annotation later to maint).
+    (merge f7669676d0 rs/use-fspathncmp later to maint).
+    (merge a677d3c416 pw/remove-rebase-p-test later to maint).
+-   (merge e3733b646d rs/archive-dedup-printf later to maint).
+\ No newline at end of file
++   (merge e3733b646d rs/archive-dedup-printf later to maint).
++   (merge 413bc6d20a ds/cmd-main-reorder later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

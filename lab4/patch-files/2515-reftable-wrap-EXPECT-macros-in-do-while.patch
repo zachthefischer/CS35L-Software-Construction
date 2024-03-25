@@ -1,0 +1,100 @@
+From e32b8ece640fc700c5a74dd53e6cae8b1a893a6d Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 11 Dec 2023 10:07:29 +0100
+Subject: [PATCH 2515/2871] reftable: wrap EXPECT macros in do/while
+
+The `EXPECT` macros used by the reftable test framework are all using a
+single `if` statement with the actual condition. This results in weird
+syntax when using them in if/else statements like the following:
+
+```
+if (foo)
+	EXPECT(foo == 2)
+else
+	EXPECT(bar == 2)
+```
+
+Note that there need not be a trailing semicolon. Furthermore, it is not
+immediately obvious whether the else now belongs to the `if (foo)` or
+whether it belongs to the expanded `if (foo == 2)` from the macro.
+
+Fix this by wrapping the macros in a do/while loop.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/test_framework.h | 58 +++++++++++++++++++++------------------
+ 1 file changed, 32 insertions(+), 26 deletions(-)
+
+diff --git a/reftable/test_framework.h b/reftable/test_framework.h
+index 774cb275bf..ee44f735ae 100644
+--- a/reftable/test_framework.h
++++ b/reftable/test_framework.h
+@@ -12,32 +12,38 @@ license that can be found in the LICENSE file or at
+ #include "system.h"
+ #include "reftable-error.h"
+ 
+-#define EXPECT_ERR(c)                                                  \
+-	if (c != 0) {                                                  \
+-		fflush(stderr);                                        \
+-		fflush(stdout);                                        \
+-		fprintf(stderr, "%s: %d: error == %d (%s), want 0\n",  \
+-			__FILE__, __LINE__, c, reftable_error_str(c)); \
+-		abort();                                               \
+-	}
+-
+-#define EXPECT_STREQ(a, b)                                               \
+-	if (strcmp(a, b)) {                                              \
+-		fflush(stderr);                                          \
+-		fflush(stdout);                                          \
+-		fprintf(stderr, "%s:%d: %s (%s) != %s (%s)\n", __FILE__, \
+-			__LINE__, #a, a, #b, b);                         \
+-		abort();                                                 \
+-	}
+-
+-#define EXPECT(c)                                                          \
+-	if (!(c)) {                                                        \
+-		fflush(stderr);                                            \
+-		fflush(stdout);                                            \
+-		fprintf(stderr, "%s: %d: failed assertion %s\n", __FILE__, \
+-			__LINE__, #c);                                     \
+-		abort();                                                   \
+-	}
++#define EXPECT_ERR(c)                                                          \
++	do {                                                                   \
++		if (c != 0) {                                                  \
++			fflush(stderr);                                        \
++			fflush(stdout);                                        \
++			fprintf(stderr, "%s: %d: error == %d (%s), want 0\n",  \
++				__FILE__, __LINE__, c, reftable_error_str(c)); \
++			abort();                                               \
++		}                                                              \
++	} while (0)
++
++#define EXPECT_STREQ(a, b)                                                       \
++	do {                                                                     \
++		if (strcmp(a, b)) {                                              \
++			fflush(stderr);                                          \
++			fflush(stdout);                                          \
++			fprintf(stderr, "%s:%d: %s (%s) != %s (%s)\n", __FILE__, \
++				__LINE__, #a, a, #b, b);                         \
++			abort();                                                 \
++		}                                                                \
++	} while (0)
++
++#define EXPECT(c)                                                                  \
++	do {                                                                       \
++		if (!(c)) {                                                        \
++			fflush(stderr);                                            \
++			fflush(stdout);                                            \
++			fprintf(stderr, "%s: %d: failed assertion %s\n", __FILE__, \
++				__LINE__, #c);                                     \
++			abort();                                                   \
++		}                                                                  \
++	} while (0)
+ 
+ #define RUN_TEST(f)                          \
+ 	fprintf(stderr, "running %s\n", #f); \
+-- 
+2.39.3 (Apple Git-145)
+

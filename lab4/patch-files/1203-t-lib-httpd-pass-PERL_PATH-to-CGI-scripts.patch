@@ -1,0 +1,62 @@
+From c1917156a04e371f33cc344af093a8b237e09eb1 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 6 Apr 2023 05:36:02 -0400
+Subject: [PATCH 1203/2871] t/lib-httpd: pass PERL_PATH to CGI scripts
+
+As discussed in t/README, tests should aim to use PERL_PATH rather than
+straight "perl". We usually do this automatically with a "perl" function
+in test-lib.sh, but a few cases need to be handled specially.
+
+One such case is the apply-one-time-perl.sh CGI, which invokes plain
+"perl". It should be using $PERL_PATH, but to make that work, we must
+also instruct Apache to pass through the variable.
+
+Prior to this patch, doing:
+
+  mv /usr/bin/perl /usr/bin/my-perl
+  make PERL_PATH=/usr/bin/my-perl test
+
+would fail t5702, t5703, and t5616. After this it passes. This is a
+pretty extreme case, as even if you install perl elsewhere, you'd likely
+still have it in your $PATH. A more realistic case is that you don't
+want to use the perl in your $PATH (because it's older, broken, etc) and
+expect PERL_PATH to consistently override that (since that's what it's
+documented to do). Removing it completely is just a convenient way of
+completely breaking it for testing purposes.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-httpd/apache.conf            | 2 ++
+ t/lib-httpd/apply-one-time-perl.sh | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/t/lib-httpd/apache.conf b/t/lib-httpd/apache.conf
+index 706799391b..f8946a289d 100644
+--- a/t/lib-httpd/apache.conf
++++ b/t/lib-httpd/apache.conf
+@@ -86,6 +86,8 @@ PassEnv LC_ALL
+ Alias /dumb/ www/
+ Alias /auth/dumb/ www/auth/dumb/
+ 
++SetEnv PERL_PATH ${PERL_PATH}
++
+ <LocationMatch /smart/>
+ 	SetEnv GIT_EXEC_PATH ${GIT_EXEC_PATH}
+ 	SetEnv GIT_HTTP_EXPORT_ALL
+diff --git a/t/lib-httpd/apply-one-time-perl.sh b/t/lib-httpd/apply-one-time-perl.sh
+index 09a0abdff7..d7f9fed6ae 100644
+--- a/t/lib-httpd/apply-one-time-perl.sh
++++ b/t/lib-httpd/apply-one-time-perl.sh
+@@ -13,7 +13,7 @@ then
+ 	export LC_ALL
+ 
+ 	"$GIT_EXEC_PATH/git-http-backend" >out
+-	perl -pe "$(cat one-time-perl)" out >out_modified
++	"$PERL_PATH" -pe "$(cat one-time-perl)" out >out_modified
+ 
+ 	if cmp -s out out_modified
+ 	then
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,120 @@
+From 88e4e18325d6ddc3d21ffd9eda8259566443a7f7 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:34:02 +0000
+Subject: [PATCH 1649/2871] builtin.h: remove unneccessary includes
+
+This also made it clear that a few .c files under builtin/ were
+depending upon some headers but had forgotten to #include them.  Add the
+missing direct includes while at it.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin.h                  | 2 --
+ builtin/check-mailmap.c    | 1 +
+ builtin/commit-graph.c     | 1 +
+ builtin/config.c           | 1 +
+ builtin/credential-cache.c | 1 +
+ builtin/for-each-ref.c     | 1 +
+ builtin/init-db.c          | 1 +
+ builtin/verify-pack.c      | 1 +
+ 8 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/builtin.h b/builtin.h
+index 3e6c22eef6..d560baa661 100644
+--- a/builtin.h
++++ b/builtin.h
+@@ -2,8 +2,6 @@
+ #define BUILTIN_H
+ 
+ #include "git-compat-util.h"
+-#include "strbuf.h"
+-#include "commit.h"
+ 
+ /*
+  * builtin API
+diff --git a/builtin/check-mailmap.c b/builtin/check-mailmap.c
+index 002d2941e9..b8a05b8e07 100644
+--- a/builtin/check-mailmap.c
++++ b/builtin/check-mailmap.c
+@@ -4,6 +4,7 @@
+ #include "ident.h"
+ #include "mailmap.h"
+ #include "parse-options.h"
++#include "strbuf.h"
+ #include "string-list.h"
+ #include "write-or-die.h"
+ 
+diff --git a/builtin/commit-graph.c b/builtin/commit-graph.c
+index a3d00fa232..96a8a67732 100644
+--- a/builtin/commit-graph.c
++++ b/builtin/commit-graph.c
+@@ -1,4 +1,5 @@
+ #include "builtin.h"
++#include "commit.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "environment.h"
+diff --git a/builtin/config.c b/builtin/config.c
+index d40fddb042..6599f88b24 100644
+--- a/builtin/config.c
++++ b/builtin/config.c
+@@ -13,6 +13,7 @@
+ #include "path.h"
+ #include "quote.h"
+ #include "setup.h"
++#include "strbuf.h"
+ #include "worktree.h"
+ #include "wrapper.h"
+ 
+diff --git a/builtin/credential-cache.c b/builtin/credential-cache.c
+index 0ffacfdd83..ff3a47badb 100644
+--- a/builtin/credential-cache.c
++++ b/builtin/credential-cache.c
+@@ -2,6 +2,7 @@
+ #include "gettext.h"
+ #include "parse-options.h"
+ #include "path.h"
++#include "strbuf.h"
+ #include "wrapper.h"
+ #include "write-or-die.h"
+ 
+diff --git a/builtin/for-each-ref.c b/builtin/for-each-ref.c
+index d0d6ab0fd3..15409337f8 100644
+--- a/builtin/for-each-ref.c
++++ b/builtin/for-each-ref.c
+@@ -5,6 +5,7 @@
+ #include "object.h"
+ #include "parse-options.h"
+ #include "ref-filter.h"
++#include "strbuf.h"
+ #include "strvec.h"
+ #include "commit-reach.h"
+ 
+diff --git a/builtin/init-db.c b/builtin/init-db.c
+index 680ef7e183..0d8bd4d721 100644
+--- a/builtin/init-db.c
++++ b/builtin/init-db.c
+@@ -12,6 +12,7 @@
+ #include "parse-options.h"
+ #include "path.h"
+ #include "setup.h"
++#include "strbuf.h"
+ #include "wrapper.h"
+ 
+ static int guess_repository_type(const char *git_dir)
+diff --git a/builtin/verify-pack.c b/builtin/verify-pack.c
+index aba92cf8af..011dddd2dc 100644
+--- a/builtin/verify-pack.c
++++ b/builtin/verify-pack.c
+@@ -3,6 +3,7 @@
+ #include "gettext.h"
+ #include "run-command.h"
+ #include "parse-options.h"
++#include "strbuf.h"
+ 
+ #define VERIFY_PACK_VERBOSE 01
+ #define VERIFY_PACK_STAT_ONLY 02
+-- 
+2.39.3 (Apple Git-145)
+

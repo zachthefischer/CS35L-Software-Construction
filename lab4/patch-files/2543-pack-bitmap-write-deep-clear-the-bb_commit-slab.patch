@@ -1,0 +1,57 @@
+From 6cdb67b97d188ea5583f33ac09f4649be5f9741f Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 14 Dec 2023 17:23:42 -0500
+Subject: [PATCH 2543/2871] pack-bitmap-write: deep-clear the `bb_commit` slab
+
+The `bb_commit` commit slab is used by the pack-bitmap-write machinery
+to track various pieces of bookkeeping used to generate reachability
+bitmaps.
+
+Even though we clear the slab when freeing the bitmap_builder struct
+(with `bitmap_builder_clear()`), there are still pointers which point to
+locations in memory that have not yet been freed, resulting in a leak.
+
+Plug the leak by introducing a suitable `free_fn` for the `struct
+bb_commit` type, and make sure it is called on each member of the slab
+via the `deep_clear_bb_data()` function.
+
+Note that it is possible for both of the arguments to `bitmap_free()` to
+be NULL, but `bitmap_free()` is a noop for NULL arguments, so it is OK
+to pass them unconditionally.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-bitmap-write.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/pack-bitmap-write.c b/pack-bitmap-write.c
+index f4ecdf8b0e..ae37fb6976 100644
+--- a/pack-bitmap-write.c
++++ b/pack-bitmap-write.c
+@@ -198,6 +198,13 @@ struct bb_commit {
+ 	unsigned idx; /* within selected array */
+ };
+ 
++static void clear_bb_commit(struct bb_commit *commit)
++{
++	free_commit_list(commit->reverse_edges);
++	bitmap_free(commit->commit_mask);
++	bitmap_free(commit->bitmap);
++}
++
+ define_commit_slab(bb_data, struct bb_commit);
+ 
+ struct bitmap_builder {
+@@ -339,7 +346,7 @@ static void bitmap_builder_init(struct bitmap_builder *bb,
+ 
+ static void bitmap_builder_clear(struct bitmap_builder *bb)
+ {
+-	clear_bb_data(&bb->data);
++	deep_clear_bb_data(&bb->data, clear_bb_commit);
+ 	free(bb->commits);
+ 	bb->commits_nr = bb->commits_alloc = 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

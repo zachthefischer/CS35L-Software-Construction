@@ -1,0 +1,61 @@
+From ca06f0fe5d8f3e93da1486b880f0e94f1c11238a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 17:06:01 -0400
+Subject: [PATCH 2271/2871] chunk-format: drop pair_chunk_unsafe()
+
+There are no callers left, and we don't want anybody to add new ones (they
+should use the not-unsafe version instead). So let's drop the function.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ chunk-format.c |  8 --------
+ chunk-format.h | 13 -------------
+ 2 files changed, 21 deletions(-)
+
+diff --git a/chunk-format.c b/chunk-format.c
+index 09ef86afa6..cdc7f39b70 100644
+--- a/chunk-format.c
++++ b/chunk-format.c
+@@ -184,14 +184,6 @@ int pair_chunk(struct chunkfile *cf,
+ 	return read_chunk(cf, chunk_id, pair_chunk_fn, &pcd);
+ }
+ 
+-int pair_chunk_unsafe(struct chunkfile *cf,
+-		      uint32_t chunk_id,
+-		      const unsigned char **p)
+-{
+-	size_t dummy;
+-	return pair_chunk(cf, chunk_id, p, &dummy);
+-}
+-
+ int read_chunk(struct chunkfile *cf,
+ 	       uint32_t chunk_id,
+ 	       chunk_read_fn fn,
+diff --git a/chunk-format.h b/chunk-format.h
+index d608b8135c..14b76180ef 100644
+--- a/chunk-format.h
++++ b/chunk-format.h
+@@ -54,19 +54,6 @@ int pair_chunk(struct chunkfile *cf,
+ 	       const unsigned char **p,
+ 	       size_t *size);
+ 
+-/*
+- * Unsafe version of pair_chunk; it does not return the size,
+- * meaning that the caller cannot possibly be careful about
+- * reading out of bounds from the mapped memory.
+- *
+- * No new callers should use this function, and old callers should
+- * be audited and migrated over to using the regular pair_chunk()
+- * function.
+- */
+-int pair_chunk_unsafe(struct chunkfile *cf,
+-		      uint32_t chunk_id,
+-		      const unsigned char **p);
+-
+ typedef int (*chunk_read_fn)(const unsigned char *chunk_start,
+ 			     size_t chunk_size, void *data);
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

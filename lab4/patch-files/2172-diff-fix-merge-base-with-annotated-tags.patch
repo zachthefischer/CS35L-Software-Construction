@@ -1,0 +1,82 @@
+From 4adceb5a299164aad1ef9794cdcbdb232ab10299 Mon Sep 17 00:00:00 2001
+From: Alyssa Ross <hi@alyssa.is>
+Date: Sun, 1 Oct 2023 15:18:45 +0000
+Subject: [PATCH 2172/2871] diff: fix --merge-base with annotated tags
+
+Checking early for OBJ_COMMIT excludes other objects that can be
+resolved to commits, like annotated tags.  If we remove it, annotated
+tags will be resolved and handled just fine by
+lookup_commit_reference(), and if we are given something that can't be
+resolved to a commit, we'll still get a useful error message, e.g.:
+
+> error: object 21ab162211ac3ef13c37603ca88b27e9c7e0d40b is a tree, not a commit
+> fatal: no merge base found
+
+Signed-off-by: Alyssa Ross <hi@alyssa.is>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff-lib.c                           |  2 --
+ t/t4068-diff-symmetric-merge-base.sh | 13 ++++++++++---
+ 2 files changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/diff-lib.c b/diff-lib.c
+index 6b0c6a7180..543398b4d8 100644
+--- a/diff-lib.c
++++ b/diff-lib.c
+@@ -572,8 +572,6 @@ void diff_get_merge_base(const struct rev_info *revs, struct object_id *mb)
+ 		struct object *obj = revs->pending.objects[i].item;
+ 		if (obj->flags)
+ 			die(_("--merge-base does not work with ranges"));
+-		if (obj->type != OBJ_COMMIT)
+-			die(_("--merge-base only works with commits"));
+ 	}
+ 
+ 	/*
+diff --git a/t/t4068-diff-symmetric-merge-base.sh b/t/t4068-diff-symmetric-merge-base.sh
+index 2d650d8f10..541642650f 100755
+--- a/t/t4068-diff-symmetric-merge-base.sh
++++ b/t/t4068-diff-symmetric-merge-base.sh
+@@ -34,7 +34,7 @@ test_expect_success setup '
+ 	echo c >c &&
+ 	git add c &&
+ 	git commit -m C &&
+-	git tag commit-C &&
++	git tag -m commit-C commit-C &&
+ 	git merge -m D main &&
+ 	git tag commit-D &&
+ 	git checkout main &&
+@@ -109,6 +109,13 @@ do
+ 		test_cmp expect actual
+ 	'
+ 
++	test_expect_success "$cmd --merge-base with annotated tag" '
++		git checkout main &&
++		git $cmd commit-C >expect &&
++		git $cmd --merge-base commit-C >actual &&
++		test_cmp expect actual
++	'
++
+ 	test_expect_success "$cmd --merge-base with one commit and unstaged changes" '
+ 		git checkout main &&
+ 		test_when_finished git reset --hard &&
+@@ -143,7 +150,7 @@ do
+ 	test_expect_success "$cmd --merge-base with non-commit" '
+ 		git checkout main &&
+ 		test_must_fail git $cmd --merge-base main^{tree} 2>err &&
+-		test_i18ngrep "fatal: --merge-base only works with commits" err
++		test_i18ngrep "is a tree, not a commit" err
+ 	'
+ 
+ 	test_expect_success "$cmd --merge-base with no merge bases and one commit" '
+@@ -169,7 +176,7 @@ do
+ 
+ 	test_expect_success "$cmd --merge-base commit and non-commit" '
+ 		test_must_fail git $cmd --merge-base br2 main^{tree} 2>err &&
+-		test_i18ngrep "fatal: --merge-base only works with commits" err
++		test_i18ngrep "is a tree, not a commit" err
+ 	'
+ 
+ 	test_expect_success "$cmd --merge-base with no merge bases and two commits" '
+-- 
+2.39.3 (Apple Git-145)
+

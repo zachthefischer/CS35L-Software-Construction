@@ -1,0 +1,42 @@
+From 81fba8e54c2336480460cad49f3f14ea92124cad Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jean-No=C3=ABl=20Avila?= <jn.avila@free.fr>
+Date: Thu, 2 Mar 2023 18:45:05 +0100
+Subject: [PATCH 0989/2871] l10n: fr: v2.40.0 rnd 2
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Jean-Noël Avila <jn.avila@free.fr>
+---
+ po/fr.po | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/po/fr.po b/po/fr.po
+index ab83428289..f032441614 100644
+--- a/po/fr.po
++++ b/po/fr.po
+@@ -78,8 +78,8 @@ msgid ""
+ msgstr ""
+ "Project-Id-Version: git\n"
+ "Report-Msgid-Bugs-To: Git Mailing List <git@vger.kernel.org>\n"
+-"POT-Creation-Date: 2023-02-27 18:57+0000\n"
+-"PO-Revision-Date: 2023-02-27 21:02+0100\n"
++"POT-Creation-Date: 2023-03-01 01:20+0000\n"
++"PO-Revision-Date: 2023-03-02 18:44+0100\n"
+ "Last-Translator: Cédric Malard <c.malard-git@valdun.net>\n"
+ "Language-Team: Jean-Noël Avila <jn.avila@free.fr>\n"
+ "Language: fr\n"
+@@ -20308,6 +20308,10 @@ msgstr ""
+ "update-ref requiert un nom de référence totalement qualifié par ex. refs/"
+ "heads/%s"
+ 
++#, c-format
++msgid "invalid command '%.*s'"
++msgstr "commande '%.*s' invalide"
++
+ #, c-format
+ msgid "%s does not accept arguments: '%s'"
+ msgstr "%s n'accepte pas d'argument : '%s'"
+-- 
+2.39.3 (Apple Git-145)
+

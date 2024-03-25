@@ -1,0 +1,50 @@
+From 993d7085be2bf79b4d1fe2b0c017b380e796c21c Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Fri, 31 Mar 2023 16:36:03 +0200
+Subject: [PATCH 1187/2871] t3060: fix mention of function prune_index
+
+Commit [1] added tests which trigger function prune_cache.  The comments
+in these tests, however, incorrectly call it "prune_path".  Since then,
+function "prune_cache" has been renamed to "prune_index" in commit [2].
+Later still in commit [3], the_index singleton, which is also mentioned
+in a comment, stopped being used directly with function "prune_index".
+
+Fix mentions of function "prune_index" and the struct it changes in
+comments in file "t3060-ls-files-with-tree.sh".
+
+[1] 54e1abce90 (Add test case for ls-files --with-tree, 2007-10-03)
+[2] 6510ae173a (ls-files: convert prune_cache to take an index,
+    2017-06-12)
+[3] 188dce131f (ls-files: use repository object, 2017-06-22)
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3060-ls-files-with-tree.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t3060-ls-files-with-tree.sh b/t/t3060-ls-files-with-tree.sh
+index c4a72ae446..5a06732ca7 100755
+--- a/t/t3060-ls-files-with-tree.sh
++++ b/t/t3060-ls-files-with-tree.sh
+@@ -40,7 +40,7 @@ test_expect_success 'setup' '
+ 	git commit -a -m "remove them all" &&
+ 
+ 	# The bug also requires some entry before our directory so that
+-	# prune_path will modify the_index.cache
++	# prune_index will modify the_repository->index.cache
+ 
+ 	mkdir a_directory_that_sorts_before_sub &&
+ 	>a_directory_that_sorts_before_sub/file &&
+@@ -56,7 +56,7 @@ test_expect_success 'usage' '
+ '
+ 
+ test_expect_success 'git ls-files --with-tree should succeed from subdir' '
+-	# We have to run from a sub-directory to trigger prune_path
++	# We have to run from a sub-directory to trigger prune_index
+ 	# Then we finally get to run our --with-tree test
+ 	(
+ 		cd sub &&
+-- 
+2.39.3 (Apple Git-145)
+

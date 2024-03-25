@@ -1,0 +1,67 @@
+From 0730a5a3a5e69e4b5fa0fbf6edd7fcbd7a08c992 Mon Sep 17 00:00:00 2001
+From: Mark Levedahl <mlevedahl@gmail.com>
+Date: Sun, 17 Sep 2023 15:24:31 -0400
+Subject: [PATCH 2127/2871] git-gui - use git-hook, honor core.hooksPath
+
+git-gui currently runs some hooks directly using its own code written
+before 2010, long predating git v2.9 that added the core.hooksPath
+configuration to override the assumed location at $GIT_DIR/hooks.  Thus,
+git-gui looks for and runs hooks including prepare-commit-msg,
+commit-msg, pre-commit, post-commit, and post-checkout from
+$GIT_DIR/hooks, regardless of configuration. Commands (e.g., git-merge)
+that git-gui invokes directly do honor core.hooksPath, meaning the
+overall behaviour is inconsistent.
+
+Furthermore, since v2.36 git exposes its hook execution machinery via
+`git-hook run`, eliminating the need for others to maintain code
+duplicating that functionality.  Using git-hook will both fix git-gui's
+current issues on hook configuration and (presumably) reduce the
+maintenance burden going forward. So, teach git-gui to use git-hook.
+
+Signed-off-by: Mark Levedahl <mlevedahl@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-gui.sh | 27 ++-------------------------
+ 1 file changed, 2 insertions(+), 25 deletions(-)
+
+diff --git a/git-gui.sh b/git-gui.sh
+index 8603437e72..3e5907a460 100755
+--- a/git-gui.sh
++++ b/git-gui.sh
+@@ -661,31 +661,8 @@ proc git_write {args} {
+ }
+ 
+ proc githook_read {hook_name args} {
+-	set pchook [gitdir hooks $hook_name]
+-	lappend args 2>@1
+-
+-	# On Windows [file executable] might lie so we need to ask
+-	# the shell if the hook is executable.  Yes that's annoying.
+-	#
+-	if {[is_Windows]} {
+-		upvar #0 _sh interp
+-		if {![info exists interp]} {
+-			set interp [_which sh]
+-		}
+-		if {$interp eq {}} {
+-			error "hook execution requires sh (not in PATH)"
+-		}
+-
+-		set scr {if test -x "$1";then exec "$@";fi}
+-		set sh_c [list $interp -c $scr $interp $pchook]
+-		return [_open_stdout_stderr [concat $sh_c $args]]
+-	}
+-
+-	if {[file executable $pchook]} {
+-		return [_open_stdout_stderr [concat [list $pchook] $args]]
+-	}
+-
+-	return {}
++	set cmd [concat git hook run --ignore-missing $hook_name -- $args 2>@1]
++	return [_open_stdout_stderr $cmd]
+ }
+ 
+ proc kill_file_process {fd} {
+-- 
+2.39.3 (Apple Git-145)
+

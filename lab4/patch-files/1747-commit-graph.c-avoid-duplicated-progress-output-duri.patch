@@ -1,0 +1,122 @@
+From 9281cd07f014263b5385f13b47ff8399282c7cdc Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 7 Jul 2023 20:31:45 -0400
+Subject: [PATCH 1747/2871] commit-graph.c: avoid duplicated progress output
+ during `verify`
+
+When `git commit-graph verify` was taught how to verify commit-graph
+chains in 3da4b609bb1 (commit-graph: verify chains with --shallow mode,
+2019-06-18), it produced one line of progress per layer of the
+commit-graph chain.
+
+    $ git.compile commit-graph verify
+    Verifying commits in commit graph: 100% (4356/4356), done.
+    Verifying commits in commit graph: 100% (131912/131912), done.
+
+This could be somewhat confusing to users, who may wonder why there are
+multiple occurrences of "Verifying commits in commit graph".
+
+There are likely good arguments on whether or not there should be
+one line of progress output per commit-graph layer. On the one hand, the
+existing output shows us verifying each individual layer of the chain.
+But on the other hand, the fact that a commit-graph may be stored among
+multiple layers is an implementation detail that the caller need not be
+aware of.
+
+Clarify this by showing a single progress meter regardless of the number
+of layers in the commit-graph chain. After this patch, the output
+reflects the logical contents of a commit-graph chain, instead of
+showing one line of output per commit-graph layer:
+
+    $ git.compile commit-graph verify
+    Verifying commits in commit graph: 100% (136268/136268), done.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c                | 27 +++++++++++++++++----------
+ t/t5324-split-commit-graph.sh |  3 ++-
+ 2 files changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 9e89952831..fda4b6e14d 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2545,7 +2545,8 @@ static int commit_graph_checksum_valid(struct commit_graph *g)
+ 
+ static int verify_one_commit_graph(struct repository *r,
+ 				   struct commit_graph *g,
+-				   struct progress *progress)
++				   struct progress *progress,
++				   uint64_t *seen)
+ {
+ 	uint32_t i, cur_fanout_pos = 0;
+ 	struct object_id prev_oid, cur_oid;
+@@ -2606,7 +2607,7 @@ static int verify_one_commit_graph(struct repository *r,
+ 		timestamp_t max_generation = 0;
+ 		timestamp_t generation;
+ 
+-		display_progress(progress, i + 1);
++		display_progress(progress, ++(*seen));
+ 		oidread(&cur_oid, g->chunk_oid_lookup + g->hash_len * i);
+ 
+ 		graph_commit = lookup_commit(r, &cur_oid);
+@@ -2695,26 +2696,32 @@ static int verify_one_commit_graph(struct repository *r,
+ 
+ int verify_commit_graph(struct repository *r, struct commit_graph *g, int flags)
+ {
++	struct progress *progress = NULL;
+ 	int local_error = 0;
++	uint64_t seen = 0;
+ 
+ 	if (!g) {
+ 		graph_report("no commit-graph file loaded");
+ 		return 1;
+ 	}
+ 
+-	for (; g; g = g->base_graph) {
+-		struct progress *progress = NULL;
+-		if (flags & COMMIT_GRAPH_WRITE_PROGRESS)
+-			progress = start_progress(_("Verifying commits in commit graph"),
+-						g->num_commits);
++	if (flags & COMMIT_GRAPH_WRITE_PROGRESS) {
++		uint64_t total = g->num_commits;
++		if (!(flags & COMMIT_GRAPH_VERIFY_SHALLOW))
++			total += g->num_commits_in_base;
++
++		progress = start_progress(_("Verifying commits in commit graph"),
++					  total);
++	}
+ 
+-		local_error |= verify_one_commit_graph(r, g, progress);
++	for (; g; g = g->base_graph) {
++		local_error |= verify_one_commit_graph(r, g, progress, &seen);
+ 		if (flags & COMMIT_GRAPH_VERIFY_SHALLOW)
+ 			break;
+-
+-		stop_progress(&progress);
+ 	}
+ 
++	stop_progress(&progress);
++
+ 	return local_error;
+ }
+ 
+diff --git a/t/t5324-split-commit-graph.sh b/t/t5324-split-commit-graph.sh
+index 669ddc645f..36c4141e67 100755
+--- a/t/t5324-split-commit-graph.sh
++++ b/t/t5324-split-commit-graph.sh
+@@ -351,7 +351,8 @@ test_expect_success 'add octopus merge' '
+ 	git branch merge/octopus &&
+ 	git commit-graph write --reachable --split &&
+ 	git commit-graph verify --progress 2>err &&
+-	test_line_count = 3 err &&
++	test_line_count = 1 err &&
++	grep "Verifying commits in commit graph: 100% (18/18)" err &&
+ 	test_i18ngrep ! warning err &&
+ 	test_line_count = 3 $graphdir/commit-graph-chain
+ '
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,54 @@
+From 7fa56b1a002338cba17013e904ee095813bb772c Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 31 Oct 2022 18:43:44 -0400
+Subject: [PATCH 0280/2871] Documentation: build redo-jch.sh from master..jch
+
+Rebuilding the 'jch' branch begins by reintegrating any topics between
+'master' and 'jch', not 'master' and 'seen'.
+
+In the maintainer guide, the documentation isn't quite right, since the
+initial input to Meta/Reintegrate is "master..seen", not "master..jch".
+This can lead to confusing results when generating the Meta/redo-jch.sh
+script for the first time.
+
+Additionally, rebuilding 'jch' takes place in two steps. First, running
+the script up to the first "### match next" cut-line, and then comparing
+the result with what's on 'next' (i.e. with "git diff jch next"). Then,
+the remaining set of topics get merged down to 'jch' (which aren't on
+'next') by running the entire "redo-jch.sh" script.
+
+Clarify the documentation to reflect this.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/howto/maintain-git.txt | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/howto/maintain-git.txt b/Documentation/howto/maintain-git.txt
+index 215e2edb0f..bac6429fbc 100644
+--- a/Documentation/howto/maintain-git.txt
++++ b/Documentation/howto/maintain-git.txt
+@@ -231,7 +231,7 @@ by doing the following:
+  - Prepare 'jch' branch, which is used to represent somewhere
+    between 'master' and 'seen' and often is slightly ahead of 'next'.
+ 
+-     $ Meta/Reintegrate master..seen >Meta/redo-jch.sh
++     $ Meta/Reintegrate master..jch >Meta/redo-jch.sh
+ 
+    The result is a script that lists topics to be merged in order to
+    rebuild 'seen' as the input to Meta/Reintegrate script.  Remove
+@@ -283,6 +283,11 @@ by doing the following:
+ 
+      $ git diff jch next
+ 
++   Then build the rest of 'jch':
++
++     $ git checkout jch
++     $ sh Meta/redo-jch.sh
++
+    When all is well, clean up the redo-jch.sh script with
+ 
+      $ sh Meta/redo-jch.sh -u
+-- 
+2.39.3 (Apple Git-145)
+

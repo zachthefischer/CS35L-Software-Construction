@@ -1,0 +1,122 @@
+From 662078caacd450f93faa72e0e7d8580c42621415 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sat, 25 Feb 2023 15:21:51 +0100
+Subject: [PATCH 0950/2871] worktree: introduce is_shared_symref()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a new function, is_shared_symref(), which contains the heart of
+find_shared_symref().  Refactor find_shared_symref() to use the new
+function is_shared_symref().
+
+Soon, we will use is_shared_symref() to search for symref beyond
+the first worktree that matches.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ worktree.c | 62 +++++++++++++++++++++++++++---------------------------
+ worktree.h |  6 ++++++
+ 2 files changed, 37 insertions(+), 31 deletions(-)
+
+diff --git a/worktree.c b/worktree.c
+index aa43c64119..40cb9874b7 100644
+--- a/worktree.c
++++ b/worktree.c
+@@ -403,44 +403,44 @@ int is_worktree_being_bisected(const struct worktree *wt,
+  * bisect). New commands that do similar things should update this
+  * function as well.
+  */
+-const struct worktree *find_shared_symref(struct worktree **worktrees,
+-					  const char *symref,
+-					  const char *target)
++int is_shared_symref(const struct worktree *wt, const char *symref,
++		     const char *target)
+ {
+-	const struct worktree *existing = NULL;
+-	int i = 0;
++	const char *symref_target;
++	struct ref_store *refs;
++	int flags;
+ 
+-	for (i = 0; worktrees[i]; i++) {
+-		struct worktree *wt = worktrees[i];
+-		const char *symref_target;
+-		struct ref_store *refs;
+-		int flags;
++	if (wt->is_bare)
++		return 0;
+ 
+-		if (wt->is_bare)
+-			continue;
++	if (wt->is_detached && !strcmp(symref, "HEAD")) {
++		if (is_worktree_being_rebased(wt, target))
++			return 1;
++		if (is_worktree_being_bisected(wt, target))
++			return 1;
++	}
+ 
+-		if (wt->is_detached && !strcmp(symref, "HEAD")) {
+-			if (is_worktree_being_rebased(wt, target)) {
+-				existing = wt;
+-				break;
+-			}
+-			if (is_worktree_being_bisected(wt, target)) {
+-				existing = wt;
+-				break;
+-			}
+-		}
++	refs = get_worktree_ref_store(wt);
++	symref_target = refs_resolve_ref_unsafe(refs, symref, 0,
++						NULL, &flags);
++	if ((flags & REF_ISSYMREF) &&
++	    symref_target && !strcmp(symref_target, target))
++		return 1;
+ 
+-		refs = get_worktree_ref_store(wt);
+-		symref_target = refs_resolve_ref_unsafe(refs, symref, 0,
+-							NULL, &flags);
+-		if ((flags & REF_ISSYMREF) &&
+-		    symref_target && !strcmp(symref_target, target)) {
+-			existing = wt;
+-			break;
+-		}
++	return 0;
++}
++
++const struct worktree *find_shared_symref(struct worktree **worktrees,
++					  const char *symref,
++					  const char *target)
++{
++
++	for (int i = 0; worktrees[i]; i++) {
++		if (is_shared_symref(worktrees[i], symref, target))
++			return worktrees[i];
+ 	}
+ 
+-	return existing;
++	return NULL;
+ }
+ 
+ int submodule_uses_worktrees(const char *path)
+diff --git a/worktree.h b/worktree.h
+index 9dcea6fc8c..7889c4761d 100644
+--- a/worktree.h
++++ b/worktree.h
+@@ -149,6 +149,12 @@ const struct worktree *find_shared_symref(struct worktree **worktrees,
+ 					  const char *symref,
+ 					  const char *target);
+ 
++/*
++ * Returns true if a symref points to a ref in a worktree.
++ */
++int is_shared_symref(const struct worktree *wt,
++		     const char *symref, const char *target);
++
+ /*
+  * Similar to head_ref() for all HEADs _except_ one from the current
+  * worktree, which is covered by head_ref().
+-- 
+2.39.3 (Apple Git-145)
+

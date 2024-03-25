@@ -1,0 +1,54 @@
+From e0c7e2c3261fa49f9c99638fb2adf526e3833927 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 20 Oct 2023 06:09:01 -0400
+Subject: [PATCH 2296/2871] doc/send-email: mention handling of "reply-to" with
+ --compose
+
+The documentation for git-send-email lists the headers handled specially
+by --compose in a way that implies that this is the complete set of
+headers that are special. But one more was added by d11c943c78
+(send-email: support separate Reply-To address, 2018-03-04) and never
+documented.
+
+Let's add it, and reword the documentation slightly to avoid having to
+specify the list of headers twice (as it is growing and will continue to
+do so as we add new features).
+
+If you read the code, you may notice that we also handle MIME-Version
+specially, in that we'll avoid over-writing user-provided MIME headers.
+I don't think this is worth mentioning, as it's what you'd expect to
+happen (as opposed to the other headers, which are picked up to be used
+in later emails). And certainly this feature existed when the
+documentation was expanded in 01d3861217 (git-send-email.txt: describe
+--compose better, 2009-03-16), and we chose not to mention it then.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-send-email.txt | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-send-email.txt b/Documentation/git-send-email.txt
+index 492a82323d..021276329c 100644
+--- a/Documentation/git-send-email.txt
++++ b/Documentation/git-send-email.txt
+@@ -68,11 +68,11 @@ This option may be specified multiple times.
+ 	Invoke a text editor (see GIT_EDITOR in linkgit:git-var[1])
+ 	to edit an introductory message for the patch series.
+ +
+-When `--compose` is used, git send-email will use the From, Subject, and
+-In-Reply-To headers specified in the message. If the body of the message
+-(what you type after the headers and a blank line) only contains blank
+-(or Git: prefixed) lines, the summary won't be sent, but From, Subject,
+-and In-Reply-To headers will be used unless they are removed.
++When `--compose` is used, git send-email will use the From, Subject,
++Reply-To, and In-Reply-To headers specified in the message. If the body
++of the message (what you type after the headers and a blank line) only
++contains blank (or Git: prefixed) lines, the summary won't be sent, but
++the headers mentioned above will be used unless they are removed.
+ +
+ Missing From or In-Reply-To headers will be prompted for.
+ +
+-- 
+2.39.3 (Apple Git-145)
+

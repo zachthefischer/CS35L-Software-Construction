@@ -1,0 +1,58 @@
+From c8f4357010b03db1cde5b514a481b3dbc4c34895 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 28 Nov 2022 22:09:53 +0800
+Subject: [PATCH 0456/2871] pack-bitmap.c: trace bitmap ignore logs when
+ midx-bitmap is found
+
+When we find a midx bitmap, we do not bother checking for pack
+bitmaps, since we can use only one. But since we will warn of unused
+bitmaps via trace2, let's continue looking for pack bitmaps when
+tracing is enabled.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-bitmap.c | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/pack-bitmap.c b/pack-bitmap.c
+index 3b6c2f804a..d2a42abf28 100644
+--- a/pack-bitmap.c
++++ b/pack-bitmap.c
+@@ -524,8 +524,6 @@ static int open_pack_bitmap(struct repository *r,
+ 	struct packed_git *p;
+ 	int ret = -1;
+ 
+-	assert(!bitmap_git->map);
+-
+ 	for (p = get_all_packs(r); p; p = p->next) {
+ 		if (open_pack_bitmap_1(bitmap_git, p) == 0) {
+ 			ret = 0;
+@@ -559,11 +557,20 @@ static int open_midx_bitmap(struct repository *r,
+ static int open_bitmap(struct repository *r,
+ 		       struct bitmap_index *bitmap_git)
+ {
++	int found;
++
+ 	assert(!bitmap_git->map);
+ 
+-	if (!open_midx_bitmap(r, bitmap_git))
+-		return 0;
+-	return open_pack_bitmap(r, bitmap_git);
++	found = !open_midx_bitmap(r, bitmap_git);
++
++	/*
++	 * these will all be skipped if we opened a midx bitmap; but run it
++	 * anyway if tracing is enabled to report the duplicates
++	 */
++	if (!found || trace2_is_enabled())
++		found |= !open_pack_bitmap(r, bitmap_git);
++
++	return found ? 0 : -1;
+ }
+ 
+ struct bitmap_index *prepare_bitmap_git(struct repository *r)
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,83 @@
+From aa1df8146d70bb85c63b0999868fe29aebc1173e Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Mon, 17 Oct 2022 13:17:45 +0000
+Subject: [PATCH 0157/2871] rebase --keep-base: imply --no-fork-point
+
+Given the name of the option it is confusing if --keep-base actually
+changes the base of the branch without --fork-point being explicitly
+given on the command line.
+
+The combination of --keep-base with an explicit --fork-point is still
+supported even though --fork-point means we do not keep the same base
+if the upstream branch has been rewound.  We do this in case anyone is
+relying on this behavior which is tested in t3431[1]
+
+[1] https://lore.kernel.org/git/20200715032014.GA10818@generichostname/
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt | 8 ++++----
+ builtin/rebase.c             | 6 ++++++
+ t/t3431-rebase-fork-point.sh | 2 +-
+ 3 files changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 092a355071..65d500b28e 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -218,7 +218,7 @@ leave out at most one of A and B, in which case it defaults to HEAD.
+ 	merge base of `<upstream>` and `<branch>`. Running
+ 	`git rebase --keep-base <upstream> <branch>` is equivalent to
+ 	running
+-	`git rebase --reapply-cherry-picks --onto <upstream>...<branch> <upstream> <branch>`.
++	`git rebase --reapply-cherry-picks --no-fork-point --onto <upstream>...<branch> <upstream> <branch>`.
+ +
+ This option is useful in the case where one is developing a feature on
+ top of an upstream branch. While the feature is being worked on, the
+@@ -452,9 +452,9 @@ When `--fork-point` is active, 'fork_point' will be used instead of
+ <branch>` command (see linkgit:git-merge-base[1]).  If 'fork_point'
+ ends up being empty, the `<upstream>` will be used as a fallback.
+ +
+-If `<upstream>` is given on the command line, then the default is
+-`--no-fork-point`, otherwise the default is `--fork-point`. See also
+-`rebase.forkpoint` in linkgit:git-config[1].
++If `<upstream>` or `--keep-base` is given on the command line, then
++the default is `--no-fork-point`, otherwise the default is
++`--fork-point`. See also `rebase.forkpoint` in linkgit:git-config[1].
+ +
+ If your branch was based on `<upstream>` but `<upstream>` was rewound and
+ your branch contains commits which were dropped, this option can be used
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 0287f3e817..ef520f66fb 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1230,6 +1230,12 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 			die(_("options '%s' and '%s' cannot be used together"), "--keep-base", "--onto");
+ 		if (options.root)
+ 			die(_("options '%s' and '%s' cannot be used together"), "--keep-base", "--root");
++		/*
++		 * --keep-base defaults to --no-fork-point to keep the
++		 * base the same.
++		 */
++		if (options.fork_point < 0)
++			options.fork_point = 0;
+ 	}
+ 	/*
+ 	 * --keep-base defaults to --reapply-cherry-picks to avoid losing
+diff --git a/t/t3431-rebase-fork-point.sh b/t/t3431-rebase-fork-point.sh
+index 1d0b15380e..70e8136356 100755
+--- a/t/t3431-rebase-fork-point.sh
++++ b/t/t3431-rebase-fork-point.sh
+@@ -50,7 +50,7 @@ test_rebase () {
+ 
+ test_rebase 'G F E D B A'
+ test_rebase 'G F D B A' --onto D
+-test_rebase 'G F B A' --keep-base
++test_rebase 'G F C B A' --keep-base
+ test_rebase 'G F C E D B A' --no-fork-point
+ test_rebase 'G F C D B A' --no-fork-point --onto D
+ test_rebase 'G F C B A' --no-fork-point --keep-base
+-- 
+2.39.3 (Apple Git-145)
+

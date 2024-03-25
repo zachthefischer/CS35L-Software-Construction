@@ -1,0 +1,96 @@
+From be0d29d301ffe284b123247d6680b289f73924a4 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 12 Oct 2022 09:35:10 +0000
+Subject: [PATCH 0163/2871] rebase --apply: make reflog messages match rebase
+ --merge
+
+The apply backend creates slightly different reflog messages to the
+merge backend when starting or finishing a rebase and when picking
+commits. These differences make it harder than it needs to be to parse
+the reflog (I have a script that reads the finishing messages from
+rebase and it is a pain to have to accommodate two different message
+formats). While it is possible to determine the backend used for a
+rebase from the reflog messages, the differences are not designed for
+that purpose. c2417d3af7 (rebase: drop '-i' from the reflog for
+interactive-based rebases, 2020-02-15) removed the clear distinction
+between the reflog messages of the two backends without complaint.
+
+As the merge backend is the default it is likely to be the format most
+common in existing reflogs. For that reason the apply backend is changed
+to format its reflog messages to match the merge backend as closely as
+possible. Note that there is still a difference as when committing a
+conflict resolution the apply backend will use "(pick)" rather than
+"(continue)" because it is not currently possible to change the message
+for a single commit.
+
+In addition to c2417d3af7 we also changed the reflog messages in
+68aa495b59 (rebase: implement --merge via the interactive machinery,
+2018-12-11) and 2ac0d6273f (rebase: change the default backend from "am"
+to "merge", 2020-02-15). This commit makes the same change to "git
+rebase --apply" that 2ac0d6273f made to "git rebase" without any backend
+specific options. As the messages are changed to use an existing format
+any scripts that can parse the reflog messages of the default rebase
+backend should be unaffected by this change.
+
+There are existing tests for the messages from both backends which are
+adjusted to ensure that they do not get out of sync in the future.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c          | 9 +++++----
+ t/t3406-rebase-message.sh | 2 +-
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index ea246c6bb3..5253ba6686 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -582,10 +582,10 @@ static int move_to_original_branch(struct rebase_options *opts)
+ 	if (!opts->onto)
+ 		BUG("move_to_original_branch without onto");
+ 
+-	strbuf_addf(&branch_reflog, "%s finished: %s onto %s",
++	strbuf_addf(&branch_reflog, "%s (finish): %s onto %s",
+ 		    getenv(GIT_REFLOG_ACTION_ENVIRONMENT),
+ 		    opts->head_name, oid_to_hex(&opts->onto->object.oid));
+-	strbuf_addf(&head_reflog, "%s finished: returning to %s",
++	strbuf_addf(&head_reflog, "%s (finish): returning to %s",
+ 		    getenv(GIT_REFLOG_ACTION_ENVIRONMENT), opts->head_name);
+ 	ropts.branch = opts->head_name;
+ 	ropts.flags = RESET_HEAD_REFS_ONLY;
+@@ -615,7 +615,8 @@ static int run_am(struct rebase_options *opts)
+ 
+ 	am.git_cmd = 1;
+ 	strvec_push(&am.args, "am");
+-
++	strvec_pushf(&am.env, GIT_REFLOG_ACTION_ENVIRONMENT "=%s (pick)",
++		     getenv(GIT_REFLOG_ACTION_ENVIRONMENT));
+ 	if (opts->action && !strcmp("continue", opts->action)) {
+ 		strvec_push(&am.args, "--resolved");
+ 		strvec_pushf(&am.args, "--resolvemsg=%s", resolvemsg);
+@@ -1792,7 +1793,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 		printf(_("First, rewinding head to replay your work on top of "
+ 			 "it...\n"));
+ 
+-	strbuf_addf(&msg, "%s: checkout %s",
++	strbuf_addf(&msg, "%s (start): checkout %s",
+ 		    getenv(GIT_REFLOG_ACTION_ENVIRONMENT), options.onto_name);
+ 	ropts.oid = &options.onto->object.oid;
+ 	ropts.orig_head = &options.orig_head->object.oid,
+diff --git a/t/t3406-rebase-message.sh b/t/t3406-rebase-message.sh
+index bb2a4949ab..5c6cd9af3b 100755
+--- a/t/t3406-rebase-message.sh
++++ b/t/t3406-rebase-message.sh
+@@ -88,7 +88,7 @@ test_expect_success 'error out early upon -C<n> or --whitespace=<bad>' '
+ write_reflog_expect () {
+ 	if test $mode = --apply
+ 	then
+-		sed 's/(finish)/finished/; s/ ([^)]*)//'
++		sed 's/(continue)/(pick)/'
+ 	else
+ 		cat
+ 	fi >expect
+-- 
+2.39.3 (Apple Git-145)
+

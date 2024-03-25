@@ -1,0 +1,76 @@
+From 4a3c34662bc56a0e2369635536ac2ee1e79d8f56 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 17:05:44 -0400
+Subject: [PATCH 2266/2871] commit-graph: check size of generations chunk
+
+We neither check nor record the size of the generations chunk we parse
+from a commit-graph file. This should have one uint32_t for each commit
+in the file; if it is smaller (due to corruption, etc), we may read
+outside the mapped memory.
+
+The included test segfaults without this patch, as it shrinks the size
+considerably (and the chunk is near the end of the file, so we read off
+the end of the array rather than accidentally reading another chunk).
+
+We can fix this by checking the size up front (like we do for other
+fixed-size chunks, like CDAT).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c          | 14 ++++++++++++--
+ t/t5318-commit-graph.sh |  8 ++++++++
+ 2 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 4377b547c8..ca26870d1b 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -350,6 +350,16 @@ static int graph_read_commit_data(const unsigned char *chunk_start,
+ 	return 0;
+ }
+ 
++static int graph_read_generation_data(const unsigned char *chunk_start,
++				      size_t chunk_size, void *data)
++{
++	struct commit_graph *g = data;
++	if (chunk_size != g->num_commits * sizeof(uint32_t))
++		return error("commit-graph generations chunk is wrong size");
++	g->chunk_generation_data = chunk_start;
++	return 0;
++}
++
+ static int graph_read_bloom_data(const unsigned char *chunk_start,
+ 				  size_t chunk_size, void *data)
+ {
+@@ -439,8 +449,8 @@ struct commit_graph *parse_commit_graph(struct repo_settings *s,
+ 		   &graph->chunk_base_graphs_size);
+ 
+ 	if (s->commit_graph_generation_version >= 2) {
+-		pair_chunk_unsafe(cf, GRAPH_CHUNKID_GENERATION_DATA,
+-			&graph->chunk_generation_data);
++		read_chunk(cf, GRAPH_CHUNKID_GENERATION_DATA,
++			   graph_read_generation_data, graph);
+ 		pair_chunk_unsafe(cf, GRAPH_CHUNKID_GENERATION_DATA_OVERFLOW,
+ 			&graph->chunk_generation_data_overflow);
+ 
+diff --git a/t/t5318-commit-graph.sh b/t/t5318-commit-graph.sh
+index 05bafcfe5f..6505ff595a 100755
+--- a/t/t5318-commit-graph.sh
++++ b/t/t5318-commit-graph.sh
+@@ -887,4 +887,12 @@ test_expect_success 'reader notices out-of-bounds extra edge' '
+ 	test_cmp expect.err err
+ '
+ 
++test_expect_success 'reader notices too-small generations chunk' '
++	check_corrupt_chunk GDA2 clear 00000000 &&
++	cat >expect.err <<-\EOF &&
++	error: commit-graph generations chunk is wrong size
++	EOF
++	test_cmp expect.err err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,44 @@
+From 57dbb70cd953c39c9eb8a8d0fe42e5319194fb81 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:28 -0400
+Subject: [PATCH 2021/2871] add-interactive: mark unused callback parameters
+
+The interactive commands are dispatched from a table of abstract
+pointers, but not every command uses every parameter it receives. Mark
+the unused ones to silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ add-interactive.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/add-interactive.c b/add-interactive.c
+index add9a1ad43..852e8e6b2f 100644
+--- a/add-interactive.c
++++ b/add-interactive.c
+@@ -1021,9 +1021,9 @@ static int run_diff(struct add_i_state *s, const struct pathspec *ps,
+ 	return res;
+ }
+ 
+-static int run_help(struct add_i_state *s, const struct pathspec *unused_ps,
+-		    struct prefix_item_list *unused_files,
+-		    struct list_and_choose_options *unused_opts)
++static int run_help(struct add_i_state *s, const struct pathspec *ps UNUSED,
++		    struct prefix_item_list *files UNUSED,
++		    struct list_and_choose_options *opts UNUSED)
+ {
+ 	color_fprintf_ln(stdout, s->help_color, "status        - %s",
+ 			 _("show paths with changes"));
+@@ -1074,7 +1074,7 @@ struct print_command_item_data {
+ 	const char *color, *reset;
+ };
+ 
+-static void print_command_item(int i, int selected,
++static void print_command_item(int i, int selected UNUSED,
+ 			       struct string_list_item *item,
+ 			       void *print_command_item_data)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,49 @@
+From 991d549f74862d07a38a077f34c0deaf65607c74 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 3 Oct 2023 16:30:04 -0400
+Subject: [PATCH 2189/2871] commit-graph: delay base_graph assignment in
+ add_graph_to_chain()
+
+When adding a graph to a chain, we do some consistency checks and then
+if everything looks good, set g->base_graph to add a link to the chain.
+But when we added a new consistency check in 209250ef38 (commit-graph.c:
+prevent overflow in add_graph_to_chain(), 2023-07-12), it comes _after_
+we've already set g->base_graph. So we might return failure, even though
+we actually added to the chain.
+
+This hasn't caused a bug yet, because after failing to add to the chain,
+we discard the failed graph struct completely, leaking it. But in order
+to fix that, it's important that the struct be in a consistent and
+predictable state after the failure.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 2f75ecd9ae..2c72a554c2 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -498,8 +498,6 @@ static int add_graph_to_chain(struct commit_graph *g,
+ 		cur_g = cur_g->base_graph;
+ 	}
+ 
+-	g->base_graph = chain;
+-
+ 	if (chain) {
+ 		if (unsigned_add_overflows(chain->num_commits,
+ 					   chain->num_commits_in_base)) {
+@@ -510,6 +508,8 @@ static int add_graph_to_chain(struct commit_graph *g,
+ 		g->num_commits_in_base = chain->num_commits + chain->num_commits_in_base;
+ 	}
+ 
++	g->base_graph = chain;
++
+ 	return 1;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

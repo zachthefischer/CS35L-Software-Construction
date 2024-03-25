@@ -1,0 +1,65 @@
+From 4a4d9706ade6dcdca7cc16372f1f83f5011a5d2b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 28 Mar 2023 16:58:42 -0400
+Subject: [PATCH 1174/2871] parse-options: drop parse_opt_unknown_cb()
+
+This low-level callback was introduced in ce564eb1bd5 (parse-options:
+add parse_opt_unknown_cb(), 2016-09-05) so that we could advertise
+--indent-heuristic in git-blame's "-h" output, even though the option is
+actually handled in parse_revision_opt(). We later stopped doing so in
+44ae131e384 (builtin/blame.c: remove '--indent-heuristic' from usage
+string, 2019-10-28).
+
+This is a weird thing to do, and in the intervening years, we've never
+used it again. Let's drop the helper in the name of simplicity.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options-cb.c | 15 ---------------
+ parse-options.h    |  3 ---
+ 2 files changed, 18 deletions(-)
+
+diff --git a/parse-options-cb.c b/parse-options-cb.c
+index d346dbe210..4729277aa6 100644
+--- a/parse-options-cb.c
++++ b/parse-options-cb.c
+@@ -213,21 +213,6 @@ int parse_opt_noop_cb(const struct option *opt, const char *arg, int unset)
+ 	return 0;
+ }
+ 
+-/**
+- * Report that the option is unknown, so that other code can handle
+- * it. This can be used as a callback together with
+- * OPTION_LOWLEVEL_CALLBACK to allow an option to be documented in the
+- * "-h" output even if it's not being handled directly by
+- * parse_options().
+- */
+-enum parse_opt_result parse_opt_unknown_cb(struct parse_opt_ctx_t *ctx,
+-					   const struct option *opt,
+-					   const char *arg, int unset)
+-{
+-	BUG_ON_OPT_ARG(arg);
+-	return PARSE_OPT_UNKNOWN;
+-}
+-
+ /**
+  * Recreates the command-line option in the strbuf.
+  */
+diff --git a/parse-options.h b/parse-options.h
+index 50d852f299..60b0a758d6 100644
+--- a/parse-options.h
++++ b/parse-options.h
+@@ -348,9 +348,6 @@ int parse_opt_commit(const struct option *, const char *, int);
+ int parse_opt_tertiary(const struct option *, const char *, int);
+ int parse_opt_string_list(const struct option *, const char *, int);
+ int parse_opt_noop_cb(const struct option *, const char *, int);
+-enum parse_opt_result parse_opt_unknown_cb(struct parse_opt_ctx_t *ctx,
+-					   const struct option *,
+-					   const char *, int);
+ int parse_opt_passthru(const struct option *, const char *, int);
+ int parse_opt_passthru_argv(const struct option *, const char *, int);
+ /* value is enum branch_track* */
+-- 
+2.39.3 (Apple Git-145)
+

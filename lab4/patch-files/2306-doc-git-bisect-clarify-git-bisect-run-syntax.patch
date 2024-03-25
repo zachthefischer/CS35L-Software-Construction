@@ -1,0 +1,72 @@
+From 3f02785de9f6db28fec17e7100f70665e725b7c5 Mon Sep 17 00:00:00 2001
+From: Javier Mora <cousteaulecommandant@gmail.com>
+Date: Mon, 23 Oct 2023 19:23:10 +0000
+Subject: [PATCH 2306/2871] doc/git-bisect: clarify `git bisect run` syntax
+
+The description of the `git bisect run` command syntax at the beginning
+of the manpage is `git bisect run <cmd>...`, which isn't quite clear
+about what `<cmd>` is or what the `...` mean; one could think that it is
+the whole (quoted) command line with all arguments in a single string,
+or that it supports multiple commands, or that it doesn't accept
+commands with arguments at all.
+
+Change to `git bisect run <cmd> [<arg>...]` to clarify the syntax,
+in both the manpage and the `git bisect -h` command output.
+
+Additionally, change `--term-{new,bad}` et al to `--term-(new|bad)`
+for consistency with the synopsis syntax conventions.
+
+Signed-off-by: Javier Mora <cousteaulecommandant@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-bisect.txt | 4 ++--
+ builtin/bisect.c             | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-bisect.txt b/Documentation/git-bisect.txt
+index 7872dba3ae..191b4a42b6 100644
+--- a/Documentation/git-bisect.txt
++++ b/Documentation/git-bisect.txt
+@@ -16,7 +16,7 @@ DESCRIPTION
+ The command takes various subcommands, and different options depending
+ on the subcommand:
+ 
+- git bisect start [--term-{new,bad}=<term> --term-{old,good}=<term>]
++ git bisect start [--term-(new|bad)=<term-new> --term-(old|good)=<term-old>]
+ 		  [--no-checkout] [--first-parent] [<bad> [<good>...]] [--] [<paths>...]
+  git bisect (bad|new|<term-new>) [<rev>]
+  git bisect (good|old|<term-old>) [<rev>...]
+@@ -26,7 +26,7 @@ on the subcommand:
+  git bisect (visualize|view)
+  git bisect replay <logfile>
+  git bisect log
+- git bisect run <cmd>...
++ git bisect run <cmd> [<arg>...]
+  git bisect help
+ 
+ This command uses a binary search algorithm to find which commit in
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index 65478ef40f..35938b05fd 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -26,7 +26,7 @@ static GIT_PATH_FUNC(git_path_bisect_first_parent, "BISECT_FIRST_PARENT")
+ static GIT_PATH_FUNC(git_path_bisect_run, "BISECT_RUN")
+ 
+ #define BUILTIN_GIT_BISECT_START_USAGE \
+-	N_("git bisect start [--term-{new,bad}=<term> --term-{old,good}=<term>]" \
++	N_("git bisect start [--term-(new|bad)=<term> --term-(old|good)=<term>]" \
+ 	   "    [--no-checkout] [--first-parent] [<bad> [<good>...]] [--]" \
+ 	   "    [<pathspec>...]")
+ #define BUILTIN_GIT_BISECT_STATE_USAGE \
+@@ -46,7 +46,7 @@ static GIT_PATH_FUNC(git_path_bisect_run, "BISECT_RUN")
+ #define BUILTIN_GIT_BISECT_LOG_USAGE \
+ 	"git bisect log"
+ #define BUILTIN_GIT_BISECT_RUN_USAGE \
+-	N_("git bisect run <cmd>...")
++	N_("git bisect run <cmd> [<arg>...]")
+ 
+ static const char * const git_bisect_usage[] = {
+ 	BUILTIN_GIT_BISECT_START_USAGE,
+-- 
+2.39.3 (Apple Git-145)
+

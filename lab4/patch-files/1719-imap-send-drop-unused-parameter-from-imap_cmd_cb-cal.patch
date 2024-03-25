@@ -1,0 +1,57 @@
+From ec9e358a4a1a0f5513d57f5447d43e31a508dd17 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:34:02 -0400
+Subject: [PATCH 1719/2871] imap-send: drop unused parameter from imap_cmd_cb
+ callback
+
+There's a generic callback mechanism for handling plus-continuation of
+IMAP commands. It takes the imap_cmd struct itself as an argument. That
+seems reasonable, and in a larger imap-using program it might be used.
+But in imap-send, we have only one such callback (auth_cram_md5) and it
+doesn't use this value, triggering -Wunused-parameter warnings.
+
+We could just mark the parameter as UNUSED. But since this is the only
+such function, and because we are not likely to share code with the
+upstream isync anymore, we can just simplify the interface to remove
+this parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ imap-send.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/imap-send.c b/imap-send.c
+index 0afd88de44..81a87f434b 100644
+--- a/imap-send.c
++++ b/imap-send.c
+@@ -137,7 +137,7 @@ struct imap_store {
+ };
+ 
+ struct imap_cmd_cb {
+-	int (*cont)(struct imap_store *ctx, struct imap_cmd *cmd, const char *prompt);
++	int (*cont)(struct imap_store *ctx, const char *prompt);
+ 	void (*done)(struct imap_store *ctx, struct imap_cmd *cmd, int response);
+ 	void *ctx;
+ 	char *data;
+@@ -786,7 +786,7 @@ static int get_cmd_result(struct imap_store *ctx, struct imap_cmd *tcmd)
+ 				if (n != (int)cmdp->cb.dlen)
+ 					return RESP_BAD;
+ 			} else if (cmdp->cb.cont) {
+-				if (cmdp->cb.cont(ctx, cmdp, cmd))
++				if (cmdp->cb.cont(ctx, cmd))
+ 					return RESP_BAD;
+ 			} else {
+ 				fprintf(stderr, "IMAP error: unexpected command continuation request\n");
+@@ -917,7 +917,7 @@ static char *cram(const char *challenge_64, const char *user, const char *pass)
+ 
+ #endif
+ 
+-static int auth_cram_md5(struct imap_store *ctx, struct imap_cmd *cmd, const char *prompt)
++static int auth_cram_md5(struct imap_store *ctx, const char *prompt)
+ {
+ 	int ret;
+ 	char *response;
+-- 
+2.39.3 (Apple Git-145)
+

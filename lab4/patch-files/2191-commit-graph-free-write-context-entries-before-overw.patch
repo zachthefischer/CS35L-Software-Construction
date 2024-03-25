@@ -1,0 +1,36 @@
+From 274bfa7f28fea96fafa114f2508ebef53735d7b6 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 3 Oct 2023 16:30:55 -0400
+Subject: [PATCH 2191/2871] commit-graph: free write-context entries before
+ overwriting
+
+When writing a split graph file, we replace the final element of the
+commit_graph_hash_after and commit_graph_filenames_after arrays. But
+since these are allocated strings, we need to free them before
+overwriting to avoid leaking the old string.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 4aa2f294f1..744b7eb1a3 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2065,9 +2065,11 @@ static int write_commit_graph_file(struct write_commit_graph_context *ctx)
+ 			free(graph_name);
+ 		}
+ 
++		free(ctx->commit_graph_hash_after[ctx->num_commit_graphs_after - 1]);
+ 		ctx->commit_graph_hash_after[ctx->num_commit_graphs_after - 1] = xstrdup(hash_to_hex(file_hash));
+ 		final_graph_name = get_split_graph_filename(ctx->odb,
+ 					ctx->commit_graph_hash_after[ctx->num_commit_graphs_after - 1]);
++		free(ctx->commit_graph_filenames_after[ctx->num_commit_graphs_after - 1]);
+ 		ctx->commit_graph_filenames_after[ctx->num_commit_graphs_after - 1] = final_graph_name;
+ 
+ 		result = rename(ctx->graph_name, final_graph_name);
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,65 @@
+From 61e1c560bc7424278504b46f764a1ad945cebf37 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 29 Jan 2024 12:07:30 +0100
+Subject: [PATCH 2771/2871] t1419: mark test suite as files-backend specific
+
+With 59c35fac54 (refs/packed-backend.c: implement jump lists to avoid
+excluded pattern(s), 2023-07-10) we have implemented logic to handle
+excluded refs more efficiently in the "packed" ref backend. This logic
+allows us to skip emitting refs completely which we know to not be of
+any interest to the caller, which can avoid quite some allocations and
+object lookups.
+
+This was wired up via a new `exclude_patterns` parameter passed to the
+backend's ref iterator. The backend only needs to handle them on a best
+effort basis though, and in fact we only handle it for the "packed-refs"
+file, but not for loose references. Consequently, all callers must still
+filter emitted refs with those exclude patterns.
+
+The result is that handling exclude patterns is completely optional in
+the ref backend, and any future backends may or may not implement it.
+Let's thus mark the test for t1419 to depend on the REFFILES prereq.
+
+An alternative would be to introduce a new prereq that tells us whether
+the backend under test supports exclude patterns or not. But this does
+feel a bit overblown:
+
+  - It would either map to the REFFILES prereq, in which case it feels
+    overengineered because the prereq is only ever relevant to t1419.
+
+  - Otherwise, it could auto-detect whether the backend supports exclude
+    patterns. But this could lead to silent failures in case the support
+    for this feature breaks at any point in time.
+
+It should thus be good enough to just use the REFFILES prereq for now.
+If future backends ever grow support for exclude patterns we can easily
+add their respective prereq as another condition for this test suite to
+execute.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Reviewed-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1419-exclude-refs.sh | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/t/t1419-exclude-refs.sh b/t/t1419-exclude-refs.sh
+index 5d8c86b657..1359574419 100755
+--- a/t/t1419-exclude-refs.sh
++++ b/t/t1419-exclude-refs.sh
+@@ -8,6 +8,12 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
++if test_have_prereq !REFFILES
++then
++	skip_all='skipping `git for-each-ref --exclude` tests; need files backend'
++	test_done
++fi
++
+ for_each_ref__exclude () {
+ 	GIT_TRACE2_PERF=1 test-tool ref-store main \
+ 		for-each-ref--exclude "$@" >actual.raw
+-- 
+2.39.3 (Apple Git-145)
+

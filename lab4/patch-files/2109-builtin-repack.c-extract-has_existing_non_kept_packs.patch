@@ -1,0 +1,66 @@
+From 4bbfb003c06c9a3b8e02d8957f053ce938c3d93e Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 13 Sep 2023 15:17:54 -0400
+Subject: [PATCH 2109/2871] builtin/repack.c: extract
+ `has_existing_non_kept_packs()`
+
+When there is:
+
+  - at least one pre-existing packfile (which is not marked as kept),
+  - repacking with the `-d` flag, and
+  - not doing a cruft repack
+
+, then we pass a handful of additional options to the inner
+`pack-objects` process, like `--unpack-unreachable`,
+`--keep-unreachable`, and `--pack-loose-unreachable`, in addition to
+marking any packs we just wrote for promisor remotes as kept in-core
+(with `--keep-pack`, as opposed to the presence of a ".keep" file on
+disk).
+
+Because we store both cruft and non-cruft packs together in the same
+`existing.non_kept_packs` list, it suffices to check its `nr` member to
+see if it is zero or not.
+
+But a following change will store cruft- and non-cruft packs separately,
+meaning this check would break as a result. Prepare for this by
+extracting this part of the check into a new helper function called
+`has_existing_non_kept_packs()`.
+
+This patch does not introduce any functional changes, but prepares us to
+make a more isolated change in a subsequent patch.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index f6717e334c..3f0789ff89 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -105,6 +105,11 @@ struct existing_packs {
+ 	.non_kept_packs = STRING_LIST_INIT_DUP, \
+ }
+ 
++static int has_existing_non_kept_packs(const struct existing_packs *existing)
++{
++	return existing->non_kept_packs.nr;
++}
++
+ static void mark_packs_for_deletion_1(struct string_list *names,
+ 				      struct string_list *list)
+ {
+@@ -1048,7 +1053,8 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 	if (pack_everything & ALL_INTO_ONE) {
+ 		repack_promisor_objects(&po_args, &names);
+ 
+-		if (existing.non_kept_packs.nr && delete_redundant &&
++		if (has_existing_non_kept_packs(&existing) &&
++		    delete_redundant &&
+ 		    !(pack_everything & PACK_CRUFT)) {
+ 			for_each_string_list_item(item, &names) {
+ 				strvec_pushf(&cmd.args, "--keep-pack=%s-%s.pack",
+-- 
+2.39.3 (Apple Git-145)
+

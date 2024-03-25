@@ -1,0 +1,38 @@
+From 3521c6321350cf1432f4772efa09db8bec0aa331 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 27 Mar 2023 00:33:40 +0200
+Subject: [PATCH 1119/2871] branch: avoid unnecessary worktrees traversals
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When we rename a branch ref, we need to update any worktree that have
+its HEAD pointing to the branch ref being renamed, so to make it use the
+new ref name.
+
+If we know in advance that we're renaming a branch that is not currently
+checked out in any worktree, we can skip this step entirely.  Let's do
+it so.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index a93b9fc0ab..6a564b22b0 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -617,7 +617,7 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int
+ 				interpreted_oldname);
+ 	}
+ 
+-	if (!copy &&
++	if (!copy && (oldref_usage & IS_HEAD) &&
+ 	    replace_each_worktree_head_symref(worktrees, oldref.buf, newref.buf,
+ 					      logmsg.buf))
+ 		die(_("Branch renamed to %s, but HEAD is not updated!"), newname);
+-- 
+2.39.3 (Apple Git-145)
+

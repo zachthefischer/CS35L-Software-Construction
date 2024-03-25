@@ -1,0 +1,82 @@
+From 5843080c85ae9d13f77442bec7bbec8e84a18100 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 2 Mar 2023 08:44:16 -0800
+Subject: [PATCH 1096/2871] http.c: clear the 'finished' member once we are
+ done with it
+
+In http.c, the run_active_slot() function allows the given "slot" to
+make progress by calling step_active_slots() in a loop repeatedly,
+and the loop is not left until the request held in the slot
+completes.
+
+Ages ago, we used to use the slot->in_use member to get out of the
+loop, which misbehaved when the request in "slot" completes (at
+which time, the result of the request is copied away from the slot,
+and the in_use member is cleared, making the slot ready to be
+reused), and the "slot" gets reused to service a different request
+(at which time, the "slot" becomes in_use again, even though it is
+for a different request).  The loop terminating condition mistakenly
+thought that the original request has yet to be completed.
+
+Today's code, after baa7b67d (HTTP slot reuse fixes, 2006-03-10)
+fixed this issue, uses a separate "slot->finished" member that is
+set in run_active_slot() to point to an on-stack variable, and the
+code that completes the request in finish_active_slot() clears the
+on-stack variable via the pointer to signal that the particular
+request held by the slot has completed.  It also clears the in_use
+member (as before that fix), so that the slot itself can safely be
+reused for an unrelated request.
+
+One thing that is not quite clean in this arrangement is that,
+unless the slot gets reused, at which point the finished member is
+reset to NULL, the member keeps the value of &finished, which
+becomes a dangling pointer into the stack when run_active_slot()
+returns.  Clear the finished member before the control leaves the
+function, which has a side effect of unconfusing compilers like
+recent GCC 12 that is over-eager to warn against such an assignment.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/http.c b/http.c
+index 8b23a546af..f44209881e 100644
+--- a/http.c
++++ b/http.c
+@@ -1523,6 +1523,32 @@ void run_active_slot(struct active_request_slot *slot)
+ 		finish_active_slot(slot);
+ 	}
+ #endif
++
++	/*
++	 * The value of slot->finished we set before the loop was used
++	 * to set our "finished" variable when our request completed.
++	 *
++	 * 1. The slot may not have been reused for another requst
++	 *    yet, in which case it still has &finished.
++	 *
++	 * 2. The slot may already be in-use to serve another request,
++	 *    which can further be divided into two cases:
++	 *
++	 * (a) If call run_active_slot() hasn't been called for that
++	 *     other request, slot->finished would have been cleared
++	 *     by get_active_slot() and has NULL.
++	 *
++	 * (b) If the request did call run_active_slot(), then the
++	 *     call would have updated slot->finished at the beginning
++	 *     of this function, and with the clearing of the member
++	 *     below, we would find that slot->finished is now NULL.
++	 *
++	 * In all cases, slot->finished has no useful information to
++	 * anybody at this point.  Some compilers warn us for
++	 * attempting to smuggle a pointer that is about to become
++	 * invalid, i.e. &finished.  We clear it here to assure them.
++	 */
++	slot->finished = NULL;
+ }
+ 
+ static void release_active_slot(struct active_request_slot *slot)
+-- 
+2.39.3 (Apple Git-145)
+

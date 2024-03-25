@@ -1,0 +1,160 @@
+From 97eeeea2dc069a1fcb03db99ef3810ebe3056188 Mon Sep 17 00:00:00 2001
+From: Glen Choo <chooglen@google.com>
+Date: Wed, 28 Jun 2023 19:26:20 +0000
+Subject: [PATCH 1697/2871] config: inline git_color_default_config
+
+git_color_default_config() is a shorthand for calling two other config
+callbacks. There are no other non-static functions that do this and it
+will complicate our refactoring of config_fn_t so inline it instead.
+
+Signed-off-by: Glen Choo <chooglen@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/add.c         | 5 ++++-
+ builtin/branch.c      | 5 ++++-
+ builtin/clean.c       | 6 ++++--
+ builtin/grep.c        | 5 ++++-
+ builtin/show-branch.c | 5 ++++-
+ builtin/tag.c         | 6 +++++-
+ color.c               | 8 --------
+ color.h               | 6 +-----
+ 8 files changed, 26 insertions(+), 20 deletions(-)
+
+diff --git a/builtin/add.c b/builtin/add.c
+index 6137e7b4ad..e01efdfc50 100644
+--- a/builtin/add.c
++++ b/builtin/add.c
+@@ -365,7 +365,10 @@ static int add_config(const char *var, const char *value, void *cb)
+ 		return 0;
+ 	}
+ 
+-	return git_color_default_config(var, value, cb);
++	if (git_color_config(var, value, cb) < 0)
++		return -1;
++
++	return git_default_config(var, value, cb);
+ }
+ 
+ static const char embedded_advice[] = N_(
+diff --git a/builtin/branch.c b/builtin/branch.c
+index 075e580d22..8337b9e71b 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -117,7 +117,10 @@ static int git_branch_config(const char *var, const char *value, void *cb)
+ 		return 0;
+ 	}
+ 
+-	return git_color_default_config(var, value, cb);
++	if (git_color_config(var, value, cb) < 0)
++		return -1;
++
++	return git_default_config(var, value, cb);
+ }
+ 
+ static const char *branch_get_color(enum color_branch ix)
+diff --git a/builtin/clean.c b/builtin/clean.c
+index 78852d28ce..57e7f7cac6 100644
+--- a/builtin/clean.c
++++ b/builtin/clean.c
+@@ -130,8 +130,10 @@ static int git_clean_config(const char *var, const char *value, void *cb)
+ 		return 0;
+ 	}
+ 
+-	/* inspect the color.ui config variable and others */
+-	return git_color_default_config(var, value, cb);
++	if (git_color_config(var, value, cb) < 0)
++		return -1;
++
++	return git_default_config(var, value, cb);
+ }
+ 
+ static const char *clean_get_color(enum color_clean ix)
+diff --git a/builtin/grep.c b/builtin/grep.c
+index b86c754def..76cf999d31 100644
+--- a/builtin/grep.c
++++ b/builtin/grep.c
+@@ -293,7 +293,10 @@ static int wait_all(void)
+ static int grep_cmd_config(const char *var, const char *value, void *cb)
+ {
+ 	int st = grep_config(var, value, cb);
+-	if (git_color_default_config(var, value, NULL) < 0)
++
++	if (git_color_config(var, value, cb) < 0)
++		st = -1;
++	else if (git_default_config(var, value, cb) < 0)
+ 		st = -1;
+ 
+ 	if (!strcmp(var, "grep.threads")) {
+diff --git a/builtin/show-branch.c b/builtin/show-branch.c
+index 7ef4a642c1..a2461270d4 100644
+--- a/builtin/show-branch.c
++++ b/builtin/show-branch.c
+@@ -579,7 +579,10 @@ static int git_show_branch_config(const char *var, const char *value, void *cb)
+ 		return 0;
+ 	}
+ 
+-	return git_color_default_config(var, value, cb);
++	if (git_color_config(var, value, cb) < 0)
++		return -1;
++
++	return git_default_config(var, value, cb);
+ }
+ 
+ static int omit_in_dense(struct commit *commit, struct commit **rev, int n)
+diff --git a/builtin/tag.c b/builtin/tag.c
+index 49b64c7a28..1acf5f7a59 100644
+--- a/builtin/tag.c
++++ b/builtin/tag.c
+@@ -209,7 +209,11 @@ static int git_tag_config(const char *var, const char *value, void *cb)
+ 
+ 	if (starts_with(var, "column."))
+ 		return git_column_config(var, value, "tag", &colopts);
+-	return git_color_default_config(var, value, cb);
++
++	if (git_color_config(var, value, cb) < 0)
++		return -1;
++
++	return git_default_config(var, value, cb);
+ }
+ 
+ static void write_tag_body(int fd, const struct object_id *oid)
+diff --git a/color.c b/color.c
+index 83abb11eda..b24b19566b 100644
+--- a/color.c
++++ b/color.c
+@@ -430,14 +430,6 @@ int git_color_config(const char *var, const char *value, void *cb UNUSED)
+ 	return 0;
+ }
+ 
+-int git_color_default_config(const char *var, const char *value, void *cb)
+-{
+-	if (git_color_config(var, value, cb) < 0)
+-		return -1;
+-
+-	return git_default_config(var, value, cb);
+-}
+-
+ void color_print_strbuf(FILE *fp, const char *color, const struct strbuf *sb)
+ {
+ 	if (*color)
+diff --git a/color.h b/color.h
+index cfc8f841b2..bb28343be2 100644
+--- a/color.h
++++ b/color.h
+@@ -88,12 +88,8 @@ extern const int column_colors_ansi_max;
+  */
+ extern int color_stdout_is_tty;
+ 
+-/*
+- * Use the first one if you need only color config; the second is a convenience
+- * if you are just going to change to git_default_config, too.
+- */
++/* Parse color config. */
+ int git_color_config(const char *var, const char *value, void *cb);
+-int git_color_default_config(const char *var, const char *value, void *cb);
+ 
+ /*
+  * Parse a config option, which can be a boolean or one of
+-- 
+2.39.3 (Apple Git-145)
+

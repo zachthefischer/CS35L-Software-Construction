@@ -1,0 +1,36 @@
+From f7f9a836e22b559a2f122c7951ca7d4af25258e7 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sun, 23 Apr 2023 15:46:47 +0200
+Subject: [PATCH 1344/2871] t1300: drop duplicate test
+
+There are two almost identical tests called 'git config ignores pairs
+with zero count' in file t1300-config.sh.  Drop the first of these and
+keep the one that contains more assertions.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1300-config.sh | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/t/t1300-config.sh b/t/t1300-config.sh
+index 2575279ab8..696dca17c6 100755
+--- a/t/t1300-config.sh
++++ b/t/t1300-config.sh
+@@ -1458,13 +1458,6 @@ test_expect_success 'git config ignores pairs without count' '
+ 	test_must_be_empty error
+ '
+ 
+-test_expect_success 'git config ignores pairs with zero count' '
+-	test_must_fail env \
+-		GIT_CONFIG_COUNT=0 \
+-		GIT_CONFIG_KEY_0="pair.one" GIT_CONFIG_VALUE_0="value" \
+-		git config pair.one
+-'
+-
+ test_expect_success 'git config ignores pairs exceeding count' '
+ 	GIT_CONFIG_COUNT=1 \
+ 		GIT_CONFIG_KEY_0="pair.one" GIT_CONFIG_VALUE_0="value" \
+-- 
+2.39.3 (Apple Git-145)
+

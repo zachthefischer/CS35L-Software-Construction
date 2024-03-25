@@ -1,0 +1,120 @@
+From b9f7daa6ef52ad8894b5f730eaee0599668d66d5 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 10 Jul 2023 17:12:07 -0400
+Subject: [PATCH 1750/2871] ref-filter.h: provide `REF_FILTER_INIT`
+
+Provide a sane initialization value for `struct ref_filter`, which in a
+subsequent patch will be used to initialize a new field.
+
+In the meantime, ensure that the `ref_filter` struct used in the
+test-helper's `cmd__reach()` is zero-initialized. The lack of
+initialization is OK, since `commit_contains()` only looks at the single
+`with_commit_tag_algo` field that *is* initialized directly above.
+
+So this does not fix a bug, but rather prevents one from biting us in
+the future.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c       | 3 +--
+ builtin/for-each-ref.c | 3 +--
+ builtin/tag.c          | 3 +--
+ ref-filter.h           | 3 +++
+ t/helper/test-reach.c  | 2 +-
+ 5 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index e6c2655af6..7891dec361 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -707,7 +707,7 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 	int reflog = 0, quiet = 0, icase = 0, force = 0,
+ 	    recurse_submodules_explicit = 0;
+ 	enum branch_track track;
+-	struct ref_filter filter;
++	struct ref_filter filter = REF_FILTER_INIT;
+ 	static struct ref_sorting *sorting;
+ 	struct string_list sorting_options = STRING_LIST_INIT_DUP;
+ 	struct ref_format format = REF_FORMAT_INIT;
+@@ -765,7 +765,6 @@ int cmd_branch(int argc, const char **argv, const char *prefix)
+ 
+ 	setup_ref_filter_porcelain_msg();
+ 
+-	memset(&filter, 0, sizeof(filter));
+ 	filter.kind = FILTER_REFS_BRANCHES;
+ 	filter.abbrev = -1;
+ 
+diff --git a/builtin/for-each-ref.c b/builtin/for-each-ref.c
+index 695fc8f4a5..99ccb73518 100644
+--- a/builtin/for-each-ref.c
++++ b/builtin/for-each-ref.c
+@@ -24,7 +24,7 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
+ 	struct string_list sorting_options = STRING_LIST_INIT_DUP;
+ 	int maxcount = 0, icase = 0, omit_empty = 0;
+ 	struct ref_array array;
+-	struct ref_filter filter;
++	struct ref_filter filter = REF_FILTER_INIT;
+ 	struct ref_format format = REF_FORMAT_INIT;
+ 	struct strbuf output = STRBUF_INIT;
+ 	struct strbuf err = STRBUF_INIT;
+@@ -61,7 +61,6 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
+ 	};
+ 
+ 	memset(&array, 0, sizeof(array));
+-	memset(&filter, 0, sizeof(filter));
+ 
+ 	format.format = "%(objectname) %(objecttype)\t%(refname)";
+ 
+diff --git a/builtin/tag.c b/builtin/tag.c
+index 1850a6a6fd..6b41bb7374 100644
+--- a/builtin/tag.c
++++ b/builtin/tag.c
+@@ -443,7 +443,7 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 	struct msg_arg msg = { .buf = STRBUF_INIT };
+ 	struct ref_transaction *transaction;
+ 	struct strbuf err = STRBUF_INIT;
+-	struct ref_filter filter;
++	struct ref_filter filter = REF_FILTER_INIT;
+ 	struct ref_sorting *sorting;
+ 	struct string_list sorting_options = STRING_LIST_INIT_DUP;
+ 	struct ref_format format = REF_FORMAT_INIT;
+@@ -501,7 +501,6 @@ int cmd_tag(int argc, const char **argv, const char *prefix)
+ 	git_config(git_tag_config, &sorting_options);
+ 
+ 	memset(&opt, 0, sizeof(opt));
+-	memset(&filter, 0, sizeof(filter));
+ 	filter.lines = -1;
+ 	opt.sign = -1;
+ 
+diff --git a/ref-filter.h b/ref-filter.h
+index 430701cfb7..a920f73b29 100644
+--- a/ref-filter.h
++++ b/ref-filter.h
+@@ -92,6 +92,9 @@ struct ref_format {
+ 	struct string_list bases;
+ };
+ 
++#define REF_FILTER_INIT { \
++	.points_at = OID_ARRAY_INIT, \
++}
+ #define REF_FORMAT_INIT {             \
+ 	.use_color = -1,              \
+ 	.bases = STRING_LIST_INIT_DUP, \
+diff --git a/t/helper/test-reach.c b/t/helper/test-reach.c
+index 5b6f217441..ef58f10c2d 100644
+--- a/t/helper/test-reach.c
++++ b/t/helper/test-reach.c
+@@ -139,7 +139,7 @@ int cmd__reach(int ac, const char **av)
+ 
+ 		printf("%s(X,_,_,0,0):%d\n", av[1], can_all_from_reach_with_flag(&X_obj, 2, 4, 0, 0));
+ 	} else if (!strcmp(av[1], "commit_contains")) {
+-		struct ref_filter filter;
++		struct ref_filter filter = REF_FILTER_INIT;
+ 		struct contains_cache cache;
+ 		init_contains_cache(&cache);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

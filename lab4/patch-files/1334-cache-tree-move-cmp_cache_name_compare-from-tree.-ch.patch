@@ -1,0 +1,100 @@
+From aabc5617cdfb29ccf98048b0d99cae2a811df51f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:21 +0000
+Subject: [PATCH 1334/2871] cache,tree: move cmp_cache_name_compare from
+ tree.[ch] to read-cache.c
+
+Since cmp_cache_name_compare() was comparing cache_entry structs, it
+was associated with the cache rather than with trees.  Move the
+function.  As a side effect, we can make cache_name_stage_compare()
+static as well.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h      |  2 +-
+ read-cache.c | 13 ++++++++++++-
+ tree.c       | 10 ----------
+ tree.h       |  1 -
+ 4 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 7a46f300d9..502e4c0b11 100644
+--- a/cache.h
++++ b/cache.h
+@@ -562,7 +562,7 @@ int base_name_compare(const char *name1, size_t len1, int mode1,
+ int df_name_compare(const char *name1, size_t len1, int mode1,
+ 		    const char *name2, size_t len2, int mode2);
+ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2);
+-int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2);
++int cmp_cache_name_compare(const void *a_, const void *b_);
+ 
+ /* add */
+ /*
+diff --git a/read-cache.c b/read-cache.c
+index 206c003e55..8f00da4bf7 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -567,7 +567,8 @@ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2)
+ 	return 0;
+ }
+ 
+-int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2)
++static int cache_name_stage_compare(const char *name1, int len1, int stage1,
++				    const char *name2, int len2, int stage2)
+ {
+ 	int cmp;
+ 
+@@ -582,6 +583,16 @@ int cache_name_stage_compare(const char *name1, int len1, int stage1, const char
+ 	return 0;
+ }
+ 
++int cmp_cache_name_compare(const void *a_, const void *b_)
++{
++	const struct cache_entry *ce1, *ce2;
++
++	ce1 = *((const struct cache_entry **)a_);
++	ce2 = *((const struct cache_entry **)b_);
++	return cache_name_stage_compare(ce1->name, ce1->ce_namelen, ce_stage(ce1),
++				  ce2->name, ce2->ce_namelen, ce_stage(ce2));
++}
++
+ static int index_name_stage_pos(struct index_state *istate,
+ 				const char *name, int namelen,
+ 				int stage,
+diff --git a/tree.c b/tree.c
+index e9d51ce2e0..896b7f4776 100644
+--- a/tree.c
++++ b/tree.c
+@@ -94,16 +94,6 @@ int read_tree(struct repository *r,
+ 	return ret;
+ }
+ 
+-int cmp_cache_name_compare(const void *a_, const void *b_)
+-{
+-	const struct cache_entry *ce1, *ce2;
+-
+-	ce1 = *((const struct cache_entry **)a_);
+-	ce2 = *((const struct cache_entry **)b_);
+-	return cache_name_stage_compare(ce1->name, ce1->ce_namelen, ce_stage(ce1),
+-				  ce2->name, ce2->ce_namelen, ce_stage(ce2));
+-}
+-
+ struct tree *lookup_tree(struct repository *r, const struct object_id *oid)
+ {
+ 	struct object *obj = lookup_object(r, oid);
+diff --git a/tree.h b/tree.h
+index 0499ad01aa..8e3c6d441c 100644
+--- a/tree.h
++++ b/tree.h
+@@ -29,7 +29,6 @@ void free_tree_buffer(struct tree *tree);
+ /* Parses and returns the tree in the given ent, chasing tags and commits. */
+ struct tree *parse_tree_indirect(const struct object_id *oid);
+ 
+-int cmp_cache_name_compare(const void *a_, const void *b_);
+ 
+ #define READ_TREE_RECURSIVE 1
+ typedef int (*read_tree_fn_t)(const struct object_id *, struct strbuf *, const char *, unsigned int, void *);
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,53 @@
+From 3c9b01f0bf4f53eb8437bae725c854049a981865 Mon Sep 17 00:00:00 2001
+From: Michael J Gruber <git@grubix.eu>
+Date: Wed, 16 Nov 2022 16:56:40 +0100
+Subject: [PATCH 0392/2871] notes: avoid empty line in template
+
+When `git notes` prepares the template it adds an empty newline between
+the comment header and the content:
+
+>
+> #
+> # Write/edit the notes for the following object:
+>
+> # commit 0f3c55d4c2b7864bffb2d92278eff08d0b2e083f
+> # etc
+
+This is wrong structurally because that newline is part of the comment,
+too, and thus should be commented. Also, it throws off some positioning
+strategies of editors and plugins, and it differs from how we do commit
+templates.
+
+Change this to follow the standard set by `git commit`:
+
+>
+> #
+> # Write/edit the notes for the following object:
+> #
+> # commit 0f3c55d4c2b7864bffb2d92278eff08d0b2e083f
+>
+
+Tests pass unchanged after this code change.
+
+Signed-off-by: Michael J Gruber <git@grubix.eu>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/notes.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/notes.c b/builtin/notes.c
+index be51f69225..80d9dfd25c 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -181,7 +181,7 @@ static void prepare_note_data(const struct object_id *object, struct note_data *
+ 		strbuf_addch(&buf, '\n');
+ 		strbuf_add_commented_lines(&buf, "\n", strlen("\n"));
+ 		strbuf_add_commented_lines(&buf, _(note_template), strlen(_(note_template)));
+-		strbuf_addch(&buf, '\n');
++		strbuf_add_commented_lines(&buf, "\n", strlen("\n"));
+ 		write_or_die(fd, buf.buf, buf.len);
+ 
+ 		write_commented_object(fd, object);
+-- 
+2.39.3 (Apple Git-145)
+

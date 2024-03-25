@@ -1,0 +1,33 @@
+From 5c858368966f71ffeba78e2fa9aaecec02050f3c Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 21 Jan 2024 21:15:35 +0800
+Subject: [PATCH 2733/2871] transport-helper: protocol v2 supports
+ upload-archive
+
+We used to support only git-upload-pack service for protocol v2. In
+order to support remote archive over HTTP/HTTPS protocols, add new
+service support for git-upload-archive in protocol v2.
+
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ transport-helper.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/transport-helper.c b/transport-helper.c
+index 2e127d24a5..6fe9f4f208 100644
+--- a/transport-helper.c
++++ b/transport-helper.c
+@@ -628,7 +628,8 @@ static int process_connect_service(struct transport *transport,
+ 		ret = run_connect(transport, &cmdbuf);
+ 	} else if (data->stateless_connect &&
+ 		   (get_protocol_version_config() == protocol_v2) &&
+-		   !strcmp("git-upload-pack", name)) {
++		   (!strcmp("git-upload-pack", name) ||
++		    !strcmp("git-upload-archive", name))) {
+ 		strbuf_addf(&cmdbuf, "stateless-connect %s\n", name);
+ 		ret = run_connect(transport, &cmdbuf);
+ 		if (ret)
+-- 
+2.39.3 (Apple Git-145)
+

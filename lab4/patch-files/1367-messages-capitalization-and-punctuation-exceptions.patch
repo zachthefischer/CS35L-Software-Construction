@@ -1,0 +1,66 @@
+From b734fe49fddb4bbd02f471fa3b11d3605bd6921d Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Fri, 28 Apr 2023 14:56:49 +0200
+Subject: [PATCH 1367/2871] messages: capitalization and punctuation exceptions
+
+These are conscious violations of the usual rules for error messages,
+based on this reasoning:
+
+ - If an error message is directly followed by another sentence, it
+   needs to be properly terminated with a period, lest the grammar
+   looks broken and becomes hard to read.
+
+ - That second sentence isn't actually an error message any more, so
+   it should abide to conventional language rules for good looks and
+   legibility. Arguably, these should be converted to advice
+   messages (which the user can squelch, too), but that's a much
+   bigger effort to get right.
+
+ - Neither of these apply to the first hunk in do_exec(), but this
+   two-line message looks just too much like a real sentence to not
+   terminate it. Also, leaving it alone would make it asymmetrical
+   to the other hunk.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pull.c | 2 +-
+ sequencer.c    | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/pull.c b/builtin/pull.c
+index 1ab4de0005..47fa87190e 100644
+--- a/builtin/pull.c
++++ b/builtin/pull.c
+@@ -1049,7 +1049,7 @@ int cmd_pull(int argc, const char **argv, const char *prefix)
+ 		if (!opt_autostash)
+ 			require_clean_work_tree(the_repository,
+ 				N_("pull with rebase"),
+-				_("please commit or stash them."), 1, 0);
++				_("Please commit or stash them."), 1, 0);
+ 
+ 		if (get_rebase_fork_point(&rebase_fork_point, repo, *refspecs))
+ 			oidclr(&rebase_fork_point);
+diff --git a/sequencer.c b/sequencer.c
+index 155d0a2290..8ec3466afb 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -3626,13 +3626,13 @@ static int do_exec(struct repository *r, const char *command_line)
+ 			  "\n"),
+ 			command_line,
+ 			dirty ? _("and made changes to the index and/or the "
+-				"working tree\n") : "");
++				"working tree.\n") : "");
+ 		if (status == 127)
+ 			/* command not found */
+ 			status = 1;
+ 	} else if (dirty) {
+ 		warning(_("execution succeeded: %s\nbut "
+-			  "left changes to the index and/or the working tree\n"
++			  "left changes to the index and/or the working tree.\n"
+ 			  "Commit or stash your changes, and then run\n"
+ 			  "\n"
+ 			  "  git rebase --continue\n"
+-- 
+2.39.3 (Apple Git-145)
+

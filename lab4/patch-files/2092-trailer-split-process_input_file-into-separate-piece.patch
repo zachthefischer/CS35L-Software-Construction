@@ -1,0 +1,117 @@
+From c2a8edf997a8d9f3f005666f63105172a23bd3a0 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Sat, 9 Sep 2023 06:16:13 +0000
+Subject: [PATCH 2092/2871] trailer: split process_input_file into separate
+ pieces
+
+Currently, process_input_file does three things:
+
+    (1) parse the input string for trailers,
+    (2) print text before the trailers, and
+    (3) calculate the position of the input where the trailers end.
+
+Rename this function to parse_trailers(), and make it only do
+(1). The caller of this function, process_trailers, becomes responsible
+for (2) and (3). These items belong inside process_trailers because they
+are both concerned with printing the surrounding text around
+trailers (which is already one of the immediate concerns of
+process_trailers).
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trailer.c | 42 ++++++++++++++++++++++--------------------
+ 1 file changed, 22 insertions(+), 20 deletions(-)
+
+diff --git a/trailer.c b/trailer.c
+index de4bdece84..2c56cbc4a2 100644
+--- a/trailer.c
++++ b/trailer.c
+@@ -961,28 +961,24 @@ static void unfold_value(struct strbuf *val)
+ 	strbuf_release(&out);
+ }
+ 
+-static size_t process_input_file(FILE *outfile,
+-				 const char *str,
+-				 struct list_head *head,
+-				 const struct process_trailer_options *opts)
++/*
++ * Parse trailers in "str", populating the trailer info and "head"
++ * linked list structure.
++ */
++static void parse_trailers(struct trailer_info *info,
++			     const char *str,
++			     struct list_head *head,
++			     const struct process_trailer_options *opts)
+ {
+-	struct trailer_info info;
+ 	struct strbuf tok = STRBUF_INIT;
+ 	struct strbuf val = STRBUF_INIT;
+ 	size_t i;
+ 
+-	trailer_info_get(&info, str, opts);
+-
+-	/* Print lines before the trailers as is */
+-	if (!opts->only_trailers)
+-		fwrite(str, 1, info.trailer_start - str, outfile);
++	trailer_info_get(info, str, opts);
+ 
+-	if (!opts->only_trailers && !info.blank_line_before_trailer)
+-		fprintf(outfile, "\n");
+-
+-	for (i = 0; i < info.trailer_nr; i++) {
++	for (i = 0; i < info->trailer_nr; i++) {
+ 		int separator_pos;
+-		char *trailer = info.trailers[i];
++		char *trailer = info->trailers[i];
+ 		if (trailer[0] == comment_line_char)
+ 			continue;
+ 		separator_pos = find_separator(trailer, separators);
+@@ -1002,10 +998,6 @@ static size_t process_input_file(FILE *outfile,
+ 					 strbuf_detach(&val, NULL));
+ 		}
+ 	}
+-
+-	trailer_info_release(&info);
+-
+-	return info.trailer_end - str;
+ }
+ 
+ static void free_all(struct list_head *head)
+@@ -1054,6 +1046,7 @@ void process_trailers(const char *file,
+ {
+ 	LIST_HEAD(head);
+ 	struct strbuf sb = STRBUF_INIT;
++	struct trailer_info info;
+ 	size_t trailer_end;
+ 	FILE *outfile = stdout;
+ 
+@@ -1064,8 +1057,16 @@ void process_trailers(const char *file,
+ 	if (opts->in_place)
+ 		outfile = create_in_place_tempfile(file);
+ 
++	parse_trailers(&info, sb.buf, &head, opts);
++	trailer_end = info.trailer_end - sb.buf;
++
+ 	/* Print the lines before the trailers */
+-	trailer_end = process_input_file(outfile, sb.buf, &head, opts);
++	if (!opts->only_trailers)
++		fwrite(sb.buf, 1, info.trailer_start - sb.buf, outfile);
++
++	if (!opts->only_trailers && !info.blank_line_before_trailer)
++		fprintf(outfile, "\n");
++
+ 
+ 	if (!opts->only_input) {
+ 		LIST_HEAD(arg_head);
+@@ -1076,6 +1077,7 @@ void process_trailers(const char *file,
+ 	print_all(outfile, &head, opts);
+ 
+ 	free_all(&head);
++	trailer_info_release(&info);
+ 
+ 	/* Print the lines after the trailers as is */
+ 	if (!opts->only_trailers)
+-- 
+2.39.3 (Apple Git-145)
+

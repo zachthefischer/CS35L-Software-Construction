@@ -1,0 +1,80 @@
+From 84356ff7709bd45c7e61632f1b837a7144a5178f Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 9 Nov 2022 14:16:26 +0000
+Subject: [PATCH 0344/2871] git_parse_unsigned: reject negative values
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+git_parse_unsigned() relies on strtoumax() which unfortunately parses
+negative values as large positive integers. Fix this by rejecting any
+string that contains '-' as we do in strtoul_ui(). I've chosen to treat
+negative numbers as invalid input and set errno to EINVAL rather than
+ERANGE one the basis that they are never acceptable if we're looking for
+a unsigned integer. This is also consistent with the existing behavior
+of rejecting "1–2" with EINVAL.
+
+As we do not have unit tests for this function it is tested indirectly
+by checking that negative values of reject for core.bigFileThreshold are
+rejected. As this function is also used by OPT_MAGNITUDE() a test is
+added to check that rejects negative values too.
+
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ config.c                 | 5 +++++
+ t/t0040-parse-options.sh | 5 +++++
+ t/t1050-large.sh         | 6 ++++++
+ 3 files changed, 16 insertions(+)
+
+diff --git a/config.c b/config.c
+index cbb5a3bab7..d5069d4f01 100644
+--- a/config.c
++++ b/config.c
+@@ -1193,6 +1193,11 @@ static int git_parse_unsigned(const char *value, uintmax_t *ret, uintmax_t max)
+ 		uintmax_t val;
+ 		uintmax_t factor;
+ 
++		/* negative values would be accepted by strtoumax */
++		if (strchr(value, '-')) {
++			errno = EINVAL;
++			return 0;
++		}
+ 		errno = 0;
+ 		val = strtoumax(value, &end, 0);
+ 		if (errno == ERANGE)
+diff --git a/t/t0040-parse-options.sh b/t/t0040-parse-options.sh
+index 5cc62306e3..64d2327b74 100755
+--- a/t/t0040-parse-options.sh
++++ b/t/t0040-parse-options.sh
+@@ -709,4 +709,9 @@ test_expect_success 'subcommands are incompatible with KEEP_DASHDASH unless in c
+ 	grep ^BUG err
+ '
+ 
++test_expect_success 'negative magnitude' '
++	test_must_fail test-tool parse-options --magnitude -1 >out 2>err &&
++	grep "non-negative integer" err &&
++	test_must_be_empty out
++'
+ test_done
+diff --git a/t/t1050-large.sh b/t/t1050-large.sh
+index 4f3aa17c99..c71932b024 100755
+--- a/t/t1050-large.sh
++++ b/t/t1050-large.sh
+@@ -5,6 +5,12 @@ test_description='adding and checking out large blobs'
+ 
+ . ./test-lib.sh
+ 
++test_expect_success 'core.bigFileThreshold must be non-negative' '
++	test_must_fail git -c core.bigFileThreshold=-1 rev-parse >out 2>err &&
++	grep "bad numeric config value" err &&
++	test_must_be_empty out
++'
++
+ test_expect_success setup '
+ 	# clone does not allow us to pass core.bigfilethreshold to
+ 	# new repos, so set core.bigfilethreshold globally
+-- 
+2.39.3 (Apple Git-145)
+

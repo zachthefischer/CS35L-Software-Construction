@@ -1,0 +1,66 @@
+From 08248790787e4b6c3e687ca88f727bbdb52fc3a8 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:25:23 -0500
+Subject: [PATCH 2507/2871] diff: give more detailed messages for bogus diff.*
+ config
+
+The config callbacks for a few diff.* variables simply return -1 when we
+encounter an error. The message you get mentions the offending location,
+like:
+
+  fatal: bad config variable 'diff.algorithm' in file '.git/config' at line 7
+
+but is vague about "bad" (as it must be, since the message comes from
+the generic config code). Most callbacks add their own messages here, so
+let's do the same. E.g.:
+
+  error: unknown value for config 'diff.algorithm': foo
+  fatal: bad config variable 'diff.algorithm' in file '.git/config' at line 7
+
+I've written the string in a way that should be reusable for
+translators, and matches another similar message in transport.c (there
+doesn't yet seem to be a popular generic message to reuse here, so
+hopefully this will get the ball rolling).
+
+Note that in the case of diff.algorithm, our parse_algorithm_value()
+helper does detect a NULL value string. But it's still worth detecting
+it ourselves here, since we can give a more specific error message (and
+which is the usual one for unexpected implicit-bool values).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index 5b213a4b44..a2def45644 100644
+--- a/diff.c
++++ b/diff.c
+@@ -445,9 +445,12 @@ int git_diff_ui_config(const char *var, const char *value,
+ 	}
+ 
+ 	if (!strcmp(var, "diff.algorithm")) {
++		if (!value)
++			return config_error_nonbool(var);
+ 		diff_algorithm = parse_algorithm_value(value);
+ 		if (diff_algorithm < 0)
+-			return -1;
++			return error(_("unknown value for config '%s': %s"),
++				     var, value);
+ 		return 0;
+ 	}
+ 
+@@ -486,7 +489,8 @@ int git_diff_basic_config(const char *var, const char *value,
+ 			return config_error_nonbool(var);
+ 		val = parse_ws_error_highlight(value);
+ 		if (val < 0)
+-			return -1;
++			return error(_("unknown value for config '%s': %s"),
++				     var, value);
+ 		ws_error_highlight_default = val;
+ 		return 0;
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

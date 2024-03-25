@@ -1,0 +1,61 @@
+From b40ba17e44cd2614d2f422a0225f6db49ca694a8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 13 Feb 2024 11:48:15 -0800
+Subject: [PATCH 2850/2871] write-or-die: fix the polarity of GIT_FLUSH
+ environment variable
+
+When GIT_FLUSH is set to 1, true, on, yes, then we should disable
+skip_stdout_flush, but the conversion somehow did the opposite.
+
+With the understanding of the original motivation behind "skip" in
+06f59e9f (Don't fflush(stdout) when it's not helpful, 2007-06-29),
+we can sympathize with the current naming (we wanted to avoid
+useless flushing of stdout by default, with an escape hatch to
+always flush), but it is still not a good excuse.
+
+Retire the "skip_stdout_flush" variable and replace it with "flush_stdout"
+that tells if we do or do not want to run fflush().
+
+Reported-by: Xiaoguang WANG <wxiaoguang@gmail.com>
+Helped-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ write-or-die.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/write-or-die.c b/write-or-die.c
+index 3942152865..01a9a51fa2 100644
+--- a/write-or-die.c
++++ b/write-or-die.c
+@@ -18,20 +18,20 @@
+  */
+ void maybe_flush_or_die(FILE *f, const char *desc)
+ {
+-	static int skip_stdout_flush = -1;
+-
+ 	if (f == stdout) {
+-		if (skip_stdout_flush < 0) {
+-			skip_stdout_flush = git_env_bool("GIT_FLUSH", -1);
+-			if (skip_stdout_flush < 0) {
++		static int force_flush_stdout = -1;
++
++		if (force_flush_stdout < 0) {
++			force_flush_stdout = git_env_bool("GIT_FLUSH", -1);
++			if (force_flush_stdout < 0) {
+ 				struct stat st;
+ 				if (fstat(fileno(stdout), &st))
+-					skip_stdout_flush = 0;
++					force_flush_stdout = 1;
+ 				else
+-					skip_stdout_flush = S_ISREG(st.st_mode);
++					force_flush_stdout = !S_ISREG(st.st_mode);
+ 			}
+ 		}
+-		if (skip_stdout_flush && !ferror(f))
++		if (!force_flush_stdout && !ferror(f))
+ 			return;
+ 	}
+ 	if (fflush(f)) {
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,81 @@
+From 826f0e33ab0cbe976af02dd487303e4d1a0b3017 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Apr 2023 18:20:17 -0400
+Subject: [PATCH 1350/2871] t/helper/test-hashmap.c: avoid using `strtok()`
+
+Avoid using the non-reentrant `strtok()` to separate the parts of each
+incoming command. Instead of replacing it with `strtok_r()`, let's
+instead use the more friendly pair of `string_list_split_in_place()` and
+`string_list_remove_empty_items()`.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-hashmap.c | 22 +++++++++++++++-------
+ 1 file changed, 15 insertions(+), 7 deletions(-)
+
+diff --git a/t/helper/test-hashmap.c b/t/helper/test-hashmap.c
+index 36ff07bd4b..0eb0b3d49c 100644
+--- a/t/helper/test-hashmap.c
++++ b/t/helper/test-hashmap.c
+@@ -2,6 +2,7 @@
+ #include "git-compat-util.h"
+ #include "hashmap.h"
+ #include "strbuf.h"
++#include "string-list.h"
+ 
+ struct test_entry
+ {
+@@ -150,6 +151,7 @@ static void perf_hashmap(unsigned int method, unsigned int rounds)
+  */
+ int cmd__hashmap(int argc, const char **argv)
+ {
++	struct string_list parts = STRING_LIST_INIT_NODUP;
+ 	struct strbuf line = STRBUF_INIT;
+ 	int icase;
+ 	struct hashmap map = HASHMAP_INIT(test_entry_cmp, &icase);
+@@ -159,21 +161,26 @@ int cmd__hashmap(int argc, const char **argv)
+ 
+ 	/* process commands from stdin */
+ 	while (strbuf_getline(&line, stdin) != EOF) {
+-		char *cmd, *p1 = NULL, *p2 = NULL;
++		char *cmd, *p1, *p2;
+ 		unsigned int hash = 0;
+ 		struct test_entry *entry;
+ 
+ 		/* break line into command and up to two parameters */
+-		cmd = strtok(line.buf, DELIM);
++		string_list_setlen(&parts, 0);
++		string_list_split_in_place(&parts, line.buf, DELIM, 2);
++		string_list_remove_empty_items(&parts, 0);
++
+ 		/* ignore empty lines */
+-		if (!cmd || *cmd == '#')
++		if (!parts.nr)
++			continue;
++		if (!*parts.items[0].string || *parts.items[0].string == '#')
+ 			continue;
+ 
+-		p1 = strtok(NULL, DELIM);
+-		if (p1) {
++		cmd = parts.items[0].string;
++		p1 = parts.nr >= 1 ? parts.items[1].string : NULL;
++		p2 = parts.nr >= 2 ? parts.items[2].string : NULL;
++		if (p1)
+ 			hash = icase ? strihash(p1) : strhash(p1);
+-			p2 = strtok(NULL, DELIM);
+-		}
+ 
+ 		if (!strcmp("add", cmd) && p1 && p2) {
+ 
+@@ -260,6 +267,7 @@ int cmd__hashmap(int argc, const char **argv)
+ 		}
+ 	}
+ 
++	string_list_clear(&parts, 0);
+ 	strbuf_release(&line);
+ 	hashmap_clear_and_free(&map, struct test_entry, ent);
+ 	return 0;
+-- 
+2.39.3 (Apple Git-145)
+

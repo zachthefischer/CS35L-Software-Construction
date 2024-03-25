@@ -1,0 +1,119 @@
+From a70839cf36c9cad10e514f75fa1bec2e6180dbda Mon Sep 17 00:00:00 2001
+From: Jeff Hostetler <jeffhost@microsoft.com>
+Date: Mon, 24 Oct 2022 13:41:03 +0000
+Subject: [PATCH 0218/2871] trace2: rename the thread_name argument to
+ trace2_thread_start
+
+Rename the `thread_name` argument in `tr2tls_create_self()` and
+`trace2_thread_start()` to be `thread_base_name` to make it clearer
+that the passed argument is a component used in the construction of
+the actual `struct tr2tls_thread_ctx.thread_name` variable.
+
+The base name will be used along with the thread id to create a
+unique thread name.
+
+This commit does not change how the `thread_name` field is
+allocated or stored within the `tr2tls_thread_ctx` structure.
+
+Signed-off-by: Jeff Hostetler <jeffhost@microsoft.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trace2.c         |  6 +++---
+ trace2.h         | 11 ++++++-----
+ trace2/tr2_tls.c |  4 ++--
+ trace2/tr2_tls.h |  2 +-
+ 4 files changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/trace2.c b/trace2.c
+index c1244e45ac..165264dc79 100644
+--- a/trace2.c
++++ b/trace2.c
+@@ -466,7 +466,7 @@ void trace2_exec_result_fl(const char *file, int line, int exec_id, int code)
+ 				file, line, us_elapsed_absolute, exec_id, code);
+ }
+ 
+-void trace2_thread_start_fl(const char *file, int line, const char *thread_name)
++void trace2_thread_start_fl(const char *file, int line, const char *thread_base_name)
+ {
+ 	struct tr2_tgt *tgt_j;
+ 	int j;
+@@ -488,14 +488,14 @@ void trace2_thread_start_fl(const char *file, int line, const char *thread_name)
+ 		 */
+ 		trace2_region_enter_printf_fl(file, line, NULL, NULL, NULL,
+ 					      "thread-proc on main: %s",
+-					      thread_name);
++					      thread_base_name);
+ 		return;
+ 	}
+ 
+ 	us_now = getnanotime() / 1000;
+ 	us_elapsed_absolute = tr2tls_absolute_elapsed(us_now);
+ 
+-	tr2tls_create_self(thread_name, us_now);
++	tr2tls_create_self(thread_base_name, us_now);
+ 
+ 	for_each_wanted_builtin (j, tgt_j)
+ 		if (tgt_j->pfn_thread_start_fl)
+diff --git a/trace2.h b/trace2.h
+index af3c11694c..74cdb1354f 100644
+--- a/trace2.h
++++ b/trace2.h
+@@ -304,14 +304,15 @@ void trace2_exec_result_fl(const char *file, int line, int exec_id, int code);
+  * thread-proc to allow the thread to create its own thread-local
+  * storage.
+  *
+- * Thread names should be descriptive, like "preload_index".
+- * Thread names will be decorated with an instance number automatically.
++ * The thread base name should be descriptive, like "preload_index" or
++ * taken from the thread-proc function.  A unique thread name will be
++ * created from the given base name and the thread id automatically.
+  */
+ void trace2_thread_start_fl(const char *file, int line,
+-			    const char *thread_name);
++			    const char *thread_base_name);
+ 
+-#define trace2_thread_start(thread_name) \
+-	trace2_thread_start_fl(__FILE__, __LINE__, (thread_name))
++#define trace2_thread_start(thread_base_name) \
++	trace2_thread_start_fl(__FILE__, __LINE__, (thread_base_name))
+ 
+ /*
+  * Emit a 'thread_exit' event.  This must be called from inside the
+diff --git a/trace2/tr2_tls.c b/trace2/tr2_tls.c
+index 8d2182fbdb..4f7c516ecb 100644
+--- a/trace2/tr2_tls.c
++++ b/trace2/tr2_tls.c
+@@ -31,7 +31,7 @@ void tr2tls_start_process_clock(void)
+ 	tr2tls_us_start_process = getnanotime() / 1000;
+ }
+ 
+-struct tr2tls_thread_ctx *tr2tls_create_self(const char *thread_name,
++struct tr2tls_thread_ctx *tr2tls_create_self(const char *thread_base_name,
+ 					     uint64_t us_thread_start)
+ {
+ 	struct tr2tls_thread_ctx *ctx = xcalloc(1, sizeof(*ctx));
+@@ -50,7 +50,7 @@ struct tr2tls_thread_ctx *tr2tls_create_self(const char *thread_name,
+ 	strbuf_init(&ctx->thread_name, 0);
+ 	if (ctx->thread_id)
+ 		strbuf_addf(&ctx->thread_name, "th%02d:", ctx->thread_id);
+-	strbuf_addstr(&ctx->thread_name, thread_name);
++	strbuf_addstr(&ctx->thread_name, thread_base_name);
+ 	if (ctx->thread_name.len > TR2_MAX_THREAD_NAME)
+ 		strbuf_setlen(&ctx->thread_name, TR2_MAX_THREAD_NAME);
+ 
+diff --git a/trace2/tr2_tls.h b/trace2/tr2_tls.h
+index 1297509fd2..d4e725f430 100644
+--- a/trace2/tr2_tls.h
++++ b/trace2/tr2_tls.h
+@@ -35,7 +35,7 @@ struct tr2tls_thread_ctx {
+  * In this and all following functions the term "self" refers to the
+  * current thread.
+  */
+-struct tr2tls_thread_ctx *tr2tls_create_self(const char *thread_name,
++struct tr2tls_thread_ctx *tr2tls_create_self(const char *thread_base_name,
+ 					     uint64_t us_thread_start);
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

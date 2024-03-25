@@ -1,0 +1,141 @@
+From 13420028e5b119d27277d521f4d267212c5ca21c Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Nov 2023 11:01:15 +0100
+Subject: [PATCH 2403/2871] global: convert trivial usages of `test <expr>
+ -a/-o <expr>`
+
+Our coding guidelines say to not use `test` with `-a` and `-o` because
+it can easily lead to bugs. Convert trivial cases where we still use
+these to instead instead concatenate multiple invocations of `test` via
+`&&` and `||`, respectively.
+
+While not all of the converted instances can cause ambiguity, it is
+worth getting rid of all of them regardless:
+
+    - It becomes easier to reason about the code as we do not have to
+      argue why one use of `-a`/`-o` is okay while another one isn't.
+
+    - We don't encourage people to use these expressions.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ GIT-VERSION-GEN                | 2 +-
+ configure.ac                   | 2 +-
+ contrib/subtree/git-subtree.sh | 4 ++--
+ t/perf/perf-lib.sh             | 2 +-
+ t/perf/run                     | 9 +++++----
+ t/valgrind/valgrind.sh         | 2 +-
+ 6 files changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/GIT-VERSION-GEN b/GIT-VERSION-GEN
+index e54492f827..7246ab7c78 100755
+--- a/GIT-VERSION-GEN
++++ b/GIT-VERSION-GEN
+@@ -11,7 +11,7 @@ LF='
+ if test -f version
+ then
+ 	VN=$(cat version) || VN="$DEF_VER"
+-elif test -d ${GIT_DIR:-.git} -o -f .git &&
++elif { test -d "${GIT_DIR:-.git}" || test -f .git; } &&
+ 	VN=$(git describe --match "v[0-9]*" HEAD 2>/dev/null) &&
+ 	case "$VN" in
+ 	*$LF*) (exit 1) ;;
+diff --git a/configure.ac b/configure.ac
+index 276593cd9d..d1a96da14e 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -94,7 +94,7 @@ AC_DEFUN([GIT_PARSE_WITH_SET_MAKE_VAR],
+ [AC_ARG_WITH([$1],
+  [AS_HELP_STRING([--with-$1=VALUE], $3)],
+  if test -n "$withval"; then
+-  if test "$withval" = "yes" -o "$withval" = "no"; then
++  if test "$withval" = "yes" || test "$withval" = "no"; then
+     AC_MSG_WARN([You likely do not want either 'yes' or 'no' as]
+ 		     [a value for $1 ($2).  Maybe you do...?])
+   fi
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index e0c5d3b0de..43b5fec732 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -489,13 +489,13 @@ find_existing_splits () {
+ 			;;
+ 		END)
+ 			debug "Main is: '$main'"
+-			if test -z "$main" -a -n "$sub"
++			if test -z "$main" && test -n "$sub"
+ 			then
+ 				# squash commits refer to a subtree
+ 				debug "  Squash: $sq from $sub"
+ 				cache_set "$sq" "$sub"
+ 			fi
+-			if test -n "$main" -a -n "$sub"
++			if test -n "$main" && test -n "$sub"
+ 			then
+ 				debug "  Prior: $main -> $sub"
+ 				cache_set $main $sub
+diff --git a/t/perf/perf-lib.sh b/t/perf/perf-lib.sh
+index e7786775a9..b952e5024b 100644
+--- a/t/perf/perf-lib.sh
++++ b/t/perf/perf-lib.sh
+@@ -31,7 +31,7 @@ unset GIT_CONFIG_NOSYSTEM
+ GIT_CONFIG_SYSTEM="$TEST_DIRECTORY/perf/config"
+ export GIT_CONFIG_SYSTEM
+ 
+-if test -n "$GIT_TEST_INSTALLED" -a -z "$PERF_SET_GIT_TEST_INSTALLED"
++if test -n "$GIT_TEST_INSTALLED" && test -z "$PERF_SET_GIT_TEST_INSTALLED"
+ then
+ 	error "Do not use GIT_TEST_INSTALLED with the perf tests.
+ 
+diff --git a/t/perf/run b/t/perf/run
+index 34115edec3..486ead2198 100755
+--- a/t/perf/run
++++ b/t/perf/run
+@@ -91,10 +91,10 @@ set_git_test_installed () {
+ run_dirs_helper () {
+ 	mydir=${1%/}
+ 	shift
+-	while test $# -gt 0 -a "$1" != -- -a ! -f "$1"; do
++	while test $# -gt 0 && test "$1" != -- && test ! -f "$1"; do
+ 		shift
+ 	done
+-	if test $# -gt 0 -a "$1" = --; then
++	if test $# -gt 0 && test "$1" = --; then
+ 		shift
+ 	fi
+ 
+@@ -124,7 +124,7 @@ run_dirs_helper () {
+ }
+ 
+ run_dirs () {
+-	while test $# -gt 0 -a "$1" != -- -a ! -f "$1"; do
++	while test $# -gt 0 && test "$1" != -- && test ! -f "$1"; do
+ 		run_dirs_helper "$@"
+ 		shift
+ 	done
+@@ -180,7 +180,8 @@ run_subsection () {
+ 	GIT_PERF_AGGREGATING_LATER=t
+ 	export GIT_PERF_AGGREGATING_LATER
+ 
+-	if test $# = 0 -o "$1" = -- -o -f "$1"; then
++	if test $# = 0 || test "$1" = -- || test -f "$1"
++	then
+ 		set -- . "$@"
+ 	fi
+ 
+diff --git a/t/valgrind/valgrind.sh b/t/valgrind/valgrind.sh
+index 669ebaf68b..3c8ee19975 100755
+--- a/t/valgrind/valgrind.sh
++++ b/t/valgrind/valgrind.sh
+@@ -23,7 +23,7 @@ memcheck)
+ 	VALGRIND_MAJOR=$(expr "$VALGRIND_VERSION" : '[^0-9]*\([0-9]*\)')
+ 	VALGRIND_MINOR=$(expr "$VALGRIND_VERSION" : '[^0-9]*[0-9]*\.\([0-9]*\)')
+ 	test 3 -gt "$VALGRIND_MAJOR" ||
+-	test 3 -eq "$VALGRIND_MAJOR" -a 4 -gt "$VALGRIND_MINOR" ||
++	{ test 3 -eq "$VALGRIND_MAJOR" && test 4 -gt "$VALGRIND_MINOR"; } ||
+ 	TOOL_OPTIONS="$TOOL_OPTIONS --track-origins=yes"
+ 	;;
+ *)
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,37 @@
+From ffbf6a748d0dd7c9377ec99166ac132c95a5b96a Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 6 Oct 2023 15:57:03 -0700
+Subject: [PATCH 2214/2871] doc: update list archive reference to use
+ lore.kernel.org
+
+No disrespect to other mailing list archives, but the local part of
+their URLs will become pretty much meaningless once the archives go
+out of service, and we learned the lesson hard way when $gmane
+stopped serving.
+
+Let's point into https://lore.kernel.org/ for an article that can be
+found there, because the local part of the URL has the Message-Id:
+that can be used to find the same message in other archives, even if
+lore goes down.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/CodingGuidelines | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/CodingGuidelines b/Documentation/CodingGuidelines
+index 65af8d82ce..9495df835d 100644
+--- a/Documentation/CodingGuidelines
++++ b/Documentation/CodingGuidelines
+@@ -24,7 +24,7 @@ code.  For Git in general, a few rough rules are:
+ 
+    "Once it _is_ in the tree, it's not really worth the patch noise to
+    go and fix it up."
+-   Cf. http://lkml.iu.edu/hypermail/linux/kernel/1001.3/01069.html
++   Cf. https://lore.kernel.org/all/20100126160632.3bdbe172.akpm@linux-foundation.org/
+ 
+  - Log messages to explain your changes are as important as the
+    changes themselves.  Clearly written code and in-code comments
+-- 
+2.39.3 (Apple Git-145)
+

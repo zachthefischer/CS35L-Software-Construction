@@ -1,0 +1,47 @@
+From 89086c9466624ca0b53f04374e293a7afcec592b Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:11:27 -0500
+Subject: [PATCH 2499/2871] help: handle NULL value for alias.* config
+
+When showing all config with "git help --all", we print the list of
+defined aliases. But our config callback to do so does not check for a
+NULL value, meaning a config block like:
+
+  [alias]
+  foo
+
+will cause us to segfault. We should detect and complain about this in
+the usual way.
+
+Since this command is purely informational (and we aren't trying to run
+the alias), we could perhaps just generate a warning and continue. But
+this sort of misconfiguration should be pretty rare, and the error
+message we will produce points directly to the line of config that needs
+to be fixed. So just generating the usual error should be OK.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ help.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/help.c b/help.c
+index 6d2ebfbd2a..2dbe57b413 100644
+--- a/help.c
++++ b/help.c
+@@ -464,8 +464,11 @@ static int get_alias(const char *var, const char *value,
+ {
+ 	struct string_list *list = data;
+ 
+-	if (skip_prefix(var, "alias.", &var))
++	if (skip_prefix(var, "alias.", &var)) {
++		if (!value)
++			return config_error_nonbool(var);
+ 		string_list_append(list, var)->util = xstrdup(value);
++	}
+ 
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

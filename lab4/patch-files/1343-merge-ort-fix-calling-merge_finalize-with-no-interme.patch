@@ -1,0 +1,65 @@
+From 000c4ceca794645eb4744f9c9afb6247232c0646 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:22:10 +0000
+Subject: [PATCH 1343/2871] merge-ort: fix calling merge_finalize() with no
+ intermediate merge
+
+If some code sets up the data structures for a merge, but then never
+actually performs one before calling merge_finalize(), then
+merge_finalize() wouldn't notice that result->priv was NULL and
+return early, resulting in following that NULL pointer and getting
+a segfault.  There is currently no code in the git codebase that does
+this, but this issue was found during testing of some proposed patches
+that had the following structure:
+
+    struct merge_options merge_opt;
+    struct merge_result result;
+
+    init_merge_options(&merge_opt, the_repository);
+    memset(&result, 0, sizeof(result));
+
+    <do N merges, for some value of N>
+
+    merge_finalize(&merge_opt, &result);
+
+where some flags could cause the code to have N=0, i.e. doing no merges.
+Add a check for result->priv being NULL and return early to avoid a
+segfault in these kinds of cases.
+
+While at it, ensure the FREE_AND_NULL() in the function does something
+useful with the nulling aspect, namely sets result->priv to NULL rather
+than a mere temporary.
+
+Reported-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index e5f41cce48..36a140f8ed 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -4683,14 +4683,14 @@ void merge_switch_to_result(struct merge_options *opt,
+ void merge_finalize(struct merge_options *opt,
+ 		    struct merge_result *result)
+ {
+-	struct merge_options_internal *opti = result->priv;
+-
+ 	if (opt->renormalize)
+ 		git_attr_set_direction(GIT_ATTR_CHECKIN);
+ 	assert(opt->priv == NULL);
+ 
+-	clear_or_reinit_internal_opts(opti, 0);
+-	FREE_AND_NULL(opti);
++	if (result->priv) {
++		clear_or_reinit_internal_opts(result->priv, 0);
++		FREE_AND_NULL(result->priv);
++	}
+ }
+ 
+ /*** Function Grouping: helper functions for merge_incore_*() ***/
+-- 
+2.39.3 (Apple Git-145)
+

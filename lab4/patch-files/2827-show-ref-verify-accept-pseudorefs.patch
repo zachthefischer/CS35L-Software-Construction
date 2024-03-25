@@ -1,0 +1,62 @@
+From 1dbe40156307763255d96653cc853ef4ff841920 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 7 Feb 2024 16:44:35 +0000
+Subject: [PATCH 2827/2871] show-ref --verify: accept pseudorefs
+
+"git show-ref --verify" is useful for scripts that want to look up a
+fully qualified refname without falling back to the DWIM rules used by
+"git rev-parse" rules when the ref does not exist. Currently it will
+only accept "HEAD" or a refname beginning with "refs/". Running
+
+    git show-ref --verify CHERRY_PICK_HEAD
+
+will always result in
+
+    fatal: 'CHERRY_PICK_HEAD' - not a valid ref
+
+even when CHERRY_PICK_HEAD exists. By calling refname_is_safe() instead
+of comparing the refname to "HEAD" we can accept all one-level refs that
+contain only uppercase ascii letters and underscores.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/show-ref.c  | 2 +-
+ t/t1403-show-ref.sh | 8 ++++++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/show-ref.c b/builtin/show-ref.c
+index 79955c2856..1c15421e60 100644
+--- a/builtin/show-ref.c
++++ b/builtin/show-ref.c
+@@ -172,7 +172,7 @@ static int cmd_show_ref__verify(const struct show_one_options *show_one_opts,
+ 	while (*refs) {
+ 		struct object_id oid;
+ 
+-		if ((starts_with(*refs, "refs/") || !strcmp(*refs, "HEAD")) &&
++		if ((starts_with(*refs, "refs/") || refname_is_safe(*refs)) &&
+ 		    !read_ref(*refs, &oid)) {
+ 			show_one(show_one_opts, *refs, &oid);
+ 		}
+diff --git a/t/t1403-show-ref.sh b/t/t1403-show-ref.sh
+index d0a8f7b121..33fb7a38ff 100755
+--- a/t/t1403-show-ref.sh
++++ b/t/t1403-show-ref.sh
+@@ -174,6 +174,14 @@ test_expect_success 'show-ref --verify HEAD' '
+ 	test_must_be_empty actual
+ '
+ 
++test_expect_success 'show-ref --verify pseudorefs' '
++	git update-ref CHERRY_PICK_HEAD HEAD $ZERO_OID &&
++	test_when_finished "git update-ref -d CHERRY_PICK_HEAD" &&
++	git show-ref -s --verify HEAD >actual &&
++	git show-ref -s --verify CHERRY_PICK_HEAD >expect &&
++	test_cmp actual expect
++'
++
+ test_expect_success 'show-ref --verify with dangling ref' '
+ 	sha1_file() {
+ 		echo "$*" | sed "s#..#.git/objects/&/#"
+-- 
+2.39.3 (Apple Git-145)
+

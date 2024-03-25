@@ -1,0 +1,171 @@
+From 22613b25ec727560bce369075503194a460f2133 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 30 Sep 2022 20:47:11 +0000
+Subject: [PATCH 0018/2871] tmp-objdir: skip clean up when handling a signal
+
+In the tmp-objdir api, tmp_objdir_create will create a temporary
+directory but also register signal handlers responsible for removing
+the directory's contents and the directory itself. However, the
+function responsible for recursively removing the contents and
+directory, remove_dir_recurse() calls opendir(3) and closedir(3).
+This can be problematic because these functions allocate and free
+memory, which are not async-signal-safe functions. This can lead to
+deadlocks.
+
+One place we call tmp_objdir_create() is in git-receive-pack, where
+we create a temporary quarantine directory "incoming". Incoming
+objects will be written to this directory before they get moved to
+the object directory.
+
+We have observed this code leading to a deadlock:
+
+	Thread 1 (Thread 0x7f621ba0b200 (LWP 326305)):
+	#0  __lll_lock_wait_private (futex=futex@entry=0x7f621bbf8b80
+		<main_arena>) at ./lowlevellock.c:35
+	#1  0x00007f621baa635b in __GI___libc_malloc
+		(bytes=bytes@entry=32816) at malloc.c:3064
+	#2  0x00007f621bae9f49 in __alloc_dir (statp=0x7fff2ea7ed60,
+		flags=0, close_fd=true, fd=5)
+		at ../sysdeps/posix/opendir.c:118
+	#3  opendir_tail (fd=5) at ../sysdeps/posix/opendir.c:69
+	#4  __opendir (name=<optimized out>)
+		at ../sysdeps/posix/opendir.c:92
+	#5  0x0000557c19c77de1 in remove_dir_recurse ()
+	git#6  0x0000557c19d81a4f in remove_tmp_objdir_on_signal ()
+	#7  <signal handler called>
+	git#8  _int_malloc (av=av@entry=0x7f621bbf8b80 <main_arena>,
+		bytes=bytes@entry=7160) at malloc.c:4116
+	git#9  0x00007f621baa62c9 in __GI___libc_malloc (bytes=7160)
+		at malloc.c:3066
+	git#10 0x00007f621bd1e987 in inflateInit2_ ()
+		from /opt/gitlab/embedded/lib/libz.so.1
+	git#11 0x0000557c19dbe5f4 in git_inflate_init ()
+	git#12 0x0000557c19cee02a in unpack_compressed_entry ()
+	git#13 0x0000557c19cf08cb in unpack_entry ()
+	git#14 0x0000557c19cf0f32 in packed_object_info ()
+	git#15 0x0000557c19cd68cd in do_oid_object_info_extended ()
+	git#16 0x0000557c19cd6e2b in read_object_file_extended ()
+	git#17 0x0000557c19cdec2f in parse_object ()
+	git#18 0x0000557c19c34977 in lookup_commit_reference_gently ()
+	git#19 0x0000557c19d69309 in mark_uninteresting ()
+	git#20 0x0000557c19d2d180 in do_for_each_repo_ref_iterator ()
+	git#21 0x0000557c19d21678 in for_each_ref ()
+	git#22 0x0000557c19d6a94f in assign_shallow_commits_to_refs ()
+	git#23 0x0000557c19bc02b2 in cmd_receive_pack ()
+	git#24 0x0000557c19b29fdd in handle_builtin ()
+	git#25 0x0000557c19b2a526 in cmd_main ()
+	git#26 0x0000557c19b28ea2 in main ()
+
+Since we can't do the cleanup in a portable and signal-safe way, skip
+the cleanup when we're handling a signal.
+
+This means that when signal handling, the temporary directory may not
+get cleaned up properly. This is mitigated by b3cecf49ea (tmp-objdir: new
+API for creating temporary writable databases, 2021-12-06) which changed
+the default name and allows gc to clean up these temporary directories.
+
+In the event of a normal exit, we should still be cleaning up via the
+atexit() handler.
+
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ tmp-objdir.c | 40 ++++------------------------------------
+ 1 file changed, 4 insertions(+), 36 deletions(-)
+
+diff --git a/tmp-objdir.c b/tmp-objdir.c
+index adf6033549..2a2012eb6d 100644
+--- a/tmp-objdir.c
++++ b/tmp-objdir.c
+@@ -18,7 +18,7 @@ struct tmp_objdir {
+ 
+ /*
+  * Allow only one tmp_objdir at a time in a running process, which simplifies
+- * our signal/atexit cleanup routines.  It's doubtful callers will ever need
++ * our atexit cleanup routines.  It's doubtful callers will ever need
+  * more than one, and we can expand later if so.  You can have many such
+  * tmp_objdirs simultaneously in many processes, of course.
+  */
+@@ -31,7 +31,7 @@ static void tmp_objdir_free(struct tmp_objdir *t)
+ 	free(t);
+ }
+ 
+-static int tmp_objdir_destroy_1(struct tmp_objdir *t, int on_signal)
++int tmp_objdir_destroy(struct tmp_objdir *t)
+ {
+ 	int err;
+ 
+@@ -41,44 +41,21 @@ static int tmp_objdir_destroy_1(struct tmp_objdir *t, int on_signal)
+ 	if (t == the_tmp_objdir)
+ 		the_tmp_objdir = NULL;
+ 
+-	if (!on_signal && t->prev_odb)
++	if (t->prev_odb)
+ 		restore_primary_odb(t->prev_odb, t->path.buf);
+ 
+-	/*
+-	 * This may use malloc via strbuf_grow(), but we should
+-	 * have pre-grown t->path sufficiently so that this
+-	 * doesn't happen in practice.
+-	 */
+ 	err = remove_dir_recursively(&t->path, 0);
+ 
+-	/*
+-	 * When we are cleaning up due to a signal, we won't bother
+-	 * freeing memory; it may cause a deadlock if the signal
+-	 * arrived while libc's allocator lock is held.
+-	 */
+-	if (!on_signal)
+-		tmp_objdir_free(t);
++	tmp_objdir_free(t);
+ 
+ 	return err;
+ }
+ 
+-int tmp_objdir_destroy(struct tmp_objdir *t)
+-{
+-	return tmp_objdir_destroy_1(t, 0);
+-}
+-
+ static void remove_tmp_objdir(void)
+ {
+ 	tmp_objdir_destroy(the_tmp_objdir);
+ }
+ 
+-static void remove_tmp_objdir_on_signal(int signo)
+-{
+-	tmp_objdir_destroy_1(the_tmp_objdir, 1);
+-	sigchain_pop(signo);
+-	raise(signo);
+-}
+-
+ void tmp_objdir_discard_objects(struct tmp_objdir *t)
+ {
+ 	remove_dir_recursively(&t->path, REMOVE_DIR_KEEP_TOPLEVEL);
+@@ -152,14 +129,6 @@ struct tmp_objdir *tmp_objdir_create(const char *prefix)
+ 	 */
+ 	strbuf_addf(&t->path, "%s/tmp_objdir-%s-XXXXXX", get_object_directory(), prefix);
+ 
+-	/*
+-	 * Grow the strbuf beyond any filename we expect to be placed in it.
+-	 * If tmp_objdir_destroy() is called by a signal handler, then
+-	 * we should be able to use the strbuf to remove files without
+-	 * having to call malloc.
+-	 */
+-	strbuf_grow(&t->path, 1024);
+-
+ 	if (!mkdtemp(t->path.buf)) {
+ 		/* free, not destroy, as we never touched the filesystem */
+ 		tmp_objdir_free(t);
+@@ -169,7 +138,6 @@ struct tmp_objdir *tmp_objdir_create(const char *prefix)
+ 	the_tmp_objdir = t;
+ 	if (!installed_handlers) {
+ 		atexit(remove_tmp_objdir);
+-		sigchain_push_common(remove_tmp_objdir_on_signal);
+ 		installed_handlers++;
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,40 @@
+From d35d8f2e7af9dfd7560c1cfeb96713285c0f59bc Mon Sep 17 00:00:00 2001
+From: Ashutosh Pandey <ashutosh.pandeyhlr007@gmail.com>
+Date: Sun, 19 Feb 2023 00:51:28 +0530
+Subject: [PATCH 0882/2871] t2015-checkout-unborn.sh: changes the style for cd
+
+the `cd` followed the old style which wasn't consistent with the rest of
+the test suite, so this commit makes it consistent with the current
+style of the test suite for `cd` in  subshell.
+
+Signed-off-by: Ashutosh Pandey <ashutosh.pandeyhlr007@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2015-checkout-unborn.sh | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/t/t2015-checkout-unborn.sh b/t/t2015-checkout-unborn.sh
+index 9425aae639..fb0e13881c 100755
+--- a/t/t2015-checkout-unborn.sh
++++ b/t/t2015-checkout-unborn.sh
+@@ -9,11 +9,12 @@ TEST_PASSES_SANITIZE_LEAK=true
+ 
+ test_expect_success 'setup' '
+ 	mkdir parent &&
+-	(cd parent &&
+-	 git init &&
+-	 echo content >file &&
+-	 git add file &&
+-	 git commit -m base
++	(
++		cd parent &&
++		git init &&
++		echo content >file &&
++		git add file &&
++		git commit -m base
+ 	) &&
+ 	git fetch parent main:origin
+ '
+-- 
+2.39.3 (Apple Git-145)
+

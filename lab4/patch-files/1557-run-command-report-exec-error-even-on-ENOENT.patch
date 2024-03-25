@@ -1,0 +1,82 @@
+From 6d224ac286d62bb3a10c3697f220b0c10d4b5f51 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 10 Jun 2023 16:51:21 +0200
+Subject: [PATCH 1557/2871] run-command: report exec error even on ENOENT
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+If execve(2) fails with ENOENT and we report the error, we use the
+format "cannot run %s", followed by the actual error message.  For other
+errors we use "cannot exec '%s'".
+
+Stop making this subtle distinction and use the second format for all
+execve(2) errors.  This simplifies the code and makes the prefix more
+precise by indicating the failed operation.  It also allows us to
+slightly simplify t1800.16.
+
+On Windows -- which lacks execve(2) -- we already use a single format in
+all cases: "cannot spawn %s".
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ run-command.c   | 14 +++-----------
+ t/t1800-hook.sh |  2 +-
+ 2 files changed, 4 insertions(+), 12 deletions(-)
+
+diff --git a/run-command.c b/run-command.c
+index 6bd16acb06..ea192882fb 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -301,7 +301,6 @@ enum child_errcode {
+ 	CHILD_ERR_DUP2,
+ 	CHILD_ERR_CLOSE,
+ 	CHILD_ERR_SIGPROCMASK,
+-	CHILD_ERR_ENOENT,
+ 	CHILD_ERR_SILENT,
+ 	CHILD_ERR_ERRNO
+ };
+@@ -384,9 +383,6 @@ static void child_err_spew(struct child_process *cmd, struct child_err *cerr)
+ 	case CHILD_ERR_SIGPROCMASK:
+ 		error_errno("sigprocmask failed restoring signals");
+ 		break;
+-	case CHILD_ERR_ENOENT:
+-		error_errno("cannot run %s", cmd->args.v[0]);
+-		break;
+ 	case CHILD_ERR_SILENT:
+ 		break;
+ 	case CHILD_ERR_ERRNO:
+@@ -840,13 +836,9 @@ int start_command(struct child_process *cmd)
+ 			execve(argv.v[0], (char *const *) argv.v,
+ 			       (char *const *) childenv);
+ 
+-		if (errno == ENOENT) {
+-			if (cmd->silent_exec_failure)
+-				child_die(CHILD_ERR_SILENT);
+-			child_die(CHILD_ERR_ENOENT);
+-		} else {
+-			child_die(CHILD_ERR_ERRNO);
+-		}
++		if (cmd->silent_exec_failure && errno == ENOENT)
++			child_die(CHILD_ERR_SILENT);
++		child_die(CHILD_ERR_ERRNO);
+ 	}
+ 	atfork_parent(&as);
+ 	if (cmd->pid < 0)
+diff --git a/t/t1800-hook.sh b/t/t1800-hook.sh
+index c156d6decc..8b0234cf2d 100755
+--- a/t/t1800-hook.sh
++++ b/t/t1800-hook.sh
+@@ -164,7 +164,7 @@ test_expect_success 'git hook run a hook with a bad shebang' '
+ 	# TODO: We should emit the same (or at least a more similar)
+ 	# error on MINGW (essentially Git for Windows) and all other
+ 	# platforms.. See the OS-specific code in start_command()
+-	grep -E "^(error|fatal): cannot (exec|run|spawn) .*bad-hooks/test-hook" err
++	grep -E "^(error|fatal): cannot (exec|spawn) .*bad-hooks/test-hook" err
+ '
+ 
+ test_expect_success 'stdin to hooks' '
+-- 
+2.39.3 (Apple Git-145)
+

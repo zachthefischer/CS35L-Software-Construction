@@ -1,0 +1,97 @@
+From e1bfe30c4dd29a1a30569d04432d73675e497e86 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 14 Dec 2023 17:24:28 -0500
+Subject: [PATCH 2560/2871] pack-revindex: factor out `midx_key_to_pack_pos()`
+ helper
+
+The `midx_to_pack_pos()` function implements a binary search over
+objects in the MIDX between lexical and pseudo-pack order. It does this
+by taking in an index into the lexical order (i.e. the same argument
+you'd use for `nth_midxed_object_id()` and similar) and spits out a
+position in the pseudo-pack order.
+
+This works for all callers, since they currently all are translating
+from lexical order to pseudo-pack order. But future callers may want to
+translate a known (offset, pack_id) tuple into an index into the
+psuedo-pack order, without knowing where that (offset, pack_id) tuple
+appears in lexical order.
+
+Prepare for implementing a function that translates between a (offset,
+pack_id) tuple into an index into the psuedo-pack order by extracting a
+helper function which does just that, and then reimplementing
+midx_to_pack_pos() in terms of it.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-revindex.c | 39 ++++++++++++++++++++++++---------------
+ 1 file changed, 24 insertions(+), 15 deletions(-)
+
+diff --git a/pack-revindex.c b/pack-revindex.c
+index 7dc6c776d5..baa4657ed3 100644
+--- a/pack-revindex.c
++++ b/pack-revindex.c
+@@ -520,19 +520,12 @@ static int midx_pack_order_cmp(const void *va, const void *vb)
+ 	return 0;
+ }
+ 
+-int midx_to_pack_pos(struct multi_pack_index *m, uint32_t at, uint32_t *pos)
++static int midx_key_to_pack_pos(struct multi_pack_index *m,
++				struct midx_pack_key *key,
++				uint32_t *pos)
+ {
+-	struct midx_pack_key key;
+ 	uint32_t *found;
+ 
+-	if (!m->revindex_data)
+-		BUG("midx_to_pack_pos: reverse index not yet loaded");
+-	if (m->num_objects <= at)
+-		BUG("midx_to_pack_pos: out-of-bounds object at %"PRIu32, at);
+-
+-	key.pack = nth_midxed_pack_int_id(m, at);
+-	key.offset = nth_midxed_offset(m, at);
+-	key.midx = m;
+ 	/*
+ 	 * The preferred pack sorts first, so determine its identifier by
+ 	 * looking at the first object in pseudo-pack order.
+@@ -542,16 +535,32 @@ int midx_to_pack_pos(struct multi_pack_index *m, uint32_t at, uint32_t *pos)
+ 	 * implicitly is preferred (and includes all its objects, since ties are
+ 	 * broken first by pack identifier).
+ 	 */
+-	if (midx_preferred_pack(key.midx, &key.preferred_pack) < 0)
++	if (midx_preferred_pack(key->midx, &key->preferred_pack) < 0)
+ 		return error(_("could not determine preferred pack"));
+ 
+-
+-	found = bsearch(&key, m->revindex_data, m->num_objects,
+-			sizeof(*m->revindex_data), midx_pack_order_cmp);
++	found = bsearch(key, m->revindex_data, m->num_objects,
++			sizeof(*m->revindex_data),
++			midx_pack_order_cmp);
+ 
+ 	if (!found)
+-		return error("bad offset for revindex");
++		return -1;
+ 
+ 	*pos = found - m->revindex_data;
+ 	return 0;
+ }
++
++int midx_to_pack_pos(struct multi_pack_index *m, uint32_t at, uint32_t *pos)
++{
++	struct midx_pack_key key;
++
++	if (!m->revindex_data)
++		BUG("midx_to_pack_pos: reverse index not yet loaded");
++	if (m->num_objects <= at)
++		BUG("midx_to_pack_pos: out-of-bounds object at %"PRIu32, at);
++
++	key.pack = nth_midxed_pack_int_id(m, at);
++	key.offset = nth_midxed_offset(m, at);
++	key.midx = m;
++
++	return midx_key_to_pack_pos(m, &key, pos);
++}
+-- 
+2.39.3 (Apple Git-145)
+

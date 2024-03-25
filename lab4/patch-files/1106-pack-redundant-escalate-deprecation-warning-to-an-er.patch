@@ -1,0 +1,54 @@
+From 4406522b76138c2bd3d110ac9de0d860ba2be5ed Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 23 Mar 2023 16:40:47 -0400
+Subject: [PATCH 1106/2871] pack-redundant: escalate deprecation warning to an
+ error
+
+In c3b58472be2 (pack-redundant: gauge the usage before proposing its
+removal, 2020-08-25), we added a big, ugly warning when pack-redundant
+is run. The plan there indicated that we would ratchet that up to an
+error before finally removing it. Since it has been 2.5 years (and 9
+releases) since then, let's continue with the plan.
+
+Note that we did get one bite on the warning, which was somebody asking
+about alternatives:
+
+  https://lore.kernel.org/git/CAKvOHKAFXQwt4D8yUCCkf_TQL79mYaJ=KAKhtpDNTvHJFuX1NA@mail.gmail.com/
+
+but we didn't undo the ugly warning (and the advice continues to be "use
+repack -d" instead).
+
+There was also some discussion around the time of the deprecation that
+pack-redundant was invoked by the bitbake tool, and it still seems to do
+so now:
+
+  https://git.openembedded.org/bitbake
+
+That use should probably just go away in favor of an occasional repack
+(which probably even happens via auto-gc after fetch these days).
+
+But since neither of those data points caused us to cancel the
+deprecation plan by dropping the warning, it seems like we should
+proceed with the next step.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-redundant.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/builtin/pack-redundant.c b/builtin/pack-redundant.c
+index ecd49ca268..fe645325fb 100644
+--- a/builtin/pack-redundant.c
++++ b/builtin/pack-redundant.c
+@@ -603,6 +603,7 @@ int cmd_pack_redundant(int argc, const char **argv, const char *prefix)
+ 			"option, '--i-still-use-this', on the command line\n"
+ 			"and let us know you still use it by sending an e-mail\n"
+ 			"to <git@vger.kernel.org>.  Thanks.\n"), stderr);
++		die(_("refusing to run without --i-still-use-this"));
+ 	}
+ 
+ 	if (load_all_packs)
+-- 
+2.39.3 (Apple Git-145)
+

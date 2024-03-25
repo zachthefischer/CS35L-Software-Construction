@@ -1,0 +1,170 @@
+From c6ce27ab08d30dd9d626d7a56cb928bc5792eb27 Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Sun, 12 Feb 2023 09:04:26 +0000
+Subject: [PATCH 0970/2871] fetch: support hideRefs to speed up connectivity
+ checks
+
+With roughly 800 remotes all fetching into their own
+refs/remotes/$REMOTE/* island, the connectivity check[1] gets
+expensive for each fetch on systems which lack sufficient RAM to
+cache objects.
+
+To do a no-op fetch on one $REMOTE out of hundreds, hideRefs now
+allows the no-op fetch to take ~30 seconds instead of ~20 minutes
+on a noisy, RAM-constrained machine (localhost, so no network latency):
+
+   git -c fetch.hideRefs=refs \
+	-c fetch.hideRefs='!refs/remotes/$REMOTE/' \
+	fetch $REMOTE
+
+[1] `git rev-list --objects --stdin --not --all --quiet --alternate-refs'
+
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rev-parse.txt    | 9 +++++----
+ Documentation/rev-list-options.txt | 9 +++++----
+ builtin/fetch.c                    | 2 ++
+ builtin/rev-list.c                 | 2 +-
+ revision.c                         | 3 ++-
+ t/t5510-fetch.sh                   | 9 +++++++++
+ t/t6018-rev-list-glob.sh           | 2 +-
+ t/t6021-rev-list-exclude-hidden.sh | 2 +-
+ 8 files changed, 26 insertions(+), 12 deletions(-)
+
+diff --git a/Documentation/git-rev-parse.txt b/Documentation/git-rev-parse.txt
+index bcd8069287..f26a7591e3 100644
+--- a/Documentation/git-rev-parse.txt
++++ b/Documentation/git-rev-parse.txt
+@@ -197,10 +197,11 @@ respectively, and they must begin with `refs/` when applied to `--glob`
+ or `--all`. If a trailing '/{asterisk}' is intended, it must be given
+ explicitly.
+ 
+---exclude-hidden=[receive|uploadpack]::
+-	Do not include refs that would be hidden by `git-receive-pack` or
+-	`git-upload-pack` by consulting the appropriate `receive.hideRefs` or
+-	`uploadpack.hideRefs` configuration along with `transfer.hideRefs` (see
++--exclude-hidden=[fetch|receive|uploadpack]::
++	Do not include refs that would be hidden by `git-fetch`,
++	`git-receive-pack` or `git-upload-pack` by consulting the appropriate
++	`fetch.hideRefs`, `receive.hideRefs` or `uploadpack.hideRefs`
++	configuration along with `transfer.hideRefs` (see
+ 	linkgit:git-config[1]). This option affects the next pseudo-ref option
+ 	`--all` or `--glob` and is cleared after processing them.
+ 
+diff --git a/Documentation/rev-list-options.txt b/Documentation/rev-list-options.txt
+index 0d90d5b154..90c73d6708 100644
+--- a/Documentation/rev-list-options.txt
++++ b/Documentation/rev-list-options.txt
+@@ -195,10 +195,11 @@ respectively, and they must begin with `refs/` when applied to `--glob`
+ or `--all`. If a trailing '/{asterisk}' is intended, it must be given
+ explicitly.
+ 
+---exclude-hidden=[receive|uploadpack]::
+-	Do not include refs that would be hidden by `git-receive-pack` or
+-	`git-upload-pack` by consulting the appropriate `receive.hideRefs` or
+-	`uploadpack.hideRefs` configuration along with `transfer.hideRefs` (see
++--exclude-hidden=[fetch|receive|uploadpack]::
++	Do not include refs that would be hidden by `git-fetch`,
++	`git-receive-pack` or `git-upload-pack` by consulting the appropriate
++	`fetch.hideRefs`, `receive.hideRefs` or `uploadpack.hideRefs`
++	configuration along with `transfer.hideRefs` (see
+ 	linkgit:git-config[1]). This option affects the next pseudo-ref option
+ 	`--all` or `--glob` and is cleared after processing them.
+ 
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index a09606b472..edbeb19d3b 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -1132,6 +1132,7 @@ static int store_updated_refs(const char *raw_url, const char *remote_name,
+ 	if (!connectivity_checked) {
+ 		struct check_connected_options opt = CHECK_CONNECTED_INIT;
+ 
++		opt.exclude_hidden_refs_section = "fetch";
+ 		rm = ref_map;
+ 		if (check_connected(iterate_ref_map, &rm, &opt)) {
+ 			rc = error(_("%s did not send all necessary objects\n"), url);
+@@ -1325,6 +1326,7 @@ static int check_exist_and_connected(struct ref *ref_map)
+ 	}
+ 
+ 	opt.quiet = 1;
++	opt.exclude_hidden_refs_section = "fetch";
+ 	return check_connected(iterate_ref_map, &rm, &opt);
+ }
+ 
+diff --git a/builtin/rev-list.c b/builtin/rev-list.c
+index d42db0b0cc..2ab3efd233 100644
+--- a/builtin/rev-list.c
++++ b/builtin/rev-list.c
+@@ -38,7 +38,7 @@ static const char rev_list_usage[] =
+ "    --tags\n"
+ "    --remotes\n"
+ "    --stdin\n"
+-"    --exclude-hidden=[receive|uploadpack]\n"
++"    --exclude-hidden=[fetch|receive|uploadpack]\n"
+ "    --quiet\n"
+ "  ordering output:\n"
+ "    --topo-order\n"
+diff --git a/revision.c b/revision.c
+index 21f5f572c2..50940699e4 100644
+--- a/revision.c
++++ b/revision.c
+@@ -1574,7 +1574,8 @@ void exclude_hidden_refs(struct ref_exclusions *exclusions, const char *section)
+ {
+ 	struct exclude_hidden_refs_cb cb;
+ 
+-	if (strcmp(section, "receive") && strcmp(section, "uploadpack"))
++	if (strcmp(section, "fetch") && strcmp(section, "receive") &&
++			strcmp(section, "uploadpack"))
+ 		die(_("unsupported section for hidden refs: %s"), section);
+ 
+ 	if (exclusions->hidden_refs_configured)
+diff --git a/t/t5510-fetch.sh b/t/t5510-fetch.sh
+index 34a1261520..dc44da9c79 100755
+--- a/t/t5510-fetch.sh
++++ b/t/t5510-fetch.sh
+@@ -1171,6 +1171,15 @@ test_expect_success '--no-show-forced-updates' '
+ 	)
+ '
+ 
++for section in fetch transfer
++do
++	test_expect_success "$section.hideRefs affects connectivity check" '
++		GIT_TRACE="$PWD"/trace git -c $section.hideRefs=refs -c \
++			$section.hideRefs="!refs/tags/" fetch &&
++		grep "git rev-list .*--exclude-hidden=fetch" trace
++	'
++done
++
+ setup_negotiation_tip () {
+ 	SERVER="$1"
+ 	URL="$2"
+diff --git a/t/t6018-rev-list-glob.sh b/t/t6018-rev-list-glob.sh
+index aabf590dda..67d523d405 100755
+--- a/t/t6018-rev-list-glob.sh
++++ b/t/t6018-rev-list-glob.sh
+@@ -187,7 +187,7 @@ test_expect_success 'rev-parse --exclude=ref with --remotes=glob' '
+ 	compare rev-parse "--exclude=upstream/x --remotes=upstream/*" "upstream/one upstream/two"
+ '
+ 
+-for section in receive uploadpack
++for section in fetch receive uploadpack
+ do
+ 	test_expect_success "rev-parse --exclude-hidden=$section with --all" '
+ 		compare "-c transfer.hideRefs=refs/remotes/ rev-parse" "--branches --tags" "--exclude-hidden=$section --all"
+diff --git a/t/t6021-rev-list-exclude-hidden.sh b/t/t6021-rev-list-exclude-hidden.sh
+index 11c50b7c0d..1a9d37e638 100755
+--- a/t/t6021-rev-list-exclude-hidden.sh
++++ b/t/t6021-rev-list-exclude-hidden.sh
+@@ -22,7 +22,7 @@ test_expect_success 'invalid section' '
+ 	test_cmp expected err
+ '
+ 
+-for section in receive uploadpack
++for section in fetch receive uploadpack
+ do
+ 	test_expect_success "$section: passed multiple times" '
+ 		echo "fatal: --exclude-hidden= passed more than once" >expected &&
+-- 
+2.39.3 (Apple Git-145)
+

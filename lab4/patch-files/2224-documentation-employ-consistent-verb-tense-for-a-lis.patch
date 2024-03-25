@@ -1,0 +1,58 @@
+From 7f7e6bbe06719aa4c6276d5ddf230ba8d6a4d57a Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:10 +0000
+Subject: [PATCH 2224/2871] documentation: employ consistent verb tense for a
+ list
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/push.txt    | 2 +-
+ Documentation/config/receive.txt | 2 +-
+ Documentation/git-rev-parse.txt  | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/config/push.txt b/Documentation/config/push.txt
+index 43338b65e8..dbaf930f01 100644
+--- a/Documentation/config/push.txt
++++ b/Documentation/config/push.txt
+@@ -35,7 +35,7 @@ push.default::
+ 
+ * `tracking` - This is a deprecated synonym for `upstream`.
+ 
+-* `simple` - pushes the current branch with the same name on the remote.
++* `simple` - push the current branch with the same name on the remote.
+ +
+ If you are working on a centralized workflow (pushing to the same repository you
+ pull from, which is typically `origin`), then you need to configure an upstream
+diff --git a/Documentation/config/receive.txt b/Documentation/config/receive.txt
+index ae526cbf58..c77e55b1cd 100644
+--- a/Documentation/config/receive.txt
++++ b/Documentation/config/receive.txt
+@@ -14,7 +14,7 @@ receive.autogc::
+ 
+ receive.certNonceSeed::
+ 	By setting this variable to a string, `git receive-pack`
+-	will accept a `git push --signed` and verifies it by using
++	will accept a `git push --signed` and verify it by using
+ 	a "nonce" protected by HMAC using this string as a secret
+ 	key.
+ 
+diff --git a/Documentation/git-rev-parse.txt b/Documentation/git-rev-parse.txt
+index 2294e9a519..7b3ce3012e 100644
+--- a/Documentation/git-rev-parse.txt
++++ b/Documentation/git-rev-parse.txt
+@@ -156,7 +156,7 @@ for another option.
+ 	are not refs (i.e. branch or tag names; or more
+ 	explicitly disambiguating "heads/master" form, when you
+ 	want to name the "master" branch when there is an
+-	unfortunately named tag "master"), and show them as full
++	unfortunately named tag "master"), and shows them as full
+ 	refnames (e.g. "refs/heads/master").
+ 
+ Options for Objects
+-- 
+2.39.3 (Apple Git-145)
+

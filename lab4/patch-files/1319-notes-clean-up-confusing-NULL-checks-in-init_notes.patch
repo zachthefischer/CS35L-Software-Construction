@@ -1,0 +1,49 @@
+From ae6f064fd7f0925cc8985769750a1367a4c24194 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 22 Apr 2023 09:55:43 -0400
+Subject: [PATCH 1319/2871] notes: clean up confusing NULL checks in
+ init_notes()
+
+Coverity complains that we check whether "notes_ref" is NULL, but it was
+already implied to be non-NULL earlier in the function. And this is
+true; since b9342b3fd63 (refs: add array of ref namespaces, 2022-08-05),
+we call xstrdup(notes_ref) unconditionally, which would segfault if it
+was NULL.
+
+But that commit is actually doing the right thing. Even if NULL is
+passed into the function, we'll use default_notes_ref() as a fallback,
+which will never return NULL (it tries a few options, but its last
+resort is a string literal). Ironically, the "!notes_ref" check was
+added by the same commit that added the fallback: 709f79b0894 (Notes
+API: init_notes(): Initialize the notes tree from the given notes ref,
+2010-02-13). So this check never did anything.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ notes.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/notes.c b/notes.c
+index 45fb7f22d1..cadb435056 100644
+--- a/notes.c
++++ b/notes.c
+@@ -1019,13 +1019,13 @@ void init_notes(struct notes_tree *t, const char *notes_ref,
+ 	t->root = (struct int_node *) xcalloc(1, sizeof(struct int_node));
+ 	t->first_non_note = NULL;
+ 	t->prev_non_note = NULL;
+-	t->ref = xstrdup_or_null(notes_ref);
++	t->ref = xstrdup(notes_ref);
+ 	t->update_ref = (flags & NOTES_INIT_WRITABLE) ? t->ref : NULL;
+ 	t->combine_notes = combine_notes;
+ 	t->initialized = 1;
+ 	t->dirty = 0;
+ 
+-	if (flags & NOTES_INIT_EMPTY || !notes_ref ||
++	if (flags & NOTES_INIT_EMPTY ||
+ 	    repo_get_oid_treeish(the_repository, notes_ref, &object_oid))
+ 		return;
+ 	if (flags & NOTES_INIT_WRITABLE && read_ref(notes_ref, &object_oid))
+-- 
+2.39.3 (Apple Git-145)
+

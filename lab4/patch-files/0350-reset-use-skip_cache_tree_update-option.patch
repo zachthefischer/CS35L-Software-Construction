@@ -1,0 +1,70 @@
+From 0e47bca0f7592f8053ffcc530d8afa1d2e364563 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Thu, 10 Nov 2022 19:06:03 +0000
+Subject: [PATCH 0350/2871] reset: use 'skip_cache_tree_update' option
+
+Enable the 'skip_cache_tree_update' option in the variants that call
+'prime_cache_tree()' after 'unpack_trees()' (specifically, 'git reset
+--mixed' and 'git reset --hard'). This avoids redundantly rebuilding the
+cache tree in both 'cache_tree_update()' at the end of 'unpack_trees()' and
+in 'prime_cache_tree()', resulting in a small (but consistent) performance
+improvement. From the newly-added 'p7102-reset.sh' test:
+
+Test                         before            after
+--------------------------------------------------------------------
+7102.1: reset --hard (...)   2.11(0.40+1.54)   1.97(0.38+1.47) -6.6%
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/reset.c       |  2 ++
+ t/perf/p7102-reset.sh | 21 +++++++++++++++++++++
+ 2 files changed, 23 insertions(+)
+ create mode 100755 t/perf/p7102-reset.sh
+
+diff --git a/builtin/reset.c b/builtin/reset.c
+index fdce6f8c85..ab02777482 100644
+--- a/builtin/reset.c
++++ b/builtin/reset.c
+@@ -73,9 +73,11 @@ static int reset_index(const char *ref, const struct object_id *oid, int reset_t
+ 	case HARD:
+ 		opts.update = 1;
+ 		opts.reset = UNPACK_RESET_OVERWRITE_UNTRACKED;
++		opts.skip_cache_tree_update = 1;
+ 		break;
+ 	case MIXED:
+ 		opts.reset = UNPACK_RESET_PROTECT_UNTRACKED;
++		opts.skip_cache_tree_update = 1;
+ 		/* but opts.update=0, so working tree not updated */
+ 		break;
+ 	default:
+diff --git a/t/perf/p7102-reset.sh b/t/perf/p7102-reset.sh
+new file mode 100755
+index 0000000000..9b039e8691
+--- /dev/null
++++ b/t/perf/p7102-reset.sh
+@@ -0,0 +1,21 @@
++#!/bin/sh
++
++test_description='performance of reset'
++. ./perf-lib.sh
++
++test_perf_default_repo
++test_checkout_worktree
++
++test_perf 'reset --hard with change in tree' '
++	base=$(git rev-parse HEAD) &&
++	test_commit --no-tag A &&
++	new=$(git rev-parse HEAD) &&
++
++	for i in $(test_seq 10)
++	do
++		git reset --hard $new &&
++		git reset --hard $base || return $?
++	done
++'
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

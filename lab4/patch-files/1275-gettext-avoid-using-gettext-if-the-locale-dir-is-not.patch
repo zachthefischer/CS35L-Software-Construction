@@ -1,0 +1,91 @@
+From c4137be0f5a6edf9a9044e6e43ecf4468c7a4046 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 22 Feb 2023 12:40:55 +0100
+Subject: [PATCH 1275/2871] gettext: avoid using gettext if the locale dir is
+ not present
+
+In cc5e1bf99247 (gettext: avoid initialization if the locale dir is not
+present, 2018-04-21) Git was taught to avoid a costly gettext start-up
+when there are not even any localized messages to work with.
+
+But we still called `gettext()` and `ngettext()` functions.
+
+Which caused a problem in Git for Windows when the libgettext that is
+consumed from the MSYS2 project stopped using a runtime prefix in
+https://github.com/msys2/MINGW-packages/pull/10461
+
+Due to that change, we now use an unintialized gettext machinery that
+might get auto-initialized _using an unintended locale directory_:
+`C:\mingw64\share\locale`.
+
+Let's record the fact when the gettext initialization was skipped, and
+skip calling the gettext functions accordingly.
+
+This addresses CVE-2023-25815.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ gettext.c | 4 ++++
+ gettext.h | 7 ++++++-
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/gettext.c b/gettext.c
+index 1b564216d0..610d402fe7 100644
+--- a/gettext.c
++++ b/gettext.c
+@@ -109,6 +109,8 @@ static void init_gettext_charset(const char *domain)
+ 		setlocale(LC_CTYPE, "C");
+ }
+ 
++int git_gettext_enabled = 0;
++
+ void git_setup_gettext(void)
+ {
+ 	const char *podir = getenv(GIT_TEXT_DOMAIN_DIR_ENVIRONMENT);
+@@ -130,6 +132,8 @@ void git_setup_gettext(void)
+ 	init_gettext_charset("git");
+ 	textdomain("git");
+ 
++	git_gettext_enabled = 1;
++
+ 	free(p);
+ }
+ 
+diff --git a/gettext.h b/gettext.h
+index bee52eb113..b96ab9d340 100644
+--- a/gettext.h
++++ b/gettext.h
+@@ -31,9 +31,11 @@
+ int use_gettext_poison(void);
+ 
+ #ifndef NO_GETTEXT
++extern int git_gettext_enabled;
+ void git_setup_gettext(void);
+ int gettext_width(const char *s);
+ #else
++#define git_gettext_enabled (0)
+ static inline void git_setup_gettext(void)
+ {
+ 	use_gettext_poison(); /* getenv() reentrancy paranoia */
+@@ -48,7 +50,8 @@ static inline FORMAT_PRESERVING(1) const char *_(const char *msgid)
+ {
+ 	if (!*msgid)
+ 		return "";
+-	return use_gettext_poison() ? "# GETTEXT POISON #" : gettext(msgid);
++	return use_gettext_poison() ? "# GETTEXT POISON #" :
++		!git_gettext_enabled ? msgid : gettext(msgid);
+ }
+ 
+ static inline FORMAT_PRESERVING(1) FORMAT_PRESERVING(2)
+@@ -56,6 +59,8 @@ const char *Q_(const char *msgid, const char *plu, unsigned long n)
+ {
+ 	if (use_gettext_poison())
+ 		return "# GETTEXT POISON #";
++	if (!git_gettext_enabled)
++		return n == 1 ? msgid : plu;
+ 	return ngettext(msgid, plu, n);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

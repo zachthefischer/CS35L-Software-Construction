@@ -1,0 +1,64 @@
+From 2ea1d8b55634f538ae87e9d431fe608246ba60e9 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 18 Oct 2022 10:59:01 +0000
+Subject: [PATCH 0184/2871] cmake: make it easier to diagnose regressions in
+ CTest runs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When a test script fails in Git's test suite, the usual course of action
+is to re-run it using options to increase the verbosity of the output,
+e.g. `-v` and `-x`.
+
+Like in Git's CI runs, when running the tests in Visual Studio via the
+CTest route, it is cumbersome or at least requires a very unintuitive
+approach to pass options to the test scripts: the CMakeLists.txt file
+would have to be modified, passing the desired options to _all_ test
+scripts, and then the CMake Cache would have to be reconfigured before
+running the test in question individually. Unintuitive at best, and
+opposite to the niceties IDE users expect.
+
+So let's just pass those options by default: This will not clutter any
+output window but the log that is written to a log file will have
+information necessary to figure out test failures.
+
+While at it, also imitate what the Windows jobs in Git's CI runs do to
+accelerate running the test scripts: pass the `--no-bin-wrappers` and
+`--no-chain-lint` options.
+
+This makes the test runs noticeably faster because the `bin-wrappers/`
+scripts as well as the `chain-lint` code make heavy use of POSIX shell
+scripting, which is really, really slow on Windows due to the need to
+emulate POSIX behavior via the MSYS2 runtime. In a test by Eric
+Sunshine, it added two minutes (!) just to perform the chain-lint task.
+
+The idea of adding a CMake config option (á la `GIT_TEST_OPTS`) was
+considered during the development of this patch, but then dropped: such
+a setting is global, across _all_ tests, where e.g. `--run=...` would
+not make sense. Users wishing to override these new defaults are better
+advised running the test script manually, in a Git Bash, with full
+control over the command line.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/buildsystems/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/buildsystems/CMakeLists.txt b/contrib/buildsystems/CMakeLists.txt
+index 1b23f2440d..4aee1e2434 100644
+--- a/contrib/buildsystems/CMakeLists.txt
++++ b/contrib/buildsystems/CMakeLists.txt
+@@ -1088,7 +1088,7 @@ file(GLOB test_scipts "${CMAKE_SOURCE_DIR}/t/t[0-9]*.sh")
+ #test
+ foreach(tsh ${test_scipts})
+ 	add_test(NAME ${tsh}
+-		COMMAND ${SH_EXE} ${tsh}
++		COMMAND ${SH_EXE} ${tsh} --no-bin-wrappers --no-chain-lint -vx
+ 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/t)
+ endforeach()
+ 
+-- 
+2.39.3 (Apple Git-145)
+

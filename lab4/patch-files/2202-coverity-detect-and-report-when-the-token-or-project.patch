@@ -1,0 +1,53 @@
+From 3349520e1a1ffd268347ec0ebb720830428f872e Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 25 Sep 2023 11:51:02 +0000
+Subject: [PATCH 2202/2871] coverity: detect and report when the token or
+ project is incorrect
+
+When trying to obtain the MD5 of the Coverity Scan Tool (in order to
+decide whether a cached version can be used or a new version has to be
+downloaded), it is possible to get a 401 (Authorization required) due to
+either an incorrect token, or even more likely due to an incorrect
+Coverity project name.
+
+Seeing an authorization failure that is caused by an incorrect project
+name was somewhat surprising to me when developing the Coverity
+workflow, as I found such a failure suggestive of an incorrect token
+instead.
+
+So let's provide a helpful error message about that specifically when
+encountering authentication issues.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/coverity.yml | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/.github/workflows/coverity.yml b/.github/workflows/coverity.yml
+index 53f9ee6a41..e5532d381b 100644
+--- a/.github/workflows/coverity.yml
++++ b/.github/workflows/coverity.yml
+@@ -80,7 +80,18 @@ jobs:
+                    --fail \
+                    --form token='${{ secrets.COVERITY_SCAN_TOKEN }}' \
+                    --form project="$COVERITY_PROJECT" \
+-                   --form md5=1) &&
++                   --form md5=1)
++          case $? in
++          0) ;; # okay
++          22) # 40x, i.e. access denied
++            echo "::error::incorrect token or project?" >&2
++            exit 1
++            ;;
++          *) # other error
++            echo "::error::Failed to retrieve MD5" >&2
++            exit 1
++            ;;
++          esac
+           echo "hash=$MD5" >>$GITHUB_OUTPUT
+ 
+       # Try to cache the tool to avoid downloading 1GB+ on every run.
+-- 
+2.39.3 (Apple Git-145)
+

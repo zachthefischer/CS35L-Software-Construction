@@ -1,0 +1,360 @@
+From 0cfde740f0b2c9474aae3a381d1d6e97c7468e7a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 22 Dec 2022 15:14:09 +0000
+Subject: [PATCH 0594/2871] clone: request the 'bundle-uri' command when
+ available
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Set up all the needed client parts of the 'bundle-uri' protocol v2
+command, without actually doing anything with the bundle URIs.
+
+If the server says it supports 'bundle-uri' teach Git to issue the
+'bundle-uri' command after the 'ls-refs' during 'git clone'. The
+returned key=value pairs are passed to the bundle list code which is
+tested using a different ingest mechanism in t5750-bundle-uri-parse.sh.
+
+At this point, Git does nothing with that bundle list. It will not
+download any of the bundles. That will come in a later change after
+these protocol bits are finalized.
+
+The no-op client is initially used only by 'git clone' to test the basic
+functionality, and eventually will bootstrap the initial download of Git
+objects during a fresh clone. The bundle URI client will not be
+integrated into other fetches until a mechanism is created to select a
+subset of bundles for download.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clone.c              |  6 +++++
+ connect.c                    | 44 +++++++++++++++++++++++++++++++
+ remote.h                     |  5 ++++
+ t/lib-bundle-uri-protocol.sh | 19 ++++++++++++++
+ transport-helper.c           | 13 +++++++++
+ transport-internal.h         |  7 +++++
+ transport.c                  | 51 ++++++++++++++++++++++++++++++++++++
+ transport.h                  | 19 ++++++++++++++
+ 8 files changed, 164 insertions(+)
+
+diff --git a/builtin/clone.c b/builtin/clone.c
+index 0e4348686b..5866873d26 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -1271,6 +1271,12 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 	if (refs)
+ 		mapped_refs = wanted_peer_refs(refs, &remote->fetch);
+ 
++	/*
++	 * Populate transport->got_remote_bundle_uri and
++	 * transport->bundle_uri. We might get nothing.
++	 */
++	transport_get_remote_bundle_uri(transport);
++
+ 	if (mapped_refs) {
+ 		int hash_algo = hash_algo_by_ptr(transport_get_hash_algo(transport));
+ 
+diff --git a/connect.c b/connect.c
+index 5ea53deda2..624a10f18e 100644
+--- a/connect.c
++++ b/connect.c
+@@ -15,6 +15,7 @@
+ #include "version.h"
+ #include "protocol.h"
+ #include "alias.h"
++#include "bundle-uri.h"
+ 
+ static char *server_capabilities_v1;
+ static struct strvec server_capabilities_v2 = STRVEC_INIT;
+@@ -491,6 +492,49 @@ static void send_capabilities(int fd_out, struct packet_reader *reader)
+ 	}
+ }
+ 
++int get_remote_bundle_uri(int fd_out, struct packet_reader *reader,
++			  struct bundle_list *bundles, int stateless_rpc)
++{
++	int line_nr = 1;
++
++	/* Assert bundle-uri support */
++	server_supports_v2("bundle-uri", 1);
++
++	/* (Re-)send capabilities */
++	send_capabilities(fd_out, reader);
++
++	/* Send command */
++	packet_write_fmt(fd_out, "command=bundle-uri\n");
++	packet_delim(fd_out);
++
++	packet_flush(fd_out);
++
++	/* Process response from server */
++	while (packet_reader_read(reader) == PACKET_READ_NORMAL) {
++		const char *line = reader->line;
++		line_nr++;
++
++		if (!bundle_uri_parse_line(bundles, line))
++			continue;
++
++		return error(_("error on bundle-uri response line %d: %s"),
++			     line_nr, line);
++	}
++
++	if (reader->status != PACKET_READ_FLUSH)
++		return error(_("expected flush after bundle-uri listing"));
++
++	/*
++	 * Might die(), but obscure enough that that's OK, e.g. in
++	 * serve.c we'll call BUG() on its equivalent (the
++	 * PACKET_READ_RESPONSE_END check).
++	 */
++	check_stateless_delimiter(stateless_rpc, reader,
++				  _("expected response end packet after ref listing"));
++
++	return 0;
++}
++
+ struct ref **get_remote_refs(int fd_out, struct packet_reader *reader,
+ 			     struct ref **list, int for_push,
+ 			     struct transport_ls_refs_options *transport_options,
+diff --git a/remote.h b/remote.h
+index 1c4621b414..1ebbe42792 100644
+--- a/remote.h
++++ b/remote.h
+@@ -234,6 +234,11 @@ struct ref **get_remote_refs(int fd_out, struct packet_reader *reader,
+ 			     const struct string_list *server_options,
+ 			     int stateless_rpc);
+ 
++/* Used for protocol v2 in order to retrieve refs from a remote */
++struct bundle_list;
++int get_remote_bundle_uri(int fd_out, struct packet_reader *reader,
++			  struct bundle_list *bundles, int stateless_rpc);
++
+ int resolve_remote_symref(struct ref *ref, struct ref *list);
+ 
+ /*
+diff --git a/t/lib-bundle-uri-protocol.sh b/t/lib-bundle-uri-protocol.sh
+index 2da22a39cb..d44c6e10f9 100644
+--- a/t/lib-bundle-uri-protocol.sh
++++ b/t/lib-bundle-uri-protocol.sh
+@@ -83,3 +83,22 @@ test_expect_success "connect with $BUNDLE_URI_PROTOCOL:// using protocol v2: hav
+ 	# Server advertised bundle-uri capability
+ 	grep "< bundle-uri" log
+ '
++
++test_expect_success "clone with $BUNDLE_URI_PROTOCOL:// using protocol v2: request bundle-uris" '
++	test_when_finished "rm -rf log cloned" &&
++
++	GIT_TRACE_PACKET="$PWD/log" \
++	git \
++		-c protocol.version=2 \
++		clone "$BUNDLE_URI_REPO_URI" cloned \
++		>actual 2>err &&
++
++	# Server responded using protocol v2
++	grep "< version 2" log &&
++
++	# Server advertised bundle-uri capability
++	grep "< bundle-uri" log &&
++
++	# Client issued bundle-uri command
++	grep "> command=bundle-uri" log
++'
+diff --git a/transport-helper.c b/transport-helper.c
+index e95267a4ab..3ea7c2bb5a 100644
+--- a/transport-helper.c
++++ b/transport-helper.c
+@@ -1267,9 +1267,22 @@ static struct ref *get_refs_list_using_list(struct transport *transport,
+ 	return ret;
+ }
+ 
++static int get_bundle_uri(struct transport *transport)
++{
++	get_helper(transport);
++
++	if (process_connect(transport, 0)) {
++		do_take_over(transport);
++		return transport->vtable->get_bundle_uri(transport);
++	}
++
++	return -1;
++}
++
+ static struct transport_vtable vtable = {
+ 	.set_option	= set_helper_option,
+ 	.get_refs_list	= get_refs_list,
++	.get_bundle_uri = get_bundle_uri,
+ 	.fetch_refs	= fetch_refs,
+ 	.push_refs	= push_refs,
+ 	.connect	= connect_helper,
+diff --git a/transport-internal.h b/transport-internal.h
+index c4ca0b733a..90ea749e5c 100644
+--- a/transport-internal.h
++++ b/transport-internal.h
+@@ -26,6 +26,13 @@ struct transport_vtable {
+ 	struct ref *(*get_refs_list)(struct transport *transport, int for_push,
+ 				     struct transport_ls_refs_options *transport_options);
+ 
++	/**
++	 * Populates the remote side's bundle-uri under protocol v2,
++	 * if the "bundle-uri" capability was advertised. Returns 0 if
++	 * OK, negative values on error.
++	 */
++	int (*get_bundle_uri)(struct transport *transport);
++
+ 	/**
+ 	 * Fetch the objects for the given refs. Note that this gets
+ 	 * an array, and should ignore the list structure.
+diff --git a/transport.c b/transport.c
+index e7b97194c1..b6f279e92c 100644
+--- a/transport.c
++++ b/transport.c
+@@ -22,6 +22,7 @@
+ #include "protocol.h"
+ #include "object-store.h"
+ #include "color.h"
++#include "bundle-uri.h"
+ 
+ static int transport_use_color = -1;
+ static char transport_colors[][COLOR_MAXLEN] = {
+@@ -359,6 +360,32 @@ static struct ref *get_refs_via_connect(struct transport *transport, int for_pus
+ 	return handshake(transport, for_push, options, 1);
+ }
+ 
++static int get_bundle_uri(struct transport *transport)
++{
++	struct git_transport_data *data = transport->data;
++	struct packet_reader reader;
++	int stateless_rpc = transport->stateless_rpc;
++
++	if (!transport->bundles) {
++		CALLOC_ARRAY(transport->bundles, 1);
++		init_bundle_list(transport->bundles);
++	}
++
++	/*
++	 * "Support" protocol v0 and v2 without bundle-uri support by
++	 * silently degrading to a NOOP.
++	 */
++	if (!server_supports_v2("bundle-uri", 0))
++		return 0;
++
++	packet_reader_init(&reader, data->fd[0], NULL, 0,
++			   PACKET_READ_CHOMP_NEWLINE |
++			   PACKET_READ_GENTLE_ON_EOF);
++
++	return get_remote_bundle_uri(data->fd[1], &reader,
++				     transport->bundles, stateless_rpc);
++}
++
+ static int fetch_refs_via_pack(struct transport *transport,
+ 			       int nr_heads, struct ref **to_fetch)
+ {
+@@ -902,6 +929,7 @@ static int disconnect_git(struct transport *transport)
+ 
+ static struct transport_vtable taken_over_vtable = {
+ 	.get_refs_list	= get_refs_via_connect,
++	.get_bundle_uri = get_bundle_uri,
+ 	.fetch_refs	= fetch_refs_via_pack,
+ 	.push_refs	= git_transport_push,
+ 	.disconnect	= disconnect_git
+@@ -1054,6 +1082,7 @@ static struct transport_vtable bundle_vtable = {
+ 
+ static struct transport_vtable builtin_smart_vtable = {
+ 	.get_refs_list	= get_refs_via_connect,
++	.get_bundle_uri = get_bundle_uri,
+ 	.fetch_refs	= fetch_refs_via_pack,
+ 	.push_refs	= git_transport_push,
+ 	.connect	= connect_git,
+@@ -1068,6 +1097,9 @@ struct transport *transport_get(struct remote *remote, const char *url)
+ 	ret->progress = isatty(2);
+ 	string_list_init_dup(&ret->pack_lockfiles);
+ 
++	CALLOC_ARRAY(ret->bundles, 1);
++	init_bundle_list(ret->bundles);
++
+ 	if (!remote)
+ 		BUG("No remote provided to transport_get()");
+ 
+@@ -1482,6 +1514,23 @@ int transport_fetch_refs(struct transport *transport, struct ref *refs)
+ 	return rc;
+ }
+ 
++int transport_get_remote_bundle_uri(struct transport *transport)
++{
++	const struct transport_vtable *vtable = transport->vtable;
++
++	/* Check config only once. */
++	if (transport->got_remote_bundle_uri)
++		return 0;
++	transport->got_remote_bundle_uri = 1;
++
++	if (!vtable->get_bundle_uri)
++		return error(_("bundle-uri operation not supported by protocol"));
++
++	if (vtable->get_bundle_uri(transport) < 0)
++		return error(_("could not retrieve server-advertised bundle-uri list"));
++	return 0;
++}
++
+ void transport_unlock_pack(struct transport *transport, unsigned int flags)
+ {
+ 	int in_signal_handler = !!(flags & TRANSPORT_UNLOCK_PACK_IN_SIGNAL_HANDLER);
+@@ -1512,6 +1561,8 @@ int transport_disconnect(struct transport *transport)
+ 		ret = transport->vtable->disconnect(transport);
+ 	if (transport->got_remote_refs)
+ 		free_refs((void *)transport->remote_refs);
++	clear_bundle_list(transport->bundles);
++	free(transport->bundles);
+ 	free(transport);
+ 	return ret;
+ }
+diff --git a/transport.h b/transport.h
+index b5bf7b3e70..85150f504f 100644
+--- a/transport.h
++++ b/transport.h
+@@ -62,6 +62,7 @@ enum transport_family {
+ 	TRANSPORT_FAMILY_IPV6
+ };
+ 
++struct bundle_list;
+ struct transport {
+ 	const struct transport_vtable *vtable;
+ 
+@@ -76,6 +77,18 @@ struct transport {
+ 	 */
+ 	unsigned got_remote_refs : 1;
+ 
++	/**
++	 * Indicates whether we already called get_bundle_uri_list(); set by
++	 * transport.c::transport_get_remote_bundle_uri().
++	 */
++	unsigned got_remote_bundle_uri : 1;
++
++	/*
++	 * The results of "command=bundle-uri", if both sides support
++	 * the "bundle-uri" capability.
++	 */
++	struct bundle_list *bundles;
++
+ 	/*
+ 	 * Transports that call take-over destroys the data specific to
+ 	 * the transport type while doing so, and cannot be reused.
+@@ -281,6 +294,12 @@ void transport_ls_refs_options_release(struct transport_ls_refs_options *opts);
+ const struct ref *transport_get_remote_refs(struct transport *transport,
+ 					    struct transport_ls_refs_options *transport_options);
+ 
++/**
++ * Retrieve bundle URI(s) from a remote. Populates "struct
++ * transport"'s "bundle_uri" and "got_remote_bundle_uri".
++ */
++int transport_get_remote_bundle_uri(struct transport *transport);
++
+ /*
+  * Fetch the hash algorithm used by a remote.
+  *
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,41 @@
+From 0d32ae8d7ffab444a83ce1db11e5341a95d109dd Mon Sep 17 00:00:00 2001
+From: Jerry Zhang <Jerry@skydio.com>
+Date: Mon, 24 Oct 2022 20:07:44 +0000
+Subject: [PATCH 0239/2871] builtin: patch-id: remove unused diff-tree prefix
+
+The last git version that had "diff-tree" in the header text
+of "git diff-tree" output was v1.3.0 from 2006. The header text
+was changed from "diff-tree" to "commit" in 91539833
+("Log message printout cleanups").
+
+Given how long ago this change was made, it is highly unlikely that
+anyone is still feeding in outputs from that git version.
+
+Remove the handling of the "diff-tree" prefix and document the
+source of the other prefixes so that the overall functionality
+is more clear.
+
+Signed-off-by: Jerry Zhang <Jerry@skydio.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/patch-id.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/patch-id.c b/builtin/patch-id.c
+index afdd472369..f840fbf1c7 100644
+--- a/builtin/patch-id.c
++++ b/builtin/patch-id.c
+@@ -74,8 +74,8 @@ static int get_one_patchid(struct object_id *next_oid, struct object_id *result,
+ 		const char *p = line;
+ 		int len;
+ 
+-		if (!skip_prefix(line, "diff-tree ", &p) &&
+-		    !skip_prefix(line, "commit ", &p) &&
++		/* Possibly skip over the prefix added by "log" or "format-patch" */
++		if (!skip_prefix(line, "commit ", &p) &&
+ 		    !skip_prefix(line, "From ", &p) &&
+ 		    starts_with(line, "\\ ") && 12 < strlen(line)) {
+ 			if (verbatim)
+-- 
+2.39.3 (Apple Git-145)
+

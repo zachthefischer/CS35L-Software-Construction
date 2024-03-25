@@ -1,0 +1,60 @@
+From 8d90352acc5c855620042fdcc6092f23a276af6d Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 28 Mar 2023 10:49:52 -0700
+Subject: [PATCH 1157/2871] The fourth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.41.0.txt | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.41.0.txt b/Documentation/RelNotes/2.41.0.txt
+index 5db6f1b0ef..8ba6951338 100644
+--- a/Documentation/RelNotes/2.41.0.txt
++++ b/Documentation/RelNotes/2.41.0.txt
+@@ -35,6 +35,9 @@ UI, Workflows & Features
+ 
+    This is a backward compatibility breaking change.
+ 
++ * Lift the limitation that colored prompts can only be used with
++   PROMPT_COMMAND mode.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -49,6 +52,10 @@ Performance, Internal Implementation, Development Support etc.
+    configuration variables, make the subsystem lazily initialize
+    itself.
+ 
++ * Remove workaround for ancient versions of DocBook to make it work
++   correctly with groff, which has not been necessary since docbook
++   1.76 from 2010.
++
+ 
+ Fixes since v2.40
+ -----------------
+@@ -101,6 +108,21 @@ Fixes since v2.40
+    corrected.
+    (merge c55c30669c ps/receive-pack-unlock-before-die later to maint).
+ 
++ * "git rev-parse --quiet foo@{u}", or anything that asks @{u} to be
++   parsed with GET_OID_QUIETLY option, did not quietly fail, which has
++   been corrected.
++   (merge dfbfdc521d fc/oid-quietly-parse-upstream later to maint).
++
++ * Transports that do not support protocol v2 did not correctly fall
++   back to protocol v0 under certain conditions, which has been
++   corrected.
++   (merge eaa0fd6584 jk/fix-proto-downgrade-to-v0 later to maint).
++
++ * time(2) on glib 2.31+, especially on Linux, goes out of sync with
++   higher resolution timers used for gettimeofday(2) and by the
++   filesystem.  Replace all calls to it with a git_time() wrapper and
++   (merge 370ddcbc89 pe/time-use-gettimeofday later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge f7111175df as/doc-markup-fix later to maint).
+    (merge 90ff7c9898 fc/test-aggregation-clean-up later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

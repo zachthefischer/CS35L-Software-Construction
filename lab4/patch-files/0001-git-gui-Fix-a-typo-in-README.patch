@@ -1,0 +1,29 @@
+From 8cf36407cab4065d210d36aee03f58cd18397db8 Mon Sep 17 00:00:00 2001
+From: Vipul Kumar <kumar@onenetbeyond.org>
+Date: Fri, 5 Nov 2021 11:53:33 +0530
+Subject: [PATCH 0001/2871] git-gui: Fix a typo in README
+
+Add a missing punctuation.
+
+Signed-off-by: Vipul Kumar <kumar@onenetbeyond.org>
+Signed-off-by: Pratyush Yadav <me@yadavpratyush.com>
+---
+ README.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/README.md b/README.md
+index 5ce2122fbc..b460b649a8 100644
+--- a/README.md
++++ b/README.md
+@@ -88,7 +88,7 @@ that you first use `git-format-patch` to generate the emails, audit them, and
+ then send them via `git-send-email`.
+ 
+ A pretty good guide to configuring and using `git-send-email` can be found
+-[here](https://www.freedesktop.org/wiki/Software/PulseAudio/HowToUseGitSendEmail/)
++[here](https://www.freedesktop.org/wiki/Software/PulseAudio/HowToUseGitSendEmail/).
+ 
+ ### Using your email client
+ 
+-- 
+2.39.3 (Apple Git-145)
+

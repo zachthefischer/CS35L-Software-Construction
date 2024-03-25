@@ -1,0 +1,53 @@
+From 4e61e0f68053ff3fcca298ebd3080527e3565004 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 5 Jul 2023 20:49:28 +0100
+Subject: [PATCH 1729/2871] diff --no-index: die on error reading stdin
+
+If there is an error when reading from stdin then "diff --no-index"
+prints an error message but continues to try and diff a file named "-"
+resulting in an error message that looks like
+
+    error: error while reading from stdin: Invalid argument
+    fatal: stat '-': No such file or directory
+
+assuming that no file named "-" exists. If such a file exists it prints
+the first error message and generates the diff from that file which is
+not what the user wanted. Instead just die() straight away if we cannot
+read from stdin.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff-no-index.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/diff-no-index.c b/diff-no-index.c
+index 77462ac2a9..4470e0271d 100644
+--- a/diff-no-index.c
++++ b/diff-no-index.c
+@@ -60,20 +60,19 @@ static int get_mode(const char *path, int *mode)
+ 	return 0;
+ }
+ 
+-static int populate_from_stdin(struct diff_filespec *s)
++static void populate_from_stdin(struct diff_filespec *s)
+ {
+ 	struct strbuf buf = STRBUF_INIT;
+ 	size_t size = 0;
+ 
+ 	if (strbuf_read(&buf, 0, 0) < 0)
+-		return error_errno("error while reading from stdin");
++		die_errno("error while reading from stdin");
+ 
+ 	s->should_munmap = 0;
+ 	s->data = strbuf_detach(&buf, &size);
+ 	s->size = size;
+ 	s->should_free = 1;
+ 	s->is_stdin = 1;
+-	return 0;
+ }
+ 
+ static struct diff_filespec *noindex_filespec(const char *name, int mode)
+-- 
+2.39.3 (Apple Git-145)
+

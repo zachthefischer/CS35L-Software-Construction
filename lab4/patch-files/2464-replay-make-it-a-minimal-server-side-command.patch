@@ -1,0 +1,335 @@
+From 81613be31e0bedf8709fa0962f1b6f85dcb053a2 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:39 +0100
+Subject: [PATCH 2464/2871] replay: make it a minimal server side command
+
+We want this command to be a minimal command that just does server side
+picking of commits, displaying the results on stdout for higher level
+scripts to consume.
+
+So let's simplify it:
+  * remove the worktree and index reading/writing,
+  * remove the ref (and reflog) updating,
+  * remove the assumptions tying us to HEAD, since (a) this is not a
+    rebase and (b) we want to be able to pick commits in a bare repo,
+    i.e. to/from branches that are not checked out and not the main
+    branch,
+  * remove unneeded includes,
+  * handle rebasing multiple branches by printing on stdout the update
+    ref commands that should be performed.
+
+The output can be piped into `git update-ref --stdin` for the ref
+updates to happen.
+
+In the future to make it easier for users to use this command
+directly maybe an option can be added to automatically pipe its output
+into `git update-ref`.
+
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-replay.txt             |  5 +-
+ builtin/replay.c                         | 78 ++++++++----------------
+ t/t3650-replay-basics.sh                 | 19 +++++-
+ t/t6429-merge-sequence-rename-caching.sh | 39 +++++++-----
+ 4 files changed, 72 insertions(+), 69 deletions(-)
+
+diff --git a/Documentation/git-replay.txt b/Documentation/git-replay.txt
+index 2ca7ca5fd8..267282d92a 100644
+--- a/Documentation/git-replay.txt
++++ b/Documentation/git-replay.txt
+@@ -15,7 +15,10 @@ DESCRIPTION
+ -----------
+ 
+ Takes a range of commits, specified by <oldbase> and <branch>, and
+-replays them onto a new location (see `--onto` option below).
++replays them onto a new location (see `--onto` option below). Leaves
++the working tree and the index untouched, and updates no references.
++The output of this command is meant to be used as input to
++`git update-ref --stdin`, which would update the relevant branches.
+ 
+ THIS COMMAND IS EXPERIMENTAL. THE BEHAVIOR MAY CHANGE.
+ 
+diff --git a/builtin/replay.c b/builtin/replay.c
+index bdec2f2b97..bfccbbbfea 100644
+--- a/builtin/replay.c
++++ b/builtin/replay.c
+@@ -6,11 +6,7 @@
+ #include "git-compat-util.h"
+ 
+ #include "builtin.h"
+-#include "cache-tree.h"
+-#include "commit.h"
+ #include "environment.h"
+-#include "gettext.h"
+-#include "hash.h"
+ #include "hex.h"
+ #include "lockfile.h"
+ #include "merge-ort.h"
+@@ -18,8 +14,6 @@
+ #include "parse-options.h"
+ #include "refs.h"
+ #include "revision.h"
+-#include "sequencer.h"
+-#include "setup.h"
+ #include "strvec.h"
+ #include <oidset.h>
+ #include <tree.h>
+@@ -102,6 +96,7 @@ static struct commit *pick_regular_commit(struct commit *pickme,
+ 	pickme_tree = repo_get_commit_tree(the_repository, pickme);
+ 	base_tree = repo_get_commit_tree(the_repository, base);
+ 
++	merge_opt->branch1 = short_commit_name(last_commit);
+ 	merge_opt->branch2 = short_commit_name(pickme);
+ 	merge_opt->ancestor = xstrfmt("parent of %s", merge_opt->branch2);
+ 
+@@ -122,15 +117,12 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ {
+ 	struct commit *onto;
+ 	const char *onto_name = NULL;
+-	struct commit *last_commit = NULL, *last_picked_commit = NULL;
+-	struct lock_file lock = LOCK_INIT;
++	struct commit *last_commit = NULL;
+ 	struct strvec rev_walk_args = STRVEC_INIT;
+ 	struct rev_info revs;
+ 	struct commit *commit;
+ 	struct merge_options merge_opt;
+-	struct tree *head_tree;
+ 	struct merge_result result;
+-	struct strbuf reflog_msg = STRBUF_INIT;
+ 	struct strbuf branch_name = STRBUF_INIT;
+ 	int ret = 0;
+ 
+@@ -161,10 +153,6 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	onto = peel_committish(onto_name);
+ 	strbuf_addf(&branch_name, "refs/heads/%s", argv[2]);
+ 
+-	repo_hold_locked_index(the_repository, &lock, LOCK_DIE_ON_ERROR);
+-	if (repo_read_index(the_repository) < 0)
+-		BUG("Could not read index");
+-
+ 	repo_init_revisions(the_repository, &revs, prefix);
+ 
+ 	strvec_pushl(&rev_walk_args, "", argv[2], "--not", argv[1], NULL);
+@@ -227,58 +215,44 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	init_merge_options(&merge_opt, the_repository);
+ 	memset(&result, 0, sizeof(result));
+ 	merge_opt.show_rename_progress = 0;
+-	merge_opt.branch1 = "HEAD";
+-	head_tree = repo_get_commit_tree(the_repository, onto);
+-	result.tree = head_tree;
++	result.tree = repo_get_commit_tree(the_repository, onto);
+ 	last_commit = onto;
+ 	while ((commit = get_revision(&revs))) {
+-		struct commit *pick;
++		const struct name_decoration *decoration;
+ 
+ 		if (!commit->parents)
+ 			die(_("replaying down to root commit is not supported yet!"));
+ 		if (commit->parents->next)
+ 			die(_("replaying merge commits is not supported yet!"));
+ 
+-		pick = pick_regular_commit(commit, last_commit, &merge_opt, &result);
+-		if (!pick)
++		last_commit = pick_regular_commit(commit, last_commit, &merge_opt, &result);
++		if (!last_commit)
+ 			break;
+-		last_commit = pick;
+-		last_picked_commit = commit;
++
++		decoration = get_name_decoration(&commit->object);
++		if (!decoration)
++			continue;
++
++		while (decoration) {
++			if (decoration->type == DECORATION_REF_LOCAL) {
++				printf("update %s %s %s\n",
++				       decoration->name,
++				       oid_to_hex(&last_commit->object.oid),
++				       oid_to_hex(&commit->object.oid));
++			}
++			decoration = decoration->next;
++		}
+ 	}
+ 
+ 	merge_finalize(&merge_opt, &result);
++	ret = result.clean;
+ 
+-	if (result.clean < 0)
+-		exit(128);
+-
+-	if (result.clean) {
+-		strbuf_addf(&reflog_msg, "finish rebase %s onto %s",
+-			    oid_to_hex(&last_picked_commit->object.oid),
+-			    oid_to_hex(&last_commit->object.oid));
+-		if (update_ref(reflog_msg.buf, branch_name.buf,
+-			       &last_commit->object.oid,
+-			       &last_picked_commit->object.oid,
+-			       REF_NO_DEREF, UPDATE_REFS_MSG_ON_ERR)) {
+-			error(_("could not update %s"), argv[2]);
+-			die("Failed to update %s", argv[2]);
+-		}
+-		if (create_symref("HEAD", branch_name.buf, reflog_msg.buf) < 0)
+-			die(_("unable to update HEAD"));
+-	} else {
+-		strbuf_addf(&reflog_msg, "rebase progress up to %s",
+-			    oid_to_hex(&last_picked_commit->object.oid));
+-		if (update_ref(reflog_msg.buf, "HEAD",
+-			       &last_commit->object.oid,
+-			       &onto->object.oid,
+-			       REF_NO_DEREF, UPDATE_REFS_MSG_ON_ERR)) {
+-			error(_("could not update %s"), argv[2]);
+-			die("Failed to update %s", argv[2]);
+-		}
+-	}
+-	ret = (result.clean == 0);
+ cleanup:
+-	strbuf_release(&reflog_msg);
+ 	strbuf_release(&branch_name);
+ 	release_revisions(&revs);
+-	return ret;
++
++	/* Return */
++	if (ret < 0)
++		exit(128);
++	return ret ? 0 : 1;
+ }
+diff --git a/t/t3650-replay-basics.sh b/t/t3650-replay-basics.sh
+index b5b9f9ade2..3567c98362 100755
+--- a/t/t3650-replay-basics.sh
++++ b/t/t3650-replay-basics.sh
+@@ -47,12 +47,29 @@ test_expect_success 'setup' '
+ 	test_commit C.conflict C.t conflict
+ '
+ 
++test_expect_success 'setup bare' '
++	git clone --bare . bare
++'
++
+ test_expect_success 'using replay to rebase two branches, one on top of other' '
+ 	git replay --onto main topic1 topic2 >result &&
+ 
++	test_line_count = 1 result &&
++
+ 	git log --format=%s $(cut -f 3 -d " " result) >actual &&
+ 	test_write_lines E D M L B A >expect &&
+-	test_cmp expect actual
++	test_cmp expect actual &&
++
++	printf "update refs/heads/topic2 " >expect &&
++	printf "%s " $(cut -f 3 -d " " result) >>expect &&
++	git rev-parse topic2 >>expect &&
++
++	test_cmp expect result
++'
++
++test_expect_success 'using replay on bare repo to rebase two branches, one on top of other' '
++	git -C bare replay --onto main topic1 topic2 >result-bare &&
++	test_cmp expect result-bare
+ '
+ 
+ test_done
+diff --git a/t/t6429-merge-sequence-rename-caching.sh b/t/t6429-merge-sequence-rename-caching.sh
+index 7670b72008..099aefeffc 100755
+--- a/t/t6429-merge-sequence-rename-caching.sh
++++ b/t/t6429-merge-sequence-rename-caching.sh
+@@ -71,8 +71,9 @@ test_expect_success 'caching renames does not preclude finding new ones' '
+ 
+ 		git switch upstream &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
+-		git reset --hard topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		git ls-files >tracked-files &&
+ 		test_line_count = 2 tracked-files &&
+@@ -140,7 +141,9 @@ test_expect_success 'cherry-pick both a commit and its immediate revert' '
+ 		GIT_TRACE2_PERF="$(pwd)/trace.output" &&
+ 		export GIT_TRACE2_PERF &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+ 		test_line_count = 1 calls
+@@ -198,8 +201,9 @@ test_expect_success 'rename same file identically, then reintroduce it' '
+ 		GIT_TRACE2_PERF="$(pwd)/trace.output" &&
+ 		export GIT_TRACE2_PERF &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
+-		git reset --hard topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		git ls-files >tracked &&
+ 		test_line_count = 2 tracked &&
+@@ -275,8 +279,9 @@ test_expect_success 'rename same file identically, then add file to old dir' '
+ 		GIT_TRACE2_PERF="$(pwd)/trace.output" &&
+ 		export GIT_TRACE2_PERF &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
+-		git reset --hard topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		git ls-files >tracked &&
+ 		test_line_count = 4 tracked &&
+@@ -451,8 +456,9 @@ test_expect_success 'dir rename unneeded, then add new file to old dir' '
+ 		GIT_TRACE2_PERF="$(pwd)/trace.output" &&
+ 		export GIT_TRACE2_PERF &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
+-		git reset --hard topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+ 		test_line_count = 2 calls &&
+@@ -517,8 +523,9 @@ test_expect_success 'dir rename unneeded, then rename existing file into old dir
+ 		GIT_TRACE2_PERF="$(pwd)/trace.output" &&
+ 		export GIT_TRACE2_PERF &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
+-		git reset --hard topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+ 		test_line_count = 3 calls &&
+@@ -619,8 +626,9 @@ test_expect_success 'caching renames only on upstream side, part 1' '
+ 		GIT_TRACE2_PERF="$(pwd)/trace.output" &&
+ 		export GIT_TRACE2_PERF &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
+-		git reset --hard topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+ 		test_line_count = 1 calls &&
+@@ -677,8 +685,9 @@ test_expect_success 'caching renames only on upstream side, part 2' '
+ 		GIT_TRACE2_PERF="$(pwd)/trace.output" &&
+ 		export GIT_TRACE2_PERF &&
+ 
+-		git replay --onto HEAD upstream~1 topic &&
+-		git reset --hard topic &&
++		git replay --onto HEAD upstream~1 topic >out &&
++		git update-ref --stdin <out &&
++		git checkout topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+ 		test_line_count = 2 calls &&
+-- 
+2.39.3 (Apple Git-145)
+

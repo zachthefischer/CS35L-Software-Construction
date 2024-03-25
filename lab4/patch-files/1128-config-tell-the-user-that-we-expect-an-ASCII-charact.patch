@@ -1,0 +1,36 @@
+From d3b3419f8f287cd9d17be30e50937cbc7c4951ff Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Mon, 27 Mar 2023 21:43:44 +0200
+Subject: [PATCH 1128/2871] config: tell the user that we expect an ASCII
+ character
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Commit 50b54fd72a (config: be strict on core.commentChar, 2014-05-17)
+notes that “multi-byte character encoding could also be misinterpreted”,
+and indeed a multi-byte codepoint (non-ASCII) is not accepted as a valid
+`core.commentChar`.
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config.c b/config.c
+index d0aff55fa6..0b2679994e 100644
+--- a/config.c
++++ b/config.c
+@@ -1686,7 +1686,7 @@ static int git_default_core_config(const char *var, const char *value, void *cb)
+ 			comment_line_char = value[0];
+ 			auto_comment_line_char = 0;
+ 		} else
+-			return error(_("core.commentChar should only be one character"));
++			return error(_("core.commentChar should only be one ASCII character"));
+ 		return 0;
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

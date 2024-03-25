@@ -1,0 +1,54 @@
+From 7b341645e30bb94f186d31f27a62eb14107ae834 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Tue, 3 Jan 2023 10:27:20 +0000
+Subject: [PATCH 0621/2871] ci(github): restore "print test failures" step name
+
+As well as removing the explicit shell setting d8b21a0fe2 (CI: don't
+explicitly pick "bash" shell outside of Windows, fix regression,
+2022-12-07) also reverted the name of the print test failures step
+introduced by 5aeb145780f (ci(github): bring back the 'print test
+failures' step, 2022-06-08). This is unfortunate as 5aeb145780f added a
+message to direct contributors to the "print test failures" step when a
+test fails and that step is no-longer known by that name on the
+non-windows ci jobs.
+
+In principle we could update the message to print the correct name for
+the step but then we'd have to deal with having two different names for
+the same step on different jobs. It is simpler for the implementation
+and contributors to use the same name for this step on all jobs.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 2ac20b47b7..eb694427f6 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -261,8 +261,9 @@ jobs:
+     - uses: actions/checkout@v2
+     - run: ci/install-dependencies.sh
+     - run: ci/run-build-and-tests.sh
+-    - run: ci/print-test-failures.sh
++    - name: print test failures
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
++      run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+       uses: actions/upload-artifact@v2
+@@ -292,8 +293,9 @@ jobs:
+     - uses: actions/checkout@v1
+     - run: ci/install-docker-dependencies.sh
+     - run: ci/run-build-and-tests.sh
+-    - run: ci/print-test-failures.sh
++    - name: print test failures
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
++      run: ci/print-test-failures.sh
+     - name: Upload failed tests' directories
+       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
+       uses: actions/upload-artifact@v1
+-- 
+2.39.3 (Apple Git-145)
+

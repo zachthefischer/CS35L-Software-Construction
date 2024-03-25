@@ -1,0 +1,46 @@
+From 9b3fadfd067cc2c9ae7d6cc1a8bfdbdd5a253cd5 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sun, 23 Oct 2022 13:00:45 -0400
+Subject: [PATCH 0213/2871] t7700: annotate cruft-pack failure with ok=sigpipe
+
+One of our tests intentionally causes the cruft-pack generation phase of
+repack to fail, in order to stimulate an exit from repack at the desired
+moment. It does so by feeding a bogus option argument to pack-objects.
+This is a simple and reliable way to get pack-objects to fail, but it
+has one downside: pack-objects will die before reading its stdin, which
+means the caller repack may racily get SIGPIPE writing to it.
+
+For the purposes of this test, that's OK. We are checking whether repack
+cleans up already-created .tmp files, and it will do so whether it exits
+or dies by signal (because the tempfile API hooks both).
+
+But we have to tell test_must_fail that either outcome is OK, or it
+complains about the signal. Arguably this is a workaround (compared to
+fixing repack), as repack dying to SIGPIPE means that it loses the
+opportunity to give a more detailed message. But we don't actually write
+such a message anyway; we rely on pack-objects to have written something
+useful to stderr, and it does. In either case (signal or exit), that is
+the main thing the user will see.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7700-repack.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t7700-repack.sh b/t/t7700-repack.sh
+index edcda849b9..9164acbe02 100755
+--- a/t/t7700-repack.sh
++++ b/t/t7700-repack.sh
+@@ -433,7 +433,7 @@ test_expect_success TTY '--quiet disables progress' '
+ '
+ 
+ test_expect_success 'clean up .tmp-* packs on error' '
+-	test_must_fail git \
++	test_must_fail ok=sigpipe git \
+ 		-c repack.cruftwindow=bogus \
+ 		repack -ad --cruft &&
+ 	find $objdir/pack -name '.tmp-*' >tmpfiles &&
+-- 
+2.39.3 (Apple Git-145)
+

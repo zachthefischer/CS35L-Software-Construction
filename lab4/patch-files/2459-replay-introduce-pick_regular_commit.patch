@@ -1,0 +1,111 @@
+From e787e664da640d1d4b15c6dc67a704dfa56592f9 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:34 +0100
+Subject: [PATCH 2459/2871] replay: introduce pick_regular_commit()
+
+Let's refactor the code to handle a regular commit (a commit that is
+neither a root commit nor a merge commit) into a single function instead
+of keeping it inside cmd_replay().
+
+This is good for separation of concerns, and this will help further work
+in the future to replay merge commits.
+
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/replay.c | 54 ++++++++++++++++++++++++++++++------------------
+ 1 file changed, 34 insertions(+), 20 deletions(-)
+
+diff --git a/builtin/replay.c b/builtin/replay.c
+index f48c5ed255..d039467cd4 100644
+--- a/builtin/replay.c
++++ b/builtin/replay.c
+@@ -89,6 +89,35 @@ static struct commit *create_commit(struct tree *tree,
+ 	return (struct commit *)obj;
+ }
+ 
++static struct commit *pick_regular_commit(struct commit *pickme,
++					  struct commit *last_commit,
++					  struct merge_options *merge_opt,
++					  struct merge_result *result)
++{
++	struct commit *base;
++	struct tree *pickme_tree, *base_tree;
++
++	base = pickme->parents->item;
++
++	pickme_tree = repo_get_commit_tree(the_repository, pickme);
++	base_tree = repo_get_commit_tree(the_repository, base);
++
++	merge_opt->branch2 = short_commit_name(pickme);
++	merge_opt->ancestor = xstrfmt("parent of %s", merge_opt->branch2);
++
++	merge_incore_nonrecursive(merge_opt,
++				  base_tree,
++				  result->tree,
++				  pickme_tree,
++				  result);
++
++	free((char*)merge_opt->ancestor);
++	merge_opt->ancestor = NULL;
++	if (!result->clean)
++		return NULL;
++	return create_commit(result->tree, pickme, last_commit);
++}
++
+ int cmd_replay(int argc, const char **argv, const char *prefix)
+ {
+ 	struct commit *onto;
+@@ -100,7 +129,7 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	struct rev_info revs;
+ 	struct commit *commit;
+ 	struct merge_options merge_opt;
+-	struct tree *next_tree, *base_tree, *head_tree;
++	struct tree *head_tree;
+ 	struct merge_result result;
+ 	struct strbuf reflog_msg = STRBUF_INIT;
+ 	struct strbuf branch_name = STRBUF_INIT;
+@@ -175,7 +204,7 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	result.tree = head_tree;
+ 	last_commit = onto;
+ 	while ((commit = get_revision(&revs))) {
+-		struct commit *base;
++		struct commit *pick;
+ 
+ 		fprintf(stderr, "Rebasing %s...\r",
+ 			oid_to_hex(&commit->object.oid));
+@@ -185,26 +214,11 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 		if (commit->parents->next)
+ 			die(_("replaying merge commits is not supported yet!"));
+ 
+-		base = commit->parents->item;
+-
+-		next_tree = repo_get_commit_tree(the_repository, commit);
+-		base_tree = repo_get_commit_tree(the_repository, base);
+-
+-		merge_opt.branch2 = short_commit_name(commit);
+-		merge_opt.ancestor = xstrfmt("parent of %s", merge_opt.branch2);
+-
+-		merge_incore_nonrecursive(&merge_opt,
+-					  base_tree,
+-					  result.tree,
+-					  next_tree,
+-					  &result);
+-
+-		free((char*)merge_opt.ancestor);
+-		merge_opt.ancestor = NULL;
+-		if (!result.clean)
++		pick = pick_regular_commit(commit, last_commit, &merge_opt, &result);
++		if (!pick)
+ 			break;
++		last_commit = pick;
+ 		last_picked_commit = commit;
+-		last_commit = create_commit(result.tree, commit, last_commit);
+ 	}
+ 
+ 	merge_finalize(&merge_opt, &result);
+-- 
+2.39.3 (Apple Git-145)
+

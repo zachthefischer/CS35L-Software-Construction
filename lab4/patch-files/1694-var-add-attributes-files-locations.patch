@@ -1,0 +1,139 @@
+From 576a37fccbf2a46d98a6dd367dbb3d1636e62f57 Mon Sep 17 00:00:00 2001
+From: "brian m. carlson" <bk2204@github.com>
+Date: Tue, 27 Jun 2023 16:19:01 +0000
+Subject: [PATCH 1694/2871] var: add attributes files locations
+
+Currently, there are some programs which would like to read and parse
+the gitattributes files at the global or system levels.  However, it's
+not always obvious where these files live, especially for the system
+file, which may have been hard-coded at compile time or computed
+dynamically based on the runtime prefix.
+
+It's not reasonable to expect all callers of Git to intuitively know
+where the Git distributor or user has configured these locations to
+be, so add some entries to allow us to determine their location.  Honor
+the GIT_ATTR_NOSYSTEM environment variable if one is specified.  Expose
+the accessor functions in a way that we can reuse them from within the
+var code.
+
+In order to make our paths consistent on Windows and also use the same
+form as paths use in "git rev-parse", let's normalize the path before we
+return it.  This results in Windows-style paths that use slashes, which
+is convenient for making our tests function in a consistent way across
+platforms.  Note that this requires that some of our values be freed, so
+let's add a flag about whether the value needs to be freed and use it
+accordingly.
+
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-var.txt |  6 ++++++
+ builtin/var.c             | 29 +++++++++++++++++++++++++++++
+ t/t0007-git-var.sh        | 20 ++++++++++++++++++++
+ 3 files changed, 55 insertions(+)
+
+diff --git a/Documentation/git-var.txt b/Documentation/git-var.txt
+index f0f647e14a..dfbe5cb52b 100644
+--- a/Documentation/git-var.txt
++++ b/Documentation/git-var.txt
+@@ -74,6 +74,12 @@ GIT_DEFAULT_BRANCH::
+ GIT_SHELL_PATH::
+     The path of the binary providing the POSIX shell for commands which use the shell.
+ 
++GIT_ATTR_SYSTEM::
++    The path to the system linkgit:gitattributes[5] file, if one is enabled.
++
++GIT_ATTR_GLOBAL::
++    The path to the global (per-user) linkgit:gitattributes[5] file.
++
+ SEE ALSO
+ --------
+ linkgit:git-commit-tree[1]
+diff --git a/builtin/var.c b/builtin/var.c
+index d6f9f495c9..79f7bdf55f 100644
+--- a/builtin/var.c
++++ b/builtin/var.c
+@@ -4,6 +4,7 @@
+  * Copyright (C) Eric Biederman, 2005
+  */
+ #include "builtin.h"
++#include "attr.h"
+ #include "config.h"
+ #include "editor.h"
+ #include "ident.h"
+@@ -51,6 +52,26 @@ static char *shell_path(int ident_flag UNUSED)
+ 	return xstrdup(SHELL_PATH);
+ }
+ 
++static char *git_attr_val_system(int ident_flag UNUSED)
++{
++	if (git_attr_system_is_enabled()) {
++		char *file = xstrdup(git_attr_system_file());
++		normalize_path_copy(file, file);
++		return file;
++	}
++	return NULL;
++}
++
++static char *git_attr_val_global(int ident_flag UNUSED)
++{
++	char *file = xstrdup(git_attr_global_file());
++	if (file) {
++		normalize_path_copy(file, file);
++		return file;
++	}
++	return NULL;
++}
++
+ struct git_var {
+ 	const char *name;
+ 	char *(*read)(int);
+@@ -84,6 +105,14 @@ static struct git_var git_vars[] = {
+ 		.name = "GIT_SHELL_PATH",
+ 		.read = shell_path,
+ 	},
++	{
++		.name = "GIT_ATTR_SYSTEM",
++		.read = git_attr_val_system,
++	},
++	{
++		.name = "GIT_ATTR_GLOBAL",
++		.read = git_attr_val_global,
++	},
+ 	{
+ 		.name = "",
+ 		.read = NULL,
+diff --git a/t/t0007-git-var.sh b/t/t0007-git-var.sh
+index e35f07afcb..374d9f49e9 100755
+--- a/t/t0007-git-var.sh
++++ b/t/t0007-git-var.sh
+@@ -162,6 +162,26 @@ test_expect_success MINGW 'GIT_SHELL_PATH points to a suitable shell' '
+ 	esac
+ '
+ 
++test_expect_success 'GIT_ATTR_SYSTEM produces expected output' '
++	test_must_fail env GIT_ATTR_NOSYSTEM=1 git var GIT_ATTR_SYSTEM &&
++	(
++		sane_unset GIT_ATTR_NOSYSTEM &&
++		systempath=$(git var GIT_ATTR_SYSTEM) &&
++		test "$systempath" != ""
++	)
++'
++
++test_expect_success 'GIT_ATTR_GLOBAL points to the correct location' '
++	TRASHDIR="$(test-tool path-utils normalize_path_copy "$(pwd)")" &&
++	globalpath=$(XDG_CONFIG_HOME="$TRASHDIR/.config" git var GIT_ATTR_GLOBAL) &&
++	test "$globalpath" = "$TRASHDIR/.config/git/attributes" &&
++	(
++		sane_unset XDG_CONFIG_HOME &&
++		globalpath=$(HOME="$TRASHDIR" git var GIT_ATTR_GLOBAL) &&
++		test "$globalpath" = "$TRASHDIR/.config/git/attributes"
++	)
++'
++
+ # For git var -l, we check only a representative variable;
+ # testing the whole output would make our test too brittle with
+ # respect to unrelated changes in the test suite's environment.
+-- 
+2.39.3 (Apple Git-145)
+

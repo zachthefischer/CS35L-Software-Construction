@@ -1,0 +1,120 @@
+From d3b6f6c63137b72df5055b71721825e786bcbd6e Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 9 Nov 2023 02:24:35 -0500
+Subject: [PATCH 2383/2871] commit-graph: use fanout value for graph size
+
+Commit-graph, midx, and pack idx files all have both a lookup table of
+oids and an oid fanout table. In midx and pack idx files, we take the
+final entry of the fanout table as the source of truth for the number of
+entries, and then verify that the size of the lookup table matches that.
+But for commit-graph files, we do the opposite: we use the size of the
+lookup table as the source of truth, and then check the final fanout
+entry against it.
+
+As noted in 4169d89645 (commit-graph: check consistency of fanout
+table, 2023-10-09), either is correct. But there are a few reasons to
+prefer the fanout table as the source of truth:
+
+  1. The fanout entries are 32-bits on disk, and that defines the
+     maximum number of entries we can store. But since the size of the
+     lookup table is only bounded by the filesystem, it can be much
+     larger. And hence computing it as the commit-graph does means that
+     we may truncate the result when storing it in a uint32_t.
+
+  2. We read the fanout first, then the lookup table. If we're verifying
+     the chunks as we read them, then we'd want to take the fanout as
+     truth (we have nothing yet to check it against) and then we can
+     check that the lookup table matches what we already know.
+
+  3. It is pointlessly inconsistent with the midx and pack idx code.
+     Since the three have to do similar size and bounds checks, it is
+     easier to reason about all three if they use the same approach.
+
+So this patch moves the assignment of g->num_commits to the fanout
+parser, and then we can check the size of the lookup chunk as soon as we
+try to load it.
+
+There's already a test covering this situation, which munges the final
+fanout entry to 2^32-1. In the current code we complain that it does not
+agree with the table size. But now that we treat the munged value as the
+source of truth, we'll complain that the lookup table is the wrong size
+(again, either is correct). So we'll have to update the message we
+expect (and likewise for an earlier test which does similar munging).
+
+There's a similar test for this situation on the midx side, but rather
+than making a very-large fanout value, it just truncates the lookup
+table. We could do that here, too, but the very-large fanout value
+actually shows an interesting corner case. On a 32-bit system,
+multiplying to find the expected table size would cause an integer
+overflow. Using st_mult() would detect that, but cause us to die()
+rather than falling back to the non-graph code path. Checking the size
+using division (as we do with existing chunk-size checks) avoids the
+overflow entirely, and the test demonstrates this when run on a 32-bit
+system.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c          | 8 +++-----
+ t/t5318-commit-graph.sh | 5 +++--
+ 2 files changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 6abb857323..a7d2fe883f 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -300,10 +300,6 @@ static int verify_commit_graph_lite(struct commit_graph *g)
+ 			return 1;
+ 		}
+ 	}
+-	if (ntohl(g->chunk_oid_fanout[255]) != g->num_commits) {
+-		error("commit-graph oid table and fanout disagree on size");
+-		return 1;
+-	}
+ 
+ 	return 0;
+ }
+@@ -315,6 +311,7 @@ static int graph_read_oid_fanout(const unsigned char *chunk_start,
+ 	if (chunk_size != 256 * sizeof(uint32_t))
+ 		return error("commit-graph oid fanout chunk is wrong size");
+ 	g->chunk_oid_fanout = (const uint32_t *)chunk_start;
++	g->num_commits = ntohl(g->chunk_oid_fanout[255]);
+ 	return 0;
+ }
+ 
+@@ -323,7 +320,8 @@ static int graph_read_oid_lookup(const unsigned char *chunk_start,
+ {
+ 	struct commit_graph *g = data;
+ 	g->chunk_oid_lookup = chunk_start;
+-	g->num_commits = chunk_size / g->hash_len;
++	if (chunk_size / g->hash_len != g->num_commits)
++		return error(_("commit-graph OID lookup chunk is the wrong size"));
+ 	return 0;
+ }
+ 
+diff --git a/t/t5318-commit-graph.sh b/t/t5318-commit-graph.sh
+index 4c4a4ae13e..9d186e7b13 100755
+--- a/t/t5318-commit-graph.sh
++++ b/t/t5318-commit-graph.sh
+@@ -560,7 +560,7 @@ test_expect_success 'detect incorrect fanout' '
+ 
+ test_expect_success 'detect incorrect fanout final value' '
+ 	corrupt_graph_and_verify $GRAPH_BYTE_FANOUT2 "\01" \
+-		"oid table and fanout disagree on size"
++		"OID lookup chunk is the wrong size"
+ '
+ 
+ test_expect_success 'detect incorrect OID order' '
+@@ -850,7 +850,8 @@ test_expect_success 'reader notices too-small oid fanout chunk' '
+ test_expect_success 'reader notices fanout/lookup table mismatch' '
+ 	check_corrupt_chunk OIDF 1020 "FFFFFFFF" &&
+ 	cat >expect.err <<-\EOF &&
+-	error: commit-graph oid table and fanout disagree on size
++	error: commit-graph OID lookup chunk is the wrong size
++	error: commit-graph required OID lookup chunk missing or corrupted
+ 	EOF
+ 	test_cmp expect.err err
+ '
+-- 
+2.39.3 (Apple Git-145)
+

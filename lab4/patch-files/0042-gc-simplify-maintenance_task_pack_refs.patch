@@ -1,0 +1,44 @@
+From b004c9028270832aec73746fdddd5c7bce8dbe84 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Tue, 4 Oct 2022 18:17:39 +0200
+Subject: [PATCH 0042/2871] gc: simplify maintenance_task_pack_refs()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Pass a constant string array directly to run_command_v_opt() instead of
+copying it into a strvec first.  This shortens the code and avoids heap
+allocations.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c | 11 ++---------
+ 1 file changed, 2 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 2753bd15a5..ceff31ea00 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -167,16 +167,9 @@ static void gc_config(void)
+ struct maintenance_run_opts;
+ static int maintenance_task_pack_refs(MAYBE_UNUSED struct maintenance_run_opts *opts)
+ {
+-	struct strvec pack_refs_cmd = STRVEC_INIT;
+-	int ret;
++	const char *argv[] = { "pack-refs", "--all", "--prune", NULL };
+ 
+-	strvec_pushl(&pack_refs_cmd, "pack-refs", "--all", "--prune", NULL);
+-
+-	ret = run_command_v_opt(pack_refs_cmd.v, RUN_GIT_CMD);
+-
+-	strvec_clear(&pack_refs_cmd);
+-
+-	return ret;
++	return run_command_v_opt(argv, RUN_GIT_CMD);
+ }
+ 
+ static int too_many_loose_objects(void)
+-- 
+2.39.3 (Apple Git-145)
+

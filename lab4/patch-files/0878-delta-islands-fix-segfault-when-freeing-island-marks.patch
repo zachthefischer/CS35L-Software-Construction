@@ -1,0 +1,78 @@
+From 6eb095d78790d0d6cbad2186685dad4e7ba2e3de Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 16 Feb 2023 11:29:48 +0100
+Subject: [PATCH 0878/2871] delta-islands: fix segfault when freeing island
+ marks
+
+In 647982bb71 (delta-islands: free island_marks and bitmaps, 2023-02-03)
+we have introduced logic to free `island_marks` in order to reduce heap
+memory usage in git-pack-objects(1). This commit is causing segfaults in
+the case where this Git command does not load delta islands at all, e.g.
+when reading object IDs from standard input. One such crash can be hit
+when using repacking multi-pack-indices with delta islands enabled.
+
+The root cause of this bug is that we unconditionally dereference the
+`island_marks` variable even in the case where it is a `NULL` pointer,
+which is fixed by making it conditional. Note that we still leave the
+logic in place to set the pointer to `-1` to detect use-after-free bugs
+even when there are no loaded island marks at all.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Acked-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ delta-islands.c             | 12 +++++++-----
+ t/t5319-multi-pack-index.sh | 16 ++++++++++++++++
+ 2 files changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/delta-islands.c b/delta-islands.c
+index 8b234cb85b..afdec0a878 100644
+--- a/delta-islands.c
++++ b/delta-islands.c
+@@ -517,11 +517,13 @@ void free_island_marks(void)
+ {
+ 	struct island_bitmap *bitmap;
+ 
+-	kh_foreach_value(island_marks, bitmap, {
+-		if (!--bitmap->refcount)
+-			free(bitmap);
+-	});
+-	kh_destroy_oid_map(island_marks);
++	if (island_marks) {
++		kh_foreach_value(island_marks, bitmap, {
++			if (!--bitmap->refcount)
++				free(bitmap);
++		});
++		kh_destroy_oid_map(island_marks);
++	}
+ 
+ 	/* detect use-after-free with a an address which is never valid: */
+ 	island_marks = (void *)-1;
+diff --git a/t/t5319-multi-pack-index.sh b/t/t5319-multi-pack-index.sh
+index b5f9b10922..499d5d4c78 100755
+--- a/t/t5319-multi-pack-index.sh
++++ b/t/t5319-multi-pack-index.sh
+@@ -1015,4 +1015,20 @@ test_expect_success 'complains when run outside of a repository' '
+ 	grep "not a git repository" err
+ '
+ 
++test_expect_success 'repack with delta islands' '
++	git init repo &&
++	test_when_finished "rm -fr repo" &&
++	(
++		cd repo &&
++
++		test_commit first &&
++		git repack &&
++		test_commit second &&
++		git repack &&
++
++		git multi-pack-index write &&
++		git -c repack.useDeltaIslands=true multi-pack-index repack
++	)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

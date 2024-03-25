@@ -1,0 +1,56 @@
+From 681c0a247bb6ec38ec9ac9ed745e2ef2c91f447d Mon Sep 17 00:00:00 2001
+From: Emily Shaffer <nasamuffin@google.com>
+Date: Thu, 26 Oct 2023 11:22:31 -0700
+Subject: [PATCH 2312/2871] bugreport: reject positional arguments
+
+git-bugreport already rejected unrecognized flag arguments, like
+`--diaggnose`, but this doesn't help if the user's mistake was to forget
+the `--` in front of the argument. This can result in a user's intended
+argument not being parsed with no indication to the user that something
+went wrong. Since git-bugreport presently doesn't take any positionals
+at all, let's reject all positionals and give the user a usage hint.
+
+Signed-off-by: Emily Shaffer <nasamuffin@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bugreport.c  | 5 +++++
+ t/t0091-bugreport.sh | 7 +++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/builtin/bugreport.c b/builtin/bugreport.c
+index d2ae5c305d..3106e56a13 100644
+--- a/builtin/bugreport.c
++++ b/builtin/bugreport.c
+@@ -126,6 +126,11 @@ int cmd_bugreport(int argc, const char **argv, const char *prefix)
+ 	argc = parse_options(argc, argv, prefix, bugreport_options,
+ 			     bugreport_usage, 0);
+ 
++	if (argc) {
++		error(_("unknown argument `%s'"), argv[0]);
++		usage(bugreport_usage[0]);
++	}
++
+ 	/* Prepare the path to put the result */
+ 	prefixed_filename = prefix_filename(prefix,
+ 					    option_output ? option_output : "");
+diff --git a/t/t0091-bugreport.sh b/t/t0091-bugreport.sh
+index e1588f71b7..ae5b7dc31f 100755
+--- a/t/t0091-bugreport.sh
++++ b/t/t0091-bugreport.sh
+@@ -69,6 +69,13 @@ test_expect_success 'incorrect arguments abort with usage' '
+ 	test_path_is_missing git-bugreport-*
+ '
+ 
++test_expect_success 'incorrect positional arguments abort with usage and hint' '
++	test_must_fail git bugreport false 2>output &&
++	grep usage output &&
++	grep false output &&
++	test_path_is_missing git-bugreport-*
++'
++
+ test_expect_success 'runs outside of a git dir' '
+ 	test_when_finished rm non-repo/git-bugreport-* &&
+ 	nongit git bugreport
+-- 
+2.39.3 (Apple Git-145)
+

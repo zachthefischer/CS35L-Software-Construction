@@ -1,0 +1,72 @@
+From 9ccdace1e83d22f0f618926e97b659e503b5fd94 Mon Sep 17 00:00:00 2001
+From: Jacob Abel <jacobabel@nullpo.dev>
+Date: Wed, 17 May 2023 21:48:40 +0000
+Subject: [PATCH 1466/2871] t2400: add tests to verify --quiet
+
+Add tests to verify that the command performs operations the same with
+`--quiet` as without it. Additionally verifies that all non-fatal output
+is suppressed.
+
+Signed-off-by: Jacob Abel <jacobabel@nullpo.dev>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t2400-worktree-add.sh | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/t/t2400-worktree-add.sh b/t/t2400-worktree-add.sh
+index 0ca3ec2022..841f15f59e 100755
+--- a/t/t2400-worktree-add.sh
++++ b/t/t2400-worktree-add.sh
+@@ -334,6 +334,13 @@ test_expect_success 'add --quiet' '
+ 	test_must_be_empty actual
+ '
+ 
++test_expect_success 'add --quiet -b' '
++	test_when_finished "git branch -D quietnewbranch" &&
++	test_when_finished "git worktree remove -f -f another-worktree" &&
++	git worktree add --quiet -b quietnewbranch another-worktree 2>actual &&
++	test_must_be_empty actual
++'
++
+ test_expect_success 'local clone from linked checkout' '
+ 	git clone --local here here-clone &&
+ 	( cd here-clone && git fsck )
+@@ -532,6 +539,35 @@ test_expect_success 'git worktree add --guess-remote sets up tracking' '
+ 		test_cmp_rev refs/remotes/repo_a/foo refs/heads/foo
+ 	)
+ '
++test_expect_success 'git worktree add --guess-remote sets up tracking (quiet)' '
++	test_when_finished rm -rf repo_a repo_b foo &&
++	setup_remote_repo repo_a repo_b &&
++	(
++		cd repo_b &&
++		git worktree add --quiet --guess-remote ../foo 2>actual &&
++		test_must_be_empty actual
++	) &&
++	(
++		cd foo &&
++		test_branch_upstream foo repo_a foo &&
++		test_cmp_rev refs/remotes/repo_a/foo refs/heads/foo
++	)
++'
++
++test_expect_success 'git worktree --no-guess-remote (quiet)' '
++	test_when_finished rm -rf repo_a repo_b foo &&
++	setup_remote_repo repo_a repo_b &&
++	(
++		cd repo_b &&
++		git worktree add --quiet --no-guess-remote ../foo
++	) &&
++	(
++		cd foo &&
++		test_must_fail git config "branch.foo.remote" &&
++		test_must_fail git config "branch.foo.merge" &&
++		test_cmp_rev ! refs/remotes/repo_a/foo refs/heads/foo
++	)
++'
+ 
+ test_expect_success 'git worktree add with worktree.guessRemote sets up tracking' '
+ 	test_when_finished rm -rf repo_a repo_b foo &&
+-- 
+2.39.3 (Apple Git-145)
+

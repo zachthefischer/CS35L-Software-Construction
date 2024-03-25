@@ -1,0 +1,39 @@
+From 0b658eae751968506552f1bddadc338653819d20 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Tue, 12 Sep 2023 17:30:27 +0000
+Subject: [PATCH 2102/2871] completion: commit: complete trailers tokens more
+ robustly
+
+In the previous commit, we added support for completing configured
+trailer tokens in 'git commit --trailer'.
+
+Make the implementation more robust by:
+
+- using '__git' instead of plain 'git', as the rest of the completion
+  script does
+- using a stricter pattern for --get-regexp to avoid false hits
+- using 'cut' and 'rev' instead of 'awk' to account for tokens including
+  dots.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index b5eb75aadc..c23465886e 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -1679,7 +1679,7 @@ __git_untracked_file_modes="all no normal"
+ 
+ __git_trailer_tokens ()
+ {
+-	git config --name-only --get-regexp trailer.\*.key | awk -F. '{print $2}'
++	__git config --name-only --get-regexp '^trailer\..*\.key$' | cut -d. -f 2- | rev | cut -d. -f2- | rev
+ }
+ 
+ _git_commit ()
+-- 
+2.39.3 (Apple Git-145)
+

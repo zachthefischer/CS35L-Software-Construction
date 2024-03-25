@@ -1,0 +1,45 @@
+From ff29a61cbbc83f0948606df37dbc734436b62c17 Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Mon, 7 Aug 2023 19:09:35 +0200
+Subject: [PATCH 1903/2871] advice: handle "rebase" in error_resolve_conflict()
+
+This makes sure that we get a properly translated message rather than
+inserting the command (which we failed to translate) into a generic
+fallback message.
+
+The function is called indirectly via die_resolve_conflict() with fixed
+strings, and directly with the string obtained via action_name(), which
+in turn returns a string from a fixed set. Hence we know that the now
+covered set of strings is exhausitive, and will therefore BUG() out when
+encountering an unexpected string. We also know that all covered strings
+are actually used.
+
+Arguably, the above suggests that it would be cleaner to pass the
+command as an enum in the first place, but that's left for another time.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ advice.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/advice.c b/advice.c
+index e5a9bb9b44..50c79443ba 100644
+--- a/advice.c
++++ b/advice.c
+@@ -191,9 +191,10 @@ int error_resolve_conflict(const char *me)
+ 		error(_("Pulling is not possible because you have unmerged files."));
+ 	else if (!strcmp(me, "revert"))
+ 		error(_("Reverting is not possible because you have unmerged files."));
++	else if (!strcmp(me, "rebase"))
++		error(_("Rebasing is not possible because you have unmerged files."));
+ 	else
+-		error(_("It is not possible to %s because you have unmerged files."),
+-			me);
++		BUG("Unhandled conflict reason '%s'", me);
+ 
+ 	if (advice_enabled(ADVICE_RESOLVE_CONFLICT))
+ 		/*
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,79 @@
+From 3bb3d6bac5f2b496dfa2862dc1a84cbfa9b4449a Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Apr 2023 19:18:28 -0400
+Subject: [PATCH 1278/2871] config.c: disallow overly-long lines in
+ `copy_or_rename_section_in_file()`
+
+As a defense-in-depth measure to guard against any potentially-unknown
+buffer overflows in `copy_or_rename_section_in_file()`, refuse to work
+with overly-long lines in a gitconfig.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+---
+ config.c          | 13 +++++++++++++
+ t/t1300-config.sh | 10 ++++++++++
+ 2 files changed, 23 insertions(+)
+
+diff --git a/config.c b/config.c
+index e4189aa2d7..b8194dfd8a 100644
+--- a/config.c
++++ b/config.c
+@@ -3083,6 +3083,8 @@ static int section_name_is_ok(const char *name)
+ 	return 1;
+ }
+ 
++#define GIT_CONFIG_MAX_LINE_LEN (512 * 1024)
++
+ /* if new_name == NULL, the section is removed instead */
+ static int git_config_copy_or_rename_section_in_file(const char *config_filename,
+ 				      const char *old_name,
+@@ -3097,6 +3099,7 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
+ 	struct stat st;
+ 	struct strbuf copystr = STRBUF_INIT;
+ 	struct config_store_data store;
++	uint32_t line_nr = 0;
+ 
+ 	memset(&store, 0, sizeof(store));
+ 
+@@ -3137,6 +3140,16 @@ static int git_config_copy_or_rename_section_in_file(const char *config_filename
+ 		size_t i, length;
+ 		int is_section = 0;
+ 		char *output = buf.buf;
++
++		line_nr++;
++
++		if (buf.len >= GIT_CONFIG_MAX_LINE_LEN) {
++			ret = error(_("refusing to work with overly long line "
++				      "in '%s' on line %"PRIuMAX),
++				    config_filename, (uintmax_t)line_nr);
++			goto out;
++		}
++
+ 		for (i = 0; buf.buf[i] && isspace(buf.buf[i]); i++)
+ 			; /* do nothing */
+ 		if (buf.buf[i] == '[') {
+diff --git a/t/t1300-config.sh b/t/t1300-config.sh
+index 24c13b91db..de564cb8e5 100755
+--- a/t/t1300-config.sh
++++ b/t/t1300-config.sh
+@@ -633,6 +633,16 @@ test_expect_success 'renaming an embedded section with a long line' '
+ 	test_must_fail git config -f y foo.e
+ '
+ 
++test_expect_success 'renaming a section with an overly-long line' '
++	{
++		printf "[b]\\n" &&
++		printf "  c = d %525000s e" " " &&
++		printf "[a] g = h\\n"
++	} >y &&
++	test_must_fail git config -f y --rename-section a xyz 2>err &&
++	test_i18ngrep "refusing to work with overly long line in .y. on line 2" err
++'
++
+ cat >> .git/config << EOF
+   [branch "zwei"] a = 1 [branch "vier"]
+ EOF
+-- 
+2.39.3 (Apple Git-145)
+

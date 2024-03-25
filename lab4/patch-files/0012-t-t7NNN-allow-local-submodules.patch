@@ -1,0 +1,397 @@
+From 0d3beb71dad7906f576b0de9cea32164549163fe Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 29 Jul 2022 15:21:40 -0400
+Subject: [PATCH 0012/2871] t/t7NNN: allow local submodules
+
+To prepare for the default value of `protocol.file.allow` to change to
+"user", ensure tests that rely on local submodules can initialize them
+over the file protocol.
+
+Tests that only need to interact with submodules in a limited capacity
+have individual Git commands annotated with the appropriate
+configuration via `-c`. Tests that interact with submodules a handful of
+times use `test_config_global` instead. Test scripts that rely on
+submodules throughout use a `git config --global` during a setup test
+towards the beginning of the script.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t7001-mv.sh                           | 2 ++
+ t/t7064-wtstatus-pv2.sh                 | 1 +
+ t/t7300-clean.sh                        | 1 +
+ t/t7400-submodule-basic.sh              | 4 ++++
+ t/t7403-submodule-sync.sh               | 2 ++
+ t/t7406-submodule-update.sh             | 1 +
+ t/t7407-submodule-foreach.sh            | 1 +
+ t/t7408-submodule-reference.sh          | 4 ++++
+ t/t7409-submodule-detached-work-tree.sh | 4 ++++
+ t/t7411-submodule-config.sh             | 3 +++
+ t/t7413-submodule-is-active.sh          | 1 +
+ t/t7414-submodule-mistakes.sh           | 3 ++-
+ t/t7415-submodule-names.sh              | 4 ++++
+ t/t7416-submodule-dash-url.sh           | 4 ++++
+ t/t7417-submodule-path-url.sh           | 4 ++++
+ t/t7418-submodule-sparse-gitmodules.sh  | 4 ++++
+ t/t7419-submodule-set-branch.sh         | 4 ++++
+ t/t7420-submodule-set-url.sh            | 4 ++++
+ t/t7421-submodule-summary-add.sh        | 4 ++++
+ t/t7506-status-submodule.sh             | 2 ++
+ t/t7507-commit-verbose.sh               | 1 +
+ t/t7800-difftool.sh                     | 1 +
+ t/t7814-grep-recurse-submodules.sh      | 4 ++++
+ 23 files changed, 62 insertions(+), 1 deletion(-)
+
+diff --git a/t/t7001-mv.sh b/t/t7001-mv.sh
+index 63d5f41a12..6156eeb9ad 100755
+--- a/t/t7001-mv.sh
++++ b/t/t7001-mv.sh
+@@ -307,6 +307,7 @@ test_expect_success SYMLINKS 'check moved symlink' '
+ rm -f moved symlink
+ 
+ test_expect_success 'setup submodule' '
++	test_config_global protocol.file.allow always &&
+ 	git commit -m initial &&
+ 	git reset --hard &&
+ 	git submodule add ./. sub &&
+@@ -513,6 +514,7 @@ test_expect_success 'moving a submodule in nested directories' '
+ '
+ 
+ test_expect_success 'moving nested submodules' '
++	test_config_global protocol.file.allow always &&
+ 	git commit -am "cleanup commit" &&
+ 	mkdir sub_nested_nested &&
+ 	(cd sub_nested_nested &&
+diff --git a/t/t7064-wtstatus-pv2.sh b/t/t7064-wtstatus-pv2.sh
+index 601b47830b..2fdb6ecc17 100755
+--- a/t/t7064-wtstatus-pv2.sh
++++ b/t/t7064-wtstatus-pv2.sh
+@@ -462,6 +462,7 @@ test_expect_success 'create and add submodule, submodule appears clean (A. S...)
+ 	git checkout initial-branch &&
+ 	git clone . sub_repo &&
+ 	git clone . super_repo &&
++	test_config_global protocol.file.allow always &&
+ 	(	cd super_repo &&
+ 		git submodule add ../sub_repo sub1 &&
+ 
+diff --git a/t/t7300-clean.sh b/t/t7300-clean.sh
+index cb5e34d94c..713f113a4a 100755
+--- a/t/t7300-clean.sh
++++ b/t/t7300-clean.sh
+@@ -480,6 +480,7 @@ test_expect_success 'should not clean submodules' '
+ 		git init &&
+ 		test_commit msg hello.world
+ 	) &&
++	test_config_global protocol.file.allow always &&
+ 	git submodule add ./repo/.git sub1 &&
+ 	git commit -m "sub1" &&
+ 	git branch before_sub2 &&
+diff --git a/t/t7400-submodule-basic.sh b/t/t7400-submodule-basic.sh
+index fec7e0299d..bf1a4dfadb 100755
+--- a/t/t7400-submodule-basic.sh
++++ b/t/t7400-submodule-basic.sh
+@@ -11,6 +11,10 @@ subcommands of git submodule.
+ 
+ . ./test-lib.sh
+ 
++test_expect_success 'setup - enable local submodules' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'submodule deinit works on empty repository' '
+ 	git submodule deinit --all
+ '
+diff --git a/t/t7403-submodule-sync.sh b/t/t7403-submodule-sync.sh
+index 0726799e74..3bc904bacb 100755
+--- a/t/t7403-submodule-sync.sh
++++ b/t/t7403-submodule-sync.sh
+@@ -11,6 +11,8 @@ These tests exercise the "git submodule sync" subcommand.
+ . ./test-lib.sh
+ 
+ test_expect_success setup '
++	git config --global protocol.file.allow always &&
++
+ 	echo file >file &&
+ 	git add file &&
+ 	test_tick &&
+diff --git a/t/t7406-submodule-update.sh b/t/t7406-submodule-update.sh
+index acb8766ac2..328b9b7012 100755
+--- a/t/t7406-submodule-update.sh
++++ b/t/t7406-submodule-update.sh
+@@ -22,6 +22,7 @@ compare_head()
+ 
+ 
+ test_expect_success 'setup a submodule tree' '
++	git config --global protocol.file.allow always &&
+ 	echo file > file &&
+ 	git add file &&
+ 	test_tick &&
+diff --git a/t/t7407-submodule-foreach.sh b/t/t7407-submodule-foreach.sh
+index 6b2aa917e1..a3404ac330 100755
+--- a/t/t7407-submodule-foreach.sh
++++ b/t/t7407-submodule-foreach.sh
+@@ -13,6 +13,7 @@ that are currently checked out.
+ 
+ 
+ test_expect_success 'setup a submodule tree' '
++	git config --global protocol.file.allow always &&
+ 	echo file > file &&
+ 	git add file &&
+ 	test_tick &&
+diff --git a/t/t7408-submodule-reference.sh b/t/t7408-submodule-reference.sh
+index a3892f494b..02feb85779 100755
+--- a/t/t7408-submodule-reference.sh
++++ b/t/t7408-submodule-reference.sh
+@@ -17,6 +17,10 @@ test_alternate_is_used () {
+ 	test_cmp expect actual
+ }
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'preparing first repository' '
+ 	test_create_repo A &&
+ 	(
+diff --git a/t/t7409-submodule-detached-work-tree.sh b/t/t7409-submodule-detached-work-tree.sh
+index fc018e3638..e12eed5a30 100755
+--- a/t/t7409-submodule-detached-work-tree.sh
++++ b/t/t7409-submodule-detached-work-tree.sh
+@@ -12,6 +12,10 @@ on detached working trees
+ TEST_NO_CREATE_REPO=1
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'submodule on detached working tree' '
+ 	git init --bare remote &&
+ 	test_create_repo bundle1 &&
+diff --git a/t/t7411-submodule-config.sh b/t/t7411-submodule-config.sh
+index ad28e93880..c583c4e373 100755
+--- a/t/t7411-submodule-config.sh
++++ b/t/t7411-submodule-config.sh
+@@ -12,6 +12,9 @@ from the database and from the worktree works.
+ TEST_NO_CREATE_REPO=1
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
+ test_expect_success 'submodule config cache setup' '
+ 	mkdir submodule &&
+ 	(cd submodule &&
+diff --git a/t/t7413-submodule-is-active.sh b/t/t7413-submodule-is-active.sh
+index c8e7e98331..c8b5ac2928 100755
+--- a/t/t7413-submodule-is-active.sh
++++ b/t/t7413-submodule-is-active.sh
+@@ -9,6 +9,7 @@ submodules which are "active" and interesting to the user.
+ . ./test-lib.sh
+ 
+ test_expect_success 'setup' '
++	git config --global protocol.file.allow always &&
+ 	git init sub &&
+ 	test_commit -C sub initial &&
+ 	git init super &&
+diff --git a/t/t7414-submodule-mistakes.sh b/t/t7414-submodule-mistakes.sh
+index f2e7df59cf..cf95603d7d 100755
+--- a/t/t7414-submodule-mistakes.sh
++++ b/t/t7414-submodule-mistakes.sh
+@@ -30,7 +30,8 @@ test_expect_success 'no warning when updating entry' '
+ 
+ test_expect_success 'submodule add does not warn' '
+ 	test_when_finished "git rm -rf submodule .gitmodules" &&
+-	git submodule add ./embed submodule 2>stderr &&
++	git -c protocol.file.allow=always \
++		submodule add ./embed submodule 2>stderr &&
+ 	test_i18ngrep ! warning stderr
+ '
+ 
+diff --git a/t/t7415-submodule-names.sh b/t/t7415-submodule-names.sh
+index f70368bc2e..f37456f15b 100755
+--- a/t/t7415-submodule-names.sh
++++ b/t/t7415-submodule-names.sh
+@@ -8,6 +8,10 @@ real-world setup that confirms we catch this in practice.
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-pack.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'check names' '
+ 	cat >expect <<-\EOF &&
+ 	valid
+diff --git a/t/t7416-submodule-dash-url.sh b/t/t7416-submodule-dash-url.sh
+index d21dc8b009..3ebd985981 100755
+--- a/t/t7416-submodule-dash-url.sh
++++ b/t/t7416-submodule-dash-url.sh
+@@ -3,6 +3,10 @@
+ test_description='check handling of disallowed .gitmodule urls'
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'create submodule with protected dash in url' '
+ 	git init upstream &&
+ 	git -C upstream commit --allow-empty -m base &&
+diff --git a/t/t7417-submodule-path-url.sh b/t/t7417-submodule-path-url.sh
+index f7e7e94d7b..b17d18034a 100755
+--- a/t/t7417-submodule-path-url.sh
++++ b/t/t7417-submodule-path-url.sh
+@@ -3,6 +3,10 @@
+ test_description='check handling of .gitmodule path with dash'
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'create submodule with dash in path' '
+ 	git init upstream &&
+ 	git -C upstream commit --allow-empty -m base &&
+diff --git a/t/t7418-submodule-sparse-gitmodules.sh b/t/t7418-submodule-sparse-gitmodules.sh
+index 3f7f271883..16331c34c4 100755
+--- a/t/t7418-submodule-sparse-gitmodules.sh
++++ b/t/t7418-submodule-sparse-gitmodules.sh
+@@ -14,6 +14,10 @@ also by committing .gitmodules and then just removing it from the filesystem.
+ 
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'sparse checkout setup which hides .gitmodules' '
+ 	git init upstream &&
+ 	git init submodule &&
+diff --git a/t/t7419-submodule-set-branch.sh b/t/t7419-submodule-set-branch.sh
+index 3b925c302f..5357093e98 100755
+--- a/t/t7419-submodule-set-branch.sh
++++ b/t/t7419-submodule-set-branch.sh
+@@ -12,6 +12,10 @@ as expected.
+ TEST_NO_CREATE_REPO=1
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'submodule config cache setup' '
+ 	mkdir submodule &&
+ 	(cd submodule &&
+diff --git a/t/t7420-submodule-set-url.sh b/t/t7420-submodule-set-url.sh
+index ef0cb6e8e1..d6bf62b3ac 100755
+--- a/t/t7420-submodule-set-url.sh
++++ b/t/t7420-submodule-set-url.sh
+@@ -12,6 +12,10 @@ as expected.
+ TEST_NO_CREATE_REPO=1
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'submodule config cache setup' '
+ 	mkdir submodule &&
+ 	(
+diff --git a/t/t7421-submodule-summary-add.sh b/t/t7421-submodule-summary-add.sh
+index b070f13714..ce64d8b137 100755
+--- a/t/t7421-submodule-summary-add.sh
++++ b/t/t7421-submodule-summary-add.sh
+@@ -12,6 +12,10 @@ while making sure to add submodules using `git submodule add` instead of
+ 
+ . ./test-lib.sh
+ 
++test_expect_success 'setup' '
++	git config --global protocol.file.allow always
++'
++
+ test_expect_success 'summary test environment setup' '
+ 	git init sm &&
+ 	test_commit -C sm "add file" file file-content file-tag &&
+diff --git a/t/t7506-status-submodule.sh b/t/t7506-status-submodule.sh
+index 3fcb44767f..459300c40b 100755
+--- a/t/t7506-status-submodule.sh
++++ b/t/t7506-status-submodule.sh
+@@ -251,6 +251,7 @@ test_expect_success 'status with merge conflict in .gitmodules' '
+ 	test_create_repo_with_commit sub1 &&
+ 	test_tick &&
+ 	test_create_repo_with_commit sub2 &&
++	test_config_global protocol.file.allow always &&
+ 	(
+ 		cd super &&
+ 		prev=$(git rev-parse HEAD) &&
+@@ -326,6 +327,7 @@ test_expect_success 'diff --submodule with merge conflict in .gitmodules' '
+ # sub2 will have an untracked file
+ # sub3 will have an untracked repository
+ test_expect_success 'setup superproject with untracked file in nested submodule' '
++	test_config_global protocol.file.allow always &&
+ 	(
+ 		cd super &&
+ 		git clean -dfx &&
+diff --git a/t/t7507-commit-verbose.sh b/t/t7507-commit-verbose.sh
+index ed2653d46f..bd0ae4b1ea 100755
+--- a/t/t7507-commit-verbose.sh
++++ b/t/t7507-commit-verbose.sh
+@@ -74,6 +74,7 @@ test_expect_success 'diff in message is retained with -v' '
+ 
+ test_expect_success 'submodule log is stripped out too with -v' '
+ 	git config diff.submodule log &&
++	test_config_global protocol.file.allow always &&
+ 	git submodule add ./. sub &&
+ 	git commit -m "sub added" &&
+ 	(
+diff --git a/t/t7800-difftool.sh b/t/t7800-difftool.sh
+index a578b35761..cca50697b5 100755
+--- a/t/t7800-difftool.sh
++++ b/t/t7800-difftool.sh
+@@ -626,6 +626,7 @@ test_expect_success 'difftool --no-symlinks detects conflict ' '
+ 
+ test_expect_success 'difftool properly honors gitlink and core.worktree' '
+ 	test_when_finished rm -rf submod/ule &&
++	test_config_global protocol.file.allow always &&
+ 	git submodule add ./. submod/ule &&
+ 	test_config -C submod/ule diff.tool checktrees &&
+ 	test_config -C submod/ule difftool.checktrees.cmd '\''
+diff --git a/t/t7814-grep-recurse-submodules.sh b/t/t7814-grep-recurse-submodules.sh
+index 828cb3ba58..f465c0d140 100755
+--- a/t/t7814-grep-recurse-submodules.sh
++++ b/t/t7814-grep-recurse-submodules.sh
+@@ -193,6 +193,7 @@ test_expect_success !MINGW 'grep recurse submodule colon in name' '
+ 	git -C "su:b" commit -m "add fi:le" &&
+ 	test_tick &&
+ 
++	test_config_global protocol.file.allow always &&
+ 	git -C parent submodule add "../su:b" "su:b" &&
+ 	git -C parent commit -m "add submodule" &&
+ 	test_tick &&
+@@ -227,6 +228,7 @@ test_expect_success 'grep history with moved submoules' '
+ 	git -C sub commit -m "add file" &&
+ 	test_tick &&
+ 
++	test_config_global protocol.file.allow always &&
+ 	git -C parent submodule add ../sub dir/sub &&
+ 	git -C parent commit -m "add submodule" &&
+ 	test_tick &&
+@@ -271,6 +273,7 @@ test_expect_success 'grep using relative path' '
+ 	mkdir parent/src &&
+ 	echo "(1|2)d(3|4)" >parent/src/file2 &&
+ 	git -C parent add src/file2 &&
++	test_config_global protocol.file.allow always &&
+ 	git -C parent submodule add ../sub &&
+ 	git -C parent commit -m "add files and submodule" &&
+ 	test_tick &&
+@@ -313,6 +316,7 @@ test_expect_success 'grep from a subdir' '
+ 	mkdir parent/src &&
+ 	echo "(1|2)d(3|4)" >parent/src/file &&
+ 	git -C parent add src/file &&
++	test_config_global protocol.file.allow always &&
+ 	git -C parent submodule add ../sub src/sub &&
+ 	git -C parent submodule add ../sub sub &&
+ 	git -C parent commit -m "add files and submodules" &&
+-- 
+2.39.3 (Apple Git-145)
+

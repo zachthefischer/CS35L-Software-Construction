@@ -1,0 +1,2103 @@
+From bc5c5ec0446895f5c4139cd470066beb3c4ac6d5 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:33:57 +0000
+Subject: [PATCH 1644/2871] cache.h: remove this no-longer-used header
+
+Since this header showed up in some places besides just #include
+statements, update/clean-up/remove those other places as well.
+
+Note that compat/fsmonitor/fsm-path-utils-darwin.c previously got
+away with violating the rule that all files must start with an include
+of git-compat-util.h (or a short-list of alternate headers that happen
+to include it first).  This change exposed the violation and caused it
+to stop building correctly; fix it by having it include
+git-compat-util.h first, as per policy.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/CodingGuidelines           |  2 +-
+ Documentation/MyFirstObjectWalk.txt      |  2 +-
+ Documentation/user-manual.txt            | 18 ++++++++----------
+ Makefile                                 |  2 +-
+ add-interactive.c                        |  2 +-
+ add-patch.c                              |  2 +-
+ apply.c                                  |  2 +-
+ attr.c                                   |  2 +-
+ blame.c                                  |  2 +-
+ builtin.h                                |  1 -
+ builtin/add.c                            |  3 +--
+ builtin/am.c                             |  3 +--
+ builtin/apply.c                          |  1 -
+ builtin/archive.c                        |  1 -
+ builtin/bisect.c                         |  1 -
+ builtin/branch.c                         |  3 +--
+ builtin/bundle.c                         |  1 -
+ builtin/cat-file.c                       |  3 +--
+ builtin/check-attr.c                     |  1 -
+ builtin/check-ignore.c                   |  1 -
+ builtin/check-ref-format.c               |  3 +--
+ builtin/clean.c                          |  1 -
+ builtin/column.c                         |  1 -
+ builtin/commit-tree.c                    |  3 +--
+ builtin/commit.c                         |  3 +--
+ builtin/count-objects.c                  |  3 +--
+ builtin/describe.c                       |  3 +--
+ builtin/diff-files.c                     |  3 +--
+ builtin/diff-index.c                     |  3 +--
+ builtin/diff-tree.c                      |  3 +--
+ builtin/diff.c                           |  3 +--
+ builtin/difftool.c                       |  3 +--
+ builtin/fast-export.c                    |  1 -
+ builtin/fast-import.c                    |  1 -
+ builtin/fetch.c                          |  3 +--
+ builtin/for-each-ref.c                   |  1 -
+ builtin/for-each-repo.c                  |  3 +--
+ builtin/fsck.c                           |  1 -
+ builtin/get-tar-commit-id.c              |  3 +--
+ builtin/grep.c                           |  3 +--
+ builtin/help.c                           |  3 +--
+ builtin/hook.c                           |  1 -
+ builtin/init-db.c                        |  3 +--
+ builtin/interpret-trailers.c             |  1 -
+ builtin/ls-files.c                       |  3 +--
+ builtin/ls-remote.c                      |  1 -
+ builtin/ls-tree.c                        |  3 +--
+ builtin/mailinfo.c                       |  3 +--
+ builtin/mailsplit.c                      |  1 -
+ builtin/merge-base.c                     |  1 -
+ builtin/merge-file.c                     |  1 -
+ builtin/merge-recursive.c                |  1 -
+ builtin/merge.c                          |  3 +--
+ builtin/multi-pack-index.c               |  1 -
+ builtin/notes.c                          |  3 +--
+ builtin/patch-id.c                       |  1 -
+ builtin/prune.c                          |  3 +--
+ builtin/pull.c                           |  3 +--
+ builtin/push.c                           |  3 +--
+ builtin/range-diff.c                     |  1 -
+ builtin/read-tree.c                      |  3 +--
+ builtin/replace.c                        |  3 +--
+ builtin/rerere.c                         |  1 -
+ builtin/rev-list.c                       |  3 +--
+ builtin/rev-parse.c                      |  3 +--
+ builtin/shortlog.c                       |  1 -
+ builtin/show-branch.c                    |  3 +--
+ builtin/show-index.c                     |  1 -
+ builtin/show-ref.c                       |  1 -
+ builtin/sparse-checkout.c                |  1 -
+ builtin/stripspace.c                     |  1 -
+ builtin/submodule--helper.c              |  1 -
+ builtin/symbolic-ref.c                   |  1 -
+ builtin/tag.c                            |  3 +--
+ builtin/unpack-objects.c                 |  1 -
+ builtin/update-index.c                   |  3 +--
+ builtin/update-ref.c                     |  3 +--
+ builtin/update-server-info.c             |  3 +--
+ builtin/upload-archive.c                 |  1 -
+ builtin/upload-pack.c                    |  1 -
+ builtin/verify-commit.c                  |  3 +--
+ builtin/verify-pack.c                    |  1 -
+ builtin/verify-tag.c                     |  3 +--
+ builtin/worktree.c                       |  3 +--
+ builtin/write-tree.c                     |  1 -
+ cache-tree.c                             |  2 +-
+ cache.h                                  |  6 ------
+ compat/fsmonitor/fsm-health-win32.c      |  2 +-
+ compat/fsmonitor/fsm-listen-win32.c      |  2 +-
+ compat/fsmonitor/fsm-path-utils-darwin.c |  1 +
+ compat/fsmonitor/fsm-path-utils-win32.c  |  2 +-
+ compat/fsmonitor/fsm-settings-win32.c    |  2 +-
+ compat/mingw.c                           |  1 -
+ compat/precompose_utf8.c                 |  2 +-
+ compat/sha1-chunked.c                    |  2 +-
+ compat/simple-ipc/ipc-win32.c            |  2 +-
+ compat/win32/trace2_win32_process_info.c |  2 +-
+ contrib/buildsystems/CMakeLists.txt      |  2 +-
+ convert.c                                |  2 +-
+ diff-lib.c                               |  2 +-
+ diff.c                                   |  2 +-
+ entry.c                                  |  2 +-
+ environment.c                            |  2 +-
+ fsmonitor-ipc.c                          |  2 +-
+ fsmonitor.c                              |  2 +-
+ fsmonitor.h                              |  1 -
+ hash-lookup.c                            |  2 +-
+ merge-ort-wrappers.c                     |  2 +-
+ merge-ort.c                              |  2 +-
+ merge-recursive.c                        |  2 +-
+ merge.c                                  |  2 +-
+ name-hash.c                              |  2 +-
+ object-name.c                            |  2 +-
+ object.c                                 |  2 +-
+ parallel-checkout.c                      |  2 +-
+ pathspec.c                               |  2 +-
+ preload-index.c                          |  2 +-
+ read-cache.c                             |  2 +-
+ refs/files-backend.c                     |  2 +-
+ refs/packed-backend.c                    |  2 +-
+ repository.c                             |  2 +-
+ rerere.c                                 |  2 +-
+ resolve-undo.c                           |  2 +-
+ revision.c                               |  2 +-
+ run-command.h                            |  2 +-
+ sequencer.c                              |  2 +-
+ shallow.c                                |  2 +-
+ sparse-index.c                           |  2 +-
+ split-index.c                            |  2 +-
+ strbuf.h                                 |  4 ----
+ submodule.c                              |  2 +-
+ t/helper/test-cache-tree.c               |  1 -
+ t/helper/test-dump-cache-tree.c          |  1 -
+ t/helper/test-dump-fsmonitor.c           |  1 -
+ t/helper/test-dump-split-index.c         |  1 -
+ t/helper/test-dump-untracked-cache.c     |  1 -
+ t/helper/test-fast-rebase.c              |  1 -
+ t/helper/test-fsmonitor-client.c         |  1 -
+ t/helper/test-hash-speed.c               |  1 -
+ t/helper/test-index-version.c            |  1 -
+ t/helper/test-lazy-init-name-hash.c      |  1 -
+ t/helper/test-path-utils.c               |  1 -
+ t/helper/test-read-cache.c               |  1 -
+ t/helper/test-scrap-cache-tree.c         |  1 -
+ t/helper/test-sha1.c                     |  1 -
+ t/helper/test-sha256.c                   |  1 -
+ t/helper/test-strcmp-offset.c            |  1 -
+ t/helper/test-write-cache.c              |  1 -
+ unpack-trees.c                           |  2 +-
+ wt-status.c                              |  2 +-
+ 150 files changed, 100 insertions(+), 206 deletions(-)
+ delete mode 100644 cache.h
+
+diff --git a/Documentation/CodingGuidelines b/Documentation/CodingGuidelines
+index 003393ed16..2b472df29d 100644
+--- a/Documentation/CodingGuidelines
++++ b/Documentation/CodingGuidelines
+@@ -444,7 +444,7 @@ For C programs:
+  - The first #include in C files, except in platform specific compat/
+    implementations and sha1dc/, must be either "git-compat-util.h" or
+    one of the approved headers that includes it first for you.  (The
+-   approved headers currently include "cache.h", "builtin.h",
++   approved headers currently include "builtin.h",
+    "t/helper/test-tool.h", "xdiff/xinclude.h", or
+    "reftable/system.h").  You do not have to include more than one of
+    these.
+diff --git a/Documentation/MyFirstObjectWalk.txt b/Documentation/MyFirstObjectWalk.txt
+index eee513e86f..200e628e30 100644
+--- a/Documentation/MyFirstObjectWalk.txt
++++ b/Documentation/MyFirstObjectWalk.txt
+@@ -124,7 +124,7 @@ parameters provided by the user over the CLI.
+ 
+ `nr` represents the number of `rev_cmdline_entry` present in the array.
+ 
+-`alloc` is used by the `ALLOC_GROW` macro. Check `cache.h` - this variable is
++`alloc` is used by the `ALLOC_GROW` macro. Check `alloc.h` - this variable is
+ used to track the allocated size of the list.
+ 
+ Per entry, we find:
+diff --git a/Documentation/user-manual.txt b/Documentation/user-manual.txt
+index aa385137ad..4281396093 100644
+--- a/Documentation/user-manual.txt
++++ b/Documentation/user-manual.txt
+@@ -4129,13 +4129,11 @@ Note that terminology has changed since that revision.  For example, the
+ README in that revision uses the word "changeset" to describe what we
+ now call a <<def_commit_object,commit>>.
+ 
+-Also, we do not call it "cache" any more, but rather "index"; however, the
+-file is still called `cache.h`.  Remark: Not much reason to change it now,
+-especially since there is no good single name for it anyway, because it is
+-basically _the_ header file which is included by _all_ of Git's C sources.
++Also, we do not call it "cache" any more, but rather "index"; however,
++the file is still called `read-cache.h`.
+ 
+ If you grasp the ideas in that initial commit, you should check out a
+-more recent version and skim `cache.h`, `object.h` and `commit.h`.
++more recent version and skim `read-cache-ll.h`, `object.h` and `commit.h`.
+ 
+ In the early days, Git (in the tradition of UNIX) was a bunch of programs
+ which were extremely simple, and which you used in scripts, piping the
+@@ -4146,11 +4144,11 @@ many of these parts have become builtins, and some of the core has been
+ and to avoid code duplication.
+ 
+ By now, you know what the index is (and find the corresponding data
+-structures in `cache.h`), and that there are just a couple of object types
+-(blobs, trees, commits and tags) which inherit their common structure from
+-`struct object`, which is their first member (and thus, you can cast e.g.
+-`(struct object *)commit` to achieve the _same_ as `&commit->object`, i.e.
+-get at the object name and flags).
++structures in `read-cache-ll.h`), and that there are just a couple of
++object types (blobs, trees, commits and tags) which inherit their
++common structure from `struct object`, which is their first member
++(and thus, you can cast e.g.  `(struct object *)commit` to achieve the
++_same_ as `&commit->object`, i.e.  get at the object name and flags).
+ 
+ Now is a good point to take a break to let this information sink in.
+ 
+diff --git a/Makefile b/Makefile
+index 339c29849e..e62db9460d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1952,7 +1952,7 @@ endif
+ 	BASIC_CFLAGS += \
+ 		-DSHA1DC_NO_STANDARD_INCLUDES \
+ 		-DSHA1DC_INIT_SAFE_HASH_DEFAULT=0 \
+-		-DSHA1DC_CUSTOM_INCLUDE_SHA1_C="\"cache.h\"" \
++		-DSHA1DC_CUSTOM_INCLUDE_SHA1_C="\"git-compat-util.h\"" \
+ 		-DSHA1DC_CUSTOM_INCLUDE_UBC_CHECK_C="\"git-compat-util.h\""
+ endif
+ endif
+diff --git a/add-interactive.c b/add-interactive.c
+index a9671e3349..40f88c0205 100644
+--- a/add-interactive.c
++++ b/add-interactive.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "add-interactive.h"
+ #include "color.h"
+ #include "config.h"
+diff --git a/add-patch.c b/add-patch.c
+index 7d4d298286..875b96e227 100644
+--- a/add-patch.c
++++ b/add-patch.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "add-interactive.h"
+ #include "advice.h"
+ #include "alloc.h"
+diff --git a/apply.c b/apply.c
+index f056c8f3bb..e44a5dd7c5 100644
+--- a/apply.c
++++ b/apply.c
+@@ -7,7 +7,7 @@
+  *
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "base85.h"
+diff --git a/attr.c b/attr.c
+index 475241c5c4..b659f415d8 100644
+--- a/attr.c
++++ b/attr.c
+@@ -6,7 +6,7 @@
+  * an insanely large number of attributes.
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "environment.h"
+diff --git a/blame.c b/blame.c
+index a0c7b5c065..ab3c6108cc 100644
+--- a/blame.c
++++ b/blame.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "refs.h"
+ #include "object-store.h"
+ #include "cache-tree.h"
+diff --git a/builtin.h b/builtin.h
+index cb0db67681..3e6c22eef6 100644
+--- a/builtin.h
++++ b/builtin.h
+@@ -3,7 +3,6 @@
+ 
+ #include "git-compat-util.h"
+ #include "strbuf.h"
+-#include "cache.h"
+ #include "commit.h"
+ 
+ /*
+diff --git a/builtin/add.c b/builtin/add.c
+index 9fe6b6ce29..50792c0d49 100644
+--- a/builtin/add.c
++++ b/builtin/add.c
+@@ -4,10 +4,9 @@
+  * Copyright (C) 2006 Linus Torvalds
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "advice.h"
+ #include "config.h"
+-#include "builtin.h"
+ #include "lockfile.h"
+ #include "editor.h"
+ #include "dir.h"
+diff --git a/builtin/am.c b/builtin/am.c
+index 0d8f46f8d5..2f0f233791 100644
+--- a/builtin/am.c
++++ b/builtin/am.c
+@@ -4,11 +4,10 @@
+  * Based on git-am.sh by Junio C Hamano.
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "abspath.h"
+ #include "advice.h"
+ #include "config.h"
+-#include "builtin.h"
+ #include "editor.h"
+ #include "environment.h"
+ #include "exec-cmd.h"
+diff --git a/builtin/apply.c b/builtin/apply.c
+index e3ff02a09e..c18b7ea5d3 100644
+--- a/builtin/apply.c
++++ b/builtin/apply.c
+@@ -1,4 +1,3 @@
+-#include "cache.h"
+ #include "builtin.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+diff --git a/builtin/archive.c b/builtin/archive.c
+index b0eaa3c14a..90761fdfee 100644
+--- a/builtin/archive.c
++++ b/builtin/archive.c
+@@ -2,7 +2,6 @@
+  * Copyright (c) 2006 Franck Bui-Huu
+  * Copyright (c) 2006 Rene Scharfe
+  */
+-#include "cache.h"
+ #include "builtin.h"
+ #include "archive.h"
+ #include "gettext.h"
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index 4812450c39..bce0ee6268 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "copy.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/builtin/branch.c b/builtin/branch.c
+index e6c2655af6..c480fa2121 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -5,14 +5,13 @@
+  * Based on git-branch.sh by Junio C Hamano.
+  */
+ 
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "color.h"
+ #include "editor.h"
+ #include "environment.h"
+ #include "refs.h"
+ #include "commit.h"
+-#include "builtin.h"
+ #include "gettext.h"
+ #include "object-name.h"
+ #include "remote.h"
+diff --git a/builtin/bundle.c b/builtin/bundle.c
+index 44113389d7..3f63631c03 100644
+--- a/builtin/bundle.c
++++ b/builtin/bundle.c
+@@ -6,7 +6,6 @@
+ #include "parse-options.h"
+ #include "pkt-line.h"
+ #include "repository.h"
+-#include "cache.h"
+ #include "bundle.h"
+ 
+ /*
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index 0bafc14e6c..9646e7209c 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -4,11 +4,10 @@
+  * Copyright (C) Linus Torvalds, 2005
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "convert.h"
+-#include "builtin.h"
+ #include "diff.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/builtin/check-attr.c b/builtin/check-attr.c
+index e27b86d150..b22ff748c3 100644
+--- a/builtin/check-attr.c
++++ b/builtin/check-attr.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "attr.h"
+ #include "environment.h"
+diff --git a/builtin/check-ignore.c b/builtin/check-ignore.c
+index e4b78782a3..906cd96753 100644
+--- a/builtin/check-ignore.c
++++ b/builtin/check-ignore.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "gettext.h"
+diff --git a/builtin/check-ref-format.c b/builtin/check-ref-format.c
+index 57f0505070..5eb6bdc3f6 100644
+--- a/builtin/check-ref-format.c
++++ b/builtin/check-ref-format.c
+@@ -2,9 +2,8 @@
+  * GIT - The information manager from hell
+  */
+ 
+-#include "cache.h"
+-#include "refs.h"
+ #include "builtin.h"
++#include "refs.h"
+ #include "setup.h"
+ #include "strbuf.h"
+ 
+diff --git a/builtin/clean.c b/builtin/clean.c
+index 49c7af45b0..66b4479356 100644
+--- a/builtin/clean.c
++++ b/builtin/clean.c
+@@ -9,7 +9,6 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "builtin.h"
+ #include "abspath.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "gettext.h"
+diff --git a/builtin/column.c b/builtin/column.c
+index de623a16c2..ce13ff0baa 100644
+--- a/builtin/column.c
++++ b/builtin/column.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "strbuf.h"
+diff --git a/builtin/commit-tree.c b/builtin/commit-tree.c
+index d1d251c3de..d2121f30d4 100644
+--- a/builtin/commit-tree.c
++++ b/builtin/commit-tree.c
+@@ -3,7 +3,7 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "hex.h"
+@@ -12,7 +12,6 @@
+ #include "repository.h"
+ #include "commit.h"
+ #include "tree.h"
+-#include "builtin.h"
+ #include "utf8.h"
+ #include "gpg-interface.h"
+ #include "parse-options.h"
+diff --git a/builtin/commit.c b/builtin/commit.c
+index 829daaca9d..acf21789a0 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -6,7 +6,7 @@
+  */
+ 
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "advice.h"
+ #include "config.h"
+ #include "lockfile.h"
+@@ -15,7 +15,6 @@
+ #include "dir.h"
+ #include "editor.h"
+ #include "environment.h"
+-#include "builtin.h"
+ #include "diff.h"
+ #include "diffcore.h"
+ #include "commit.h"
+diff --git a/builtin/count-objects.c b/builtin/count-objects.c
+index f3d8f1bcbb..b9e6b55a9a 100644
+--- a/builtin/count-objects.c
++++ b/builtin/count-objects.c
+@@ -4,13 +4,12 @@
+  * Copyright (c) 2006 Junio C Hamano
+  */
+ 
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "repository.h"
+-#include "builtin.h"
+ #include "parse-options.h"
+ #include "quote.h"
+ #include "packfile.h"
+diff --git a/builtin/describe.c b/builtin/describe.c
+index f1be7c3694..508e8df00e 100644
+--- a/builtin/describe.c
++++ b/builtin/describe.c
+@@ -1,5 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+@@ -9,7 +9,6 @@
+ #include "tag.h"
+ #include "blob.h"
+ #include "refs.h"
+-#include "builtin.h"
+ #include "exec-cmd.h"
+ #include "object-name.h"
+ #include "parse-options.h"
+diff --git a/builtin/diff-files.c b/builtin/diff-files.c
+index 3ac175264d..a4a2ab76c7 100644
+--- a/builtin/diff-files.c
++++ b/builtin/diff-files.c
+@@ -3,14 +3,13 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "diff.h"
+ #include "diff-merges.h"
+ #include "commit.h"
+ #include "preload-index.h"
+ #include "revision.h"
+-#include "builtin.h"
+ #include "submodule.h"
+ 
+ static const char diff_files_usage[] =
+diff --git a/builtin/diff-index.c b/builtin/diff-index.c
+index 9b98db2e77..1ab8f8b6dc 100644
+--- a/builtin/diff-index.c
++++ b/builtin/diff-index.c
+@@ -1,11 +1,10 @@
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "diff.h"
+ #include "diff-merges.h"
+ #include "commit.h"
+ #include "preload-index.h"
+ #include "revision.h"
+-#include "builtin.h"
+ #include "setup.h"
+ #include "submodule.h"
+ 
+diff --git a/builtin/diff-tree.c b/builtin/diff-tree.c
+index 8f7dff8eb3..f3a458bb87 100644
+--- a/builtin/diff-tree.c
++++ b/builtin/diff-tree.c
+@@ -1,12 +1,11 @@
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "diff.h"
+ #include "commit.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "log-tree.h"
+-#include "builtin.h"
+ #include "submodule.h"
+ #include "read-cache-ll.h"
+ #include "repository.h"
+diff --git a/builtin/diff.c b/builtin/diff.c
+index a9ce701ff9..b19530c996 100644
+--- a/builtin/diff.c
++++ b/builtin/diff.c
+@@ -4,7 +4,7 @@
+  * Copyright (c) 2006 Junio C Hamano
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "ewah/ewok.h"
+ #include "lockfile.h"
+@@ -20,7 +20,6 @@
+ #include "read-cache-ll.h"
+ #include "revision.h"
+ #include "log-tree.h"
+-#include "builtin.h"
+ #include "setup.h"
+ #include "submodule.h"
+ #include "oid-array.h"
+diff --git a/builtin/difftool.c b/builtin/difftool.c
+index 88809976c5..4a22de3edd 100644
+--- a/builtin/difftool.c
++++ b/builtin/difftool.c
+@@ -12,11 +12,10 @@
+  * Copyright (C) 2016 Johannes Schindelin
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "abspath.h"
+ #include "config.h"
+ #include "copy.h"
+-#include "builtin.h"
+ #include "run-command.h"
+ #include "environment.h"
+ #include "exec-cmd.h"
+diff --git a/builtin/fast-export.c b/builtin/fast-export.c
+index 9a95f6a1a8..5f3ffd6912 100644
+--- a/builtin/fast-export.c
++++ b/builtin/fast-export.c
+@@ -4,7 +4,6 @@
+  * Copyright (C) 2007 Johannes E. Schindelin
+  */
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/builtin/fast-import.c b/builtin/fast-import.c
+index bbd9b2b3e7..67a2260a5e 100644
+--- a/builtin/fast-import.c
++++ b/builtin/fast-import.c
+@@ -1,6 +1,5 @@
+ #include "builtin.h"
+ #include "abspath.h"
+-#include "cache.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index e3871048cf..2c6f4d3dff 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -1,7 +1,7 @@
+ /*
+  * "git fetch"
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "advice.h"
+ #include "config.h"
+ #include "gettext.h"
+@@ -15,7 +15,6 @@
+ #include "oidset.h"
+ #include "oid-array.h"
+ #include "commit.h"
+-#include "builtin.h"
+ #include "string-list.h"
+ #include "remote.h"
+ #include "transport.h"
+diff --git a/builtin/for-each-ref.c b/builtin/for-each-ref.c
+index 695fc8f4a5..d0d6ab0fd3 100644
+--- a/builtin/for-each-ref.c
++++ b/builtin/for-each-ref.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "refs.h"
+diff --git a/builtin/for-each-repo.c b/builtin/for-each-repo.c
+index 37daf7bec1..28186b30f5 100644
+--- a/builtin/for-each-repo.c
++++ b/builtin/for-each-repo.c
+@@ -1,6 +1,5 @@
+-#include "cache.h"
+-#include "config.h"
+ #include "builtin.h"
++#include "config.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+ #include "path.h"
+diff --git a/builtin/fsck.c b/builtin/fsck.c
+index d4e04bb36e..3e169f413d 100644
+--- a/builtin/fsck.c
++++ b/builtin/fsck.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "repository.h"
+diff --git a/builtin/get-tar-commit-id.c b/builtin/get-tar-commit-id.c
+index 564cfcac4f..9303e386cc 100644
+--- a/builtin/get-tar-commit-id.c
++++ b/builtin/get-tar-commit-id.c
+@@ -1,10 +1,9 @@
+ /*
+  * Copyright (c) 2005, 2006 Rene Scharfe
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "commit.h"
+ #include "tar.h"
+-#include "builtin.h"
+ #include "quote.h"
+ #include "wrapper.h"
+ 
+diff --git a/builtin/grep.c b/builtin/grep.c
+index 0d56757589..7638d77900 100644
+--- a/builtin/grep.c
++++ b/builtin/grep.c
+@@ -3,7 +3,7 @@
+  *
+  * Copyright (c) 2006 Junio C Hamano
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "alloc.h"
+ #include "gettext.h"
+ #include "hex.h"
+@@ -14,7 +14,6 @@
+ #include "commit.h"
+ #include "tag.h"
+ #include "tree-walk.h"
+-#include "builtin.h"
+ #include "parse-options.h"
+ #include "string-list.h"
+ #include "run-command.h"
+diff --git a/builtin/help.c b/builtin/help.c
+index d3cf4af3f6..e93533fb09 100644
+--- a/builtin/help.c
++++ b/builtin/help.c
+@@ -1,9 +1,8 @@
+ /*
+  * Builtin help command
+  */
+-#include "cache.h"
+-#include "config.h"
+ #include "builtin.h"
++#include "config.h"
+ #include "exec-cmd.h"
+ #include "gettext.h"
+ #include "pager.h"
+diff --git a/builtin/hook.c b/builtin/hook.c
+index 88051795c7..09b51a6487 100644
+--- a/builtin/hook.c
++++ b/builtin/hook.c
+@@ -1,4 +1,3 @@
+-#include "cache.h"
+ #include "builtin.h"
+ #include "config.h"
+ #include "gettext.h"
+diff --git a/builtin/init-db.c b/builtin/init-db.c
+index feb019a9de..680ef7e183 100644
+--- a/builtin/init-db.c
++++ b/builtin/init-db.c
+@@ -3,12 +3,11 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "abspath.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+-#include "builtin.h"
+ #include "object-file.h"
+ #include "parse-options.h"
+ #include "path.h"
+diff --git a/builtin/interpret-trailers.c b/builtin/interpret-trailers.c
+index 107ac28f0e..c5e8345265 100644
+--- a/builtin/interpret-trailers.c
++++ b/builtin/interpret-trailers.c
+@@ -5,7 +5,6 @@
+  *
+  */
+ 
+-#include "cache.h"
+ #include "builtin.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+diff --git a/builtin/ls-files.c b/builtin/ls-files.c
+index a0bea8f06c..3e314980fe 100644
+--- a/builtin/ls-files.c
++++ b/builtin/ls-files.c
+@@ -5,13 +5,12 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "repository.h"
+ #include "config.h"
+ #include "convert.h"
+ #include "quote.h"
+ #include "dir.h"
+-#include "builtin.h"
+ #include "gettext.h"
+ #include "object-name.h"
+ #include "strbuf.h"
+diff --git a/builtin/ls-remote.c b/builtin/ls-remote.c
+index cb6cb77e08..a0aadc9b8f 100644
+--- a/builtin/ls-remote.c
++++ b/builtin/ls-remote.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "transport.h"
+diff --git a/builtin/ls-tree.c b/builtin/ls-tree.c
+index 077977a461..f4331c640f 100644
+--- a/builtin/ls-tree.c
++++ b/builtin/ls-tree.c
+@@ -3,7 +3,7 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "hex.h"
+@@ -13,7 +13,6 @@
+ #include "tree.h"
+ #include "commit.h"
+ #include "quote.h"
+-#include "builtin.h"
+ #include "parse-options.h"
+ #include "pathspec.h"
+ 
+diff --git a/builtin/mailinfo.c b/builtin/mailinfo.c
+index a032a1c388..53b55dd71c 100644
+--- a/builtin/mailinfo.c
++++ b/builtin/mailinfo.c
+@@ -2,9 +2,8 @@
+  * Another stupid program, this one parsing the headers of an
+  * email to figure out authorship and subject
+  */
+-#include "cache.h"
+-#include "abspath.h"
+ #include "builtin.h"
++#include "abspath.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "utf8.h"
+diff --git a/builtin/mailsplit.c b/builtin/mailsplit.c
+index 0b6193a091..3af9ddb8ae 100644
+--- a/builtin/mailsplit.c
++++ b/builtin/mailsplit.c
+@@ -4,7 +4,6 @@
+  * It just splits a mbox into a list of files: "0001" "0002" ..
+  * so you can process them further from there.
+  */
+-#include "cache.h"
+ #include "builtin.h"
+ #include "gettext.h"
+ #include "string-list.h"
+diff --git a/builtin/merge-base.c b/builtin/merge-base.c
+index 854019a32d..e68b7fe45d 100644
+--- a/builtin/merge-base.c
++++ b/builtin/merge-base.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "commit.h"
+ #include "gettext.h"
+diff --git a/builtin/merge-file.c b/builtin/merge-file.c
+index 781818d08f..d7eb4c6540 100644
+--- a/builtin/merge-file.c
++++ b/builtin/merge-file.c
+@@ -1,6 +1,5 @@
+ #include "builtin.h"
+ #include "abspath.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "setup.h"
+diff --git a/builtin/merge-recursive.c b/builtin/merge-recursive.c
+index b9e980384a..3366699657 100644
+--- a/builtin/merge-recursive.c
++++ b/builtin/merge-recursive.c
+@@ -1,4 +1,3 @@
+-#include "cache.h"
+ #include "builtin.h"
+ #include "advice.h"
+ #include "commit.h"
+diff --git a/builtin/merge.c b/builtin/merge.c
+index 6e8f7b9bb5..d7ac108ce9 100644
+--- a/builtin/merge.c
++++ b/builtin/merge.c
+@@ -7,7 +7,7 @@
+  */
+ 
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "abspath.h"
+ #include "advice.h"
+ #include "alloc.h"
+@@ -18,7 +18,6 @@
+ #include "hex.h"
+ #include "object-name.h"
+ #include "parse-options.h"
+-#include "builtin.h"
+ #include "lockfile.h"
+ #include "run-command.h"
+ #include "hook.h"
+diff --git a/builtin/multi-pack-index.c b/builtin/multi-pack-index.c
+index 1b5083f8b2..5bb71bce08 100644
+--- a/builtin/multi-pack-index.c
++++ b/builtin/multi-pack-index.c
+@@ -1,6 +1,5 @@
+ #include "builtin.h"
+ #include "abspath.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/builtin/notes.c b/builtin/notes.c
+index d5788352b6..efdf245148 100644
+--- a/builtin/notes.c
++++ b/builtin/notes.c
+@@ -7,9 +7,8 @@
+  * and builtin/tag.c by Kristian Høgsberg and Carlos Rica.
+  */
+ 
+-#include "cache.h"
+-#include "config.h"
+ #include "builtin.h"
++#include "config.h"
+ #include "editor.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/builtin/patch-id.c b/builtin/patch-id.c
+index 9d5585d3a7..27952f1a6f 100644
+--- a/builtin/patch-id.c
++++ b/builtin/patch-id.c
+@@ -1,4 +1,3 @@
+-#include "cache.h"
+ #include "builtin.h"
+ #include "config.h"
+ #include "diff.h"
+diff --git a/builtin/prune.c b/builtin/prune.c
+index 5dc9b20720..b3658b5b51 100644
+--- a/builtin/prune.c
++++ b/builtin/prune.c
+@@ -1,11 +1,10 @@
+-#include "cache.h"
++#include "builtin.h"
+ #include "commit.h"
+ #include "diff.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "revision.h"
+-#include "builtin.h"
+ #include "reachable.h"
+ #include "parse-options.h"
+ #include "progress.h"
+diff --git a/builtin/pull.c b/builtin/pull.c
+index 3052244b17..d434495091 100644
+--- a/builtin/pull.c
++++ b/builtin/pull.c
+@@ -6,10 +6,9 @@
+  * Fetch one or more remote refs and merge it/them into the current HEAD.
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "advice.h"
+ #include "config.h"
+-#include "builtin.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "merge.h"
+diff --git a/builtin/push.c b/builtin/push.c
+index dbdf609daf..6f8a8dc711 100644
+--- a/builtin/push.c
++++ b/builtin/push.c
+@@ -1,7 +1,7 @@
+ /*
+  * "git push"
+  */
+-#include "cache.h"
++#include "builtin.h"
+ #include "advice.h"
+ #include "branch.h"
+ #include "config.h"
+@@ -10,7 +10,6 @@
+ #include "refs.h"
+ #include "refspec.h"
+ #include "run-command.h"
+-#include "builtin.h"
+ #include "remote.h"
+ #include "transport.h"
+ #include "parse-options.h"
+diff --git a/builtin/range-diff.c b/builtin/range-diff.c
+index 04339a92ea..8610390d7c 100644
+--- a/builtin/range-diff.c
++++ b/builtin/range-diff.c
+@@ -1,4 +1,3 @@
+-#include "cache.h"
+ #include "builtin.h"
+ #include "gettext.h"
+ #include "object-name.h"
+diff --git a/builtin/read-tree.c b/builtin/read-tree.c
+index bd1ce1d963..63c92936fa 100644
+--- a/builtin/read-tree.c
++++ b/builtin/read-tree.c
+@@ -5,7 +5,7 @@
+  */
+ 
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "hex.h"
+@@ -17,7 +17,6 @@
+ #include "cache-tree.h"
+ #include "unpack-trees.h"
+ #include "dir.h"
+-#include "builtin.h"
+ #include "parse-options.h"
+ #include "repository.h"
+ #include "resolve-undo.h"
+diff --git a/builtin/replace.c b/builtin/replace.c
+index 981f189443..e0fbdc98ed 100644
+--- a/builtin/replace.c
++++ b/builtin/replace.c
+@@ -8,9 +8,8 @@
+  * git-tag.sh and mktag.c by Linus Torvalds.
+  */
+ 
+-#include "cache.h"
+-#include "config.h"
+ #include "builtin.h"
++#include "config.h"
+ #include "editor.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/builtin/rerere.c b/builtin/rerere.c
+index d4bd52797f..0458db9cad 100644
+--- a/builtin/rerere.c
++++ b/builtin/rerere.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "gettext.h"
+diff --git a/builtin/rev-list.c b/builtin/rev-list.c
+index 6dc8be492a..8029f3de53 100644
+--- a/builtin/rev-list.c
++++ b/builtin/rev-list.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "commit.h"
+ #include "diff.h"
+@@ -15,7 +15,6 @@
+ #include "object-store.h"
+ #include "pack.h"
+ #include "pack-bitmap.h"
+-#include "builtin.h"
+ #include "log-tree.h"
+ #include "graph.h"
+ #include "bisect.h"
+diff --git a/builtin/rev-parse.c b/builtin/rev-parse.c
+index ad93e5fad8..8d8c870421 100644
+--- a/builtin/rev-parse.c
++++ b/builtin/rev-parse.c
+@@ -4,7 +4,7 @@
+  * Copyright (C) Linus Torvalds, 2005
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
+@@ -14,7 +14,6 @@
+ #include "hex.h"
+ #include "refs.h"
+ #include "quote.h"
+-#include "builtin.h"
+ #include "object-name.h"
+ #include "parse-options.h"
+ #include "diff.h"
+diff --git a/builtin/shortlog.c b/builtin/shortlog.c
+index 46f4e0832a..99be9dc417 100644
+--- a/builtin/shortlog.c
++++ b/builtin/shortlog.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "commit.h"
+ #include "diff.h"
+diff --git a/builtin/show-branch.c b/builtin/show-branch.c
+index 7ef4a642c1..cd215f89af 100644
+--- a/builtin/show-branch.c
++++ b/builtin/show-branch.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+@@ -6,7 +6,6 @@
+ #include "hex.h"
+ #include "pretty.h"
+ #include "refs.h"
+-#include "builtin.h"
+ #include "color.h"
+ #include "strvec.h"
+ #include "object-name.h"
+diff --git a/builtin/show-index.c b/builtin/show-index.c
+index d839e55335..540dc3dad1 100644
+--- a/builtin/show-index.c
++++ b/builtin/show-index.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "gettext.h"
+ #include "hash.h"
+ #include "hex.h"
+diff --git a/builtin/show-ref.c b/builtin/show-ref.c
+index a2243b4219..e07e9ca862 100644
+--- a/builtin/show-ref.c
++++ b/builtin/show-ref.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/builtin/sparse-checkout.c b/builtin/sparse-checkout.c
+index 40d420f06c..5c8ffb1f75 100644
+--- a/builtin/sparse-checkout.c
++++ b/builtin/sparse-checkout.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "environment.h"
+diff --git a/builtin/stripspace.c b/builtin/stripspace.c
+index 9451eb69ff..397d7fe2dc 100644
+--- a/builtin/stripspace.c
++++ b/builtin/stripspace.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+diff --git a/builtin/submodule--helper.c b/builtin/submodule--helper.c
+index 02f295e741..12ba2ae45d 100644
+--- a/builtin/submodule--helper.c
++++ b/builtin/submodule--helper.c
+@@ -6,7 +6,6 @@
+ #include "gettext.h"
+ #include "hex.h"
+ #include "repository.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "parse-options.h"
+ #include "quote.h"
+diff --git a/builtin/symbolic-ref.c b/builtin/symbolic-ref.c
+index 10198a74fa..a61fa3c0f8 100644
+--- a/builtin/symbolic-ref.c
++++ b/builtin/symbolic-ref.c
+@@ -1,6 +1,5 @@
+ #include "builtin.h"
+ #include "config.h"
+-#include "cache.h"
+ #include "gettext.h"
+ #include "refs.h"
+ #include "parse-options.h"
+diff --git a/builtin/tag.c b/builtin/tag.c
+index 49b64c7a28..26691e7e52 100644
+--- a/builtin/tag.c
++++ b/builtin/tag.c
+@@ -6,10 +6,9 @@
+  * Based on git-tag.sh and mktag.c by Linus Torvalds.
+  */
+ 
+-#include "cache.h"
++#include "builtin.h"
+ #include "advice.h"
+ #include "config.h"
+-#include "builtin.h"
+ #include "editor.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/builtin/unpack-objects.c b/builtin/unpack-objects.c
+index 2c52c3a741..85baf6a131 100644
+--- a/builtin/unpack-objects.c
++++ b/builtin/unpack-objects.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "bulk-checkin.h"
+ #include "config.h"
+ #include "environment.h"
+diff --git a/builtin/update-index.c b/builtin/update-index.c
+index 484a307df5..aee3cb8cbd 100644
+--- a/builtin/update-index.c
++++ b/builtin/update-index.c
+@@ -4,7 +4,7 @@
+  * Copyright (C) Linus Torvalds, 2005
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "builtin.h"
+ #include "bulk-checkin.h"
+ #include "config.h"
+ #include "environment.h"
+@@ -15,7 +15,6 @@
+ #include "quote.h"
+ #include "cache-tree.h"
+ #include "tree-walk.h"
+-#include "builtin.h"
+ #include "object-file.h"
+ #include "refs.h"
+ #include "resolve-undo.h"
+diff --git a/builtin/update-ref.c b/builtin/update-ref.c
+index 0c59b1c9ef..242102273e 100644
+--- a/builtin/update-ref.c
++++ b/builtin/update-ref.c
+@@ -1,9 +1,8 @@
+-#include "cache.h"
++#include "builtin.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "hash.h"
+ #include "refs.h"
+-#include "builtin.h"
+ #include "object-name.h"
+ #include "parse-options.h"
+ #include "quote.h"
+diff --git a/builtin/update-server-info.c b/builtin/update-server-info.c
+index 19dce3c065..1dc3971ede 100644
+--- a/builtin/update-server-info.c
++++ b/builtin/update-server-info.c
+@@ -1,6 +1,5 @@
+-#include "cache.h"
+-#include "config.h"
+ #include "builtin.h"
++#include "config.h"
+ #include "gettext.h"
+ #include "parse-options.h"
+ #include "server-info.h"
+diff --git a/builtin/upload-archive.c b/builtin/upload-archive.c
+index 44ad400e18..d4c7f162ff 100644
+--- a/builtin/upload-archive.c
++++ b/builtin/upload-archive.c
+@@ -1,7 +1,6 @@
+ /*
+  * Copyright (c) 2006 Franck Bui-Huu
+  */
+-#include "cache.h"
+ #include "builtin.h"
+ #include "archive.h"
+ #include "pkt-line.h"
+diff --git a/builtin/upload-pack.c b/builtin/upload-pack.c
+index beb9dd0861..ba5103a933 100644
+--- a/builtin/upload-pack.c
++++ b/builtin/upload-pack.c
+@@ -1,4 +1,3 @@
+-#include "cache.h"
+ #include "builtin.h"
+ #include "exec-cmd.h"
+ #include "gettext.h"
+diff --git a/builtin/verify-commit.c b/builtin/verify-commit.c
+index 5d99b82a64..aa34fb896a 100644
+--- a/builtin/verify-commit.c
++++ b/builtin/verify-commit.c
+@@ -5,9 +5,8 @@
+  *
+  * Based on git-verify-tag
+  */
+-#include "cache.h"
+-#include "config.h"
+ #include "builtin.h"
++#include "config.h"
+ #include "gettext.h"
+ #include "object-name.h"
+ #include "object-store.h"
+diff --git a/builtin/verify-pack.c b/builtin/verify-pack.c
+index 190fd69540..aba92cf8af 100644
+--- a/builtin/verify-pack.c
++++ b/builtin/verify-pack.c
+@@ -1,5 +1,4 @@
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "gettext.h"
+ #include "run-command.h"
+diff --git a/builtin/verify-tag.c b/builtin/verify-tag.c
+index c6019a0ad8..d8753270eb 100644
+--- a/builtin/verify-tag.c
++++ b/builtin/verify-tag.c
+@@ -5,9 +5,8 @@
+  *
+  * Based on git-verify-tag.sh
+  */
+-#include "cache.h"
+-#include "config.h"
+ #include "builtin.h"
++#include "config.h"
+ #include "gettext.h"
+ #include "tag.h"
+ #include "run-command.h"
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index efe520fe95..2d83ea4bf2 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -1,9 +1,8 @@
+-#include "cache.h"
++#include "builtin.h"
+ #include "abspath.h"
+ #include "checkout.h"
+ #include "config.h"
+ #include "copy.h"
+-#include "builtin.h"
+ #include "dir.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/builtin/write-tree.c b/builtin/write-tree.c
+index 84b83318c9..66e83d0ecb 100644
+--- a/builtin/write-tree.c
++++ b/builtin/write-tree.c
+@@ -5,7 +5,6 @@
+  */
+ #define USE_THE_INDEX_VARIABLE
+ #include "builtin.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/cache-tree.c b/cache-tree.c
+index 153217b47f..077932c2db 100644
+--- a/cache-tree.c
++++ b/cache-tree.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "environment.h"
+ #include "hex.h"
+diff --git a/cache.h b/cache.h
+deleted file mode 100644
+index 9b4e8d1687..0000000000
+--- a/cache.h
++++ /dev/null
+@@ -1,6 +0,0 @@
+-#ifndef CACHE_H
+-#define CACHE_H
+-
+-#include "git-compat-util.h"
+-
+-#endif /* CACHE_H */
+diff --git a/compat/fsmonitor/fsm-health-win32.c b/compat/fsmonitor/fsm-health-win32.c
+index fe11bdd9ce..6c81d7ee5c 100644
+--- a/compat/fsmonitor/fsm-health-win32.c
++++ b/compat/fsmonitor/fsm-health-win32.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "fsmonitor.h"
+ #include "fsm-health.h"
+diff --git a/compat/fsmonitor/fsm-listen-win32.c b/compat/fsmonitor/fsm-listen-win32.c
+index 677b1bbdec..3c0df5cff8 100644
+--- a/compat/fsmonitor/fsm-listen-win32.c
++++ b/compat/fsmonitor/fsm-listen-win32.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "fsmonitor.h"
+ #include "fsm-listen.h"
+diff --git a/compat/fsmonitor/fsm-path-utils-darwin.c b/compat/fsmonitor/fsm-path-utils-darwin.c
+index 45eb4a9b9e..ef0142e0fb 100644
+--- a/compat/fsmonitor/fsm-path-utils-darwin.c
++++ b/compat/fsmonitor/fsm-path-utils-darwin.c
+@@ -1,3 +1,4 @@
++#include "git-compat-util.h"
+ #include "fsmonitor.h"
+ #include "fsmonitor-path-utils.h"
+ #include "gettext.h"
+diff --git a/compat/fsmonitor/fsm-path-utils-win32.c b/compat/fsmonitor/fsm-path-utils-win32.c
+index 4024baafb9..27bb694518 100644
+--- a/compat/fsmonitor/fsm-path-utils-win32.c
++++ b/compat/fsmonitor/fsm-path-utils-win32.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "fsmonitor.h"
+ #include "fsmonitor-path-utils.h"
+ #include "gettext.h"
+diff --git a/compat/fsmonitor/fsm-settings-win32.c b/compat/fsmonitor/fsm-settings-win32.c
+index a8af31b71d..3728897864 100644
+--- a/compat/fsmonitor/fsm-settings-win32.c
++++ b/compat/fsmonitor/fsm-settings-win32.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "repository.h"
+ #include "fsmonitor.h"
+diff --git a/compat/mingw.c b/compat/mingw.c
+index d06cdc6254..559abb1c61 100644
+--- a/compat/mingw.c
++++ b/compat/mingw.c
+@@ -6,7 +6,6 @@
+ #include <wchar.h>
+ #include "../strbuf.h"
+ #include "../run-command.h"
+-#include "../cache.h"
+ #include "../abspath.h"
+ #include "../alloc.h"
+ #include "win32/lazyload.h"
+diff --git a/compat/precompose_utf8.c b/compat/precompose_utf8.c
+index fb08475bc6..0bd5c24250 100644
+--- a/compat/precompose_utf8.c
++++ b/compat/precompose_utf8.c
+@@ -5,7 +5,7 @@
+ 
+ #define PRECOMPOSE_UNICODE_C
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/compat/sha1-chunked.c b/compat/sha1-chunked.c
+index 56729d92dc..a4a6f930d7 100644
+--- a/compat/sha1-chunked.c
++++ b/compat/sha1-chunked.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "hash-ll.h"
+ 
+ int git_SHA1_Update_Chunked(platform_SHA_CTX *c, const void *data, size_t len)
+diff --git a/compat/simple-ipc/ipc-win32.c b/compat/simple-ipc/ipc-win32.c
+index 6adce3c650..8bfe51248e 100644
+--- a/compat/simple-ipc/ipc-win32.c
++++ b/compat/simple-ipc/ipc-win32.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "gettext.h"
+ #include "simple-ipc.h"
+diff --git a/compat/win32/trace2_win32_process_info.c b/compat/win32/trace2_win32_process_info.c
+index a4e33768f4..a2b1506f9c 100644
+--- a/compat/win32/trace2_win32_process_info.c
++++ b/compat/win32/trace2_win32_process_info.c
+@@ -1,4 +1,4 @@
+-#include "../../cache.h"
++#include "../../git-compat-util.h"
+ #include "../../json-writer.h"
+ #include "../../repository.h"
+ #include "../../trace2.h"
+diff --git a/contrib/buildsystems/CMakeLists.txt b/contrib/buildsystems/CMakeLists.txt
+index 2f6e0197ff..4faa419cc3 100644
+--- a/contrib/buildsystems/CMakeLists.txt
++++ b/contrib/buildsystems/CMakeLists.txt
+@@ -227,7 +227,7 @@ add_compile_definitions(GIT_HOST_CPU="${CMAKE_SYSTEM_PROCESSOR}")
+ add_compile_definitions(SHA256_BLK INTERNAL_QSORT RUNTIME_PREFIX)
+ add_compile_definitions(NO_OPENSSL SHA1_DC SHA1DC_NO_STANDARD_INCLUDES
+ 			SHA1DC_INIT_SAFE_HASH_DEFAULT=0
+-			SHA1DC_CUSTOM_INCLUDE_SHA1_C="cache.h"
++			SHA1DC_CUSTOM_INCLUDE_SHA1_C="git-compat-util.h"
+ 			SHA1DC_CUSTOM_INCLUDE_UBC_CHECK_C="git-compat-util.h" )
+ list(APPEND compat_SOURCES sha1dc_git.c sha1dc/sha1.c sha1dc/ubc_check.c block-sha1/sha1.c sha256/block/sha256.c compat/qsort_s.c)
+ 
+diff --git a/convert.c b/convert.c
+index b421065f21..89aeb9e72b 100644
+--- a/convert.c
++++ b/convert.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "advice.h"
+ #include "config.h"
+ #include "convert.h"
+diff --git a/diff-lib.c b/diff-lib.c
+index 36cd66ea23..f3aa7f93c7 100644
+--- a/diff-lib.c
++++ b/diff-lib.c
+@@ -1,7 +1,7 @@
+ /*
+  * Copyright (C) 2005 Junio C Hamano
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "quote.h"
+ #include "commit.h"
+ #include "diff.h"
+diff --git a/diff.c b/diff.c
+index a72811ee5d..7fb9abe891 100644
+--- a/diff.c
++++ b/diff.c
+@@ -1,7 +1,7 @@
+ /*
+  * Copyright (C) 2005 Junio C Hamano
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "base85.h"
+diff --git a/entry.c b/entry.c
+index 53d0038674..041f5cf212 100644
+--- a/entry.c
++++ b/entry.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "blob.h"
+ #include "object-store.h"
+ #include "dir.h"
+diff --git a/environment.c b/environment.c
+index 6bd001efbd..4ecad41bb9 100644
+--- a/environment.c
++++ b/environment.c
+@@ -109,7 +109,7 @@ char *git_work_tree_cfg;
+ static char *git_namespace;
+ 
+ /*
+- * Repository-local GIT_* environment variables; see cache.h for details.
++ * Repository-local GIT_* environment variables; see environment.h for details.
+  */
+ const char * const local_repo_env[] = {
+ 	ALTERNATE_DB_ENVIRONMENT,
+diff --git a/fsmonitor-ipc.c b/fsmonitor-ipc.c
+index 6a6a89764a..6ace978a1b 100644
+--- a/fsmonitor-ipc.c
++++ b/fsmonitor-ipc.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "fsmonitor.h"
+ #include "gettext.h"
+ #include "simple-ipc.h"
+diff --git a/fsmonitor.c b/fsmonitor.c
+index 28c083d4d8..f670c50937 100644
+--- a/fsmonitor.c
++++ b/fsmonitor.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "dir.h"
+ #include "environment.h"
+diff --git a/fsmonitor.h b/fsmonitor.h
+index 8b7a521552..7702301d21 100644
+--- a/fsmonitor.h
++++ b/fsmonitor.h
+@@ -1,7 +1,6 @@
+ #ifndef FSMONITOR_H
+ #define FSMONITOR_H
+ 
+-#include "cache.h"
+ #include "dir.h"
+ #include "fsmonitor-settings.h"
+ #include "object.h"
+diff --git a/hash-lookup.c b/hash-lookup.c
+index 8fec8939fd..9f0f95e2b9 100644
+--- a/hash-lookup.c
++++ b/hash-lookup.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "hash.h"
+ #include "hash-lookup.h"
+ #include "read-cache-ll.h"
+diff --git a/merge-ort-wrappers.c b/merge-ort-wrappers.c
+index a0bedcb63b..4acedf3c33 100644
+--- a/merge-ort-wrappers.c
++++ b/merge-ort-wrappers.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "hash.h"
+ #include "merge-ort.h"
+diff --git a/merge-ort.c b/merge-ort.c
+index 17167f56dc..12d0181f4a 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -14,7 +14,7 @@
+  * "cale", "peedy", or "ins" instead of "ort"?)
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "merge-ort.h"
+ 
+ #include "alloc.h"
+diff --git a/merge-recursive.c b/merge-recursive.c
+index 0e16e7a06d..4bef9b62fa 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -3,7 +3,7 @@
+  * Fredrik Kuivinen.
+  * The thieves were Alex Riesen and Johannes Schindelin, in June/July 2006
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "merge-recursive.h"
+ 
+ #include "advice.h"
+diff --git a/merge.c b/merge.c
+index fade6b203b..83bcba6943 100644
+--- a/merge.c
++++ b/merge.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "diff.h"
+ #include "diffcore.h"
+ #include "gettext.h"
+diff --git a/name-hash.c b/name-hash.c
+index f2f3564cb2..251f036eef 100644
+--- a/name-hash.c
++++ b/name-hash.c
+@@ -5,7 +5,7 @@
+  *
+  * Copyright (C) 2008 Linus Torvalds
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "name-hash.h"
+diff --git a/object-name.c b/object-name.c
+index 1eefeef746..45f4d51305 100644
+--- a/object-name.c
++++ b/object-name.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "object-name.h"
+ #include "advice.h"
+ #include "config.h"
+diff --git a/object.c b/object.c
+index 333e736fb2..60f954194f 100644
+--- a/object.c
++++ b/object.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "object.h"
+diff --git a/parallel-checkout.c b/parallel-checkout.c
+index 2b1439c0c5..602fbf19d3 100644
+--- a/parallel-checkout.c
++++ b/parallel-checkout.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "entry.h"
+diff --git a/pathspec.c b/pathspec.c
+index f52ce60e41..8932b05a26 100644
+--- a/pathspec.c
++++ b/pathspec.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "config.h"
+ #include "dir.h"
+diff --git a/preload-index.c b/preload-index.c
+index d037a951ef..e44530c80c 100644
+--- a/preload-index.c
++++ b/preload-index.c
+@@ -1,7 +1,7 @@
+ /*
+  * Copyright (C) 2008 Linus Torvalds
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "pathspec.h"
+ #include "dir.h"
+ #include "environment.h"
+diff --git a/read-cache.c b/read-cache.c
+index 42f27b0664..edab96765d 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -3,7 +3,7 @@
+  *
+  * Copyright (C) Linus Torvalds, 2005
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "bulk-checkin.h"
+ #include "config.h"
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index 9a8333c0d0..9223c7f5f4 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -1,4 +1,4 @@
+-#include "../cache.h"
++#include "../git-compat-util.h"
+ #include "../config.h"
+ #include "../copy.h"
+ #include "../environment.h"
+diff --git a/refs/packed-backend.c b/refs/packed-backend.c
+index f21882cc2e..27bd6339ff 100644
+--- a/refs/packed-backend.c
++++ b/refs/packed-backend.c
+@@ -1,4 +1,4 @@
+-#include "../cache.h"
++#include "../git-compat-util.h"
+ #include "../alloc.h"
+ #include "../config.h"
+ #include "../gettext.h"
+diff --git a/repository.c b/repository.c
+index 3d799150b4..2616aabde5 100644
+--- a/repository.c
++++ b/repository.c
+@@ -3,7 +3,7 @@
+  * declaration matches the definition in this file.
+  */
+ #define USE_THE_INDEX_VARIABLE
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "repository.h"
+ #include "object-store.h"
+diff --git a/rerere.c b/rerere.c
+index 3bc9aedc28..2fb93a5112 100644
+--- a/rerere.c
++++ b/rerere.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
+diff --git a/resolve-undo.c b/resolve-undo.c
+index 5959887784..7817f5d6db 100644
+--- a/resolve-undo.c
++++ b/resolve-undo.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "dir.h"
+ #include "hash.h"
+ #include "read-cache.h"
+diff --git a/revision.c b/revision.c
+index 8d37ec9f49..66a1fece0d 100644
+--- a/revision.c
++++ b/revision.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "environment.h"
+diff --git a/run-command.h b/run-command.h
+index 9e47f91d46..1f22cc3827 100644
+--- a/run-command.h
++++ b/run-command.h
+@@ -503,7 +503,7 @@ void run_processes_parallel(const struct run_process_parallel_opts *opts);
+  * exception of GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT (which cause the
+  * corresponding environment variables to be unset in the subprocess) and adds
+  * an environment variable pointing to new_git_dir. See local_repo_env in
+- * cache.h for more information.
++ * environment.h for more information.
+  */
+ void prepare_other_repo_env(struct strvec *env, const char *new_git_dir);
+ 
+diff --git a/sequencer.c b/sequencer.c
+index bdcf2cc6d9..efad20b753 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "advice.h"
+ #include "alloc.h"
+diff --git a/shallow.c b/shallow.c
+index a2ebf0af2b..f1c93e7464 100644
+--- a/shallow.c
++++ b/shallow.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "hex.h"
+ #include "repository.h"
+diff --git a/sparse-index.c b/sparse-index.c
+index 60451daae8..2c47954d93 100644
+--- a/sparse-index.c
++++ b/sparse-index.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "environment.h"
+ #include "gettext.h"
+diff --git a/split-index.c b/split-index.c
+index 0a8d3903d6..0ee3865a55 100644
+--- a/split-index.c
++++ b/split-index.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "gettext.h"
+ #include "hash.h"
+diff --git a/strbuf.h b/strbuf.h
+index 3dfeadb44c..e8dfab6ecd 100644
+--- a/strbuf.h
++++ b/strbuf.h
+@@ -72,10 +72,6 @@ struct strbuf {
+ extern char strbuf_slopbuf[];
+ #define STRBUF_INIT  { .buf = strbuf_slopbuf }
+ 
+-/*
+- * Predeclare this here, since cache.h includes this file before it defines the
+- * struct.
+- */
+ struct object_id;
+ 
+ /**
+diff --git a/submodule.c b/submodule.c
+index e09722d6be..20aa8ed0fb 100644
+--- a/submodule.c
++++ b/submodule.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "repository.h"
+diff --git a/t/helper/test-cache-tree.c b/t/helper/test-cache-tree.c
+index 9d64422b3c..e7236392c8 100644
+--- a/t/helper/test-cache-tree.c
++++ b/t/helper/test-cache-tree.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "tree.h"
+diff --git a/t/helper/test-dump-cache-tree.c b/t/helper/test-dump-cache-tree.c
+index 78aa11bb19..c38f546e4f 100644
+--- a/t/helper/test-dump-cache-tree.c
++++ b/t/helper/test-dump-cache-tree.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hash.h"
+ #include "hex.h"
+ #include "tree.h"
+diff --git a/t/helper/test-dump-fsmonitor.c b/t/helper/test-dump-fsmonitor.c
+index e4357d65ec..4f215fea02 100644
+--- a/t/helper/test-dump-fsmonitor.c
++++ b/t/helper/test-dump-fsmonitor.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "read-cache-ll.h"
+ #include "repository.h"
+ #include "setup.h"
+diff --git a/t/helper/test-dump-split-index.c b/t/helper/test-dump-split-index.c
+index 59a24a842b..5cf0b26dca 100644
+--- a/t/helper/test-dump-split-index.c
++++ b/t/helper/test-dump-split-index.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hex.h"
+ #include "read-cache-ll.h"
+ #include "repository.h"
+diff --git a/t/helper/test-dump-untracked-cache.c b/t/helper/test-dump-untracked-cache.c
+index a1cbafd64f..b4af9712fe 100644
+--- a/t/helper/test-dump-untracked-cache.c
++++ b/t/helper/test-dump-untracked-cache.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "dir.h"
+ #include "hex.h"
+ #include "read-cache-ll.h"
+diff --git a/t/helper/test-fast-rebase.c b/t/helper/test-fast-rebase.c
+index cbcf2419f9..62c5b5d704 100644
+--- a/t/helper/test-fast-rebase.c
++++ b/t/helper/test-fast-rebase.c
+@@ -12,7 +12,6 @@
+ 
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "cache-tree.h"
+ #include "commit.h"
+ #include "environment.h"
+diff --git a/t/helper/test-fsmonitor-client.c b/t/helper/test-fsmonitor-client.c
+index 386f4cdaee..58d1dc5fc8 100644
+--- a/t/helper/test-fsmonitor-client.c
++++ b/t/helper/test-fsmonitor-client.c
+@@ -4,7 +4,6 @@
+  */
+ 
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "parse-options.h"
+ #include "fsmonitor-ipc.h"
+ #include "read-cache-ll.h"
+diff --git a/t/helper/test-hash-speed.c b/t/helper/test-hash-speed.c
+index c1e82d5d02..b235da594f 100644
+--- a/t/helper/test-hash-speed.c
++++ b/t/helper/test-hash-speed.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hash-ll.h"
+ 
+ #define NUM_SECONDS 3
+diff --git a/t/helper/test-index-version.c b/t/helper/test-index-version.c
+index b3cbaf6d2a..f3c2dbe0a2 100644
+--- a/t/helper/test-index-version.c
++++ b/t/helper/test-index-version.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "read-cache-ll.h"
+ 
+ int cmd__index_version(int argc UNUSED, const char **argv UNUSED)
+diff --git a/t/helper/test-lazy-init-name-hash.c b/t/helper/test-lazy-init-name-hash.c
+index 8eb327b3b9..187a115d57 100644
+--- a/t/helper/test-lazy-init-name-hash.c
++++ b/t/helper/test-lazy-init-name-hash.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "environment.h"
+ #include "name-hash.h"
+ #include "parse-options.h"
+diff --git a/t/helper/test-path-utils.c b/t/helper/test-path-utils.c
+index 90e4d29a06..70396fa384 100644
+--- a/t/helper/test-path-utils.c
++++ b/t/helper/test-path-utils.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "abspath.h"
+ #include "environment.h"
+ #include "path.h"
+diff --git a/t/helper/test-read-cache.c b/t/helper/test-read-cache.c
+index 0d548814e0..56c2d25f35 100644
+--- a/t/helper/test-read-cache.c
++++ b/t/helper/test-read-cache.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "config.h"
+ #include "read-cache-ll.h"
+ #include "repository.h"
+diff --git a/t/helper/test-scrap-cache-tree.c b/t/helper/test-scrap-cache-tree.c
+index 7b7e238404..0a816a96e2 100644
+--- a/t/helper/test-scrap-cache-tree.c
++++ b/t/helper/test-scrap-cache-tree.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "lockfile.h"
+ #include "read-cache-ll.h"
+ #include "repository.h"
+diff --git a/t/helper/test-sha1.c b/t/helper/test-sha1.c
+index dc6fb17f2a..dcb7f6c003 100644
+--- a/t/helper/test-sha1.c
++++ b/t/helper/test-sha1.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hash-ll.h"
+ 
+ int cmd__sha1(int ac, const char **av)
+diff --git a/t/helper/test-sha256.c b/t/helper/test-sha256.c
+index f50f64f1f2..08cf149001 100644
+--- a/t/helper/test-sha256.c
++++ b/t/helper/test-sha256.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "hash-ll.h"
+ 
+ int cmd__sha256(int ac, const char **av)
+diff --git a/t/helper/test-strcmp-offset.c b/t/helper/test-strcmp-offset.c
+index d3f39207f1..d8473cf2fc 100644
+--- a/t/helper/test-strcmp-offset.c
++++ b/t/helper/test-strcmp-offset.c
+@@ -1,5 +1,4 @@
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "read-cache-ll.h"
+ 
+ int cmd__strcmp_offset(int argc UNUSED, const char **argv)
+diff --git a/t/helper/test-write-cache.c b/t/helper/test-write-cache.c
+index d27125eeac..f084034d38 100644
+--- a/t/helper/test-write-cache.c
++++ b/t/helper/test-write-cache.c
+@@ -1,6 +1,5 @@
+ #define USE_THE_INDEX_VARIABLE
+ #include "test-tool.h"
+-#include "cache.h"
+ #include "lockfile.h"
+ #include "read-cache-ll.h"
+ #include "repository.h"
+diff --git a/unpack-trees.c b/unpack-trees.c
+index fdcc46e474..4b620df303 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "advice.h"
+ #include "strvec.h"
+ #include "repository.h"
+diff --git a/wt-status.c b/wt-status.c
+index 847b63c906..6ee8567ac2 100644
+--- a/wt-status.c
++++ b/wt-status.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "advice.h"
+ #include "wt-status.h"
+ #include "object.h"
+-- 
+2.39.3 (Apple Git-145)
+

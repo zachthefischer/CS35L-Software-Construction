@@ -1,0 +1,87 @@
+From 4711556905f381c01f1fbae205f67cfa673ab44a Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 11 Apr 2023 00:42:04 -0700
+Subject: [PATCH 1241/2871] mailmap, quote: move declarations of global vars to
+ correct unit
+
+Since earlier commits removed the inclusion of cache.h from mailmap.c
+and quote.c, it feels odd to have the extern declarations of
+global variables in cache.h rather than the actual header included
+by the source file.  Move these global variable extern declarations
+from cache.h to mailmap.c and quote.c.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Acked-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h   | 5 -----
+ config.c  | 1 +
+ mailmap.h | 3 +++
+ quote.h   | 2 ++
+ 4 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/cache.h b/cache.h
+index 16b5fc9fa3..2f21704da9 100644
+--- a/cache.h
++++ b/cache.h
+@@ -599,8 +599,6 @@ void set_alternate_index_output(const char *);
+ extern int verify_index_checksum;
+ extern int verify_ce_order;
+ 
+-extern int quote_path_fully;
+-
+ #define MTIME_CHANGED	0x0001
+ #define CTIME_CHANGED	0x0002
+ #define OWNER_CHANGED	0x0004
+@@ -655,9 +653,6 @@ struct pack_entry {
+ /* Dumb servers support */
+ int update_server_info(int);
+ 
+-extern const char *git_mailmap_file;
+-extern const char *git_mailmap_blob;
+-
+ #define COPY_READ_ERROR (-2)
+ #define COPY_WRITE_ERROR (-3)
+ int copy_fd(int ifd, int ofd);
+diff --git a/config.c b/config.c
+index 11e3295419..9beba19b41 100644
+--- a/config.c
++++ b/config.c
+@@ -18,6 +18,7 @@
+ #include "ident.h"
+ #include "repository.h"
+ #include "lockfile.h"
++#include "mailmap.h"
+ #include "exec-cmd.h"
+ #include "strbuf.h"
+ #include "quote.h"
+diff --git a/mailmap.h b/mailmap.h
+index 7e99fccb46..0f8fd2c586 100644
+--- a/mailmap.h
++++ b/mailmap.h
+@@ -3,6 +3,9 @@
+ 
+ struct string_list;
+ 
++extern const char *git_mailmap_file;
++extern const char *git_mailmap_blob;
++
+ int read_mailmap(struct string_list *map);
+ void clear_mailmap(struct string_list *map);
+ 
+diff --git a/quote.h b/quote.h
+index 87ff458b06..0300c29104 100644
+--- a/quote.h
++++ b/quote.h
+@@ -3,6 +3,8 @@
+ 
+ struct strbuf;
+ 
++extern int quote_path_fully;
++
+ /* Help to copy the thing properly quoted for the shell safety.
+  * any single quote is replaced with '\'', any exclamation point
+  * is replaced with '\!', and the whole thing is enclosed in a
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,33 @@
+From c6eec9cb3677fe91c887181c0a184cb30627fca2 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Tue, 10 Jan 2023 13:15:20 +0000
+Subject: [PATCH 0654/2871] revisions.txt: be explicit about commands writing
+ 'ORIG_HEAD'
+
+When mentioning 'ORIG_HEAD', be explicit about which command write that
+pseudo-ref, namely 'git am', 'git merge', 'git rebase' and 'git reset'.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Acked-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/revisions.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/revisions.txt b/Documentation/revisions.txt
+index 0d2e55d781..9aa58052bc 100644
+--- a/Documentation/revisions.txt
++++ b/Documentation/revisions.txt
+@@ -49,7 +49,8 @@ characters and to avoid word splitting.
+ `FETCH_HEAD` records the branch which you fetched from a remote repository
+ with your last `git fetch` invocation.
+ `ORIG_HEAD` is created by commands that move your `HEAD` in a drastic
+-way, to record the position of the `HEAD` before their operation, so that
++way (`git am`, `git merge`, `git rebase`, `git reset`),
++to record the position of the `HEAD` before their operation, so that
+ you can easily change the tip of the branch back to the state before you ran
+ them.
+ `MERGE_HEAD` records the commit(s) which you are merging into your branch
+-- 
+2.39.3 (Apple Git-145)
+

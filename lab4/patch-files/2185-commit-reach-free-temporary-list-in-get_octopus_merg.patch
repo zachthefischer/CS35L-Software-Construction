@@ -1,0 +1,48 @@
+From ec97ad120caad0c7366a19a6680d37e2b8c5107c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 3 Oct 2023 16:26:30 -0400
+Subject: [PATCH 2185/2871] commit-reach: free temporary list in
+ get_octopus_merge_bases()
+
+We loop over the set of commits to merge, and for each one compute the
+merge base against the existing set of merge base candidates we've
+found. Then we replace the candidate set with a simple assignment of the
+list head, leaking the old list. We should free it first before
+assignment.
+
+This makes t5521 leak-free, so mark it as such.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-reach.c          | 1 +
+ t/t5521-pull-options.sh | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/commit-reach.c b/commit-reach.c
+index 4b7c233fd4..a868a575ea 100644
+--- a/commit-reach.c
++++ b/commit-reach.c
+@@ -173,6 +173,7 @@ struct commit_list *get_octopus_merge_bases(struct commit_list *in)
+ 			for (k = bases; k; k = k->next)
+ 				end = k;
+ 		}
++		free_commit_list(ret);
+ 		ret = new_commits;
+ 	}
+ 	return ret;
+diff --git a/t/t5521-pull-options.sh b/t/t5521-pull-options.sh
+index 264de29c35..079b2f2536 100755
+--- a/t/t5521-pull-options.sh
++++ b/t/t5521-pull-options.sh
+@@ -5,6 +5,7 @@ test_description='pull options'
+ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
+ test_expect_success 'setup' '
+-- 
+2.39.3 (Apple Git-145)
+

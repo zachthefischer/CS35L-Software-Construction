@@ -1,0 +1,84 @@
+From c4716236f218cd1278bde43ed2e6773f1d2e667a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 14 Apr 2023 17:25:18 -0400
+Subject: [PATCH 1270/2871] t5512: test "ls-remote --heads --symref" filtering
+ with v0 and v2
+
+We have two overlapping tests for checking the behavior of "ls-remote
+--symref" when filtering output. The first test checks that using
+"--heads" will omit the symref for HEAD (since we don't print anything
+about HEAD at all), but still prints other symrefs.
+
+This has been marked as expecting failure since it was added in
+99c08d4eb2 (ls-remote: add support for showing symrefs, 2016-01-19).
+That's because back then, we only had the v0 protocol, and it only
+reported on the HEAD symref, not others. But these days we have v2,
+which does exactly what the test wants. It would even have started
+unexpectedly passing when we switched to v2 by default, except that
+b2f73b70b2 (t5512: compensate for v0 only sending HEAD symrefs,
+2019-02-25) over-zealously marked it to run only in v0 mode.
+
+So let's run it with both protocol versions, and adjust the expected
+output for each. It passes in v2 without modification. In v0 mode, we'll
+drop the extra symref, but this is still testing something useful: it
+ensures that we do omit HEAD.
+
+The test after this checks "--heads" again, this time using the expected
+v0 output. That's now redundant. It also checks that limiting with a
+pattern like "refs/heads/*" works similarly, but that's redundant with a
+test earlier in the script which limits by HEAD (again, back then the
+"HEAD" test was less interesting because there were no other symrefs to
+omit, but in a modern v2 world, there are). So we can just delete that
+second test entirely.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5512-ls-remote.sh | 26 +++++++-------------------
+ 1 file changed, 7 insertions(+), 19 deletions(-)
+
+diff --git a/t/t5512-ls-remote.sh b/t/t5512-ls-remote.sh
+index fbf23d12a6..151c76eb09 100755
+--- a/t/t5512-ls-remote.sh
++++ b/t/t5512-ls-remote.sh
+@@ -275,30 +275,18 @@ test_expect_success 'ls-remote with filtered symref (refname)' '
+ 	test_cmp expect actual
+ '
+ 
+-test_expect_failure 'ls-remote with filtered symref (--heads)' '
++test_expect_success 'ls-remote with filtered symref (--heads)' '
+ 	git symbolic-ref refs/heads/foo refs/tags/mark &&
+-	cat >expect <<-EOF &&
++	cat >expect.v2 <<-EOF &&
+ 	ref: refs/tags/mark	refs/heads/foo
+ 	$rev	refs/heads/foo
+ 	$rev	refs/heads/main
+ 	EOF
+-	# Protocol v2 supports sending symrefs for refs other than HEAD, so use
+-	# protocol v0 here.
+-	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref --heads . >actual &&
+-	test_cmp expect actual
+-'
+-
+-test_expect_success 'ls-remote --symref omits filtered-out matches' '
+-	cat >expect <<-EOF &&
+-	$rev	refs/heads/foo
+-	$rev	refs/heads/main
+-	EOF
+-	# Protocol v2 supports sending symrefs for refs other than HEAD, so use
+-	# protocol v0 here.
+-	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref --heads . >actual &&
+-	test_cmp expect actual &&
+-	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref . "refs/heads/*" >actual &&
+-	test_cmp expect actual
++	grep -v "^ref: refs/tags/" <expect.v2 >expect.v0 &&
++	git -c protocol.version=0 ls-remote --symref --heads . >actual.v0 &&
++	test_cmp expect.v0 actual.v0 &&
++	git -c protocol.version=2 ls-remote --symref --heads . >actual.v2 &&
++	test_cmp expect.v2 actual.v2
+ '
+ 
+ test_expect_success 'indicate no refs in v0 standards-compliant empty remote' '
+-- 
+2.39.3 (Apple Git-145)
+

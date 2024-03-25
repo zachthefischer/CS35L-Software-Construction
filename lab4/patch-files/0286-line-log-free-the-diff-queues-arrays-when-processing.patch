@@ -1,0 +1,45 @@
+From ef84222fa9b3ed163bacd6dc59a1d855dfbfbd75 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?SZEDER=20G=C3=A1bor?= <szeder.dev@gmail.com>
+Date: Wed, 2 Nov 2022 23:01:41 +0100
+Subject: [PATCH 0286/2871] line-log: free the diff queues' arrays when
+ processing merge commits
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When processing merge commits, the line-level log first creates an
+array of diff queues, each comparing the merge commit with one of its
+parents, to check whether any of the files in the given line ranges
+were modified.  Alas, when freeing these queues it only frees the
+filepairs in the queues, but not the queues' internal arrays holding
+pointers to those filepairs.
+
+Use the diff_free_queue() helper function introduced in the previous
+commit to free the diff queues' internal arrays as well.
+
+Signed-off-by: SZEDER Gábor <szeder.dev@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ line-log.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/line-log.c b/line-log.c
+index 7a74daf2e8..a7f3e7f6ce 100644
+--- a/line-log.c
++++ b/line-log.c
+@@ -1089,10 +1089,8 @@ static struct diff_filepair *diff_filepair_dup(struct diff_filepair *pair)
+ 
+ static void free_diffqueues(int n, struct diff_queue_struct *dq)
+ {
+-	int i, j;
+-	for (i = 0; i < n; i++)
+-		for (j = 0; j < dq[i].nr; j++)
+-			diff_free_filepair(dq[i].queue[j]);
++	for (int i = 0; i < n; i++)
++		diff_free_queue(&dq[i]);
+ 	free(dq);
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

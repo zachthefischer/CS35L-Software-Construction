@@ -1,0 +1,106 @@
+From da1d63363f13d4d65c59564c74fd8dd598b39c49 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 12 Oct 2022 09:35:07 +0000
+Subject: [PATCH 0160/2871] rebase --merge: fix reflog when continuing
+
+The reflog message for a conflict resolution committed by "rebase
+--continue" looks like
+
+	rebase (continue): commit subject line
+
+Unfortunately the reflog message each subsequent pick look like
+
+	rebase (continue) (pick): commit subject line
+
+Fix this by setting the reflog message for "rebase --continue" in
+sequencer_continue() so it does not affect subsequent commits. This
+introduces a memory leak similar to the one leaking GIT_REFLOG_ACTION
+in pick_commits(). Both of these will be fixed in a future series that
+stops the sequencer calling setenv().
+
+If we fail to commit the staged changes then we error out so
+GIT_REFLOG_ACTION does not need to be reset in that case.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c          | 2 --
+ sequencer.c               | 5 +++++
+ t/t3406-rebase-message.sh | 9 +++++++--
+ 3 files changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index e67020b358..414526f83a 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1271,8 +1271,6 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 		int fd;
+ 
+ 		options.action = "continue";
+-		set_reflog_action(&options);
+-
+ 		/* Sanity check */
+ 		if (get_oid("HEAD", &head))
+ 			die(_("Cannot read HEAD"));
+diff --git a/sequencer.c b/sequencer.c
+index 61a8e0020d..5790b35d76 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -4785,6 +4785,8 @@ int sequencer_continue(struct repository *r, struct replay_opts *opts)
+ 	if (read_populate_opts(opts))
+ 		return -1;
+ 	if (is_rebase_i(opts)) {
++		char *previous_reflog_action;
++
+ 		if ((res = read_populate_todo(r, &todo_list, opts)))
+ 			goto release_todo_list;
+ 
+@@ -4795,10 +4797,13 @@ int sequencer_continue(struct repository *r, struct replay_opts *opts)
+ 			unlink(rebase_path_dropped());
+ 		}
+ 
++		previous_reflog_action = xstrdup(getenv(GIT_REFLOG_ACTION));
++		setenv(GIT_REFLOG_ACTION, reflog_message(opts, "continue", NULL), 1);
+ 		if (commit_staged_changes(r, opts, &todo_list)) {
+ 			res = -1;
+ 			goto release_todo_list;
+ 		}
++		setenv(GIT_REFLOG_ACTION, previous_reflog_action, 1);
+ 	} else if (!file_exists(get_todo_path(opts)))
+ 		return continue_single_pick(r, opts);
+ 	else if ((res = read_populate_todo(r, &todo_list, opts)))
+diff --git a/t/t3406-rebase-message.sh b/t/t3406-rebase-message.sh
+index 5253dd1551..3ca2fbb0d5 100755
+--- a/t/t3406-rebase-message.sh
++++ b/t/t3406-rebase-message.sh
+@@ -17,6 +17,7 @@ test_expect_success 'setup' '
+ 
+ 	git checkout -b conflicts O &&
+ 	test_commit P &&
++	test_commit conflict-X fileX &&
+ 	test_commit Q &&
+ 
+ 	git checkout -b topic O &&
+@@ -107,13 +108,17 @@ test_reflog () {
+ 			GIT_REFLOG_ACTION="$reflog_action" &&
+ 			export GIT_REFLOG_ACTION
+ 		fi &&
+-		git rebase $mode main
++		test_must_fail git rebase $mode main &&
++		echo resolved >fileX &&
++		git add fileX &&
++		git rebase --continue
+ 	) &&
+ 
+-	git log -g --format=%gs -4 >actual &&
++	git log -g --format=%gs -5 >actual &&
+ 	write_reflog_expect <<-EOF &&
+ 	${reflog_action:-rebase} (finish): returning to refs/heads/conflicts
+ 	${reflog_action:-rebase} (pick): Q
++	${reflog_action:-rebase} (continue): conflict-X
+ 	${reflog_action:-rebase} (pick): P
+ 	${reflog_action:-rebase} (start): checkout main
+ 	EOF
+-- 
+2.39.3 (Apple Git-145)
+

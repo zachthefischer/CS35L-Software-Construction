@@ -1,0 +1,78 @@
+From 1307d5e86fc7ea6f4352a70c24c6277a2f9939a3 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 31 Oct 2023 09:16:50 +0100
+Subject: [PATCH 2334/2871] builtin/show-ref: explicitly spell out different
+ modes in synopsis
+
+The synopsis treats the `--verify` and the implicit mode the same. They
+are slightly different though:
+
+    - They accept different sets of flags.
+
+    - The implicit mode accepts patterns while the `--verify` mode
+      accepts references.
+
+Split up the synopsis for these two modes such that we can disambiguate
+those differences.
+
+While at it, drop "--quiet" from the pattern mode's synopsis. It does
+not make a lot of sense to list patterns, but squelch the listing output
+itself. The description for "--quiet" is adapted accordingly.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-show-ref.txt | 9 ++++++---
+ builtin/show-ref.c             | 5 ++++-
+ 2 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-show-ref.txt b/Documentation/git-show-ref.txt
+index 36e81b9dec..9afcd4d536 100644
+--- a/Documentation/git-show-ref.txt
++++ b/Documentation/git-show-ref.txt
+@@ -8,9 +8,12 @@ git-show-ref - List references in a local repository
+ SYNOPSIS
+ --------
+ [verse]
+-'git show-ref' [-q | --quiet] [--verify] [--head] [-d | --dereference]
++'git show-ref' [--head] [-d | --dereference]
+ 	     [-s | --hash[=<n>]] [--abbrev[=<n>]] [--tags]
+ 	     [--heads] [--] [<pattern>...]
++'git show-ref' --verify [-q | --quiet] [-d | --dereference]
++	     [-s | --hash[=<n>]] [--abbrev[=<n>]]
++	     [--] [<ref>...]
+ 'git show-ref' --exclude-existing[=<pattern>]
+ 
+ DESCRIPTION
+@@ -70,8 +73,8 @@ OPTIONS
+ -q::
+ --quiet::
+ 
+-	Do not print any results to stdout. When combined with `--verify`, this
+-	can be used to silently check if a reference exists.
++	Do not print any results to stdout. Can be used with `--verify` to
++	silently check if a reference exists.
+ 
+ --exclude-existing[=<pattern>]::
+ 
+diff --git a/builtin/show-ref.c b/builtin/show-ref.c
+index 6685495dd2..460f238a62 100644
+--- a/builtin/show-ref.c
++++ b/builtin/show-ref.c
+@@ -11,9 +11,12 @@
+ #include "parse-options.h"
+ 
+ static const char * const show_ref_usage[] = {
+-	N_("git show-ref [-q | --quiet] [--verify] [--head] [-d | --dereference]\n"
++	N_("git show-ref [--head] [-d | --dereference]\n"
+ 	   "             [-s | --hash[=<n>]] [--abbrev[=<n>]] [--tags]\n"
+ 	   "             [--heads] [--] [<pattern>...]"),
++	N_("git show-ref --verify [-q | --quiet] [-d | --dereference]\n"
++	   "             [-s | --hash[=<n>]] [--abbrev[=<n>]]\n"
++	   "             [--] [<ref>...]"),
+ 	N_("git show-ref --exclude-existing[=<pattern>]"),
+ 	NULL
+ };
+-- 
+2.39.3 (Apple Git-145)
+

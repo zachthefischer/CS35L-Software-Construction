@@ -1,0 +1,79 @@
+From dea63088928cde2fd264a852a9b14c05178e0838 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Fri, 27 Jan 2023 20:06:03 +0000
+Subject: [PATCH 0757/2871] scalar: only warn when background maintenance fails
+
+A user reported issues with 'scalar clone' and 'scalar register' when
+working in an environment that had locked down the ability to run
+'crontab' or 'systemctl' in that those commands registered as _failures_
+instead of opportunistically reporting a success with just a warning
+about background maintenance.
+
+As a workaround, they can use GIT_TEST_MAINT_SCHEDULER to fake a
+successful background maintenance, but this is not a viable strategy for
+long-term.
+
+Update 'scalar register' and 'scalar clone' to no longer fail by
+modifying register_dir() to only warn when toggle_maintenance(1) fails.
+
+Since background maintenance is a "nice to have" and not a requirement
+for a working repository, it is best to move this from hard error to
+gentle warning.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ scalar.c                | 2 +-
+ t/t9210-scalar.sh       | 4 ++--
+ t/t9211-scalar-clone.sh | 4 ++--
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/scalar.c b/scalar.c
+index f25d5f1d0e..ca19b95ce4 100644
+--- a/scalar.c
++++ b/scalar.c
+@@ -262,7 +262,7 @@ static int register_dir(void)
+ 		return error(_("could not set recommended config"));
+ 
+ 	if (toggle_maintenance(1))
+-		return error(_("could not turn on maintenance"));
++		warning(_("could not turn on maintenance"));
+ 
+ 	if (have_fsmonitor_support() && start_fsmonitor_daemon()) {
+ 		return error(_("could not start the FSMonitor daemon"));
+diff --git a/t/t9210-scalar.sh b/t/t9210-scalar.sh
+index 13a4f6dbcf..4432a30d10 100755
+--- a/t/t9210-scalar.sh
++++ b/t/t9210-scalar.sh
+@@ -104,10 +104,10 @@ test_expect_success FSMONITOR_DAEMON 'scalar register starts fsmon daemon' '
+ 	test_cmp_config -C test/src true core.fsmonitor
+ '
+ 
+-test_expect_success 'scalar register fails when background maintenance fails' '
++test_expect_success 'scalar register warns when background maintenance fails' '
+ 	git init register-repo &&
+ 	GIT_TEST_MAINT_SCHEDULER="crontab:false,launchctl:false,schtasks:false" \
+-		test_must_fail scalar register register-repo 2>err &&
++		scalar register register-repo 2>err &&
+ 	grep "could not turn on maintenance" err
+ '
+ 
+diff --git a/t/t9211-scalar-clone.sh b/t/t9211-scalar-clone.sh
+index a6156da29a..872ad1c9c2 100755
+--- a/t/t9211-scalar-clone.sh
++++ b/t/t9211-scalar-clone.sh
+@@ -174,9 +174,9 @@ test_expect_success 'progress without tty' '
+ 	cleanup_clone $enlistment
+ '
+ 
+-test_expect_success 'scalar clone fails when background maintenance fails' '
++test_expect_success 'scalar clone warns when background maintenance fails' '
+ 	GIT_TEST_MAINT_SCHEDULER="crontab:false,launchctl:false,schtasks:false" \
+-		test_must_fail scalar clone "file://$(pwd)/to-clone" maint-fail 2>err &&
++		scalar clone "file://$(pwd)/to-clone" maint-fail 2>err &&
+ 	grep "could not turn on maintenance" err
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

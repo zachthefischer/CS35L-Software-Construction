@@ -1,0 +1,78 @@
+From 4db16f58c7720257eea9ffb7d4e76809f2c403f0 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 27 Jun 2023 16:18:55 +0000
+Subject: [PATCH 1688/2871] var: mark unused parameters in git_var callbacks
+
+We abstract the set of variables into a table, with a "read" callback to
+provide the value of each. Each callback takes a "flag" argument, but
+most callbacks don't make use of it.
+
+This flag is a bit odd. It may be set to IDENT_STRICT, which make sense
+for ident-based callbacks, but is just confusing for things like
+GIT_EDITOR.
+
+At first glance, it seems like this is just a hack to let us directly
+stick the generic git_committer_info() and git_author_info() functions
+into our table. And we'd be better off to wrap them with local functions
+which pass IDENT_STRICT, and have our callbacks take no option at all.
+
+But that doesn't quite work. We pass IDENT_STRICT when the caller asks
+for a specific variable, but otherwise do not (so that "git var -l" does
+not bail if the committer ident cannot be formed).
+
+So we really do need to pass in the flag to each invocation, even if the
+individual callback doesn't care about it. Let's mark the unused ones so
+that -Wunused-parameter does not complain. And while we're here, let's
+rename them so that it's clear that the flag values we get will be from
+the IDENT_* set. That may prevent confusion for future readers of the
+code.
+
+Another option would be to define our own local "strict" flag for the
+callbacks, and then have wrappers that translate that to IDENT_STRICT
+where it matters. But that would be more boilerplate for little gain
+(most functions would still ignore the "strict" flag anyway).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: brian m. carlson <bk2204@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/var.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/var.c b/builtin/var.c
+index 2149998980..10ee62f84c 100644
+--- a/builtin/var.c
++++ b/builtin/var.c
+@@ -12,17 +12,17 @@
+ 
+ static const char var_usage[] = "git var (-l | <variable>)";
+ 
+-static const char *editor(int flag)
++static const char *editor(int ident_flag UNUSED)
+ {
+ 	return git_editor();
+ }
+ 
+-static const char *sequence_editor(int flag)
++static const char *sequence_editor(int ident_flag UNUSED)
+ {
+ 	return git_sequence_editor();
+ }
+ 
+-static const char *pager(int flag)
++static const char *pager(int ident_flag UNUSED)
+ {
+ 	const char *pgm = git_pager(1);
+ 
+@@ -31,7 +31,7 @@ static const char *pager(int flag)
+ 	return pgm;
+ }
+ 
+-static const char *default_branch(int flag)
++static const char *default_branch(int ident_flag UNUSED)
+ {
+ 	return git_default_branch_name(1);
+ }
+-- 
+2.39.3 (Apple Git-145)
+

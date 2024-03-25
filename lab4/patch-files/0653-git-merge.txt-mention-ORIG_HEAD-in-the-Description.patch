@@ -1,0 +1,35 @@
+From 0c514d576685f72a42cf60a2690984fbc7f54a31 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Tue, 10 Jan 2023 13:15:19 +0000
+Subject: [PATCH 0653/2871] git-merge.txt: mention 'ORIG_HEAD' in the
+ Description
+
+The fact that 'git merge' writes 'ORIG_HEAD' before performing the merge
+is missing from the documentation of the command.
+
+Mention it in the 'Description' section.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Acked-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-merge.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/git-merge.txt b/Documentation/git-merge.txt
+index 2d6a1391c8..0aeff572a5 100644
+--- a/Documentation/git-merge.txt
++++ b/Documentation/git-merge.txt
+@@ -37,7 +37,8 @@ Then "`git merge topic`" will replay the changes made on the
+ `topic` branch since it diverged from `master` (i.e., `E`) until
+ its current commit (`C`) on top of `master`, and record the result
+ in a new commit along with the names of the two parent commits and
+-a log message from the user describing the changes.
++a log message from the user describing the changes. Before the operation,
++`ORIG_HEAD` is set to the tip of the current branch (`C`).
+ 
+ ------------
+ 	  A---B---C topic
+-- 
+2.39.3 (Apple Git-145)
+

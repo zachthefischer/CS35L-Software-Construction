@@ -1,0 +1,111 @@
+From 7cce9074a728fb32501054577963d8ae31d007be Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 22 Dec 2022 15:14:10 +0000
+Subject: [PATCH 0595/2871] bundle-uri client: add boolean transfer.bundleURI
+ setting
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The yet-to-be introduced client support for bundle-uri will always
+fall back on a full clone, but we'd still like to be able to ignore a
+server's bundle-uri advertisement entirely.
+
+The new transfer.bundleURI config option defaults to 'false', but a user
+can set it to 'true' to enable checking for bundle URIs from the origin
+Git server using protocol v2.
+
+Co-authored-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/transfer.txt |  6 ++++++
+ t/lib-bundle-uri-protocol.sh      | 19 ++++++++++++++++++-
+ transport.c                       |  8 ++++++++
+ 3 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/config/transfer.txt b/Documentation/config/transfer.txt
+index 264812cca4..c3ac767d1e 100644
+--- a/Documentation/config/transfer.txt
++++ b/Documentation/config/transfer.txt
+@@ -115,3 +115,9 @@ transfer.unpackLimit::
+ transfer.advertiseSID::
+ 	Boolean. When true, client and server processes will advertise their
+ 	unique session IDs to their remote counterpart. Defaults to false.
++
++transfer.bundleURI::
++	When `true`, local `git clone` commands will request bundle
++	information from the remote server (if advertised) and download
++	bundles before continuing the clone through the Git protocol.
++	Defaults to `false`.
+diff --git a/t/lib-bundle-uri-protocol.sh b/t/lib-bundle-uri-protocol.sh
+index d44c6e10f9..75ea8c4418 100644
+--- a/t/lib-bundle-uri-protocol.sh
++++ b/t/lib-bundle-uri-protocol.sh
+@@ -85,10 +85,11 @@ test_expect_success "connect with $BUNDLE_URI_PROTOCOL:// using protocol v2: hav
+ '
+ 
+ test_expect_success "clone with $BUNDLE_URI_PROTOCOL:// using protocol v2: request bundle-uris" '
+-	test_when_finished "rm -rf log cloned" &&
++	test_when_finished "rm -rf log cloned cloned2" &&
+ 
+ 	GIT_TRACE_PACKET="$PWD/log" \
+ 	git \
++		-c transfer.bundleURI=false \
+ 		-c protocol.version=2 \
+ 		clone "$BUNDLE_URI_REPO_URI" cloned \
+ 		>actual 2>err &&
+@@ -99,6 +100,22 @@ test_expect_success "clone with $BUNDLE_URI_PROTOCOL:// using protocol v2: reque
+ 	# Server advertised bundle-uri capability
+ 	grep "< bundle-uri" log &&
+ 
++	# Client did not issue bundle-uri command
++	! grep "> command=bundle-uri" log &&
++
++	GIT_TRACE_PACKET="$PWD/log" \
++	git \
++		-c transfer.bundleURI=true \
++		-c protocol.version=2 \
++		clone "$BUNDLE_URI_REPO_URI" cloned2 \
++		>actual 2>err &&
++
++	# Server responded using protocol v2
++	grep "< version 2" log &&
++
++	# Server advertised bundle-uri capability
++	grep "< bundle-uri" log &&
++
+ 	# Client issued bundle-uri command
+ 	grep "> command=bundle-uri" log
+ '
+diff --git a/transport.c b/transport.c
+index b6f279e92c..b4cf2c0252 100644
+--- a/transport.c
++++ b/transport.c
+@@ -1516,6 +1516,7 @@ int transport_fetch_refs(struct transport *transport, struct ref *refs)
+ 
+ int transport_get_remote_bundle_uri(struct transport *transport)
+ {
++	int value = 0;
+ 	const struct transport_vtable *vtable = transport->vtable;
+ 
+ 	/* Check config only once. */
+@@ -1523,6 +1524,13 @@ int transport_get_remote_bundle_uri(struct transport *transport)
+ 		return 0;
+ 	transport->got_remote_bundle_uri = 1;
+ 
++	/*
++	 * Don't request bundle-uri from the server unless configured to
++	 * do so by the transfer.bundleURI=true config option.
++	 */
++	if (git_config_get_bool("transfer.bundleuri", &value) || !value)
++		return 0;
++
+ 	if (!vtable->get_bundle_uri)
+ 		return error(_("bundle-uri operation not supported by protocol"));
+ 
+-- 
+2.39.3 (Apple Git-145)
+

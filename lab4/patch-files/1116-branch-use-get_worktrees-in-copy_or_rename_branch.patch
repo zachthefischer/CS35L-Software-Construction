@@ -1,0 +1,107 @@
+From d7f4ca61b51da5655df09277309380794ba1bd19 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 27 Mar 2023 00:33:09 +0200
+Subject: [PATCH 1116/2871] branch: use get_worktrees() in
+ copy_or_rename_branch()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Obtaining the list of worktrees, using get_worktrees(), is not a
+lightweight operation, because it involves reading from disk.
+
+Let's stop calling get_worktrees() in reject_rebase_or_bisect_branch()
+and in replace_each_worktree_head_symref().  Make them receive the list
+of worktrees from their only caller, copy_or_rename_branch().
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/branch.c | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/branch.c b/builtin/branch.c
+index c7ace2f2da..bac67c27d5 100644
+--- a/builtin/branch.c
++++ b/builtin/branch.c
+@@ -486,9 +486,9 @@ static void print_current_branch_name(void)
+ 		die(_("HEAD (%s) points outside of refs/heads/"), refname);
+ }
+ 
+-static void reject_rebase_or_bisect_branch(const char *target)
++static void reject_rebase_or_bisect_branch(struct worktree **worktrees,
++					   const char *target)
+ {
+-	struct worktree **worktrees = get_worktrees();
+ 	int i;
+ 
+ 	for (i = 0; worktrees[i]; i++) {
+@@ -505,8 +505,6 @@ static void reject_rebase_or_bisect_branch(const char *target)
+ 			die(_("Branch %s is being bisected at %s"),
+ 			    target, wt->path);
+ 	}
+-
+-	free_worktrees(worktrees);
+ }
+ 
+ /*
+@@ -514,11 +512,11 @@ static void reject_rebase_or_bisect_branch(const char *target)
+  * This will be used when renaming a branch. Returns 0 if successful, non-zero
+  * otherwise.
+  */
+-static int replace_each_worktree_head_symref(const char *oldref, const char *newref,
++static int replace_each_worktree_head_symref(struct worktree **worktrees,
++					     const char *oldref, const char *newref,
+ 					     const char *logmsg)
+ {
+ 	int ret = 0;
+-	struct worktree **worktrees = get_worktrees();
+ 	int i;
+ 
+ 	for (i = 0; worktrees[i]; i++) {
+@@ -537,7 +535,6 @@ static int replace_each_worktree_head_symref(const char *oldref, const char *new
+ 				    worktrees[i]->path);
+ 	}
+ 
+-	free_worktrees(worktrees);
+ 	return ret;
+ }
+ 
+@@ -548,6 +545,7 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int
+ 	const char *interpreted_oldname = NULL;
+ 	const char *interpreted_newname = NULL;
+ 	int recovery = 0;
++	struct worktree **worktrees = get_worktrees();
+ 
+ 	if (strbuf_check_branch_ref(&oldref, oldname)) {
+ 		/*
+@@ -576,7 +574,7 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int
+ 	else
+ 		validate_new_branchname(newname, &newref, force);
+ 
+-	reject_rebase_or_bisect_branch(oldref.buf);
++	reject_rebase_or_bisect_branch(worktrees, oldref.buf);
+ 
+ 	if (!skip_prefix(oldref.buf, "refs/heads/", &interpreted_oldname) ||
+ 	    !skip_prefix(newref.buf, "refs/heads/", &interpreted_newname)) {
+@@ -607,7 +605,8 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int
+ 	}
+ 
+ 	if (!copy &&
+-	    replace_each_worktree_head_symref(oldref.buf, newref.buf, logmsg.buf))
++	    replace_each_worktree_head_symref(worktrees, oldref.buf, newref.buf,
++					      logmsg.buf))
+ 		die(_("Branch renamed to %s, but HEAD is not updated!"), newname);
+ 
+ 	strbuf_release(&logmsg);
+@@ -622,6 +621,7 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int
+ 	strbuf_release(&newref);
+ 	strbuf_release(&oldsection);
+ 	strbuf_release(&newsection);
++	free_worktrees(worktrees);
+ }
+ 
+ static GIT_PATH_FUNC(edit_description, "EDIT_DESCRIPTION")
+-- 
+2.39.3 (Apple Git-145)
+

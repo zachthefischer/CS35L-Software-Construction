@@ -1,0 +1,62 @@
+From 85a8c899cedf46b79dd333549ed24b7ea7697862 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 11 Dec 2023 10:07:38 +0100
+Subject: [PATCH 2517/2871] reftable: handle interrupted writes
+
+There are calls to write(3P) where we don't properly handle interrupts.
+Convert them to use `write_in_full()`.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/stack.c      | 6 +++---
+ reftable/stack_test.c | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/reftable/stack.c b/reftable/stack.c
+index ed108a929b..f0cadad490 100644
+--- a/reftable/stack.c
++++ b/reftable/stack.c
+@@ -42,7 +42,7 @@ static void stack_filename(struct strbuf *dest, struct reftable_stack *st,
+ static ssize_t reftable_fd_write(void *arg, const void *data, size_t sz)
+ {
+ 	int *fdp = (int *)arg;
+-	return write(*fdp, data, sz);
++	return write_in_full(*fdp, data, sz);
+ }
+ 
+ int reftable_new_stack(struct reftable_stack **dest, const char *dir,
+@@ -554,7 +554,7 @@ int reftable_addition_commit(struct reftable_addition *add)
+ 		strbuf_addstr(&table_list, "\n");
+ 	}
+ 
+-	err = write(add->lock_file_fd, table_list.buf, table_list.len);
++	err = write_in_full(add->lock_file_fd, table_list.buf, table_list.len);
+ 	strbuf_release(&table_list);
+ 	if (err < 0) {
+ 		err = REFTABLE_IO_ERROR;
+@@ -1024,7 +1024,7 @@ static int stack_compact_range(struct reftable_stack *st, int first, int last,
+ 		strbuf_addstr(&ref_list_contents, "\n");
+ 	}
+ 
+-	err = write(lock_file_fd, ref_list_contents.buf, ref_list_contents.len);
++	err = write_in_full(lock_file_fd, ref_list_contents.buf, ref_list_contents.len);
+ 	if (err < 0) {
+ 		err = REFTABLE_IO_ERROR;
+ 		unlink(new_table_path.buf);
+diff --git a/reftable/stack_test.c b/reftable/stack_test.c
+index d0b717510f..0644c8ad2e 100644
+--- a/reftable/stack_test.c
++++ b/reftable/stack_test.c
+@@ -78,7 +78,7 @@ static void test_read_file(void)
+ 	int i = 0;
+ 
+ 	EXPECT(fd > 0);
+-	n = write(fd, out, strlen(out));
++	n = write_in_full(fd, out, strlen(out));
+ 	EXPECT(n == strlen(out));
+ 	err = close(fd);
+ 	EXPECT(err >= 0);
+-- 
+2.39.3 (Apple Git-145)
+

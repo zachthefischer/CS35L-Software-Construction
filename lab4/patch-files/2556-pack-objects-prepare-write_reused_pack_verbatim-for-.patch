@@ -1,0 +1,139 @@
+From ca0fd69e37132acdddc457b96a91ef528c7c312b Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 14 Dec 2023 17:24:17 -0500
+Subject: [PATCH 2556/2871] pack-objects: prepare
+ `write_reused_pack_verbatim()` for multi-pack reuse
+
+The function `write_reused_pack_verbatim()` within
+`builtin/pack-objects.c` is responsible for writing out a continuous
+set of objects beginning at the start of the reuse packfile.
+
+In the existing implementation, we did something like:
+
+    while (pos < reuse_packfile_bitmap->word_alloc &&
+           reuse_packfile_bitmap->words[pos] == (eword_t)~0)
+      pos++;
+
+    if (pos)
+      /* write first `pos * BITS_IN_WORD` objects from pack */
+
+as an optimization to record a single chunk for the longest continuous
+prefix of objects wanted out of the reuse pack, instead of having a
+chunk for each individual object. For more details, see bb514de356
+(pack-objects: improve partial packfile reuse, 2019-12-18).
+
+In order to retain this optimization in a multi-pack reuse world, we can
+no longer assume that the first object in a pack is on a word boundary
+in the bitmap storing the set of reusable objects.
+
+Assuming that all objects from the beginning of the reuse packfile up to
+the object corresponding to the first bit on a word boundary are part of
+the result, consume whole words at a time until the last whole word
+belonging to the reuse packfile. Copy those objects to the resulting
+packfile, and track that we reused them by recording a single chunk.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-objects.c | 73 ++++++++++++++++++++++++++++++++++--------
+ 1 file changed, 60 insertions(+), 13 deletions(-)
+
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 6ce52d88a9..31053128fc 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -1097,31 +1097,78 @@ static void write_reused_pack_one(struct packed_git *reuse_packfile,
+ 
+ static size_t write_reused_pack_verbatim(struct bitmapped_pack *reuse_packfile,
+ 					 struct hashfile *out,
+-					 off_t pack_start UNUSED,
++					 off_t pack_start,
+ 					 struct pack_window **w_curs)
+ {
+-	size_t pos = 0;
++	size_t pos = reuse_packfile->bitmap_pos;
++	size_t end;
+ 
+-	while (pos < reuse_packfile_bitmap->word_alloc &&
+-			reuse_packfile_bitmap->words[pos] == (eword_t)~0)
+-		pos++;
++	if (pos % BITS_IN_EWORD) {
++		size_t word_pos = (pos / BITS_IN_EWORD);
++		size_t offset = pos % BITS_IN_EWORD;
++		size_t last;
++		eword_t word = reuse_packfile_bitmap->words[word_pos];
+ 
+-	if (pos) {
+-		off_t to_write;
++		if (offset + reuse_packfile->bitmap_nr < BITS_IN_EWORD)
++			last = offset + reuse_packfile->bitmap_nr;
++		else
++			last = BITS_IN_EWORD;
++
++		for (; offset < last; offset++) {
++			if (word >> offset == 0)
++				return word_pos;
++			if (!bitmap_get(reuse_packfile_bitmap,
++					word_pos * BITS_IN_EWORD + offset))
++				return word_pos;
++		}
++
++		pos += BITS_IN_EWORD - (pos % BITS_IN_EWORD);
++	}
++
++	/*
++	 * Now we're going to copy as many whole eword_t's as possible.
++	 * "end" is the index of the last whole eword_t we copy, but
++	 * there may be additional bits to process. Those are handled
++	 * individually by write_reused_pack().
++	 *
++	 * Begin by advancing to the first word boundary in range of the
++	 * bit positions occupied by objects in "reuse_packfile". Then
++	 * pick the last word boundary in the same range. If we have at
++	 * least one word's worth of bits to process, continue on.
++	 */
++	end = reuse_packfile->bitmap_pos + reuse_packfile->bitmap_nr;
++	if (end % BITS_IN_EWORD)
++		end -= end % BITS_IN_EWORD;
++	if (pos >= end)
++		return reuse_packfile->bitmap_pos / BITS_IN_EWORD;
++
++	while (pos < end &&
++	       reuse_packfile_bitmap->words[pos / BITS_IN_EWORD] == (eword_t)~0)
++		pos += BITS_IN_EWORD;
++
++	if (pos > end)
++		pos = end;
++
++	if (reuse_packfile->bitmap_pos < pos) {
++		off_t pack_start_off = pack_pos_to_offset(reuse_packfile->p, 0);
++		off_t pack_end_off = pack_pos_to_offset(reuse_packfile->p,
++							pos - reuse_packfile->bitmap_pos);
+ 
+-		written = (pos * BITS_IN_EWORD);
+-		to_write = pack_pos_to_offset(reuse_packfile->p, written)
+-			- sizeof(struct pack_header);
++		written += pos - reuse_packfile->bitmap_pos;
+ 
+ 		/* We're recording one chunk, not one object. */
+-		record_reused_object(sizeof(struct pack_header), 0);
++		record_reused_object(pack_start_off,
++				     pack_start_off - (hashfile_total(out) - pack_start));
+ 		hashflush(out);
+ 		copy_pack_data(out, reuse_packfile->p, w_curs,
+-			sizeof(struct pack_header), to_write);
++			pack_start_off, pack_end_off - pack_start_off);
+ 
+ 		display_progress(progress_state, written);
+ 	}
+-	return pos;
++	if (pos % BITS_IN_EWORD)
++		BUG("attempted to jump past a word boundary to %"PRIuMAX,
++		    (uintmax_t)pos);
++	return pos / BITS_IN_EWORD;
+ }
+ 
+ static void write_reused_pack(struct bitmapped_pack *reuse_packfile,
+-- 
+2.39.3 (Apple Git-145)
+

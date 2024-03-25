@@ -1,0 +1,112 @@
+From 1147c56ff70d5d1152601a73c9e76b9856ceebf6 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Mon, 27 Feb 2023 15:28:14 +0000
+Subject: [PATCH 0962/2871] sparse-checkout: avoid using internal API of
+ unpack-trees
+
+struct unpack_trees_options has the following field and comment:
+
+	struct pattern_list *pl; /* for internal use */
+
+Despite the internal-use comment, commit e091228e17 ("sparse-checkout:
+update working directory in-process", 2019-11-21) starting setting this
+field from an external caller.  At the time, the only way around that
+would have been to modify unpack_trees() to take an extra pattern_list
+argument, and there's a lot of callers of that function.  However, when
+we split update_sparsity() off as a separate function, with
+sparse-checkout being the sole caller, the need to update other callers
+went away.  Fix this API problem by adding a pattern_list argument to
+update_sparsity() and stop setting the internal o.pl field directly.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/sparse-checkout.c |  3 +--
+ unpack-trees.c            | 18 +++++++++++-------
+ unpack-trees.h            |  3 ++-
+ 3 files changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/builtin/sparse-checkout.c b/builtin/sparse-checkout.c
+index c373815491..4b7390ce36 100644
+--- a/builtin/sparse-checkout.c
++++ b/builtin/sparse-checkout.c
+@@ -219,14 +219,13 @@ static int update_working_directory(struct pattern_list *pl)
+ 	o.dst_index = r->index;
+ 	index_state_init(&o.result, r);
+ 	o.skip_sparse_checkout = 0;
+-	o.pl = pl;
+ 
+ 	setup_work_tree();
+ 
+ 	repo_hold_locked_index(r, &lock_file, LOCK_DIE_ON_ERROR);
+ 
+ 	setup_unpack_trees_porcelain(&o, "sparse-checkout");
+-	result = update_sparsity(&o);
++	result = update_sparsity(&o, pl);
+ 	clear_unpack_trees_porcelain(&o);
+ 
+ 	if (result == UPDATE_SPARSITY_WARNINGS)
+diff --git a/unpack-trees.c b/unpack-trees.c
+index bad3120a76..6e4ca6fe80 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -2091,10 +2091,10 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options
+  *
+  * CE_NEW_SKIP_WORKTREE is used internally.
+  */
+-enum update_sparsity_result update_sparsity(struct unpack_trees_options *o)
++enum update_sparsity_result update_sparsity(struct unpack_trees_options *o,
++					    struct pattern_list *pl)
+ {
+ 	enum update_sparsity_result ret = UPDATE_SPARSITY_SUCCESS;
+-	struct pattern_list pl;
+ 	int i;
+ 	unsigned old_show_all_errors;
+ 	int free_pattern_list = 0;
+@@ -2111,11 +2111,12 @@ enum update_sparsity_result update_sparsity(struct unpack_trees_options *o)
+ 	trace_performance_enter();
+ 
+ 	/* If we weren't given patterns, use the recorded ones */
+-	if (!o->pl) {
+-		memset(&pl, 0, sizeof(pl));
++	if (!pl) {
+ 		free_pattern_list = 1;
+-		populate_from_existing_patterns(o, &pl);
++		pl = xcalloc(1, sizeof(*pl));
++		populate_from_existing_patterns(o, pl);
+ 	}
++	o->pl = pl;
+ 
+ 	/* Expand sparse directories as needed */
+ 	expand_index(o->src_index, o->pl);
+@@ -2147,8 +2148,11 @@ enum update_sparsity_result update_sparsity(struct unpack_trees_options *o)
+ 
+ 	display_warning_msgs(o);
+ 	o->show_all_errors = old_show_all_errors;
+-	if (free_pattern_list)
+-		clear_pattern_list(&pl);
++	if (free_pattern_list) {
++		clear_pattern_list(pl);
++		free(pl);
++		o->pl = NULL;
++	}
+ 	trace_performance_leave("update_sparsity");
+ 	return ret;
+ }
+diff --git a/unpack-trees.h b/unpack-trees.h
+index 3a7b3e5f00..f3a6e4f90e 100644
+--- a/unpack-trees.h
++++ b/unpack-trees.h
+@@ -112,7 +112,8 @@ enum update_sparsity_result {
+ 	UPDATE_SPARSITY_WORKTREE_UPDATE_FAILURES = -2
+ };
+ 
+-enum update_sparsity_result update_sparsity(struct unpack_trees_options *options);
++enum update_sparsity_result update_sparsity(struct unpack_trees_options *options,
++					    struct pattern_list *pl);
+ 
+ int verify_uptodate(const struct cache_entry *ce,
+ 		    struct unpack_trees_options *o);
+-- 
+2.39.3 (Apple Git-145)
+

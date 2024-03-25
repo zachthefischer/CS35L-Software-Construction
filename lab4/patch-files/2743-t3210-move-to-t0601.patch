@@ -1,0 +1,42 @@
+From 28d4e9f00af21cc00e396583e8dda92945b4fc48 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:49 +0000
+Subject: [PATCH 2743/2871] t3210: move to t0601
+
+Move t3210 to t0601, since these tests are reffiles specific in that
+they modify loose refs manually. This is part of the effort to
+categorize these tests together based on the ref backend they test. When
+we upstream the reftable backend, we can add more tests to t06xx. This
+way, all tests that test specific ref backend behavior will be grouped
+together.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/{t3210-pack-refs.sh => t0601-reffiles-pack-refs.sh} | 6 ++++++
+ 1 file changed, 6 insertions(+)
+ rename t/{t3210-pack-refs.sh => t0601-reffiles-pack-refs.sh} (98%)
+
+diff --git a/t/t3210-pack-refs.sh b/t/t0601-reffiles-pack-refs.sh
+similarity index 98%
+rename from t/t3210-pack-refs.sh
+rename to t/t0601-reffiles-pack-refs.sh
+index 7f4e98db7d..4929cc7b45 100755
+--- a/t/t3210-pack-refs.sh
++++ b/t/t0601-reffiles-pack-refs.sh
+@@ -15,6 +15,12 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ 
++if ! test_have_prereq REFFILES
++then
++	skip_all='skipping reffiles specific tests'
++	test_done
++fi
++
+ test_expect_success 'enable reflogs' '
+ 	git config core.logallrefupdates true
+ '
+-- 
+2.39.3 (Apple Git-145)
+

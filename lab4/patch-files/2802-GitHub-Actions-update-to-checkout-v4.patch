@@ -1,0 +1,123 @@
+From e94dec0c1d7709282c2bff168bdad5485a95baa8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 2 Feb 2024 12:39:34 -0800
+Subject: [PATCH 2802/2871] GitHub Actions: update to checkout@v4
+
+We seem to be getting "Node.js 16 actions are deprecated." warnings
+for jobs that use checkout@v3.  Except for the i686 containers job
+that is kept at checkout@v1 [*], update to checkout@v4, which is
+said to use Node.js 20.
+
+[*] 6cf4d908 (ci(main): upgrade actions/checkout to v3, 2022-12-05)
+    refers to https://github.com/actions/runner/issues/2115 and
+    explains why container jobs are kept at checkout@v1.  We may
+    want to check the current status of the issue and move it to the
+    same version as other jobs, but that is outside the scope of
+    this step.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/check-whitespace.yml |  2 +-
+ .github/workflows/coverity.yml         |  2 +-
+ .github/workflows/main.yml             | 16 ++++++++--------
+ 3 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/.github/workflows/check-whitespace.yml b/.github/workflows/check-whitespace.yml
+index a58e2dc8ad..a241a63428 100644
+--- a/.github/workflows/check-whitespace.yml
++++ b/.github/workflows/check-whitespace.yml
+@@ -19,7 +19,7 @@ jobs:
+   check-whitespace:
+     runs-on: ubuntu-latest
+     steps:
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+       with:
+         fetch-depth: 0
+ 
+diff --git a/.github/workflows/coverity.yml b/.github/workflows/coverity.yml
+index e5532d381b..a81a7566d1 100644
+--- a/.github/workflows/coverity.yml
++++ b/.github/workflows/coverity.yml
+@@ -38,7 +38,7 @@ jobs:
+       COVERITY_LANGUAGE: cxx
+       COVERITY_PLATFORM: overridden-below
+     steps:
+-      - uses: actions/checkout@v3
++      - uses: actions/checkout@v4
+       - name: install minimal Git for Windows SDK
+         if: contains(matrix.os, 'windows')
+         uses: git-for-windows/setup-git-for-windows-sdk@v1
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 9fdbd54028..d119a63b93 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -112,7 +112,7 @@ jobs:
+       group: windows-build-${{ github.ref }}
+       cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
+     steps:
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+     - uses: git-for-windows/setup-git-for-windows-sdk@v1
+     - name: build
+       shell: bash
+@@ -173,10 +173,10 @@ jobs:
+       group: vs-build-${{ github.ref }}
+       cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
+     steps:
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+     - uses: git-for-windows/setup-git-for-windows-sdk@v1
+     - name: initialize vcpkg
+-      uses: actions/checkout@v3
++      uses: actions/checkout@v4
+       with:
+         repository: 'microsoft/vcpkg'
+         path: 'compat/vcbuild/vcpkg'
+@@ -297,7 +297,7 @@ jobs:
+       runs_on_pool: ${{matrix.vector.pool}}
+     runs-on: ${{matrix.vector.pool}}
+     steps:
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+     - run: ci/install-dependencies.sh
+     - run: ci/run-build-and-tests.sh
+     - name: print test failures
+@@ -331,7 +331,7 @@ jobs:
+     runs-on: ubuntu-latest
+     container: ${{matrix.vector.image}}
+     steps:
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+       if: matrix.vector.jobname != 'linux32'
+     - uses: actions/checkout@v1
+       if: matrix.vector.jobname == 'linux32'
+@@ -362,7 +362,7 @@ jobs:
+       group: static-analysis-${{ github.ref }}
+       cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
+     steps:
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+     - run: ci/install-dependencies.sh
+     - run: ci/run-static-analysis.sh
+     - run: ci/check-directional-formatting.bash
+@@ -385,7 +385,7 @@ jobs:
+         artifact: sparse-20.04
+     - name: Install the current `sparse` package
+       run: sudo dpkg -i sparse-20.04/sparse_*.deb
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+     - name: Install other dependencies
+       run: ci/install-dependencies.sh
+     - run: make sparse
+@@ -400,6 +400,6 @@ jobs:
+       jobname: Documentation
+     runs-on: ubuntu-latest
+     steps:
+-    - uses: actions/checkout@v3
++    - uses: actions/checkout@v4
+     - run: ci/install-dependencies.sh
+     - run: ci/test-documentation.sh
+-- 
+2.39.3 (Apple Git-145)
+

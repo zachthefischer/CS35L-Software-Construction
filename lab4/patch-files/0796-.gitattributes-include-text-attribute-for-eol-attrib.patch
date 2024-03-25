@@ -1,0 +1,59 @@
+From 1f34e0cd3d799acb5118b3276dde389821bffdd4 Mon Sep 17 00:00:00 2001
+From: Philip Oakley <philipoakley@iee.email>
+Date: Fri, 3 Feb 2023 12:59:20 +0000
+Subject: [PATCH 0796/2871] .gitattributes: include `text` attribute for eol
+ attributes
+
+The standard advice for text file eol endings in the .gitattributes file
+was updated in e28eae3184 (gitattributes: Document the unified "auto"
+handling, 2016-08-26) with a recent clarification in 8c591dbfce (docs:
+correct documentation about eol attribute, 2022-01-11), with a follow
+up comment by the original author in [1] confirming the use of the eol
+attribute in conjunction with the text attribute.
+
+Update Git's .gitattributes file to reflect our own advice.
+
+[1] https://lore.kernel.org/git/?q=%3C20220216115239.uo2ie3flaqo3nf2d%40tb-raspi4%3E.
+
+Signed-off-by: Philip Oakley <philipoakley@iee.email>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .gitattributes | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/.gitattributes b/.gitattributes
+index b0044cf272..158c3d45c4 100644
+--- a/.gitattributes
++++ b/.gitattributes
+@@ -1,17 +1,17 @@
+ * whitespace=!indent,trail,space
+ *.[ch] whitespace=indent,trail,space diff=cpp
+-*.sh whitespace=indent,trail,space eol=lf
+-*.perl eol=lf diff=perl
+-*.pl eof=lf diff=perl
+-*.pm eol=lf diff=perl
+-*.py eol=lf diff=python
+-*.bat eol=crlf
++*.sh whitespace=indent,trail,space text eol=lf
++*.perl text eol=lf diff=perl
++*.pl text eof=lf diff=perl
++*.pm text eol=lf diff=perl
++*.py text eol=lf diff=python
++*.bat text eol=crlf
+ CODE_OF_CONDUCT.md -whitespace
+-/Documentation/**/*.txt eol=lf
+-/command-list.txt eol=lf
+-/GIT-VERSION-GEN eol=lf
+-/mergetools/* eol=lf
+-/t/oid-info/* eol=lf
++/Documentation/**/*.txt text eol=lf
++/command-list.txt text eol=lf
++/GIT-VERSION-GEN text eol=lf
++/mergetools/* text eol=lf
++/t/oid-info/* text eol=lf
+ /Documentation/git-merge.txt conflict-marker-size=32
+ /Documentation/gitk.txt conflict-marker-size=32
+ /Documentation/user-manual.txt conflict-marker-size=32
+-- 
+2.39.3 (Apple Git-145)
+

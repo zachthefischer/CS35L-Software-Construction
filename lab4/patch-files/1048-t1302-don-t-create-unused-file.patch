@@ -1,0 +1,38 @@
+From 17ae7f758e728ac40e326a3ab82a7727d735484a Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Sat, 18 Mar 2023 16:46:43 +0100
+Subject: [PATCH 1048/2871] t1302: don't create unused file
+
+Test 'gitdir selection on unsupported repo' in t1302-repo-version.sh
+writes output of a "git config" invocation to file "actual".  However,
+the test doesn't have any assertions for the file.  The file was used by
+this test until commit b9605bc4f2 (config: only read .git/config from
+configured repos, 2016-09-12), before which "git config" was expected to
+print the bogus value of "core.repositoryformatversion" to standard
+output.
+
+Don't redirect output of "git config" to file "actual" in test 'gitdir
+selection on unsupported repo'.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1302-repo-version.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t1302-repo-version.sh b/t/t1302-repo-version.sh
+index 70389fa2eb..179474fa65 100755
+--- a/t/t1302-repo-version.sh
++++ b/t/t1302-repo-version.sh
+@@ -37,7 +37,7 @@ test_expect_success 'gitdir selection on normal repos' '
+ 
+ test_expect_success 'gitdir selection on unsupported repo' '
+ 	# Make sure it would stop at test2, not trash
+-	test_expect_code 1 git -C test2 config core.repositoryformatversion >actual
++	test_expect_code 1 git -C test2 config core.repositoryformatversion
+ '
+ 
+ test_expect_success 'gitdir not required mode' '
+-- 
+2.39.3 (Apple Git-145)
+

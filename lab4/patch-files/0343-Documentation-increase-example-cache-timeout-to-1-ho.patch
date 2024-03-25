@@ -1,0 +1,42 @@
+From f13c3f28e7e8959fa23958323458b7e4437f2dda Mon Sep 17 00:00:00 2001
+From: M Hickford <mirth.hickford@gmail.com>
+Date: Wed, 9 Nov 2022 16:11:13 +0000
+Subject: [PATCH 0343/2871] Documentation: increase example cache timeout to 1
+ hour
+
+Previously, the example *decreased* the cache timeout compared to the
+default, making it less user friendly.
+
+Instead, nudge users to make cache more usable. Many users choose
+store over cache.
+https://lore.kernel.org/git/CAGJzqskRYN49SeS8kSEN5-vbB_Jt1QvAV9QhS6zNuKh0u8wxPQ@mail.gmail.com/
+
+The default timeout remains 15 minutes. A stronger nudge would
+be to increase that.
+
+Signed-off-by: M Hickford <mirth.hickford@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/git-credential-cache.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-credential-cache.txt b/Documentation/git-credential-cache.txt
+index 0216c18ef8..432e159d95 100644
+--- a/Documentation/git-credential-cache.txt
++++ b/Documentation/git-credential-cache.txt
+@@ -69,10 +69,10 @@ $ git push http://example.com/repo.git
+ ------------------------------------
+ 
+ You can provide options via the credential.helper configuration
+-variable (this example drops the cache time to 5 minutes):
++variable (this example increases the cache time to 1 hour):
+ 
+ -------------------------------------------------------
+-$ git config credential.helper 'cache --timeout=300'
++$ git config credential.helper 'cache --timeout=3600'
+ -------------------------------------------------------
+ 
+ GIT
+-- 
+2.39.3 (Apple Git-145)
+

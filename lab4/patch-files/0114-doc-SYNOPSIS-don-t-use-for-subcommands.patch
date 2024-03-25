@@ -1,0 +1,49 @@
+From b2ca7e417ea64a1cb49d00aaf48a4e62bfd0e35b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:38:59 +0200
+Subject: [PATCH 0114/2871] doc SYNOPSIS: don't use ' for subcommands
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Almost all of our documentation doesn't use "'" syntax for
+subcommands, but these did, let's make them consistent with the
+rest.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-reflog.txt | 2 +-
+ Documentation/git-rerere.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-reflog.txt b/Documentation/git-reflog.txt
+index db9d46edfa..0537d4645b 100644
+--- a/Documentation/git-reflog.txt
++++ b/Documentation/git-reflog.txt
+@@ -17,7 +17,7 @@ The command takes various subcommands, and different options
+ depending on the subcommand:
+ 
+ [verse]
+-'git reflog' ['show'] [<log-options>] [<ref>]
++'git reflog' [show] [<log-options>] [<ref>]
+ 'git reflog expire' [--expire=<time>] [--expire-unreachable=<time>]
+ 	[--rewrite] [--updateref] [--stale-fix]
+ 	[--dry-run | -n] [--verbose] [--all [--single-worktree] | <refs>...]
+diff --git a/Documentation/git-rerere.txt b/Documentation/git-rerere.txt
+index 4cfc883378..4b613d4140 100644
+--- a/Documentation/git-rerere.txt
++++ b/Documentation/git-rerere.txt
+@@ -8,7 +8,7 @@ git-rerere - Reuse recorded resolution of conflicted merges
+ SYNOPSIS
+ --------
+ [verse]
+-'git rerere' ['clear'|'forget' <pathspec>|'diff'|'remaining'|'status'|'gc']
++'git rerere' [clear|forget <pathspec>|diff|remaining|status|gc]
+ 
+ DESCRIPTION
+ -----------
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,73 @@
+From 5d4f4a592e99e8fb220b2db410f0d81203f3762e Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Mon, 27 Feb 2023 15:28:13 +0000
+Subject: [PATCH 0961/2871] unpack-trees: clean up some flow control
+
+The update_sparsity() function was introduced in commit 7af7a25853
+("unpack-trees: add a new update_sparsity() function", 2020-03-27).
+Prior to that, unpack_trees() was used, but that had a few bugs because
+the needs of the caller were different, and different enough that
+unpack_trees() could not easily be modified to handle both usecases.
+
+The implementation detail that update_sparsity() was written by copying
+unpack_trees() and then streamlining it, and then modifying it in the
+needed ways still shows through in that there are leftover vestiges in
+both functions that are no longer needed.  Clean them up.  In
+particular:
+
+  * update_sparsity() allows a pattern list to be passed in, but
+    unpack_trees() never should use a different pattern list.  Add a
+    check and a BUG() if this gets violated.
+  * update_sparsity() has a check early on that will BUG() if
+    o->skip_sparse_checkout is set; as such, there's no need to check
+    for that condition again later in the code.  We can simply remove
+    the check and its corresponding goto label.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ unpack-trees.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/unpack-trees.c b/unpack-trees.c
+index 4518d33ed9..bad3120a76 100644
+--- a/unpack-trees.c
++++ b/unpack-trees.c
+@@ -1873,6 +1873,8 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options
+ 		die("unpack_trees takes at most %d trees", MAX_UNPACK_TREES);
+ 	if (o->dir)
+ 		BUG("o->dir is for internal use only");
++	if (o->pl)
++		BUG("o->pl is for internal use only");
+ 
+ 	trace_performance_enter();
+ 	trace2_region_enter("unpack_trees", "unpack_trees", the_repository);
+@@ -1899,7 +1901,7 @@ int unpack_trees(unsigned len, struct tree_desc *t, struct unpack_trees_options
+ 
+ 	if (!core_apply_sparse_checkout || !o->update)
+ 		o->skip_sparse_checkout = 1;
+-	if (!o->skip_sparse_checkout && !o->pl) {
++	if (!o->skip_sparse_checkout) {
+ 		memset(&pl, 0, sizeof(pl));
+ 		free_pattern_list = 1;
+ 		populate_from_existing_patterns(o, &pl);
+@@ -2113,8 +2115,6 @@ enum update_sparsity_result update_sparsity(struct unpack_trees_options *o)
+ 		memset(&pl, 0, sizeof(pl));
+ 		free_pattern_list = 1;
+ 		populate_from_existing_patterns(o, &pl);
+-		if (o->skip_sparse_checkout)
+-			goto skip_sparse_checkout;
+ 	}
+ 
+ 	/* Expand sparse directories as needed */
+@@ -2142,7 +2142,6 @@ enum update_sparsity_result update_sparsity(struct unpack_trees_options *o)
+ 			ret = UPDATE_SPARSITY_WARNINGS;
+ 	}
+ 
+-skip_sparse_checkout:
+ 	if (check_updates(o, o->src_index))
+ 		ret = UPDATE_SPARSITY_WORKTREE_UPDATE_FAILURES;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

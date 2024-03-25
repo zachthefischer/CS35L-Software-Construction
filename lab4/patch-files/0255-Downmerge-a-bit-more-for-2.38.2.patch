@@ -1,0 +1,35 @@
+From e7e5c6f715b2de7bea0d39c7d2ba887335b40aa0 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 27 Oct 2022 15:24:23 -0700
+Subject: [PATCH 0255/2871] Downmerge a bit more for 2.38.2
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.38.2.txt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.38.2.txt b/Documentation/RelNotes/2.38.2.txt
+index 00d4b77655..086b900f6c 100644
+--- a/Documentation/RelNotes/2.38.2.txt
++++ b/Documentation/RelNotes/2.38.2.txt
+@@ -44,4 +44,17 @@ Fixes since v2.38.1
+  * "GIT_EDITOR=: git branch --edit-description" resulted in failure,
+    which has been corrected.
+ 
++ * Documentation on various Boolean GIT_* environment variables have
++   been clarified.
++
++ * "git multi-pack-index repack/expire" used to repack unreachable
++   cruft into a new pack, which have been corrected.
++
++ * The code to clean temporary object directories (used for
++   quarantine) tried to remove them inside its signal handler, which
++   was a no-no.
++
++ * "git branch --edit-description" on an unborh branch misleadingly
++   said that no such branch exists, which has been corrected.
++
+ Also contains various documentation updates and code clean-ups.
+-- 
+2.39.3 (Apple Git-145)
+

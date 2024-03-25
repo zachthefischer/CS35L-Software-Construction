@@ -1,0 +1,59 @@
+From 6ad5961c9112c9e9480f1e6e1caddfd3c6a64074 Mon Sep 17 00:00:00 2001
+From: Arkadii Yakovets <ark@cho.red>
+Date: Wed, 14 Feb 2024 20:35:59 -0800
+Subject: [PATCH 2856/2871] l10n: uk: v2.44 update (round 2)
+
+Signed-off-by: Arkadii Yakovets <ark@cho.red>
+---
+ po/uk.po | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/po/uk.po b/po/uk.po
+index f09e8d6dd3..dbd0d42ce3 100644
+--- a/po/uk.po
++++ b/po/uk.po
+@@ -1496,6 +1496,10 @@ msgstr "невірний --attr-source або GIT_ATTR_SOURCE"
+ msgid "unable to stat '%s'"
+ msgstr "не вдалося виконати stat для \"%s\""
+ 
++#, c-format
++msgid "unable to read %s"
++msgstr "не вдалося прочитати %s"
++
+ #, c-format
+ msgid "Badly quoted content in file '%s': %s"
+ msgstr "Невірно процитований вміст у файлі \"%s\": %s"
+@@ -6798,6 +6802,10 @@ msgstr "немає підтримки потоків, ігнорування %s"
+ msgid "unable to read tree (%s)"
+ msgstr "не вдалося прочитати дерево (%s)"
+ 
++#, c-format
++msgid "unable to read tree %s"
++msgstr "не вдалося прочитати дерево %s"
++
+ #, c-format
+ msgid "unable to grep from object of type %s"
+ msgstr "не вдалося виконати grep для об’єкта типу %s"
+@@ -7210,10 +7218,6 @@ msgstr "серйозне неспівпадіння під час розпаку
+ msgid "SHA1 COLLISION FOUND WITH %s !"
+ msgstr "ВИЯВЛЕНО SHA1 КОЛІЗІЮ З %s!"
+ 
+-#, c-format
+-msgid "unable to read %s"
+-msgstr "не вдалося прочитати %s"
+-
+ #, c-format
+ msgid "cannot read existing object info %s"
+ msgstr "неможливо прочитати інформацію про існуючий об’єкт %s"
+@@ -15959,7 +15963,7 @@ msgid "synonym for --dirstat=cumulative"
+ msgstr "синонім для --dirstat=cumulative"
+ 
+ msgid "synonym for --dirstat=files,param1,param2..."
+-msgstr "синонім для --dirstat=files,параметр1,параметр2..."
++msgstr "синонім для --dirstat=files,param1,param2..."
+ 
+ msgid "warn if changes introduce conflict markers or whitespace errors"
+ msgstr ""
+-- 
+2.39.3 (Apple Git-145)
+

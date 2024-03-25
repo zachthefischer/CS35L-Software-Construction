@@ -1,0 +1,47 @@
+From e6c4309748a7663f7ab7e7ec3b93ca4eb4379df4 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 14 Apr 2023 17:24:19 -0400
+Subject: [PATCH 1266/2871] t5512: stop referring to "v1" protocol
+
+There really isn't a "v1" Git protocol. It's just v0 with an extra probe
+which we used to test compatibility in preparation for v2. Any tests
+that are looking for before/after behavior for v2 really care about
+"v0". Mentioning "v1" in these tests is just making things more
+confusing, because we don't care about that probe; we're really testing
+v0. So let's say so.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5512-ls-remote.sh | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/t/t5512-ls-remote.sh b/t/t5512-ls-remote.sh
+index cab67282df..b868e20d7e 100755
+--- a/t/t5512-ls-remote.sh
++++ b/t/t5512-ls-remote.sh
+@@ -358,8 +358,8 @@ test_expect_success 'ls-remote --sort fails gracefully outside repository' '
+ test_expect_success 'ls-remote patterns work with all protocol versions' '
+ 	git for-each-ref --format="%(objectname)	%(refname)" \
+ 		refs/heads/main refs/remotes/origin/main >expect &&
+-	git -c protocol.version=1 ls-remote . main >actual.v1 &&
+-	test_cmp expect actual.v1 &&
++	git -c protocol.version=0 ls-remote . main >actual.v0 &&
++	test_cmp expect actual.v0 &&
+ 	git -c protocol.version=2 ls-remote . main >actual.v2 &&
+ 	test_cmp expect actual.v2
+ '
+@@ -367,8 +367,8 @@ test_expect_success 'ls-remote patterns work with all protocol versions' '
+ test_expect_success 'ls-remote prefixes work with all protocol versions' '
+ 	git for-each-ref --format="%(objectname)	%(refname)" \
+ 		refs/heads/ refs/tags/ >expect &&
+-	git -c protocol.version=1 ls-remote --heads --tags . >actual.v1 &&
+-	test_cmp expect actual.v1 &&
++	git -c protocol.version=0 ls-remote --heads --tags . >actual.v0 &&
++	test_cmp expect actual.v0 &&
+ 	git -c protocol.version=2 ls-remote --heads --tags . >actual.v2 &&
+ 	test_cmp expect actual.v2
+ '
+-- 
+2.39.3 (Apple Git-145)
+

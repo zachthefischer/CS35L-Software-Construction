@@ -1,0 +1,33 @@
+From 976d0251cedfd76e657584eefbfb58801e12b153 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 23 Jan 2024 10:40:10 -0800
+Subject: [PATCH 2755/2871] CoC: whitespace fix
+
+Fix two lines with trailing whitespaces.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ CODE_OF_CONDUCT.md | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/CODE_OF_CONDUCT.md b/CODE_OF_CONDUCT.md
+index 0215b1fd4c..e58917c50a 100644
+--- a/CODE_OF_CONDUCT.md
++++ b/CODE_OF_CONDUCT.md
+@@ -130,11 +130,11 @@ This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+ version 2.0, available at
+ [https://www.contributor-covenant.org/version/2/0/code_of_conduct.html][v2.0].
+ 
+-Community Impact Guidelines were inspired by 
++Community Impact Guidelines were inspired by
+ [Mozilla's code of conduct enforcement ladder][Mozilla CoC].
+ 
+ For answers to common questions about this code of conduct, see the FAQ at
+-[https://www.contributor-covenant.org/faq][FAQ]. Translations are available 
++[https://www.contributor-covenant.org/faq][FAQ]. Translations are available
+ at [https://www.contributor-covenant.org/translations][translations].
+ 
+ [homepage]: https://www.contributor-covenant.org
+-- 
+2.39.3 (Apple Git-145)
+

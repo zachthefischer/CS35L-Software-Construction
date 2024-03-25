@@ -1,0 +1,63 @@
+From cc2a1f98ac1042c7cca0ecedd6d57819c6b8e02e Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 10 Jul 2023 17:12:42 -0400
+Subject: [PATCH 1762/2871] builtin/receive-pack.c: avoid enumerating hidden
+ references
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Now that `refs_for_each_fullref_in()` has the ability to avoid
+enumerating references matching certain pattern(s), use that to avoid
+visiting hidden refs when constructing the ref advertisement via
+receive-pack.
+
+Note that since this exclusion is best-effort, we still need
+`show_ref_cb()` to check whether or not each reference is hidden or not
+before including it in the advertisement.
+
+As was the case when applying this same optimization to `upload-pack`,
+`receive-pack`'s reference advertisement phase can proceed much quicker
+by avoiding enumerating references that will not be part of the
+advertisement.
+
+(Below, we're still using linux.git with one hidden refs/pull/N ref per
+commit):
+
+    $ hyperfine -L v ,.compile 'git{v} -c transfer.hideRefs=refs/pull receive-pack --advertise-refs .git'
+    Benchmark 1: git -c transfer.hideRefs=refs/pull receive-pack --advertise-refs .git
+      Time (mean ± σ):      89.1 ms ±   1.7 ms    [User: 82.0 ms, System: 7.0 ms]
+      Range (min … max):    87.7 ms …  95.5 ms    31 runs
+
+    Benchmark 2: git.compile -c transfer.hideRefs=refs/pull receive-pack --advertise-refs .git
+      Time (mean ± σ):       4.5 ms ±   0.2 ms    [User: 0.5 ms, System: 3.9 ms]
+      Range (min … max):     4.1 ms …   5.6 ms    508 runs
+
+    Summary
+      'git.compile -c transfer.hideRefs=refs/pull receive-pack --advertise-refs .git' ran
+       20.00 ± 1.05 times faster than 'git -c transfer.hideRefs=refs/pull receive-pack --advertise-refs .git'
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index 1a8472eddc..dede0df3cf 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -337,7 +337,9 @@ static void write_head_info(void)
+ {
+ 	static struct oidset seen = OIDSET_INIT;
+ 
+-	for_each_ref(show_ref_cb, &seen);
++	refs_for_each_fullref_in(get_main_ref_store(the_repository), "",
++				 hidden_refs_to_excludes(&hidden_refs),
++				 show_ref_cb, &seen);
+ 	for_each_alternate_ref(show_one_alternate_ref, &seen);
+ 	oidset_clear(&seen);
+ 	if (!sent_capabilities)
+-- 
+2.39.3 (Apple Git-145)
+

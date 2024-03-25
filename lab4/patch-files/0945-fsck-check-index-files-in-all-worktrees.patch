@@ -1,0 +1,73 @@
+From fb64ca526a7c695aa137c2d2577585ddea5cce28 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 03:09:57 -0500
+Subject: [PATCH 0945/2871] fsck: check index files in all worktrees
+
+We check the index file for the main worktree, but completely ignore the
+index files in other worktrees. These should be checked, too, as they
+are part of the repository state (and in particular, errors in those
+index files may cause repo-wide operations like "git gc" to complain).
+
+Reported-by: Johannes Sixt <j6t@kdbg.org>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsck.c  | 18 ++++++++++++++++--
+ t/t1450-fsck.sh | 12 ++++++++++++
+ 2 files changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/fsck.c b/builtin/fsck.c
+index fa101e0db2..c11cb2a95f 100644
+--- a/builtin/fsck.c
++++ b/builtin/fsck.c
+@@ -984,10 +984,24 @@ int cmd_fsck(int argc, const char **argv, const char *prefix)
+ 	}
+ 
+ 	if (keep_cache_objects) {
++		struct worktree **worktrees, **p;
++
+ 		verify_index_checksum = 1;
+ 		verify_ce_order = 1;
+-		repo_read_index(the_repository);
+-		fsck_index(the_repository->index);
++
++		worktrees = get_worktrees();
++		for (p = worktrees; *p; p++) {
++			struct worktree *wt = *p;
++			struct index_state istate =
++				INDEX_STATE_INIT(the_repository);
++
++			if (read_index_from(&istate,
++					    worktree_git_path(wt, "index"),
++					    get_worktree_git_dir(wt)) > 0)
++				fsck_index(&istate);
++			discard_index(&istate);
++		}
++		free_worktrees(worktrees);
+ 	}
+ 
+ 	check_connectivity();
+diff --git a/t/t1450-fsck.sh b/t/t1450-fsck.sh
+index de0f6d5e7f..e01a519a69 100755
+--- a/t/t1450-fsck.sh
++++ b/t/t1450-fsck.sh
+@@ -1023,4 +1023,16 @@ test_expect_success 'fsck error on gitattributes with excessive size' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'fsck detects problems in worktree index' '
++	test_when_finished "git worktree remove -f wt" &&
++	git worktree add wt &&
++
++	echo "this will be removed to break the worktree index" >wt/file &&
++	git -C wt add file &&
++	blob=$(git -C wt rev-parse :file) &&
++	remove_object $blob &&
++
++	test_must_fail git fsck
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

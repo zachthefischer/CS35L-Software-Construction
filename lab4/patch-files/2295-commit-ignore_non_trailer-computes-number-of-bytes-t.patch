@@ -1,0 +1,93 @@
+From 7cb26a1722a7f7d9f1b01f2dcde8fe81d3a96bc1 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Fri, 20 Oct 2023 19:01:33 +0000
+Subject: [PATCH 2295/2871] commit: ignore_non_trailer computes number of bytes
+ to ignore
+
+ignore_non_trailer() returns the _number of bytes_ that should be
+ignored from the end of the log message. It does not by itself "ignore"
+anything.
+
+Rename this function to remove the leading "ignore" verb, to sound more
+like a quantity than an action.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit.c | 2 +-
+ builtin/merge.c  | 2 +-
+ commit.c         | 2 +-
+ commit.h         | 4 ++--
+ trailer.c        | 2 +-
+ 5 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/builtin/commit.c b/builtin/commit.c
+index 7da5f92448..d1785d32db 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -900,7 +900,7 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
+ 		strbuf_stripspace(&sb, '\0');
+ 
+ 	if (signoff)
+-		append_signoff(&sb, ignore_non_trailer(sb.buf, sb.len), 0);
++		append_signoff(&sb, ignored_log_message_bytes(sb.buf, sb.len), 0);
+ 
+ 	if (fwrite(sb.buf, 1, sb.len, s->fp) < sb.len)
+ 		die_errno(_("could not write commit template"));
+diff --git a/builtin/merge.c b/builtin/merge.c
+index 545da0c8a1..c654a29fe8 100644
+--- a/builtin/merge.c
++++ b/builtin/merge.c
+@@ -870,7 +870,7 @@ static void prepare_to_commit(struct commit_list *remoteheads)
+ 				_(no_scissors_editor_comment), comment_line_char);
+ 	}
+ 	if (signoff)
+-		append_signoff(&msg, ignore_non_trailer(msg.buf, msg.len), 0);
++		append_signoff(&msg, ignored_log_message_bytes(msg.buf, msg.len), 0);
+ 	write_merge_heads(remoteheads);
+ 	write_file_buf(git_path_merge_msg(the_repository), msg.buf, msg.len);
+ 	if (run_commit_hook(0 < option_edit, get_index_file(), NULL,
+diff --git a/commit.c b/commit.c
+index b3223478bc..4440fbabb8 100644
+--- a/commit.c
++++ b/commit.c
+@@ -1769,7 +1769,7 @@ const char *find_commit_header(const char *msg, const char *key, size_t *out_len
+  * Returns the number of bytes from the tail to ignore, to be fed as
+  * the second parameter to append_signoff().
+  */
+-size_t ignore_non_trailer(const char *buf, size_t len)
++size_t ignored_log_message_bytes(const char *buf, size_t len)
+ {
+ 	size_t boc = 0;
+ 	size_t bol = 0;
+diff --git a/commit.h b/commit.h
+index 28928833c5..1cc872f225 100644
+--- a/commit.h
++++ b/commit.h
+@@ -294,8 +294,8 @@ const char *find_header_mem(const char *msg, size_t len,
+ const char *find_commit_header(const char *msg, const char *key,
+ 			       size_t *out_len);
+ 
+-/* Find the end of the log message, the right place for a new trailer. */
+-size_t ignore_non_trailer(const char *buf, size_t len);
++/* Find the number of bytes to ignore from the end of a log message. */
++size_t ignored_log_message_bytes(const char *buf, size_t len);
+ 
+ typedef int (*each_mergetag_fn)(struct commit *commit, struct commit_extra_header *extra,
+ 				void *cb_data);
+diff --git a/trailer.c b/trailer.c
+index b6de5d9cb2..3c54b38a85 100644
+--- a/trailer.c
++++ b/trailer.c
+@@ -928,7 +928,7 @@ static size_t find_trailer_start(const char *buf, size_t len)
+ /* Return the position of the end of the trailers. */
+ static size_t find_trailer_end(const char *buf, size_t len)
+ {
+-	return len - ignore_non_trailer(buf, len);
++	return len - ignored_log_message_bytes(buf, len);
+ }
+ 
+ static int ends_with_blank_line(const char *buf, size_t len)
+-- 
+2.39.3 (Apple Git-145)
+

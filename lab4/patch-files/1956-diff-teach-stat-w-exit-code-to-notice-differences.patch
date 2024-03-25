@@ -1,0 +1,59 @@
+From e8efd863699c6927953ebff6cb317c5632b7324d Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 18 Aug 2023 16:59:30 -0700
+Subject: [PATCH 1956/2871] diff: teach "--stat -w --exit-code" to notice
+ differences
+
+When options like "-w" is used while "--exit-code" option is in
+effect, instead of the usual "do we have any filepair whose preimage
+and postimage have different <mode,object>?" check, we need to compare
+the contents of the blobs, taking into account that certain changes
+are considered no-op.
+
+With the previous step, we taught "--patch" codepath to set the
+.found_changes bit correctly, even for a change that only affects
+the mode and not object.  The "--stat" codepath, however, did not
+set the .found_changes bit at all.  This lead to
+
+    $ git diff --stat -w --exit-code
+
+for a change that does have an output to exit with status 0.
+
+Set the bit by inspecting the list of paths the diffstat output is
+given for (a mode-only change will still appear as a "0-line added
+0-line deleted" change) to fix it.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                     | 1 +
+ t/t4015-diff-whitespace.sh | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/diff.c b/diff.c
+index 998d7ae20c..da965ff688 100644
+--- a/diff.c
++++ b/diff.c
+@@ -6901,6 +6901,7 @@ void compute_diffstat(struct diff_options *options,
+ 		if (check_pair_status(p))
+ 			diff_flush_stat(p, options, diffstat);
+ 	}
++	options->found_changes = !!diffstat->nr;
+ }
+ 
+ void diff_addremove(struct diff_options *options,
+diff --git a/t/t4015-diff-whitespace.sh b/t/t4015-diff-whitespace.sh
+index 02731dccb9..230a89b951 100755
+--- a/t/t4015-diff-whitespace.sh
++++ b/t/t4015-diff-whitespace.sh
+@@ -11,7 +11,7 @@ TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-diff.sh
+ 
+-for opts in --patch --quiet -s
++for opts in --patch --quiet -s --stat --shortstat --dirstat=lines
+ do
+ 
+ 	test_expect_success "status with $opts (different)" '
+-- 
+2.39.3 (Apple Git-145)
+

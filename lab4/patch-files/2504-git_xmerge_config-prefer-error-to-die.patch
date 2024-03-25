@@ -1,0 +1,61 @@
+From 22e27413eee9ff3bcbd3c7e8f3a8d1a40650e1b2 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:24:49 -0500
+Subject: [PATCH 2504/2871] git_xmerge_config(): prefer error() to die()
+
+When parsing merge config, a few code paths die on error. It's
+preferable for us to call error() here, because the resulting error
+message from the config parsing code contains much more detail.
+
+For example, before:
+
+  fatal: unknown style 'bogus' given for 'merge.conflictstyle'
+
+and after:
+
+  error: unknown style 'bogus' given for 'merge.conflictstyle'
+  fatal: bad config variable 'merge.conflictstyle' in file '.git/config' at line 7
+
+Since we're touching these lines, I also marked them for translation.
+There's no reason they shouldn't behave like most other config-parsing
+errors.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ xdiff-interface.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/xdiff-interface.c b/xdiff-interface.c
+index adcea109fa..05d6475a09 100644
+--- a/xdiff-interface.c
++++ b/xdiff-interface.c
+@@ -1,4 +1,5 @@
+ #include "git-compat-util.h"
++#include "gettext.h"
+ #include "config.h"
+ #include "hex.h"
+ #include "object-store-ll.h"
+@@ -313,7 +314,7 @@ int git_xmerge_config(const char *var, const char *value,
+ {
+ 	if (!strcmp(var, "merge.conflictstyle")) {
+ 		if (!value)
+-			die("'%s' is not a boolean", var);
++			return error(_("'%s' is not a boolean"), var);
+ 		if (!strcmp(value, "diff3"))
+ 			git_xmerge_style = XDL_MERGE_DIFF3;
+ 		else if (!strcmp(value, "zdiff3"))
+@@ -325,8 +326,8 @@ int git_xmerge_config(const char *var, const char *value,
+ 		 * git-completion.bash when you add new merge config
+ 		 */
+ 		else
+-			die("unknown style '%s' given for '%s'",
+-			    value, var);
++			return error(_("unknown style '%s' given for '%s'"),
++				     value, var);
+ 		return 0;
+ 	}
+ 	return git_default_config(var, value, ctx, cb);
+-- 
+2.39.3 (Apple Git-145)
+

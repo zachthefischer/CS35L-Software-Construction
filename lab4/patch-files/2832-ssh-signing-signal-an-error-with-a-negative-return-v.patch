@@ -1,0 +1,35 @@
+From 6931049c32ca0271ba95dcd0f197100d22c8d844 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 7 Feb 2024 21:29:00 -0800
+Subject: [PATCH 2832/2871] ssh signing: signal an error with a negative return
+ value
+
+The other backend for the sign_buffer() function followed our usual
+"an error is signalled with a negative return" convention, but the
+SSH signer did not.  Even though we already fixed the caller that
+assumed only a negative return value is an error, tighten the callee
+to signal an error with a negative return as well.  This way, the
+callees will be strict on what they produce, while the callers will
+be lenient in what they accept.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gpg-interface.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gpg-interface.c b/gpg-interface.c
+index 48f43c5a21..e19a69c400 100644
+--- a/gpg-interface.c
++++ b/gpg-interface.c
+@@ -1088,7 +1088,7 @@ static int sign_buffer_ssh(struct strbuf *buffer, struct strbuf *signature,
+ 		if (strstr(signer_stderr.buf, "usage:"))
+ 			error(_("ssh-keygen -Y sign is needed for ssh signing (available in openssh version 8.2p1+)"));
+ 
+-		error("%s", signer_stderr.buf);
++		ret = error("%s", signer_stderr.buf);
+ 		goto out;
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

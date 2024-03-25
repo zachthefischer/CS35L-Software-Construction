@@ -1,0 +1,120 @@
+From 987505887058584ebb0e76ba8499f221c80153b6 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 21 Mar 2023 06:26:04 +0000
+Subject: [PATCH 1086/2871] treewide: remove cache.h inclusion due to
+ environment.h changes
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ csum-file.c            | 2 +-
+ gettext.c              | 2 +-
+ ls-refs.c              | 2 +-
+ notes-utils.c          | 2 +-
+ prompt.c               | 2 +-
+ prune-packed.c         | 2 +-
+ reachable.c            | 2 +-
+ t/helper/test-bitmap.c | 2 +-
+ trailer.c              | 2 +-
+ 9 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/csum-file.c b/csum-file.c
+index 2d22f80d90..82ae2973d3 100644
+--- a/csum-file.c
++++ b/csum-file.c
+@@ -7,7 +7,7 @@
+  * files. Useful when you write a file that you want to be
+  * able to verify hasn't been messed with afterwards.
+  */
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "progress.h"
+ #include "csum-file.h"
+ #include "wrapper.h"
+diff --git a/gettext.c b/gettext.c
+index 85d3d3424e..5f34870830 100644
+--- a/gettext.c
++++ b/gettext.c
+@@ -2,7 +2,7 @@
+  * Copyright (c) 2010 Ævar Arnfjörð Bjarmason
+  */
+ 
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "abspath.h"
+ #include "environment.h"
+ #include "exec-cmd.h"
+diff --git a/ls-refs.c b/ls-refs.c
+index 12cbb40a19..b9f3e08ec3 100644
+--- a/ls-refs.c
++++ b/ls-refs.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/notes-utils.c b/notes-utils.c
+index 8797271faf..86552f31c4 100644
+--- a/notes-utils.c
++++ b/notes-utils.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "commit.h"
+ #include "environment.h"
+diff --git a/prompt.c b/prompt.c
+index ba10813b31..3baa33f63d 100644
+--- a/prompt.c
++++ b/prompt.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "environment.h"
+ #include "run-command.h"
+diff --git a/prune-packed.c b/prune-packed.c
+index 5a57072a7a..58412b4fb9 100644
+--- a/prune-packed.c
++++ b/prune-packed.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "object-store.h"
+diff --git a/reachable.c b/reachable.c
+index b0f85046e9..55bb114353 100644
+--- a/reachable.c
++++ b/reachable.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "refs.h"
+diff --git a/t/helper/test-bitmap.c b/t/helper/test-bitmap.c
+index ff35f5999b..5bb489882d 100644
+--- a/t/helper/test-bitmap.c
++++ b/t/helper/test-bitmap.c
+@@ -1,5 +1,5 @@
+ #include "test-tool.h"
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "pack-bitmap.h"
+ 
+ static int bitmap_list_commits(void)
+diff --git a/trailer.c b/trailer.c
+index 6a5091a3c4..a2c3ed6f28 100644
+--- a/trailer.c
++++ b/trailer.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "config.h"
+ #include "environment.h"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,122 @@
+From def390d5939d97f4bd642684e0554885e716370e Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 11 Jul 2023 13:32:37 -0400
+Subject: [PATCH 1766/2871] builtin/repack.c: avoid dir traversal in
+ `collect_pack_filenames()`
+
+When repacking, the function `collect_pack_filenames()` is responsible
+for collecting the set of existing packs in the repository, and
+partitioning them into "kept" (if the pack has a ".keep" file or was
+given via `--keep-pack`) and "nonkept" (otherwise) lists.
+
+This function comes from the original C port of git-repack.sh from back
+in a1bbc6c0176 (repack: rewrite the shell script in C, 2013-09-15),
+where it first appears as `get_non_kept_pack_filenames()`. At the time,
+the implementation was a fairly direct translation from the relevant
+portion of git-repack.sh, which looped over the results of
+
+    find "$PACKDIR" -type f -name '*.pack'
+
+either ignoring the pack as kept, or adding it to the list of existing
+packs.
+
+So the choice to directly translate this function in terms of
+`readdir()` in a1bbc6c0176 made sense. At the time, it was possible to
+refine the C version in terms of packed_git structs, but was never done.
+
+However, manually enumerating a repository's packs via `readdir()` is
+confusing and error-prone. It leads to frustrating inconsistencies
+between which packs Git considers to be part of a repository (i.e.,
+could be found in the list of packs from `get_all_packs()`), and which
+packs `collect_pack_filenames()` considers to meet the same criteria.
+
+This bit us in 73320e49ad (builtin/repack.c: only collect fully-formed
+packs, 2023-06-07), and again in the previous commit.
+
+Prevent these issues from biting us in the future by implementing the
+`collect_pack_filenames()` function by looping over an array of pointers
+to `packed_git` structs, ensuring that we use the same criteria to
+determine the set of available packs.
+
+One gotcha here is that we have to ignore non-local packs, since the
+original version of `collect_pack_filenames()` only looks at the local
+pack directory to collect existing packs.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 41 +++++++++++++++--------------------------
+ 1 file changed, 15 insertions(+), 26 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 724e09536e..ac9fc61d2e 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -106,49 +106,38 @@ static void collect_pack_filenames(struct string_list *fname_nonkept_list,
+ 				   struct string_list *fname_kept_list,
+ 				   const struct string_list *extra_keep)
+ {
+-	DIR *dir;
+-	struct dirent *e;
+-	char *fname;
++	struct packed_git *p;
+ 	struct strbuf buf = STRBUF_INIT;
+ 
+-	if (!(dir = opendir(packdir)))
+-		return;
+-
+-	while ((e = readdir(dir)) != NULL) {
+-		size_t len;
++	for (p = get_all_packs(the_repository); p; p = p->next) {
+ 		int i;
++		const char *base;
+ 
+-		if (!strip_suffix(e->d_name, ".idx", &len))
++		if (!p->pack_local)
+ 			continue;
+ 
+-		strbuf_reset(&buf);
+-		strbuf_add(&buf, e->d_name, len);
+-		strbuf_addstr(&buf, ".pack");
+-
+-		if (!file_exists(mkpath("%s/%s", packdir, buf.buf)))
+-			continue;
++		base = pack_basename(p);
+ 
+ 		for (i = 0; i < extra_keep->nr; i++)
+-			if (!fspathcmp(buf.buf, extra_keep->items[i].string))
++			if (!fspathcmp(base, extra_keep->items[i].string))
+ 				break;
+ 
+-		fname = xmemdupz(e->d_name, len);
++		strbuf_reset(&buf);
++		strbuf_addstr(&buf, base);
++		strbuf_strip_suffix(&buf, ".pack");
+ 
+-		if ((extra_keep->nr > 0 && i < extra_keep->nr) ||
+-		    (file_exists(mkpath("%s/%s.keep", packdir, fname)))) {
+-			string_list_append_nodup(fname_kept_list, fname);
+-		} else {
++		if ((extra_keep->nr > 0 && i < extra_keep->nr) || p->pack_keep)
++			string_list_append(fname_kept_list, buf.buf);
++		else {
+ 			struct string_list_item *item;
+-			item = string_list_append_nodup(fname_nonkept_list,
+-							fname);
+-			if (file_exists(mkpath("%s/%s.mtimes", packdir, fname)))
++			item = string_list_append(fname_nonkept_list, buf.buf);
++			if (p->is_cruft)
+ 				item->util = (void*)(uintptr_t)CRUFT_PACK;
+ 		}
+ 	}
+-	closedir(dir);
+-	strbuf_release(&buf);
+ 
+ 	string_list_sort(fname_kept_list);
++	strbuf_release(&buf);
+ }
+ 
+ static void remove_redundant_pack(const char *dir_name, const char *base_name)
+-- 
+2.39.3 (Apple Git-145)
+

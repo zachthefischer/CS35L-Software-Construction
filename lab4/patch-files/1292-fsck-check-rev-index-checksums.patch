@@ -1,0 +1,100 @@
+From d975fe1fa57d57cfd21a97f96f4a94b99f50f2f4 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Mon, 17 Apr 2023 16:21:39 +0000
+Subject: [PATCH 1292/2871] fsck: check rev-index checksums
+
+The previous change added calls to verify_pack_revindex() in
+builtin/fsck.c, but the implementation of the method was left empty. Add
+the first and most-obvious check to this method: checksum verification.
+
+While here, create a helper method in the test script that makes it easy
+to adjust the .rev file and check that 'git fsck' reports the correct
+error message.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-revindex.c          | 10 ++++++++++
+ t/t5325-reverse-index.sh | 40 ++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 50 insertions(+)
+
+diff --git a/pack-revindex.c b/pack-revindex.c
+index c3f2aaa3fe..007a806994 100644
+--- a/pack-revindex.c
++++ b/pack-revindex.c
+@@ -5,6 +5,7 @@
+ #include "packfile.h"
+ #include "config.h"
+ #include "midx.h"
++#include "csum-file.h"
+ 
+ struct revindex_entry {
+ 	off_t offset;
+@@ -309,6 +310,15 @@ int load_pack_revindex(struct repository *r, struct packed_git *p)
+  */
+ int verify_pack_revindex(struct packed_git *p)
+ {
++	/* Do not bother checking if not initialized. */
++	if (!p->revindex_map)
++		return 0;
++
++	if (!hashfile_checksum_valid((const unsigned char *)p->revindex_map, p->revindex_size)) {
++		error(_("invalid checksum"));
++		return -1;
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/t/t5325-reverse-index.sh b/t/t5325-reverse-index.sh
+index 206c412f50..6b7c709a1f 100755
+--- a/t/t5325-reverse-index.sh
++++ b/t/t5325-reverse-index.sh
+@@ -145,4 +145,44 @@ test_expect_success 'fsck succeeds on good rev-index' '
+ 	)
+ '
+ 
++test_expect_success 'set up rev-index corruption tests' '
++	git init corrupt &&
++	(
++		cd corrupt &&
++
++		test_commit commit &&
++		git -c pack.writeReverseIndex=true repack -ad &&
++
++		revfile=$(ls .git/objects/pack/pack-*.rev) &&
++		chmod a+w $revfile &&
++		cp $revfile $revfile.bak
++	)
++'
++
++corrupt_rev_and_verify () {
++	(
++		pos="$1" &&
++		value="$2" &&
++		error="$3" &&
++
++		cd corrupt &&
++		revfile=$(ls .git/objects/pack/pack-*.rev) &&
++
++		# Reset to original rev-file.
++		cp $revfile.bak $revfile &&
++
++		printf "$value" | dd of=$revfile bs=1 seek="$pos" conv=notrunc &&
++		test_must_fail git fsck 2>err &&
++		grep "$error" err
++	)
++}
++
++test_expect_success 'fsck catches invalid checksum' '
++	revfile=$(ls corrupt/.git/objects/pack/pack-*.rev) &&
++	orig_size=$(wc -c <$revfile) &&
++	hashpos=$((orig_size - 10)) &&
++	corrupt_rev_and_verify $hashpos bogus \
++		"invalid checksum"
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

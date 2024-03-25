@@ -1,0 +1,39 @@
+From 6c3b077c7189606f262bbe6a2f296a52dcf67f08 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 26 Oct 2022 16:15:48 -0400
+Subject: [PATCH 0251/2871] Documentation/howto/maintain-git.txt: fix
+ Meta/redo-jch.sh invocation
+
+The Meta/redo-jch.sh script is generated a few lines earlier by running:
+
+    $ Meta/Reintegrate master..seen >Meta/redo-jch.sh
+
+But the resulting script is not necessarily executable. Later mentions
+of this script invoke it with sh (instead of directly), but this one is
+an odd one out.
+
+Update the documentation to invoke the Meta/redo-jch.sh script with sh
+in case the maintainer has not made the script executable.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/howto/maintain-git.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/howto/maintain-git.txt b/Documentation/howto/maintain-git.txt
+index a67130debb..215e2edb0f 100644
+--- a/Documentation/howto/maintain-git.txt
++++ b/Documentation/howto/maintain-git.txt
+@@ -256,7 +256,7 @@ by doing the following:
+    merged to 'next', add it at the end of the list.  Then:
+ 
+      $ git checkout -B jch master
+-     $ Meta/redo-jch.sh -c1
++     $ sh Meta/redo-jch.sh -c1
+ 
+    to rebuild the 'jch' branch from scratch.  "-c1" tells the script
+    to stop merging at the first line that begins with '###'
+-- 
+2.39.3 (Apple Git-145)
+

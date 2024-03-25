@@ -1,0 +1,30 @@
+From 4a7dab5ce429c4a2badbfd49e1f794c1229b20e4 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 16:47:00 -0400
+Subject: [PATCH 0019/2871] t1092: prepare for changing protocol.file.allow
+
+Explicitly cloning over the "file://" protocol in t1092 in preparation
+for merging a security release which will change the default value of
+this configuration to be "user".
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t1092-sparse-checkout-compatibility.sh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index e9a815ca7a..141a7bc65b 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -390,6 +390,8 @@ test_expect_success 'submodule handling' '
+ 	test_all_match git add modules &&
+ 	test_all_match git commit -m "add modules directory" &&
+ 
++	test_config_global protocol.file.allow always &&
++
+ 	run_on_all git submodule add "$(pwd)/initial-repo" modules/sub &&
+ 	test_all_match git commit -m "add submodule" &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

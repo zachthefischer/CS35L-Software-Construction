@@ -1,0 +1,77 @@
+From 3c4a5318afb4978a037c83ccd9bbeb870b3f0543 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 29 Dec 2023 08:27:00 +0100
+Subject: [PATCH 2634/2871] builtin/rev-parse: introduce `--show-ref-format`
+ flag
+
+Introduce a new `--show-ref-format` to git-rev-parse(1) that causes it
+to print the ref format used by a repository.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rev-parse.txt |  3 +++
+ builtin/rev-parse.c             |  4 ++++
+ t/t1500-rev-parse.sh            | 17 +++++++++++++++++
+ 3 files changed, 24 insertions(+)
+
+diff --git a/Documentation/git-rev-parse.txt b/Documentation/git-rev-parse.txt
+index 912fab9f5e..546faf9017 100644
+--- a/Documentation/git-rev-parse.txt
++++ b/Documentation/git-rev-parse.txt
+@@ -307,6 +307,9 @@ The following options are unaffected by `--path-format`:
+ 	input, multiple algorithms may be printed, space-separated.
+ 	If not specified, the default is "storage".
+ 
++--show-ref-format::
++	Show the reference storage format used for the repository.
++
+ 
+ Other Options
+ ~~~~~~~~~~~~~
+diff --git a/builtin/rev-parse.c b/builtin/rev-parse.c
+index 917f122440..d08987646a 100644
+--- a/builtin/rev-parse.c
++++ b/builtin/rev-parse.c
+@@ -1062,6 +1062,10 @@ int cmd_rev_parse(int argc, const char **argv, const char *prefix)
+ 				puts(the_hash_algo->name);
+ 				continue;
+ 			}
++			if (!strcmp(arg, "--show-ref-format")) {
++				puts(ref_storage_format_to_name(the_repository->ref_storage_format));
++				continue;
++			}
+ 			if (!strcmp(arg, "--end-of-options")) {
+ 				seen_end_of_options = 1;
+ 				if (filter & (DO_FLAGS | DO_REVS))
+diff --git a/t/t1500-rev-parse.sh b/t/t1500-rev-parse.sh
+index 3f9e7f62e4..a669e592f1 100755
+--- a/t/t1500-rev-parse.sh
++++ b/t/t1500-rev-parse.sh
+@@ -208,6 +208,23 @@ test_expect_success 'rev-parse --show-object-format in repo' '
+ 	grep "unknown mode for --show-object-format: squeamish-ossifrage" err
+ '
+ 
++test_expect_success 'rev-parse --show-ref-format' '
++	test_detect_ref_format >expect &&
++	git rev-parse --show-ref-format >actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'rev-parse --show-ref-format with invalid storage' '
++	test_when_finished "rm -rf repo" &&
++	git init repo &&
++	(
++		cd repo &&
++		git config extensions.refstorage broken &&
++		test_must_fail git rev-parse --show-ref-format 2>err &&
++		grep "error: invalid value for ${SQ}extensions.refstorage${SQ}: ${SQ}broken${SQ}" err
++	)
++'
++
+ test_expect_success '--show-toplevel from subdir of working tree' '
+ 	pwd >expect &&
+ 	git -C sub/dir rev-parse --show-toplevel >actual &&
+-- 
+2.39.3 (Apple Git-145)
+

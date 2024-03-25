@@ -1,0 +1,71 @@
+From 331b7d29f05b62fc73f1218e0e6db6969481a3cd Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 20 Mar 2023 13:35:32 +0100
+Subject: [PATCH 1058/2871] fetch: centralize handling of per-reference format
+
+The function `format_display()` is used to print a single reference
+update to a buffer which will then ultimately be printed by the caller.
+This architecture causes us to duplicate some logic across the different
+callsites of this function. This makes it hard to follow the code as
+some parts of the logic are located in one place, while other parts of
+the logic are located in a different place. Furthermore, by having the
+logic scattered around it becomes quite hard to implement a new output
+format for the reference updates.
+
+We can make the logic a whole lot easier to understand by making the
+`format_display()` function self-contained so that it handles formatting
+and printing of the references. This will eventually allow us to easily
+implement a completely different output format, but also opens the door
+to conditionally print to either stdout or stderr depending on the
+output format.
+
+As a first step towards that goal we move the formatting directive used
+by both callers to print a single reference update into this function.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 81ba3900cb..a66428dfd8 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -885,13 +885,14 @@ static void format_display(struct display_state *display_state,
+ 
+ 	width = (summary_width + strlen(summary) - gettext_width(summary));
+ 
+-	strbuf_addf(display_buffer, "%c %-*s ", code, width, summary);
++	strbuf_addf(display_buffer, " %c %-*s ", code, width, summary);
+ 	if (!display_state->compact_format)
+ 		print_remote_to_local(display_state, display_buffer, remote, prettify_refname(local));
+ 	else
+ 		print_compact(display_state, display_buffer, remote, prettify_refname(local));
+ 	if (error)
+ 		strbuf_addf(display_buffer, "  (%s)", error);
++	strbuf_addch(display_buffer, '\n');
+ }
+ 
+ static int update_local_ref(struct ref *ref,
+@@ -1271,7 +1272,7 @@ static int store_updated_refs(struct display_state *display_state,
+ 							url_len, url);
+ 					shown_url = 1;
+ 				}
+-				fprintf(stderr, " %s\n", note.buf);
++				fputs(note.buf, stderr);
+ 			}
+ 		}
+ 	}
+@@ -1432,7 +1433,7 @@ static int prune_refs(struct display_state *display_state,
+ 			format_display(display_state, &sb, '-', _("[deleted]"), NULL,
+ 				       _("(none)"), ref->name,
+ 				       summary_width);
+-			fprintf(stderr, " %s\n",sb.buf);
++			fputs(sb.buf, stderr);
+ 			strbuf_release(&sb);
+ 			warn_dangling_symref(stderr, dangling_msg, ref->name);
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

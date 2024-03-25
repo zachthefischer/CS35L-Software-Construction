@@ -1,0 +1,98 @@
+From 93105aba6c4c8608b10c8ebe14b2313b3d347124 Mon Sep 17 00:00:00 2001
+From: Jerry Zhang <Jerry@skydio.com>
+Date: Mon, 24 Oct 2022 20:07:42 +0000
+Subject: [PATCH 0237/2871] patch-id: fix patch-id for mode changes
+
+Currently patch-id as used in rebase and cherry-pick does not account
+for file modes if the file is modified. One consequence of this is
+that if you have a local patch that changes modes, but upstream
+has applied an outdated version of the patch that doesn't include
+that mode change, "git rebase" will drop your local version of the
+patch along with your mode changes. It also means that internal
+patch-id doesn't produce the same output as the builtin, which does
+account for mode changes due to them being part of diff output.
+
+Fix by adding mode to the patch-id if it has changed, in the same
+format that would be produced by diff, so that it is compatible
+with builtin patch-id.
+
+Signed-off-by: Jerry Zhang <Jerry@skydio.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c                     |  5 +++++
+ t/t3419-rebase-patch-id.sh | 31 ++++++++++++++++++++++++++++++-
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/diff.c b/diff.c
+index c86688794f..20b121637d 100644
+--- a/diff.c
++++ b/diff.c
+@@ -6224,6 +6224,11 @@ static int diff_get_patch_id(struct diff_options *options, struct object_id *oid
+ 		} else if (p->two->mode == 0) {
+ 			patch_id_add_string(&ctx, "deletedfilemode");
+ 			patch_id_add_mode(&ctx, p->one->mode);
++		} else if (p->one->mode != p->two->mode) {
++			patch_id_add_string(&ctx, "oldmode");
++			patch_id_add_mode(&ctx, p->one->mode);
++			patch_id_add_string(&ctx, "newmode");
++			patch_id_add_mode(&ctx, p->two->mode);
+ 		}
+ 
+ 		if (diff_header_only) {
+diff --git a/t/t3419-rebase-patch-id.sh b/t/t3419-rebase-patch-id.sh
+index d24e55aac8..7181f176b8 100755
+--- a/t/t3419-rebase-patch-id.sh
++++ b/t/t3419-rebase-patch-id.sh
+@@ -48,7 +48,17 @@ test_expect_success 'setup: 500 lines' '
+ 	git branch -f squashed main &&
+ 	git checkout -q -f squashed &&
+ 	git reset -q --soft HEAD~2 &&
+-	git commit -q -m squashed
++	git commit -q -m squashed &&
++
++	git branch -f mode main &&
++	git checkout -q -f mode &&
++	test_chmod +x file &&
++	git commit -q -a --amend &&
++
++	git branch -f modeother other &&
++	git checkout -q -f modeother &&
++	test_chmod +x file &&
++	git commit -q -a --amend
+ '
+ 
+ test_expect_success 'detect upstream patch' '
+@@ -71,6 +81,13 @@ test_expect_success 'detect upstream patch binary' '
+ 	test_when_finished "rm .gitattributes"
+ '
+ 
++test_expect_success 'detect upstream patch modechange' '
++	git checkout -q modeother^{} &&
++	git rebase mode &&
++	git rev-list mode...HEAD~ >revs &&
++	test_must_be_empty revs
++'
++
+ test_expect_success 'do not drop patch' '
+ 	git checkout -q other^{} &&
+ 	test_must_fail git rebase squashed &&
+@@ -85,4 +102,16 @@ test_expect_success 'do not drop patch binary' '
+ 	test_when_finished "rm .gitattributes"
+ '
+ 
++test_expect_success 'do not drop patch modechange' '
++	git checkout -q modeother^{} &&
++	git rebase other &&
++	cat >expected <<-\EOF &&
++	diff --git a/file b/file
++	old mode 100644
++	new mode 100755
++	EOF
++	git diff HEAD~ >modediff &&
++	test_cmp expected modediff
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,27 @@
+From f95526419bacf116abae549e5716f4ced1f38442 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Tue, 27 Dec 2022 22:01:56 +0100
+Subject: [PATCH 0616/2871] gitattributes.txt: fix typo in "comma separated"
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/gitattributes.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/gitattributes.txt b/Documentation/gitattributes.txt
+index e84e104f93..c61a119579 100644
+--- a/Documentation/gitattributes.txt
++++ b/Documentation/gitattributes.txt
+@@ -1149,7 +1149,7 @@ Unspecified::
+ 
+ String::
+ 
+-	Specify a comma separate list of common whitespace problems to
++	Specify a comma separated list of common whitespace problems to
+ 	notice in the same format as the `core.whitespace` configuration
+ 	variable.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,65 @@
+From e65b868d074a38b3049529064bb05df53948761f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 5 Feb 2023 11:42:27 +0100
+Subject: [PATCH 0800/2871] pack-objects: use strcspn(3) in name_cmp_len()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Call strcspn(3) to find the length of a string terminated by NUL, NL or
+slash instead of open-coding it.  Adopt its return type, size_t, to
+support strings of arbitrary length.  Use that type in callers as well
+for variables and function parameters that receive the return value.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-objects.c | 13 +++++--------
+ 1 file changed, 5 insertions(+), 8 deletions(-)
+
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 573d0b20b7..206c9a35a9 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -1708,17 +1708,14 @@ static void pbase_tree_put(struct pbase_tree_cache *cache)
+ 	free(cache);
+ }
+ 
+-static int name_cmp_len(const char *name)
++static size_t name_cmp_len(const char *name)
+ {
+-	int i;
+-	for (i = 0; name[i] && name[i] != '\n' && name[i] != '/'; i++)
+-		;
+-	return i;
++	return strcspn(name, "\n/");
+ }
+ 
+ static void add_pbase_object(struct tree_desc *tree,
+ 			     const char *name,
+-			     int cmplen,
++			     size_t cmplen,
+ 			     const char *fullname)
+ {
+ 	struct name_entry entry;
+@@ -1743,7 +1740,7 @@ static void add_pbase_object(struct tree_desc *tree,
+ 			struct tree_desc sub;
+ 			struct pbase_tree_cache *tree;
+ 			const char *down = name+cmplen+1;
+-			int downlen = name_cmp_len(down);
++			size_t downlen = name_cmp_len(down);
+ 
+ 			tree = pbase_tree_get(&entry.oid);
+ 			if (!tree)
+@@ -1795,7 +1792,7 @@ static int check_pbase_path(unsigned hash)
+ static void add_preferred_base_object(const char *name)
+ {
+ 	struct pbase_tree *it;
+-	int cmplen;
++	size_t cmplen;
+ 	unsigned hash = pack_name_hash(name);
+ 
+ 	if (!num_preferred_base || check_pbase_path(hash))
+-- 
+2.39.3 (Apple Git-145)
+

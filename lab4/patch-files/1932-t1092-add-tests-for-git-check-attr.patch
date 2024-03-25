@@ -1,0 +1,97 @@
+From fd4faf7a5d5d92ca3e50f5a6ee2f94676d83530b Mon Sep 17 00:00:00 2001
+From: Shuqi Liang <cheskaqiqi@gmail.com>
+Date: Fri, 11 Aug 2023 10:22:09 -0400
+Subject: [PATCH 1932/2871] t1092: add tests for 'git check-attr'
+
+Add tests for `git check-attr`, make sure attribute file does get read
+from index when path is either inside or outside of sparse-checkout
+definition.
+
+Add a test named 'diff --check with pathspec outside sparse definition'.
+It starts by disabling the trailing whitespace and space-before-tab
+checks using the core. whitespace configuration option. Then, it
+specifically re-enables the trailing whitespace check for a file located
+in a sparse directory by adding a whitespace=trailing-space rule to the
+.gitattributes file within that directory. Next, create and populate the
+folder1 directory, and then add the .gitattributes file to the index.
+Edit the contents of folder1/a, add it to the index, and proceed to
+"re-sparsify" 'folder1/' with 'git sparse-checkout reapply'. Finally,
+use 'git diff --check --cached' to compare the 'index vs. HEAD',
+ensuring the correct application of the attribute rules even when the
+file's path is outside the sparse-checkout definition.
+
+Mark the two tests 'check-attr with pathspec outside sparse definition'
+and 'diff --check with pathspec outside sparse definition' as
+'test_expect_failure' to reflect an existing issue where the attributes
+inside a sparse directory are ignored. Ensure that the 'check-attr'
+command fails to read the required attributes to demonstrate this
+expected failure.
+
+Helped-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Shuqi Liang <cheskaqiqi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1092-sparse-checkout-compatibility.sh | 49 ++++++++++++++++++++++++
+ 1 file changed, 49 insertions(+)
+
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index 8a95adf4b5..2d7fa65d81 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -2259,4 +2259,53 @@ test_expect_success 'worktree is not expanded' '
+ 	ensure_not_expanded worktree remove .worktrees/hotfix
+ '
+ 
++test_expect_success 'check-attr with pathspec inside sparse definition' '
++	init_repos &&
++
++	echo "a -crlf myAttr" >>.gitattributes &&
++	run_on_all cp ../.gitattributes ./deep &&
++
++	test_all_match git check-attr -a -- deep/a &&
++
++	test_all_match git add deep/.gitattributes &&
++	test_all_match git check-attr -a --cached -- deep/a
++'
++
++test_expect_failure 'check-attr with pathspec outside sparse definition' '
++	init_repos &&
++
++	echo "a -crlf myAttr" >>.gitattributes &&
++	run_on_sparse mkdir folder1 &&
++	run_on_all cp ../.gitattributes ./folder1 &&
++	run_on_all cp a folder1/a &&
++
++	test_all_match git check-attr -a -- folder1/a &&
++
++	git -C full-checkout add folder1/.gitattributes &&
++	test_sparse_match git add --sparse folder1/.gitattributes &&
++	test_all_match git commit -m "add .gitattributes" &&
++	test_sparse_match git sparse-checkout reapply &&
++	test_all_match git check-attr -a --cached -- folder1/a
++'
++
++test_expect_failure 'diff --check with pathspec outside sparse definition' '
++	init_repos &&
++
++	write_script edit-contents <<-\EOF &&
++	echo "a " >"$1"
++	EOF
++
++	test_all_match git config core.whitespace -trailing-space,-space-before-tab &&
++
++	echo "a whitespace=trailing-space,space-before-tab" >>.gitattributes &&
++	run_on_all mkdir -p folder1 &&
++	run_on_all cp ../.gitattributes ./folder1 &&
++	test_all_match git add --sparse folder1/.gitattributes &&
++	run_on_all ../edit-contents folder1/a &&
++	test_all_match git add --sparse folder1/a &&
++
++	test_sparse_match git sparse-checkout reapply &&
++	test_all_match test_must_fail git diff --check --cached -- folder1/a
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

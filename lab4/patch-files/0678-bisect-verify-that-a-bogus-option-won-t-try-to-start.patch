@@ -1,0 +1,44 @@
+From 2f645b33baa607629c08c0821ccd0c12c8b6ab2f Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 12 Jan 2023 16:19:11 +0100
+Subject: [PATCH 0678/2871] bisect: verify that a bogus option won't try to
+ start a bisection
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We do not want `git bisect --bogus-option` to start a bisection. To
+verify that, we look for the tell-tale error message `You need to start
+by "git bisect start"` and fail if it was found.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6030-bisect-porcelain.sh | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/t/t6030-bisect-porcelain.sh b/t/t6030-bisect-porcelain.sh
+index 98a72ff78a..9e56b42b5d 100755
+--- a/t/t6030-bisect-porcelain.sh
++++ b/t/t6030-bisect-porcelain.sh
+@@ -1058,6 +1058,16 @@ test_expect_success 'bisect start with one term1 and term2' '
+ 	git bisect reset
+ '
+ 
++test_expect_success 'bogus command does not start bisect' '
++	git bisect reset &&
++	test_must_fail git bisect --bisect-terms 1 2 2>out &&
++	! grep "You need to start" out &&
++	test_must_fail git bisect --bisect-terms 2>out &&
++	! grep "You need to start" out &&
++	grep "git bisect.*visualize" out &&
++	git bisect reset
++'
++
+ test_expect_success 'bisect replay with term1 and term2' '
+ 	git bisect replay log_to_replay.txt >bisect_result &&
+ 	grep "$HASH2 is the first term1 commit" bisect_result &&
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,153 @@
+From 2dcff52524e611413cb0cb49015f0d105f5f8dfa Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Oct 2022 18:01:55 -0400
+Subject: [PATCH 0147/2871] midx.c: instrument MIDX and bitmap generation with
+ trace2 regions
+
+When debugging MIDX and MIDX-bitmap related issues, it is useful to
+figure out where Git is spending its time.
+
+GitHub has been using the below trace2 regions to instrument various
+components of generating a MIDX itself, as well time spent preparing to
+build a MIDX bitmap.
+
+These are limited to instrumenting the following functions:
+
+  - midx.c::find_commits_for_midx_bitmap()
+  - midx.c::midx_pack_order()
+  - midx.c::prepare_midx_packing_data()
+  - midx.c::write_midx_bitmap()
+  - midx.c::write_midx_internal()
+  - midx.c::write_midx_reverse_index()
+
+to start and end with a trace2_region_enter() and trace2_region_leave(),
+respectively.
+
+The category for all of these is "midx", which matches the existing
+convention. The region description matches the name of the function.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/midx.c b/midx.c
+index a8d2111e96..4df701ee11 100644
+--- a/midx.c
++++ b/midx.c
+@@ -913,6 +913,8 @@ static uint32_t *midx_pack_order(struct write_midx_context *ctx)
+ 	uint32_t *pack_order;
+ 	uint32_t i;
+ 
++	trace2_region_enter("midx", "midx_pack_order", the_repository);
++
+ 	ALLOC_ARRAY(data, ctx->entries_nr);
+ 	for (i = 0; i < ctx->entries_nr; i++) {
+ 		struct pack_midx_entry *e = &ctx->entries[i];
+@@ -930,6 +932,8 @@ static uint32_t *midx_pack_order(struct write_midx_context *ctx)
+ 		pack_order[i] = data[i].nr;
+ 	free(data);
+ 
++	trace2_region_leave("midx", "midx_pack_order", the_repository);
++
+ 	return pack_order;
+ }
+ 
+@@ -939,6 +943,8 @@ static void write_midx_reverse_index(char *midx_name, unsigned char *midx_hash,
+ 	struct strbuf buf = STRBUF_INIT;
+ 	const char *tmp_file;
+ 
++	trace2_region_enter("midx", "write_midx_reverse_index", the_repository);
++
+ 	strbuf_addf(&buf, "%s-%s.rev", midx_name, hash_to_hex(midx_hash));
+ 
+ 	tmp_file = write_rev_file_order(NULL, ctx->pack_order, ctx->entries_nr,
+@@ -948,6 +954,8 @@ static void write_midx_reverse_index(char *midx_name, unsigned char *midx_hash,
+ 		die(_("cannot store reverse index file"));
+ 
+ 	strbuf_release(&buf);
++
++	trace2_region_leave("midx", "write_midx_reverse_index", the_repository);
+ }
+ 
+ static void clear_midx_files_ext(const char *object_dir, const char *ext,
+@@ -963,6 +971,8 @@ static void prepare_midx_packing_data(struct packing_data *pdata,
+ {
+ 	uint32_t i;
+ 
++	trace2_region_enter("midx", "prepare_midx_packing_data", the_repository);
++
+ 	memset(pdata, 0, sizeof(struct packing_data));
+ 	prepare_packing_data(the_repository, pdata);
+ 
+@@ -973,6 +983,8 @@ static void prepare_midx_packing_data(struct packing_data *pdata,
+ 		oe_set_in_pack(pdata, to,
+ 			       ctx->info[ctx->pack_perm[from->pack_int_id]].p);
+ 	}
++
++	trace2_region_leave("midx", "prepare_midx_packing_data", the_repository);
+ }
+ 
+ static int add_ref_to_pending(const char *refname,
+@@ -1070,6 +1082,9 @@ static struct commit **find_commits_for_midx_bitmap(uint32_t *indexed_commits_nr
+ 	struct rev_info revs;
+ 	struct bitmap_commit_cb cb = {0};
+ 
++	trace2_region_enter("midx", "find_commits_for_midx_bitmap",
++			    the_repository);
++
+ 	cb.ctx = ctx;
+ 
+ 	repo_init_revisions(the_repository, &revs, NULL);
+@@ -1103,6 +1118,10 @@ static struct commit **find_commits_for_midx_bitmap(uint32_t *indexed_commits_nr
+ 		*indexed_commits_nr_p = cb.commits_nr;
+ 
+ 	release_revisions(&revs);
++
++	trace2_region_leave("midx", "find_commits_for_midx_bitmap",
++			    the_repository);
++
+ 	return cb.commits;
+ }
+ 
+@@ -1120,6 +1139,8 @@ static int write_midx_bitmap(const char *midx_name,
+ 	char *bitmap_name = xstrfmt("%s-%s.bitmap", midx_name,
+ 					hash_to_hex(midx_hash));
+ 
++	trace2_region_enter("midx", "write_midx_bitmap", the_repository);
++
+ 	if (flags & MIDX_WRITE_BITMAP_HASH_CACHE)
+ 		options |= BITMAP_OPT_HASH_CACHE;
+ 
+@@ -1165,6 +1186,9 @@ static int write_midx_bitmap(const char *midx_name,
+ cleanup:
+ 	free(index);
+ 	free(bitmap_name);
++
++	trace2_region_leave("midx", "write_midx_bitmap", the_repository);
++
+ 	return ret;
+ }
+ 
+@@ -1211,6 +1235,8 @@ static int write_midx_internal(const char *object_dir,
+ 	int result = 0;
+ 	struct chunkfile *cf;
+ 
++	trace2_region_enter("midx", "write_midx_internal", the_repository);
++
+ 	get_midx_filename(&midx_name, object_dir);
+ 	if (safe_create_leading_directories(midx_name.buf))
+ 		die_errno(_("unable to create leading directories of %s"),
+@@ -1552,6 +1578,8 @@ static int write_midx_internal(const char *object_dir,
+ 	free(ctx.pack_order);
+ 	strbuf_release(&midx_name);
+ 
++	trace2_region_leave("midx", "write_midx_internal", the_repository);
++
+ 	return result;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

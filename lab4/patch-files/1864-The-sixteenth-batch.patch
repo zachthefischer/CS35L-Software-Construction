@@ -1,0 +1,25 @@
+From bfce02c22f3f1b0539686cabb69a637854448be3 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 27 Jul 2023 15:02:38 -0700
+Subject: [PATCH 1864/2871] The sixteenth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.42.0.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.42.0.txt b/Documentation/RelNotes/2.42.0.txt
+index a5e924b6c4..e569b044ed 100644
+--- a/Documentation/RelNotes/2.42.0.txt
++++ b/Documentation/RelNotes/2.42.0.txt
+@@ -237,3 +237,7 @@ Fixes since v2.41
+    (merge 3437f549dd jr/gitignore-doc-example-markup later to maint).
+    (merge 947ebd62a0 jc/am-parseopt-fix later to maint).
+    (merge e12cb98e1e jc/branch-parseopt-fix later to maint).
++   (merge d6f598e443 jc/gitignore-doc-pattern-markup later to maint).
++   (merge a2dad4868b jc/transport-parseopt-fix later to maint).
++   (merge 68cbb20e73 jc/parse-options-show-branch later to maint).
++   (merge 3821eb6c3d jc/parse-options-reset later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

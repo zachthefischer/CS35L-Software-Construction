@@ -1,0 +1,54 @@
+From af37a209ad76ce760becc0d2c2fac63c2022e730 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 15 Jun 2023 16:39:55 +0200
+Subject: [PATCH 1601/2871] revision: small readability improvement for reading
+ from stdin
+
+The code that reads lines from standard input manually compares whether
+the read line matches "--", which is a bit awkward to read. Furthermore,
+we're about to extend the code to also support reading pseudo-options
+via standard input, requiring more elaborate handling of lines with a
+leading dash.
+
+Refactor the code by hoisting out the check for "--" outside of the
+block that checks for a leading dash.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ revision.c | 17 +++++++++--------
+ 1 file changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/revision.c b/revision.c
+index cc22ccd76e..3a39f41bb8 100644
+--- a/revision.c
++++ b/revision.c
+@@ -2795,16 +2795,17 @@ static void read_revisions_from_stdin(struct rev_info *revs,
+ 
+ 	strbuf_init(&sb, 1000);
+ 	while (strbuf_getline(&sb, stdin) != EOF) {
+-		int len = sb.len;
+-		if (!len)
++		if (!sb.len)
++			break;
++
++		if (!strcmp(sb.buf, "--")) {
++			seen_dashdash = 1;
+ 			break;
+-		if (sb.buf[0] == '-') {
+-			if (len == 2 && sb.buf[1] == '-') {
+-				seen_dashdash = 1;
+-				break;
+-			}
+-			die("options not supported in --stdin mode");
+ 		}
++
++		if (sb.buf[0] == '-')
++			die("options not supported in --stdin mode");
++
+ 		if (handle_revision_arg(sb.buf, revs, 0,
+ 					REVARG_CANNOT_BE_FILENAME))
+ 			die("bad revision '%s'", sb.buf);
+-- 
+2.39.3 (Apple Git-145)
+

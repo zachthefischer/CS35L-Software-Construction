@@ -1,0 +1,37 @@
+From 99c60edc5b83cb624b30b8f459da78c250c63f87 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 18 Jan 2024 11:22:53 +0100
+Subject: [PATCH 2702/2871] ci: handle TEST_OUTPUT_DIRECTORY when printing test
+ failures
+
+The TEST_OUTPUT_DIRECTORY environment variable can be used to instruct
+the test suite to write test data and test results into a different
+location than into "t/". The "ci/print-test-failures.sh" script does not
+know to handle this environment variable though, which means that it
+will search for test results in the wrong location if it was set.
+
+Update the script to handle TEST_OUTPUT_DIRECTORY so that we can start
+to set it in our CI.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/print-test-failures.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ci/print-test-failures.sh b/ci/print-test-failures.sh
+index c33ad4e3a2..b1f80aeac3 100755
+--- a/ci/print-test-failures.sh
++++ b/ci/print-test-failures.sh
+@@ -8,7 +8,7 @@
+ # Tracing executed commands would produce too much noise in the loop below.
+ set +x
+ 
+-cd t/
++cd "${TEST_OUTPUT_DIRECTORY:-t/}"
+ 
+ if ! ls test-results/*.exit >/dev/null 2>/dev/null
+ then
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,79 @@
+From be3d65434323f7f00a5abed6dbcfe690cde648b8 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 17 Jun 2023 00:26:24 -0400
+Subject: [PATCH 1607/2871] commit: pass --no-divider to interpret-trailers
+
+When git-commit sees any "--trailer" options, it passes the
+COMMIT_EDITMSG file through git-interpret-trailers. But it does so
+without passing --no-divider, which means that interpret-trailers will
+look for a "---" divider to signal the end of the commit message.
+
+That behavior doesn't make any sense in this context; we know we have a
+complete and solitary commit message, not something we have to further
+parse. And as a result, we'll do the wrong thing if the commit message
+contains a "---" marker (which otherwise is not syntactically
+significant), inserting any new trailers at the wrong spot.
+
+We can fix this by passing --no-divider. This is the exact situation for
+which it was added in 1688c9a489 (interpret-trailers: allow suppressing
+"---" divider, 2018-08-22). As noted in the message for that commit, it
+just adds the mechanism, and further patches were needed to trigger it
+from various callers.  We did that back then in a few spots, like
+ffce7f590f (sequencer: ignore "---" divider when parsing trailers,
+2018-08-22), but obviously missed this one.
+
+Reported-by: <eric.frederich@siemens.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/commit.c            |  3 ++-
+ t/t7502-commit-porcelain.sh | 19 +++++++++++++++++++
+ 2 files changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/commit.c b/builtin/commit.c
+index e67c4be221..9f4448f6b9 100644
+--- a/builtin/commit.c
++++ b/builtin/commit.c
+@@ -1043,7 +1043,8 @@ static int prepare_to_commit(const char *index_file, const char *prefix,
+ 		struct child_process run_trailer = CHILD_PROCESS_INIT;
+ 
+ 		strvec_pushl(&run_trailer.args, "interpret-trailers",
+-			     "--in-place", git_path_commit_editmsg(), NULL);
++			     "--in-place", "--no-divider",
++			     git_path_commit_editmsg(), NULL);
+ 		strvec_pushv(&run_trailer.args, trailer_args.v);
+ 		run_trailer.git_cmd = 1;
+ 		if (run_command(&run_trailer))
+diff --git a/t/t7502-commit-porcelain.sh b/t/t7502-commit-porcelain.sh
+index 38a532d81c..b5bf7de7cd 100755
+--- a/t/t7502-commit-porcelain.sh
++++ b/t/t7502-commit-porcelain.sh
+@@ -466,6 +466,25 @@ test_expect_success 'commit --trailer with -c and command' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'commit --trailer not confused by --- separator' '
++	cat >msg <<-\EOF &&
++	subject
++
++	body with dashes
++	---
++	in it
++	EOF
++	git commit --allow-empty --trailer="my-trailer: value" -F msg &&
++	{
++		cat msg &&
++		echo &&
++		echo "my-trailer: value"
++	} >expected &&
++	git cat-file commit HEAD >commit.msg &&
++	sed -e "1,/^\$/d" commit.msg >actual &&
++	test_cmp expected actual
++'
++
+ test_expect_success 'multiple -m' '
+ 
+ 	>negative &&
+-- 
+2.39.3 (Apple Git-145)
+

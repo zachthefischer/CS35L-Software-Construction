@@ -1,0 +1,45 @@
+From b71552977030afd6f187c3f13e6b5c892d31a89d Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 25 Oct 2022 16:22:28 -0700
+Subject: [PATCH 0247/2871] The sixth batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.39.0.txt | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.39.0.txt b/Documentation/RelNotes/2.39.0.txt
+index 8153661826..f8f739cb87 100644
+--- a/Documentation/RelNotes/2.39.0.txt
++++ b/Documentation/RelNotes/2.39.0.txt
+@@ -50,6 +50,8 @@ Performance, Internal Implementation, Development Support etc.
+  * Avoid false-positive from LSan whose assumption may be broken with
+    higher optimization levels.
+ 
++ * Enable address and undefined sanitizer tasks at GitHub Actions CI.
++
+ 
+ Fixes since v2.38
+ -----------------
+@@ -135,6 +137,18 @@ Fixes since v2.38
+    corrected.
+    (merge db84376f98 ab/grep-simplify-extended-expression later to maint).
+ 
++ * "git diff rev^!" did not show combined diff to go to the rev from
++   its parents.
++   (merge a79c6b6081 rs/diff-caret-bang-with-parents later to maint).
++
++ * Allow configuration files in "protected" scopes to include other
++   configuration files.
++   (merge ecec57b3c9 gc/bare-repo-discovery later to maint).
++
++ * Give a bit more diversity to macOS CI by using sha1dc in one of the
++   jobs (the other one tests Apple Common Crypto).
++   (merge 1ad5c3df35 jc/ci-osx-with-sha1dc later to maint).
++
+  * Other code cleanup, docfix, build fix, etc.
+    (merge c34a6bd291 so/diff-merges-cleanup later to maint).
+    (merge 5e7c8b75e7 ab/test-malloc-with-sanitize-leak later to maint).
+-- 
+2.39.3 (Apple Git-145)
+

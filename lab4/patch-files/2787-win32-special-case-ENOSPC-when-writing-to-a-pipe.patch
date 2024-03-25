@@ -1,0 +1,90 @@
+From 19ed0dff8f3f19fc15e79d188d7bcaadf26f2f11 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 30 Jan 2024 21:36:59 +0000
+Subject: [PATCH 2787/2871] win32: special-case `ENOSPC` when writing to a pipe
+
+Since c6d3cce6f3c4 (pipe_command(): handle ENOSPC when writing to a
+pipe, 2022-08-17), one `write()` call that results in an `errno` value
+`ENOSPC` (which typically indicates out of disk space, which makes
+little sense in the context of a pipe) is treated the same as `EAGAIN`.
+
+However, contrary to expectations, as diagnosed in
+https://github.com/python/cpython/issues/101881#issuecomment-1428667015,
+when writing to a non-blocking pipe on Windows, an `errno` value of
+`ENOSPC` means something else: the write _fails_. Completely. Because
+more data was provided than the internal pipe buffer can handle.
+Somewhat surprising, considering that `write()` is allowed to write less
+than the specified amount, e.g. by writing only as much as fits in that
+buffer. But it doesn't, it writes no byte at all in that instance.
+
+Let's handle this by manually detecting when an `ENOSPC` indicates that
+a pipe's buffer is smaller than what needs to be written, and re-try
+using the pipe's buffer size as `size` parameter.
+
+It would be plausible to try writing the entire buffer in a loop,
+feeding pipe buffer-sized chunks, but experiments show that trying to
+write more than one buffer-sized chunk right after that will immediately
+fail because the buffer is unlikely to be drained as fast as `write()`
+could write again. And the whole point of a non-blocking pipe is to be
+non-blocking.
+
+Which means that the logic that determines the pipe's buffer size
+unfortunately has to be run potentially many times when writing large
+amounts of data to a non-blocking pipe, as there is no elegant way to
+cache that information between `write()` calls. It's the best we can do,
+though, so it has to be good enough.
+
+This fix is required to let t3701.60 (handle very large filtered diff)
+pass with the MSYS2 runtime provided by the MSYS2 project: Without this
+patch, the failed write would result in an infinite loop. This patch is
+not required with Git for Windows' variant of the MSYS2 runtime only
+because Git for Windows added an ugly work-around specifically to avoid
+a hang in that test case.
+
+The diff is slightly chatty because it extends an already-existing
+conditional that special-cases a _different_ `errno` value for pipes,
+and because this patch needs to account for the fact that
+`_get_osfhandle()` potentially overwrites `errno`.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/mingw.c | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/compat/mingw.c b/compat/mingw.c
+index ec5280da16..bdb95e7ce0 100644
+--- a/compat/mingw.c
++++ b/compat/mingw.c
+@@ -705,13 +705,24 @@ ssize_t mingw_write(int fd, const void *buf, size_t len)
+ {
+ 	ssize_t result = write(fd, buf, len);
+ 
+-	if (result < 0 && errno == EINVAL && buf) {
++	if (result < 0 && (errno == EINVAL || errno == ENOSPC) && buf) {
++		int orig = errno;
++
+ 		/* check if fd is a pipe */
+ 		HANDLE h = (HANDLE) _get_osfhandle(fd);
+-		if (GetFileType(h) == FILE_TYPE_PIPE)
++		if (GetFileType(h) != FILE_TYPE_PIPE)
++			errno = orig;
++		else if (orig == EINVAL)
+ 			errno = EPIPE;
+-		else
+-			errno = EINVAL;
++		else {
++			DWORD buf_size;
++
++			if (!GetNamedPipeInfo(h, NULL, NULL, &buf_size, NULL))
++				buf_size = 4096;
++			if (len > buf_size)
++				return write(fd, buf, buf_size);
++			errno = orig;
++		}
+ 	}
+ 
+ 	return result;
+-- 
+2.39.3 (Apple Git-145)
+

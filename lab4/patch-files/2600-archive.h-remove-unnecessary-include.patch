@@ -1,0 +1,69 @@
+From c2c4138c07ca4d5ffc41ace0bfda0f189d3e262e Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 23 Dec 2023 17:14:51 +0000
+Subject: [PATCH 2600/2871] archive.h: remove unnecessary include
+
+The unnecessary include in the header transitively pulled in some
+other headers actually needed by source files, though.  Have those
+source files explicitly include the headers they need.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ archive-tar.c | 1 +
+ archive-zip.c | 1 +
+ archive.c     | 1 +
+ archive.h     | 1 -
+ 4 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/archive-tar.c b/archive-tar.c
+index 0726996839..f2a0ed7752 100644
+--- a/archive-tar.c
++++ b/archive-tar.c
+@@ -9,6 +9,7 @@
+ #include "tar.h"
+ #include "archive.h"
+ #include "object-store-ll.h"
++#include "strbuf.h"
+ #include "streaming.h"
+ #include "run-command.h"
+ #include "write-or-die.h"
+diff --git a/archive-zip.c b/archive-zip.c
+index 7229e3e454..fd1d3f816d 100644
+--- a/archive-zip.c
++++ b/archive-zip.c
+@@ -10,6 +10,7 @@
+ #include "streaming.h"
+ #include "utf8.h"
+ #include "object-store-ll.h"
++#include "strbuf.h"
+ #include "userdiff.h"
+ #include "write-or-die.h"
+ #include "xdiff-interface.h"
+diff --git a/archive.c b/archive.c
+index 4562a69a0c..50fd35bd27 100644
+--- a/archive.c
++++ b/archive.c
+@@ -5,6 +5,7 @@
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
++#include "object-name.h"
+ #include "path.h"
+ #include "pretty.h"
+ #include "setup.h"
+diff --git a/archive.h b/archive.h
+index 3a4bdfbd07..bbe65ba0f9 100644
+--- a/archive.h
++++ b/archive.h
+@@ -1,7 +1,6 @@
+ #ifndef ARCHIVE_H
+ #define ARCHIVE_H
+ 
+-#include "object-name.h"
+ #include "pathspec.h"
+ #include "string-list.h"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

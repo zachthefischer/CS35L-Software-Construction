@@ -1,0 +1,31 @@
+From dc12ee77ab873c71170fbc68b68fdfabe3262ec8 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 2 Apr 2023 21:05:57 +0800
+Subject: [PATCH 1192/2871] object-info: init request_info before reading arg
+
+When retrieving object info via capability "object-info", we store the
+command args into a requested_info variable, but forget to initialize
+it. Initialize the variable before use to prevent unexpected output.
+
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ protocol-caps.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/protocol-caps.c b/protocol-caps.c
+index bbde91810a..2ad9f45c59 100644
+--- a/protocol-caps.c
++++ b/protocol-caps.c
+@@ -77,7 +77,7 @@ static void send_info(struct repository *r, struct packet_writer *writer,
+ 
+ int cap_object_info(struct repository *r, struct packet_reader *request)
+ {
+-	struct requested_info info;
++	struct requested_info info = { 0 };
+ 	struct packet_writer writer;
+ 	struct string_list oid_str_list = STRING_LIST_INIT_DUP;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

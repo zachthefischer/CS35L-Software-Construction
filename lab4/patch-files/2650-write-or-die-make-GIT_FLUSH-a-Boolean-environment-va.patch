@@ -1,0 +1,82 @@
+From 556e68032f8248c831e48207e5cb923c9fe0e42c Mon Sep 17 00:00:00 2001
+From: Chandra Pratap <chandrapratap3519@gmail.com>
+Date: Thu, 4 Jan 2024 10:20:17 +0000
+Subject: [PATCH 2650/2871] write-or-die: make GIT_FLUSH a Boolean environment
+ variable
+
+Among Git's environment variables, the ones marked as "Boolean"
+accept values in a way similar to Boolean configuration variables,
+i.e. values like 'yes', 'on', 'true' and positive numbers are
+taken as "on" and values like 'no', 'off', 'false' are taken as
+"off".
+
+GIT_FLUSH can be used to force Git to use non-buffered I/O when
+writing to stdout. It can only accept two values, '1' which causes
+Git to flush more often and '0' which makes all output buffered.
+Make GIT_FLUSH accept more values besides '0' and '1' by turning it
+into a Boolean environment variable, modifying the required logic.
+Update the related documentation.
+
+Signed-off-by: Chandra Pratap <chandrapratap3519@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git.txt |  5 ++---
+ write-or-die.c        | 19 ++++++++-----------
+ 2 files changed, 10 insertions(+), 14 deletions(-)
+
+diff --git a/Documentation/git.txt b/Documentation/git.txt
+index 2535a30194..d06eea024f 100644
+--- a/Documentation/git.txt
++++ b/Documentation/git.txt
+@@ -724,13 +724,12 @@ for further details.
+ 	waiting for someone with sufficient permissions to fix it.
+ 
+ `GIT_FLUSH`::
+-// NEEDSWORK: make it into a usual Boolean environment variable
+-	If this environment variable is set to "1", then commands such
++	If this Boolean environment variable is set to true, then commands such
+ 	as 'git blame' (in incremental mode), 'git rev-list', 'git log',
+ 	'git check-attr' and 'git check-ignore' will
+ 	force a flush of the output stream after each record have been
+ 	flushed. If this
+-	variable is set to "0", the output of these commands will be done
++	variable is set to false, the output of these commands will be done
+ 	using completely buffered I/O.   If this environment variable is
+ 	not set, Git will choose buffered or record-oriented flushing
+ 	based on whether stdout appears to be redirected to a file or not.
+diff --git a/write-or-die.c b/write-or-die.c
+index 42a2dc73cd..3942152865 100644
+--- a/write-or-die.c
++++ b/write-or-die.c
+@@ -19,20 +19,17 @@
+ void maybe_flush_or_die(FILE *f, const char *desc)
+ {
+ 	static int skip_stdout_flush = -1;
+-	struct stat st;
+-	char *cp;
+ 
+ 	if (f == stdout) {
+ 		if (skip_stdout_flush < 0) {
+-			/* NEEDSWORK: make this a normal Boolean */
+-			cp = getenv("GIT_FLUSH");
+-			if (cp)
+-				skip_stdout_flush = (atoi(cp) == 0);
+-			else if ((fstat(fileno(stdout), &st) == 0) &&
+-				 S_ISREG(st.st_mode))
+-				skip_stdout_flush = 1;
+-			else
+-				skip_stdout_flush = 0;
++			skip_stdout_flush = git_env_bool("GIT_FLUSH", -1);
++			if (skip_stdout_flush < 0) {
++				struct stat st;
++				if (fstat(fileno(stdout), &st))
++					skip_stdout_flush = 0;
++				else
++					skip_stdout_flush = S_ISREG(st.st_mode);
++			}
+ 		}
+ 		if (skip_stdout_flush && !ferror(f))
+ 			return;
+-- 
+2.39.3 (Apple Git-145)
+

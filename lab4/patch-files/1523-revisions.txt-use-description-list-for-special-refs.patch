@@ -1,0 +1,90 @@
+From bc11bac3291c4cbeb4fb475c4fdc6fe3b22ba12e Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Mon, 22 May 2023 19:28:56 +0000
+Subject: [PATCH 1523/2871] revisions.txt: use description list for special
+ refs
+
+The special refs listed in 'gitrevisions' (under the '<refname>' entry)
+are on separate lines in the Asciidoc source, but end up as a single
+continuous paragraph in the rendered documentation (see e.g. [1]). In
+following commits we will mention additional special refs, so to improve
+legibility, use a description list such that every entry appears on its
+own line. Since we are already in a description list, use ':::' as the
+term delimiter.
+
+In order for the new description list to be aligned with the description
+under the '<refname>' entry, instead of being aligned with the last
+entry of the "in the following rules" nested list, use the "ancestor
+list continuation" syntax [2], i.e., leave an empty line before the
+continuation '+'. Do the same for the paragraph following the new
+description list ("Note that any...").
+
+While at it, also use a continuation '+' before the "in the following
+rules" list, for correctness. The parser seems not to care here, but
+it's best to keep the sources correct.
+
+[1] https://git-scm.com/docs/gitrevisions#Documentation/gitrevisions.txt-emltrefnamegtemegemmasterememheadsmasterememrefsheadsmasterem
+[2] https://docs.asciidoctor.org/asciidoc/latest/lists/continuation/#ancestor-list-continuation
+
+Suggested-by: Victoria Dye <vdye@github.com>
+Based-on-patch-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/revisions.txt | 32 +++++++++++++++++++-------------
+ 1 file changed, 19 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/revisions.txt b/Documentation/revisions.txt
+index 9aa58052bc..ab5b8cf880 100644
+--- a/Documentation/revisions.txt
++++ b/Documentation/revisions.txt
+@@ -30,7 +30,7 @@ characters and to avoid word splitting.
+   explicitly say 'heads/master' to tell Git which one you mean.
+   When ambiguous, a '<refname>' is disambiguated by taking the
+   first match in the following rules:
+-
+++
+   . If '$GIT_DIR/<refname>' exists, that is what you mean (this is usually
+     useful only for `HEAD`, `FETCH_HEAD`, `ORIG_HEAD`, `MERGE_HEAD`
+     and `CHERRY_PICK_HEAD`);
+@@ -44,19 +44,25 @@ characters and to avoid word splitting.
+   . otherwise, 'refs/remotes/<refname>' if it exists;
+ 
+   . otherwise, 'refs/remotes/<refname>/HEAD' if it exists.
++
+ +
+-`HEAD` names the commit on which you based the changes in the working tree.
+-`FETCH_HEAD` records the branch which you fetched from a remote repository
+-with your last `git fetch` invocation.
+-`ORIG_HEAD` is created by commands that move your `HEAD` in a drastic
+-way (`git am`, `git merge`, `git rebase`, `git reset`),
+-to record the position of the `HEAD` before their operation, so that
+-you can easily change the tip of the branch back to the state before you ran
+-them.
+-`MERGE_HEAD` records the commit(s) which you are merging into your branch
+-when you run `git merge`.
+-`CHERRY_PICK_HEAD` records the commit which you are cherry-picking
+-when you run `git cherry-pick`.
++  `HEAD`:::
++    names the commit on which you based the changes in the working tree.
++  `FETCH_HEAD`:::
++    records the branch which you fetched from a remote repository with
++    your last `git fetch` invocation.
++  `ORIG_HEAD`:::
++    is created by commands that move your `HEAD` in a drastic way (`git
++    am`, `git merge`, `git rebase`, `git reset`), to record the position
++    of the `HEAD` before their operation, so that you can easily change
++    the tip of the branch back to the state before you ran them.
++  `MERGE_HEAD`:::
++    records the commit(s) which you are merging into your branch when you
++    run `git merge`.
++  `CHERRY_PICK_HEAD`:::
++    records the commit which you are cherry-picking when you run `git
++    cherry-pick`.
++
+ +
+ Note that any of the 'refs/*' cases above may come either from
+ the `$GIT_DIR/refs` directory or from the `$GIT_DIR/packed-refs` file.
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,66 @@
+From 54d8a2531b839bb9c4e2f5aa26aae029415211f9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Wed, 3 Jan 2024 04:01:52 -0500
+Subject: [PATCH 2639/2871] t1006: prefer shell loop to awk for packed object
+ sizes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+To compute the expected on-disk size of packed objects, we sort the
+output of show-index by pack offset and then compute the difference
+between adjacent entries using awk. This works but has a few readability
+problems:
+
+  1. Reading the index in pack order means don't find out the size of an
+     oid's entry until we see the _next_ entry. So we have to save it to
+     print later.
+
+     We can instead iterate in reverse order, so we compute each oid's
+     size as we see it.
+
+  2. Since the awk invocation is inside a text_expect block, we can't
+     easily use single-quotes to hold the script. So we use
+     double-quotes, but then have to escape the dollar signs in the awk
+     script.
+
+     We can swap this out for a shell loop instead (which is made much
+     easier by the first change).
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1006-cat-file.sh | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/t/t1006-cat-file.sh b/t/t1006-cat-file.sh
+index 0c2eafae65..5ea3326128 100755
+--- a/t/t1006-cat-file.sh
++++ b/t/t1006-cat-file.sh
+@@ -1117,14 +1117,16 @@ test_expect_success 'cat-file %(objectsize:disk) with --batch-all-objects' '
+ 		while read idx
+ 		do
+ 			git show-index <"$idx" >idx.raw &&
+-			sort -n <idx.raw >idx.sorted &&
++			sort -nr <idx.raw >idx.sorted &&
+ 			packsz=$(test_file_size "${idx%.idx}.pack") &&
+ 			end=$((packsz - rawsz)) &&
+-			awk -v end="$end" "
+-			  NR > 1 { print oid, \$1 - start }
+-			  { start = \$1; oid = \$2 }
+-			  END { print oid, end - start }
+-			" idx.sorted ||
++			while read start oid rest
++			do
++				size=$((end - start)) &&
++				end=$start &&
++				echo "$oid $size" ||
++				return 1
++			done <idx.sorted ||
+ 			return 1
+ 		done
+ 	} >expect.raw &&
+-- 
+2.39.3 (Apple Git-145)
+

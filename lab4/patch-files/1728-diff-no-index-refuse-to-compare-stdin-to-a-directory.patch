@@ -1,0 +1,65 @@
+From 498198453dbb8ae46becbc83a1ef0979a0eb805d Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 5 Jul 2023 20:49:27 +0100
+Subject: [PATCH 1728/2871] diff --no-index: refuse to compare stdin to a
+ directory
+
+When the user runs
+
+    git diff --no-index file directory
+
+we follow the behavior of POSIX diff and rewrite the arguments as
+
+    git diff --no-index file directory/file
+
+Doing that when "file" is "-" (which means "read from stdin") does not
+make sense so we should error out if the user asks us to compare "-" to
+a directory. This matches the behavior of GNU diff and diff on *BSD.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff-no-index.c          | 12 +++++++-----
+ t/t4053-diff-no-index.sh |  5 +++++
+ 2 files changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/diff-no-index.c b/diff-no-index.c
+index 4296940f90..77462ac2a9 100644
+--- a/diff-no-index.c
++++ b/diff-no-index.c
+@@ -218,11 +218,13 @@ static void fixup_paths(const char **path, struct strbuf *replacement)
+ {
+ 	unsigned int isdir0, isdir1;
+ 
+-	if (path[0] == file_from_standard_input ||
+-	    path[1] == file_from_standard_input)
+-		return;
+-	isdir0 = is_directory(path[0]);
+-	isdir1 = is_directory(path[1]);
++	isdir0 = path[0] != file_from_standard_input && is_directory(path[0]);
++	isdir1 = path[1] != file_from_standard_input && is_directory(path[1]);
++
++	if ((path[0] == file_from_standard_input && isdir1) ||
++	    (isdir0 && path[1] == file_from_standard_input))
++		die(_("cannot compare stdin to a directory"));
++
+ 	if (isdir0 == isdir1)
+ 		return;
+ 	if (isdir0) {
+diff --git a/t/t4053-diff-no-index.sh b/t/t4053-diff-no-index.sh
+index 4e9fa0403d..5bfb282e98 100755
+--- a/t/t4053-diff-no-index.sh
++++ b/t/t4053-diff-no-index.sh
+@@ -205,4 +205,9 @@ test_expect_success POSIXPERM,SYMLINKS 'diff --no-index normalizes: mode not lik
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'diff --no-index refuses to diff stdin and a directory' '
++	test_must_fail git diff --no-index -- - a </dev/null 2>err &&
++	grep "fatal: cannot compare stdin to a directory" err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

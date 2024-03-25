@@ -1,0 +1,29 @@
+From 82e81edf718302c20c37b17a69a768bc36837a72 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:04 +0000
+Subject: [PATCH 2218/2871] documentation: fix small error
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/fsck.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/config/fsck.txt b/Documentation/config/fsck.txt
+index fec3eefb5b..9b16757553 100644
+--- a/Documentation/config/fsck.txt
++++ b/Documentation/config/fsck.txt
+@@ -11,7 +11,7 @@ to clone or fetch it set `fetch.fsck.<msg-id>`.
+ +
+ The rest of the documentation discusses `fsck.*` for brevity, but the
+ same applies for the corresponding `receive.fsck.*` and
+-`fetch.<msg-id>.*`. variables.
++`fetch.fsck.*`. variables.
+ +
+ Unlike variables like `color.ui` and `core.editor` the
+ `receive.fsck.<msg-id>` and `fetch.fsck.<msg-id>` variables will not
+-- 
+2.39.3 (Apple Git-145)
+

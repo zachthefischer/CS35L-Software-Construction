@@ -1,0 +1,72 @@
+From 90a694a27e8e32ec1e6f61cb8e556f92cadbb35c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Mon, 29 Jan 2024 22:08:34 +0100
+Subject: [PATCH 2778/2871] t6113: mark as leak-free
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This test does not leak since a96015a517 (pack-bitmap: plug leak in
+find_objects(), 2023-12-14) when the annotation
+TEST_PASSES_SANITIZE_LEAK=true was also added.
+
+Unfortunately it was added after test-lib.sh is sourced, which makes
+GIT_TEST_PASSING_SANITIZE_LEAK=check error:
+
+   $ make SANITIZE=leak GIT_TEST_PASSING_SANITIZE_LEAK=check test T=t6113-rev-list-bitmap-filters.sh
+   ...
+   make[2]: Entering directory '/tmp/git/git/t'
+   *** t6113-rev-list-bitmap-filters.sh ***
+   in GIT_TEST_PASSING_SANITIZE_LEAK=check mode, setting --invert-exit-code for TEST_PASSES_SANITIZE_LEAK != true
+   ok 1 - set up bitmapped repo
+   ok 2 - filters fallback to non-bitmap traversal
+   ok 3 - blob:none filter
+   ok 4 - blob:none filter with specified blob
+   ok 5 - blob:limit filter
+   ok 6 - blob:limit filter with specified blob
+   ok 7 - tree:0 filter
+   ok 8 - tree:0 filter with specified blob, tree
+   ok 9 - tree:1 filter
+   ok 10 - object:type filter
+   ok 11 - object:type filter with --filter-provided-objects
+   ok 12 - combine filter
+   ok 13 - combine filter with --filter-provided-objects
+   ok 14 - bitmap traversal with --unpacked
+   # passed all 14 test(s)
+   1..14
+   # faking up non-zero exit with --invert-exit-code
+   make[2]: *** [Makefile:68: t6113-rev-list-bitmap-filters.sh] Error 1
+   make[2]: Leaving directory '/tmp/git/git/t'
+   make[1]: *** [Makefile:55: test] Error 2
+   make[1]: Leaving directory '/tmp/git/git/t'
+   make: *** [Makefile:3212: test] Error 2
+
+Let's move the annotation before sourcing test-lib.sh, to make
+GIT_TEST_PASSING_SANITIZE_LEAK=check happy.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6113-rev-list-bitmap-filters.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/t/t6113-rev-list-bitmap-filters.sh b/t/t6113-rev-list-bitmap-filters.sh
+index 459f0d7412..a9656a1ec8 100755
+--- a/t/t6113-rev-list-bitmap-filters.sh
++++ b/t/t6113-rev-list-bitmap-filters.sh
+@@ -1,10 +1,11 @@
+ #!/bin/sh
+ 
+ test_description='rev-list combining bitmaps and filters'
++
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-bitmap.sh
+ 
+-TEST_PASSES_SANITIZE_LEAK=true
+ 
+ test_expect_success 'set up bitmapped repo' '
+ 	# one commit will have bitmaps, the other will not
+-- 
+2.39.3 (Apple Git-145)
+

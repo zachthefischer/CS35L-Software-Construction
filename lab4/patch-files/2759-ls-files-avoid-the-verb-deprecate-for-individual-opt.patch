@@ -1,0 +1,88 @@
+From 0009542cabb808f558605f0faa8c57d3b97ed055 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 24 Jan 2024 13:10:31 -0800
+Subject: [PATCH 2759/2871] ls-files: avoid the verb "deprecate" for individual
+ options
+
+When e750951e (ls-files: guide folks to --exclude-standard over
+other --exclude* options, 2023-01-13) updated the documentation to
+give greater visibility to the `--exclude-standard` option, it marked
+the `--exclude-per-directory` option as "deprecated".
+
+While it is technically correct that being deprecated does not
+necessarily mean it is planned to be removed later, it seems to
+cause confusion to readers, especially when we merely mean
+
+    The option Y can be used to achieve the same thing as the option
+    X much simpler. To those of you who aren't familiar with either
+    X or Y, we would recommend to use Y when appropriate.
+
+This is especially true for `--exclude-standard` vs the combination
+of more granular `--exclude-from` and `--exclude-per-directory`
+options.  It is true that one common combination of the granular
+options can be obtained by just giving the former, but that does not
+necessarily mean a more granular control is not necessary.
+
+State the reason why we recommend readers `--exclude-standard` in
+the description of `--exclude-per-directory`, instead of saying that
+the option is deprecated.  Also, spell out the recipe to emulate
+what `--exclude-standard` does, so that the users can give it minute
+tweaks (like "do the same as Git Porcelain, except I do not want to
+read the global exclusion file from core.excludes").
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-ls-files.txt | 23 ++++++++++++++++++-----
+ 1 file changed, 18 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-ls-files.txt b/Documentation/git-ls-files.txt
+index f65a8cd91d..d08c7da8f4 100644
+--- a/Documentation/git-ls-files.txt
++++ b/Documentation/git-ls-files.txt
+@@ -119,8 +119,10 @@ OPTIONS
+ 
+ --exclude-per-directory=<file>::
+ 	Read additional exclude patterns that apply only to the
+-	directory and its subdirectories in <file>.  Deprecated; use
+-	--exclude-standard instead.
++	directory and its subdirectories in <file>.  If you are
++	trying to emulate the way Porcelain commands work, using
++	the `--exclude-standard` option instead is easier and more
++	thorough.
+ 
+ --exclude-standard::
+ 	Add the standard Git exclusions: .git/info/exclude, .gitignore
+@@ -298,9 +300,8 @@ traversing the directory tree and finding files to show when the
+ flags --others or --ignored are specified.  linkgit:gitignore[5]
+ specifies the format of exclude patterns.
+ 
+-Generally, you should just use --exclude-standard, but for historical
+-reasons the exclude patterns can be specified from the following
+-places, in order:
++These exclude patterns can be specified from the following places,
++in order:
+ 
+   1. The command-line flag --exclude=<pattern> specifies a
+      single pattern.  Patterns are ordered in the same order
+@@ -322,6 +323,18 @@ top of the directory tree.  A pattern read from a file specified
+ by --exclude-per-directory is relative to the directory that the
+ pattern file appears in.
+ 
++Generally, you should be able to use `--exclude-standard` when you
++want the exclude rules applied the same way as what Porcelain
++commands do.  To emulate what `--exclude-standard` specifies, you
++can give `--exclude-per-directory=.gitignore`, and then specify:
++
++  1. The file specified by the `core.excludesfile` configuration
++     variable, if exists, or the `$XDG_CONFIG_HOME/git/ignore` file.
++
++  2. The `$GIT_DIR/info/exclude` file.
++
++via the `--exclude-from=` option.
++
+ SEE ALSO
+ --------
+ linkgit:git-read-tree[1], linkgit:gitignore[5]
+-- 
+2.39.3 (Apple Git-145)
+

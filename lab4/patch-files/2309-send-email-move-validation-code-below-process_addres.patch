@@ -1,0 +1,145 @@
+From 0d8647034e4c1647d850cb4a3bb1ea56fd4c3f32 Mon Sep 17 00:00:00 2001
+From: Michael Strawbridge <michael.strawbridge@amd.com>
+Date: Wed, 25 Oct 2023 14:51:29 -0400
+Subject: [PATCH 2309/2871] send-email: move validation code below
+ process_address_list
+
+Move validation logic below processing of email address lists so that
+email validation gets the proper email addresses.  As a side effect,
+some initialization needed to be moved down.  In order for validation
+and the actual email sending to have the same initial state, the
+initialized variables that get modified by pre_process_file are
+encapsulated in a new function.
+
+This fixes email address validation errors when the optional
+perl module Email::Valid is installed and multiple addresses are passed
+in on a single to/cc argument like --to=foo@example.com,bar@example.com.
+A new test was added to t9001 to expose failures with this case in the
+future.
+
+Reported-by: Bagas Sanjaya <bagasdotme@gmail.com>
+Signed-off-by: Michael Strawbridge <michael.strawbridge@amd.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl   | 60 +++++++++++++++++++++++--------------------
+ t/t9001-send-email.sh | 19 ++++++++++++++
+ 2 files changed, 51 insertions(+), 28 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index affbb88509..76b28ed764 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -811,30 +811,6 @@ sub is_format_patch_arg {
+ 
+ $time = time - scalar $#files;
+ 
+-if ($validate) {
+-	# FIFOs can only be read once, exclude them from validation.
+-	my @real_files = ();
+-	foreach my $f (@files) {
+-		unless (-p $f) {
+-			push(@real_files, $f);
+-		}
+-	}
+-
+-	# Run the loop once again to avoid gaps in the counter due to FIFO
+-	# arguments provided by the user.
+-	my $num = 1;
+-	my $num_files = scalar @real_files;
+-	$ENV{GIT_SENDEMAIL_FILE_TOTAL} = "$num_files";
+-	foreach my $r (@real_files) {
+-		$ENV{GIT_SENDEMAIL_FILE_COUNTER} = "$num";
+-		pre_process_file($r, 1);
+-		validate_patch($r, $target_xfer_encoding);
+-		$num += 1;
+-	}
+-	delete $ENV{GIT_SENDEMAIL_FILE_COUNTER};
+-	delete $ENV{GIT_SENDEMAIL_FILE_TOTAL};
+-}
+-
+ @files = handle_backup_files(@files);
+ 
+ if (@files) {
+@@ -1764,10 +1740,6 @@ sub send_message {
+ 	return 1;
+ }
+ 
+-$in_reply_to = $initial_in_reply_to;
+-$references = $initial_in_reply_to || '';
+-$message_num = 0;
+-
+ sub pre_process_file {
+ 	my ($t, $quiet) = @_;
+ 
+@@ -2033,6 +2005,38 @@ sub process_file {
+ 	return 1;
+ }
+ 
++sub initialize_modified_loop_vars {
++	$in_reply_to = $initial_in_reply_to;
++	$references = $initial_in_reply_to || '';
++	$message_num = 0;
++}
++
++if ($validate) {
++	# FIFOs can only be read once, exclude them from validation.
++	my @real_files = ();
++	foreach my $f (@files) {
++		unless (-p $f) {
++			push(@real_files, $f);
++		}
++	}
++
++	# Run the loop once again to avoid gaps in the counter due to FIFO
++	# arguments provided by the user.
++	my $num = 1;
++	my $num_files = scalar @real_files;
++	$ENV{GIT_SENDEMAIL_FILE_TOTAL} = "$num_files";
++	initialize_modified_loop_vars();
++	foreach my $r (@real_files) {
++		$ENV{GIT_SENDEMAIL_FILE_COUNTER} = "$num";
++		pre_process_file($r, 1);
++		validate_patch($r, $target_xfer_encoding);
++		$num += 1;
++	}
++	delete $ENV{GIT_SENDEMAIL_FILE_COUNTER};
++	delete $ENV{GIT_SENDEMAIL_FILE_TOTAL};
++}
++
++initialize_modified_loop_vars();
+ foreach my $t (@files) {
+ 	while (!process_file($t)) {
+ 		# user edited the file
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 22fc908024..bdac4c24a1 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -632,6 +632,25 @@ test_expect_success $PREREQ "--validate respects absolute core.hooksPath path" '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success $PREREQ "--validate hook supports multiple addresses in arguments" '
++	hooks_path="$(pwd)/my-hooks" &&
++	test_config core.hooksPath "$hooks_path" &&
++	test_when_finished "rm my-hooks.ran" &&
++	test_must_fail git send-email \
++		--from="Example <nobody@example.com>" \
++		--to=nobody@example.com,abc@example.com \
++		--smtp-server="$(pwd)/fake.sendmail" \
++		--validate \
++		longline.patch 2>actual &&
++	test_path_is_file my-hooks.ran &&
++	cat >expect <<-EOF &&
++	fatal: longline.patch: rejected by sendemail-validate hook
++	fatal: command '"'"'git hook run --ignore-missing sendemail-validate -- <patch> <header>'"'"' died with exit code 1
++	warning: no patches were sent
++	EOF
++	test_cmp expect actual
++'
++
+ test_expect_success $PREREQ "--validate hook supports header argument" '
+ 	write_script my-hooks/sendemail-validate <<-\EOF &&
+ 	if test "$#" -ge 2
+-- 
+2.39.3 (Apple Git-145)
+

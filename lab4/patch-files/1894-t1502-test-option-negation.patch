@@ -1,0 +1,115 @@
+From d5dc68f73041f95c1179fb092005e2326bdd8a7b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 5 Aug 2023 16:39:52 +0200
+Subject: [PATCH 1894/2871] t1502: test option negation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add tests for checking the "git rev-parse --parseopt" flag "!" and
+whether options can be negated with a "no-" prefix.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1502-rev-parse-parseopt.sh | 44 +++++++++++++++++++++++++++++++++++
+ t/t1502/optionspec-neg        |  8 +++++++
+ t/t1502/optionspec-neg.help   | 11 +++++++++
+ 3 files changed, 63 insertions(+)
+ create mode 100644 t/t1502/optionspec-neg
+ create mode 100644 t/t1502/optionspec-neg.help
+
+diff --git a/t/t1502-rev-parse-parseopt.sh b/t/t1502-rev-parse-parseopt.sh
+index 813ee5872f..0f7c2db4c0 100755
+--- a/t/t1502-rev-parse-parseopt.sh
++++ b/t/t1502-rev-parse-parseopt.sh
+@@ -3,6 +3,22 @@
+ test_description='test git rev-parse --parseopt'
+ . ./test-lib.sh
+ 
++check_invalid_long_option () {
++	spec="$1"
++	opt="$2"
++	test_expect_success "test --parseopt invalid switch $opt help output for $spec" '
++		{
++			cat <<-\EOF &&
++			error: unknown option `'${opt#--}\''
++			EOF
++			sed -e 1d -e \$d <"$TEST_DIRECTORY/t1502/$spec.help"
++		} >expect &&
++		test_expect_code 129 git rev-parse --parseopt -- $opt \
++			2>output <"$TEST_DIRECTORY/t1502/$spec" &&
++		test_cmp expect output
++	'
++}
++
+ test_expect_success 'setup optionspec' '
+ 	sed -e "s/^|//" >optionspec <<\EOF
+ |some-command [options] <args>...
+@@ -278,4 +294,32 @@ test_expect_success 'test --parseopt help output: multi-line blurb after empty l
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'test --parseopt help output for optionspec-neg' '
++	test_expect_code 129 git rev-parse --parseopt -- \
++		-h >output <"$TEST_DIRECTORY/t1502/optionspec-neg" &&
++	test_cmp "$TEST_DIRECTORY/t1502/optionspec-neg.help" output
++'
++
++test_expect_success 'test --parseopt valid options for optionspec-neg' '
++	cat >expect <<-\EOF &&
++	set -- --foo --no-foo --no-bar --positive-only --no-negative --
++	EOF
++	git rev-parse --parseopt -- <"$TEST_DIRECTORY/t1502/optionspec-neg" >output \
++	       --foo --no-foo --no-bar --positive-only --no-negative &&
++	test_cmp expect output
++'
++
++test_expect_success 'test --parseopt positivated option for optionspec-neg' '
++	cat >expect <<-\EOF &&
++	set -- --no-no-bar --no-no-bar --
++	EOF
++	git rev-parse --parseopt -- <"$TEST_DIRECTORY/t1502/optionspec-neg" >output \
++	       --no-no-bar --bar &&
++	test_cmp expect output
++'
++
++check_invalid_long_option optionspec-neg --no-positive-only
++check_invalid_long_option optionspec-neg --negative
++check_invalid_long_option optionspec-neg --no-no-negative
++
+ test_done
+diff --git a/t/t1502/optionspec-neg b/t/t1502/optionspec-neg
+new file mode 100644
+index 0000000000..392f43eb0b
+--- /dev/null
++++ b/t/t1502/optionspec-neg
+@@ -0,0 +1,8 @@
++some-command [options] <args>...
++
++some-command does foo and bar!
++--
++foo		can be negated
++no-bar		can be positivated
++positive-only!	cannot be negated
++no-negative!	cannot be positivated
+diff --git a/t/t1502/optionspec-neg.help b/t/t1502/optionspec-neg.help
+new file mode 100644
+index 0000000000..54eba10afc
+--- /dev/null
++++ b/t/t1502/optionspec-neg.help
+@@ -0,0 +1,11 @@
++cat <<\EOF
++usage: some-command [options] <args>...
++
++    some-command does foo and bar!
++
++    --foo                 can be negated
++    --no-bar              can be positivated
++    --positive-only       cannot be negated
++    --no-negative         cannot be positivated
++
++EOF
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,59 @@
+From 06b217fc1ffba3c5f268e257b8ee9d42bbf7588d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:30 -0400
+Subject: [PATCH 2022/2871] negotiator/noop: mark unused callback parameters
+
+The noop negotiator unsurprisingly does not bother looking at any of its
+parameters. Mark them unused to silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ negotiator/noop.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/negotiator/noop.c b/negotiator/noop.c
+index 7b72937686..de39028ab7 100644
+--- a/negotiator/noop.c
++++ b/negotiator/noop.c
+@@ -3,22 +3,24 @@
+ #include "../commit.h"
+ #include "../fetch-negotiator.h"
+ 
+-static void known_common(struct fetch_negotiator *n, struct commit *c)
++static void known_common(struct fetch_negotiator *n UNUSED,
++			 struct commit *c UNUSED)
+ {
+ 	/* do nothing */
+ }
+ 
+-static void add_tip(struct fetch_negotiator *n, struct commit *c)
++static void add_tip(struct fetch_negotiator *n UNUSED,
++		    struct commit *c UNUSED)
+ {
+ 	/* do nothing */
+ }
+ 
+-static const struct object_id *next(struct fetch_negotiator *n)
++static const struct object_id *next(struct fetch_negotiator *n UNUSED)
+ {
+ 	return NULL;
+ }
+ 
+-static int ack(struct fetch_negotiator *n, struct commit *c)
++static int ack(struct fetch_negotiator *n UNUSED, struct commit *c UNUSED)
+ {
+ 	/*
+ 	 * This negotiator does not emit any commits, so there is no commit to
+@@ -28,7 +30,7 @@ static int ack(struct fetch_negotiator *n, struct commit *c)
+ 	return 0;
+ }
+ 
+-static void release(struct fetch_negotiator *n)
++static void release(struct fetch_negotiator *n UNUSED)
+ {
+ 	/* nothing to release */
+ }
+-- 
+2.39.3 (Apple Git-145)
+

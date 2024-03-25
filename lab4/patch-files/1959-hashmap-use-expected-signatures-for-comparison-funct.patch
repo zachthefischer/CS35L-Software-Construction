@@ -1,0 +1,103 @@
+From beaa1d952b90523a167a5d3f24e0a8ce56a4afcd Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 19 Aug 2023 19:55:30 -0400
+Subject: [PATCH 1959/2871] hashmap: use expected signatures for comparison
+ functions
+
+We prefer for callback functions to match the signature with which
+they'll be called, rather than casting them to the correct type when
+assigning function pointers. Even though casting often works in the real
+world, it is a violation of the standard.
+
+We did a mass conversion in 939af16eac (hashmap_cmp_fn takes
+hashmap_entry params, 2019-10-06), but have grown a few new cases since
+then. Because of the cast, the compiler does not complain. However, as
+of clang-18, UBSan will catch these at run-time, and the case in
+range-diff.c triggers when running t3206.
+
+After seeing that one, I scanned the results of:
+
+  git grep '_fn)[^(]' '*.c' | grep -v typedef
+
+and found a similar case in compat/terminal.c (which presumably isn't
+called in the test suite, since it doesn't trigger UBSan). There might
+be other cases lurking if the cast is done using a typedef that doesn't
+end in "_fn", but loosening it finds too many false positives. I also
+looked for:
+
+  git grep ' = ([a-z_]*) *[a-z]' '*.c'
+
+to find assignments that cast, but nothing looked like a function.
+
+The resulting code is unfortunately a little longer, but the bonus of
+using container_of() is that we are no longer restricted to the
+hashmap_entry being at the start of the struct.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/terminal.c | 10 ++++++----
+ range-diff.c      | 11 +++++++----
+ 2 files changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/compat/terminal.c b/compat/terminal.c
+index 83d95e8656..0afda730f2 100644
+--- a/compat/terminal.c
++++ b/compat/terminal.c
+@@ -479,10 +479,13 @@ struct escape_sequence_entry {
+ };
+ 
+ static int sequence_entry_cmp(const void *hashmap_cmp_fn_data UNUSED,
+-			      const struct escape_sequence_entry *e1,
+-			      const struct escape_sequence_entry *e2,
++			      const struct hashmap_entry *he1,
++			      const struct hashmap_entry *he2,
+ 			      const void *keydata)
+ {
++	const struct escape_sequence_entry
++		*e1 = container_of(he1, const struct escape_sequence_entry, entry),
++		*e2 = container_of(he2, const struct escape_sequence_entry, entry);
+ 	return strcmp(e1->sequence, keydata ? keydata : e2->sequence);
+ }
+ 
+@@ -496,8 +499,7 @@ static int is_known_escape_sequence(const char *sequence)
+ 		struct strbuf buf = STRBUF_INIT;
+ 		char *p, *eol;
+ 
+-		hashmap_init(&sequences, (hashmap_cmp_fn)sequence_entry_cmp,
+-			     NULL, 0);
++		hashmap_init(&sequences, sequence_entry_cmp, NULL, 0);
+ 
+ 		strvec_pushl(&cp.args, "infocmp", "-L", "-1", NULL);
+ 		if (pipe_command(&cp, NULL, 0, &buf, 0, NULL, 0))
+diff --git a/range-diff.c b/range-diff.c
+index 2e86063491..ca5493984a 100644
+--- a/range-diff.c
++++ b/range-diff.c
+@@ -230,16 +230,19 @@ static int read_patches(const char *range, struct string_list *list,
+ }
+ 
+ static int patch_util_cmp(const void *cmp_data UNUSED,
+-			  const struct patch_util *a,
+-			  const struct patch_util *b,
+-			  const char *keydata)
++			  const struct hashmap_entry *ha,
++			  const struct hashmap_entry *hb,
++			  const void *keydata)
+ {
++	const struct patch_util
++		*a = container_of(ha, const struct patch_util, e),
++		*b = container_of(hb, const struct patch_util, e);
+ 	return strcmp(a->diff, keydata ? keydata : b->diff);
+ }
+ 
+ static void find_exact_matches(struct string_list *a, struct string_list *b)
+ {
+-	struct hashmap map = HASHMAP_INIT((hashmap_cmp_fn)patch_util_cmp, NULL);
++	struct hashmap map = HASHMAP_INIT(patch_util_cmp, NULL);
+ 	int i;
+ 
+ 	/* First, add the patches of a to a hash map */
+-- 
+2.39.3 (Apple Git-145)
+

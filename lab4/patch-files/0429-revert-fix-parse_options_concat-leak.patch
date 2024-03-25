@@ -1,0 +1,55 @@
+From 603f2f5719f8a85996d5f20cf0e56186c149b923 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Tue, 8 Nov 2022 19:17:50 +0100
+Subject: [PATCH 0429/2871] revert: fix parse_options_concat() leak
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Free memory from parse_options_concat(), which comes from code
+originally added (then extended) in [1].
+
+At this point we could get several more tests leak-free by free()-ing
+the xstrdup() just above the line being changed, but that one's
+trickier than it seems. The sequencer_remove_state() function
+supposedly owns it, but sometimes we don't call it. I have a fix for
+it, but it's non-trivial, so let's fix the easy one first.
+
+1. c62f6ec341b (revert: add --ff option to allow fast forward when
+   cherry-picking, 2010-03-06)
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/revert.c            | 1 +
+ t/t3429-rebase-edit-todo.sh | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/builtin/revert.c b/builtin/revert.c
+index 0f81c8a795..8bc87e4c77 100644
+--- a/builtin/revert.c
++++ b/builtin/revert.c
+@@ -221,6 +221,7 @@ static int run_sequencer(int argc, const char **argv, struct replay_opts *opts)
+ 	opts->strategy = xstrdup_or_null(opts->strategy);
+ 	if (!opts->strategy && getenv("GIT_TEST_MERGE_ALGORITHM"))
+ 		opts->strategy = xstrdup(getenv("GIT_TEST_MERGE_ALGORITHM"));
++	free(options);
+ 
+ 	if (cmd == 'q') {
+ 		int ret = sequencer_remove_state(opts);
+diff --git a/t/t3429-rebase-edit-todo.sh b/t/t3429-rebase-edit-todo.sh
+index abd66f3602..8e0d03969a 100755
+--- a/t/t3429-rebase-edit-todo.sh
++++ b/t/t3429-rebase-edit-todo.sh
+@@ -2,6 +2,7 @@
+ 
+ test_description='rebase should reread the todo file if an exec modifies it'
+ 
++TEST_PASSES_SANITIZE_LEAK=true
+ . ./test-lib.sh
+ . "$TEST_DIRECTORY"/lib-rebase.sh
+ 
+-- 
+2.39.3 (Apple Git-145)
+

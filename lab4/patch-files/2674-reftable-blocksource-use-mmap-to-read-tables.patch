@@ -1,0 +1,155 @@
+From 718a93ecc06ed59dda4e6a5d91b1c2169275694f Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 11 Jan 2024 11:06:56 +0100
+Subject: [PATCH 2674/2871] reftable/blocksource: use mmap to read tables
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The blocksource interface provides an interface to read blocks from a
+reftable table. This interface is implemented using read(3P) calls on
+the underlying file descriptor. While this works alright, this pattern
+is very inefficient when repeatedly querying the reftable stack for one
+or more refs. This inefficiency can mostly be attributed to the fact
+that we often need to re-read the same blocks over and over again, and
+every single time we need to call read(3P) again.
+
+A natural fit in this context is to use mmap(3P) instead of read(3P),
+which has a bunch of benefits:
+
+  - We do not need to come up with a caching strategy for some of the
+    blocks as this will be handled by the kernel already.
+
+  - We can avoid the overhead of having to call into the read(3P)
+    syscall repeatedly.
+
+  - We do not need to allocate returned blocks repeatedly, but can
+    instead hand out pointers into the mmapped region directly.
+
+Using mmap comes with a significant drawback on Windows though, because
+mmapped files cannot be deleted and neither is it possible to rename
+files onto an mmapped file. But for one, the reftable library gracefully
+handles the case where auto-compaction cannot delete a still-open stack
+already and ignores any such errors. Also, `reftable_stack_clean()` will
+prune stale tables which are not referenced by "tables.list" anymore so
+that those files can eventually be pruned. And second, we never rewrite
+already-written stacks, so it does not matter that we cannot rename a
+file over an mmaped file, either.
+
+Another unfortunate property of mmap is that it is not supported by all
+systems. But given that the size of reftables should typically be rather
+limited (megabytes at most in the vast majority of repositories), we can
+use the fallback implementation provided by `git_mmap()` which reads the
+whole file into memory instead. This is the same strategy that the
+"packed" backend uses.
+
+While this change doesn't significantly improve performance in the case
+where we're seeking through stacks once (like e.g. git-for-each-ref(1)
+would). But it does speed up usecases where there is lots of random
+access to refs, e.g. when writing. The following benchmark demonstrates
+these savings with git-update-ref(1) creating N refs in an otherwise
+empty repository:
+
+  Benchmark 1: update-ref: create many refs (refcount = 1, revision = HEAD~)
+    Time (mean ± σ):       5.1 ms ±   0.2 ms    [User: 2.5 ms, System: 2.5 ms]
+    Range (min … max):     4.8 ms …   7.1 ms    111 runs
+
+  Benchmark 2: update-ref: create many refs (refcount = 100, revision = HEAD~)
+    Time (mean ± σ):      14.8 ms ±   0.5 ms    [User: 7.1 ms, System: 7.5 ms]
+    Range (min … max):    14.1 ms …  18.7 ms    84 runs
+
+  Benchmark 3: update-ref: create many refs (refcount = 10000, revision = HEAD~)
+    Time (mean ± σ):     926.4 ms ±   5.6 ms    [User: 448.5 ms, System: 477.7 ms]
+    Range (min … max):   920.0 ms … 936.1 ms    10 runs
+
+  Benchmark 4: update-ref: create many refs (refcount = 1, revision = HEAD)
+    Time (mean ± σ):       5.0 ms ±   0.2 ms    [User: 2.4 ms, System: 2.5 ms]
+    Range (min … max):     4.7 ms …   5.4 ms    111 runs
+
+  Benchmark 5: update-ref: create many refs (refcount = 100, revision = HEAD)
+    Time (mean ± σ):      10.5 ms ±   0.2 ms    [User: 5.0 ms, System: 5.3 ms]
+    Range (min … max):    10.0 ms …  10.9 ms    93 runs
+
+  Benchmark 6: update-ref: create many refs (refcount = 10000, revision = HEAD)
+    Time (mean ± σ):     529.6 ms ±   9.1 ms    [User: 268.0 ms, System: 261.4 ms]
+    Range (min … max):   522.4 ms … 547.1 ms    10 runs
+
+  Summary
+    update-ref: create many refs (refcount = 1, revision = HEAD) ran
+      1.01 ± 0.06 times faster than update-ref: create many refs (refcount = 1, revision = HEAD~)
+      2.08 ± 0.07 times faster than update-ref: create many refs (refcount = 100, revision = HEAD)
+      2.95 ± 0.14 times faster than update-ref: create many refs (refcount = 100, revision = HEAD~)
+    105.33 ± 3.76 times faster than update-ref: create many refs (refcount = 10000, revision = HEAD)
+    184.24 ± 5.89 times faster than update-ref: create many refs (refcount = 10000, revision = HEAD~)
+
+Theoretically, we could also replicate the strategy of the "packed"
+backend where small tables are read into memory instead of using mmap.
+Benchmarks did not confirm that this has a performance benefit though.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/blocksource.c | 22 +++++++---------------
+ 1 file changed, 7 insertions(+), 15 deletions(-)
+
+diff --git a/reftable/blocksource.c b/reftable/blocksource.c
+index 1e2fb5e9fd..8c41e3c70f 100644
+--- a/reftable/blocksource.c
++++ b/reftable/blocksource.c
+@@ -76,8 +76,8 @@ struct reftable_block_source malloc_block_source(void)
+ }
+ 
+ struct file_block_source {
+-	int fd;
+ 	uint64_t size;
++	unsigned char *data;
+ };
+ 
+ static uint64_t file_size(void *b)
+@@ -87,19 +87,12 @@ static uint64_t file_size(void *b)
+ 
+ static void file_return_block(void *b, struct reftable_block *dest)
+ {
+-	if (dest->len)
+-		memset(dest->data, 0xff, dest->len);
+-	reftable_free(dest->data);
+ }
+ 
+-static void file_close(void *b)
++static void file_close(void *v)
+ {
+-	int fd = ((struct file_block_source *)b)->fd;
+-	if (fd > 0) {
+-		close(fd);
+-		((struct file_block_source *)b)->fd = 0;
+-	}
+-
++	struct file_block_source *b = v;
++	munmap(b->data, b->size);
+ 	reftable_free(b);
+ }
+ 
+@@ -108,9 +101,7 @@ static int file_read_block(void *v, struct reftable_block *dest, uint64_t off,
+ {
+ 	struct file_block_source *b = v;
+ 	assert(off + size <= b->size);
+-	dest->data = reftable_malloc(size);
+-	if (pread_in_full(b->fd, dest->data, size, off) != size)
+-		return -1;
++	dest->data = b->data + off;
+ 	dest->len = size;
+ 	return size;
+ }
+@@ -143,7 +134,8 @@ int reftable_block_source_from_file(struct reftable_block_source *bs,
+ 
+ 	p = reftable_calloc(sizeof(*p));
+ 	p->size = st.st_size;
+-	p->fd = fd;
++	p->data = xmmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
++	close(fd);
+ 
+ 	assert(!bs->ops);
+ 	bs->ops = &file_vtable;
+-- 
+2.39.3 (Apple Git-145)
+

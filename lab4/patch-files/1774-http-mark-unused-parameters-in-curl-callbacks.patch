@@ -1,0 +1,64 @@
+From d0144007b185f5da87f197ceacc4aa5548d4214e Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:44:05 -0400
+Subject: [PATCH 1774/2871] http: mark unused parameters in curl callbacks
+
+These functions are all used as callbacks for curl, so they have to
+conform to a particular interface. But they don't need all of their
+parameters:
+
+  - fwrite_null() throws away the input, so it doesn't look at most
+    parameters
+
+  - fwrite_wwwauth() in theory could take the auth struct in its void
+    pointer, but instead we just access it as the global http_auth
+    (matching the rest of the code in this file)
+
+  - curl_trace() always writes via the trace mechanism, so it doesn't
+    need its void pointer to know where to send things. Likewise, it
+    ignores the CURL parameter, since nothing we trace requires querying
+    the handle.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ http.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/http.c b/http.c
+index 2af9782330..e138b4b96f 100644
+--- a/http.c
++++ b/http.c
+@@ -196,7 +196,7 @@ static inline int is_hdr_continuation(const char *ptr, const size_t size)
+ 	return size && (*ptr == ' ' || *ptr == '\t');
+ }
+ 
+-static size_t fwrite_wwwauth(char *ptr, size_t eltsize, size_t nmemb, void *p)
++static size_t fwrite_wwwauth(char *ptr, size_t eltsize, size_t nmemb, void *p UNUSED)
+ {
+ 	size_t size = eltsize * nmemb;
+ 	struct strvec *values = &http_auth.wwwauth_headers;
+@@ -295,7 +295,8 @@ static size_t fwrite_wwwauth(char *ptr, size_t eltsize, size_t nmemb, void *p)
+ 	return size;
+ }
+ 
+-size_t fwrite_null(char *ptr, size_t eltsize, size_t nmemb, void *strbuf)
++size_t fwrite_null(char *ptr UNUSED, size_t eltsize UNUSED, size_t nmemb,
++		   void *data UNUSED)
+ {
+ 	return nmemb;
+ }
+@@ -821,7 +822,9 @@ static void curl_dump_info(char *data, size_t size)
+ 	strbuf_release(&buf);
+ }
+ 
+-static int curl_trace(CURL *handle, curl_infotype type, char *data, size_t size, void *userp)
++static int curl_trace(CURL *handle UNUSED, curl_infotype type,
++		      char *data, size_t size,
++		      void *userp UNUSED)
+ {
+ 	const char *text;
+ 	enum { NO_FILTER = 0, DO_FILTER = 1 };
+-- 
+2.39.3 (Apple Git-145)
+

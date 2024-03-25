@@ -1,0 +1,237 @@
+From 8f788eb8b75502acb5c7d771279e486bae626dde Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 22 Dec 2022 15:14:08 +0000
+Subject: [PATCH 0593/2871] t: create test harness for 'bundle-uri' command
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The previous change allowed for a Git server to advertise the
+'bundle-uri' command as a capability based on the
+uploadPack.advertiseBundleURIs config option. Create a set of tests that
+check that this capability is advertised using 'git ls-remote'.
+
+In order to test this functionality across three protocols (file, git,
+and http), create lib-bundle-uri-protocol.sh to generalize the tests,
+allowing the other test scripts to set an environment variable and
+otherwise inherit the setup and tests from this script.
+
+The tests currently only test that the 'bundle-uri' command is
+advertised or not. Other actions will be tested as the Git client learns
+to request the 'bundle-uri' command and parse its response.
+
+To help with URI escaping, specifically for file paths with a space in
+them, extract a 'sed' invocation from t9199-git-svn-info.sh into a
+helper function for use here, too.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-bundle-uri-protocol.sh           | 85 ++++++++++++++++++++++++++
+ t/t5730-protocol-v2-bundle-uri-file.sh | 17 ++++++
+ t/t5731-protocol-v2-bundle-uri-git.sh  | 17 ++++++
+ t/t5732-protocol-v2-bundle-uri-http.sh | 17 ++++++
+ t/t9119-git-svn-info.sh                |  2 +-
+ t/test-lib-functions.sh                |  7 +++
+ 6 files changed, 144 insertions(+), 1 deletion(-)
+ create mode 100644 t/lib-bundle-uri-protocol.sh
+ create mode 100755 t/t5730-protocol-v2-bundle-uri-file.sh
+ create mode 100755 t/t5731-protocol-v2-bundle-uri-git.sh
+ create mode 100755 t/t5732-protocol-v2-bundle-uri-http.sh
+
+diff --git a/t/lib-bundle-uri-protocol.sh b/t/lib-bundle-uri-protocol.sh
+new file mode 100644
+index 0000000000..2da22a39cb
+--- /dev/null
++++ b/t/lib-bundle-uri-protocol.sh
+@@ -0,0 +1,85 @@
++# Set up and run tests of the 'bundle-uri' command in protocol v2
++#
++# The test that includes this script should set BUNDLE_URI_PROTOCOL
++# to one of "file", "git", or "http".
++
++BUNDLE_URI_TEST_PARENT=
++BUNDLE_URI_TEST_URI=
++BUNDLE_URI_TEST_BUNDLE_URI=
++case "$BUNDLE_URI_PROTOCOL" in
++file)
++	BUNDLE_URI_PARENT=file_parent
++	BUNDLE_URI_REPO_URI="file://$PWD/file_parent"
++	BUNDLE_URI_BUNDLE_URI="$BUNDLE_URI_REPO_URI/fake.bdl"
++	test_set_prereq BUNDLE_URI_FILE
++	;;
++git)
++	. "$TEST_DIRECTORY"/lib-git-daemon.sh
++	start_git_daemon --export-all --enable=receive-pack
++	BUNDLE_URI_PARENT="$GIT_DAEMON_DOCUMENT_ROOT_PATH/parent"
++	BUNDLE_URI_REPO_URI="$GIT_DAEMON_URL/parent"
++	BUNDLE_URI_BUNDLE_URI="https://example.com/fake.bdl"
++	test_set_prereq BUNDLE_URI_GIT
++	;;
++http)
++	. "$TEST_DIRECTORY"/lib-httpd.sh
++	start_httpd
++	BUNDLE_URI_PARENT="$HTTPD_DOCUMENT_ROOT_PATH/http_parent"
++	BUNDLE_URI_REPO_URI="$HTTPD_URL/smart/http_parent"
++	BUNDLE_URI_BUNDLE_URI="https://example.com/fake.bdl"
++	test_set_prereq BUNDLE_URI_HTTP
++	;;
++*)
++	BUG "Need to pass valid BUNDLE_URI_PROTOCOL (was \"$BUNDLE_URI_PROTOCOL\")"
++	;;
++esac
++
++test_expect_success "setup protocol v2 $BUNDLE_URI_PROTOCOL:// tests" '
++	git init "$BUNDLE_URI_PARENT" &&
++	test_commit -C "$BUNDLE_URI_PARENT" one &&
++	git -C "$BUNDLE_URI_PARENT" config uploadpack.advertiseBundleURIs true
++'
++
++case "$BUNDLE_URI_PROTOCOL" in
++http)
++	test_expect_success "setup config for $BUNDLE_URI_PROTOCOL:// tests" '
++		git -C "$BUNDLE_URI_PARENT" config http.receivepack true
++	'
++	;;
++*)
++	;;
++esac
++BUNDLE_URI_BUNDLE_URI_ESCAPED=$(echo "$BUNDLE_URI_BUNDLE_URI" | test_uri_escape)
++
++test_expect_success "connect with $BUNDLE_URI_PROTOCOL:// using protocol v2: no bundle-uri" '
++	test_when_finished "rm -f log" &&
++	test_when_finished "git -C \"$BUNDLE_URI_PARENT\" config uploadpack.advertiseBundleURIs true" &&
++	git -C "$BUNDLE_URI_PARENT" config uploadpack.advertiseBundleURIs false &&
++
++	GIT_TRACE_PACKET="$PWD/log" \
++	git \
++		-c protocol.version=2 \
++		ls-remote --symref "$BUNDLE_URI_REPO_URI" \
++		>actual 2>err &&
++
++	# Server responded using protocol v2
++	grep "< version 2" log &&
++
++	! grep bundle-uri log
++'
++
++test_expect_success "connect with $BUNDLE_URI_PROTOCOL:// using protocol v2: have bundle-uri" '
++	test_when_finished "rm -f log" &&
++
++	GIT_TRACE_PACKET="$PWD/log" \
++	git \
++		-c protocol.version=2 \
++		ls-remote --symref "$BUNDLE_URI_REPO_URI" \
++		>actual 2>err &&
++
++	# Server responded using protocol v2
++	grep "< version 2" log &&
++
++	# Server advertised bundle-uri capability
++	grep "< bundle-uri" log
++'
+diff --git a/t/t5730-protocol-v2-bundle-uri-file.sh b/t/t5730-protocol-v2-bundle-uri-file.sh
+new file mode 100755
+index 0000000000..37bdb725bc
+--- /dev/null
++++ b/t/t5730-protocol-v2-bundle-uri-file.sh
+@@ -0,0 +1,17 @@
++#!/bin/sh
++
++test_description="Test bundle-uri with protocol v2 and 'file://' transport"
++
++TEST_NO_CREATE_REPO=1
++
++GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
++export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
++
++. ./test-lib.sh
++
++# Test protocol v2 with 'file://' transport
++#
++BUNDLE_URI_PROTOCOL=file
++. "$TEST_DIRECTORY"/lib-bundle-uri-protocol.sh
++
++test_done
+diff --git a/t/t5731-protocol-v2-bundle-uri-git.sh b/t/t5731-protocol-v2-bundle-uri-git.sh
+new file mode 100755
+index 0000000000..8add1b37ab
+--- /dev/null
++++ b/t/t5731-protocol-v2-bundle-uri-git.sh
+@@ -0,0 +1,17 @@
++#!/bin/sh
++
++test_description="Test bundle-uri with protocol v2 and 'git://' transport"
++
++TEST_NO_CREATE_REPO=1
++
++GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
++export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
++
++. ./test-lib.sh
++
++# Test protocol v2 with 'git://' transport
++#
++BUNDLE_URI_PROTOCOL=git
++. "$TEST_DIRECTORY"/lib-bundle-uri-protocol.sh
++
++test_done
+diff --git a/t/t5732-protocol-v2-bundle-uri-http.sh b/t/t5732-protocol-v2-bundle-uri-http.sh
+new file mode 100755
+index 0000000000..129daa0226
+--- /dev/null
++++ b/t/t5732-protocol-v2-bundle-uri-http.sh
+@@ -0,0 +1,17 @@
++#!/bin/sh
++
++test_description="Test bundle-uri with protocol v2 and 'http://' transport"
++
++TEST_NO_CREATE_REPO=1
++
++GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
++export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
++
++. ./test-lib.sh
++
++# Test protocol v2 with 'http://' transport
++#
++BUNDLE_URI_PROTOCOL=http
++. "$TEST_DIRECTORY"/lib-bundle-uri-protocol.sh
++
++test_done
+diff --git a/t/t9119-git-svn-info.sh b/t/t9119-git-svn-info.sh
+index 8201c3e808..088d1c57a8 100755
+--- a/t/t9119-git-svn-info.sh
++++ b/t/t9119-git-svn-info.sh
+@@ -28,7 +28,7 @@ test_cmp_info () {
+ 	rm -f tmp.expect tmp.actual
+ }
+ 
+-quoted_svnrepo="$(echo $svnrepo | sed 's/ /%20/')"
++quoted_svnrepo="$(echo $svnrepo | test_uri_escape)"
+ 
+ test_expect_success 'setup repository and import' '
+ 	mkdir info &&
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 796093a7b3..0fd7d4a200 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1751,6 +1751,13 @@ test_path_is_hidden () {
+ 	return 1
+ }
+ 
++# Poor man's URI escaping. Good enough for the test suite whose trash
++# directory has a space in it. See 93c3fcbe4d4 (git-svn: attempt to
++# mimic SVN 1.7 URL canonicalization, 2012-07-28) for prior art.
++test_uri_escape() {
++	sed 's/ /%20/g'
++}
++
+ # Check that the given command was invoked as part of the
+ # trace2-format trace on stdin.
+ #
+-- 
+2.39.3 (Apple Git-145)
+

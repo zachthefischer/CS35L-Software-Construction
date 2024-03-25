@@ -1,0 +1,86 @@
+From c8e5cb065802e96c5aa5dd25936d9780c5734182 Mon Sep 17 00:00:00 2001
+From: Sergey Organov <sorganov@gmail.com>
+Date: Mon, 9 Oct 2023 19:05:34 +0300
+Subject: [PATCH 2245/2871] diff-merges: introduce '--dd' option
+
+This option provides a shortcut to request diff with respect to first
+parent for any kind of commit, universally. It's implemented as pure
+synonym for "--diff-merges=first-parent --patch".
+
+Gives user quick and universal way to see what changes, exactly, were
+brought to a branch by merges as well as by regular commits.
+
+Signed-off-by: Sergey Organov <sorganov@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/diff-options.txt | 5 +++++
+ Documentation/git-log.txt      | 2 +-
+ diff-merges.c                  | 3 +++
+ t/t4013-diff-various.sh        | 8 ++++++++
+ 4 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/diff-options.txt b/Documentation/diff-options.txt
+index 4c64eb2ae6..ac6bc53d8e 100644
+--- a/Documentation/diff-options.txt
++++ b/Documentation/diff-options.txt
+@@ -50,6 +50,11 @@ ifdef::git-log[]
+ 	Produce dense combined diff output for merge commits.
+ 	Shortcut for '--diff-merges=dense-combined -p'.
+ 
++--dd::
++	Produce diff with respect to first parent for both merge and
++	regular commits.
++	Shortcut for '--diff-merges=first-parent -p'.
++
+ --remerge-diff::
+ 	Produce remerge-diff output for merge commits.
+ 	Shortcut for '--diff-merges=remerge -p'.
+diff --git a/Documentation/git-log.txt b/Documentation/git-log.txt
+index 9b7ec96e76..579682172f 100644
+--- a/Documentation/git-log.txt
++++ b/Documentation/git-log.txt
+@@ -120,7 +120,7 @@ By default, `git log` does not generate any diff output. The options
+ below can be used to show the changes made by each commit.
+ 
+ Note that unless one of `--diff-merges` variants (including short
+-`-m`, `-c`, and `--cc` options) is explicitly given, merge commits
++`-m`, `-c`, `--cc`, and `--dd` options) is explicitly given, merge commits
+ will not show a diff, even if a diff format like `--patch` is
+ selected, nor will they match search options like `-S`. The exception
+ is when `--first-parent` is in use, in which case `first-parent` is
+diff --git a/diff-merges.c b/diff-merges.c
+index ec97616db1..45507588a2 100644
+--- a/diff-merges.c
++++ b/diff-merges.c
+@@ -131,6 +131,9 @@ int diff_merges_parse_opts(struct rev_info *revs, const char **argv)
+ 	} else if (!strcmp(arg, "--cc")) {
+ 		set_dense_combined(revs);
+ 		revs->merges_imply_patch = 1;
++	} else if (!strcmp(arg, "--dd")) {
++		set_first_parent(revs);
++		revs->merges_imply_patch = 1;
+ 	} else if (!strcmp(arg, "--remerge-diff")) {
+ 		set_remerge_diff(revs);
+ 		revs->merges_imply_patch = 1;
+diff --git a/t/t4013-diff-various.sh b/t/t4013-diff-various.sh
+index 5de1d19075..4b47480831 100755
+--- a/t/t4013-diff-various.sh
++++ b/t/t4013-diff-various.sh
+@@ -473,6 +473,14 @@ test_expect_success 'log --diff-merges=on matches --diff-merges=separate' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'log --dd matches --diff-merges=1 -p' '
++	git log --diff-merges=1 -p master >result &&
++	process_diffs result >expected &&
++	git log --dd master >result &&
++	process_diffs result >actual &&
++	test_cmp expected actual
++'
++
+ test_expect_success 'deny wrong log.diffMerges config' '
+ 	test_config log.diffMerges wrong-value &&
+ 	test_expect_code 128 git log
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,39 @@
+From ab89575387c02ea024163256826ad1c6dd2e4247 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 13 Mar 2023 15:54:11 -0400
+Subject: [PATCH 1035/2871] rebase: prefer --default-prefix to
+ --{src,dst}-prefix for format-patch
+
+When git-rebase invokes format-patch, it wants to make sure we use the
+normal prefixes, and are not confused by diff.noprefix or similar. When
+this was added in 5b220a6876f (Add --src/dst-prefix to git-formt-patch
+in git-rebase.sh, 2010-09-09), we only had --src-prefix and --dst-prefix
+to do so, which requires re-specifying the prefixes we expect to see.
+These days we can say what we want more directly: just use the defaults.
+
+This is a minor cleanup that should have no behavior change, but
+hopefully the result expresses more clearly what the code is trying to
+accomplish.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 6635f10d52..a47dfd45ef 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -660,7 +660,7 @@ static int run_am(struct rebase_options *opts)
+ 	format_patch.git_cmd = 1;
+ 	strvec_pushl(&format_patch.args, "format-patch", "-k", "--stdout",
+ 		     "--full-index", "--cherry-pick", "--right-only",
+-		     "--src-prefix=a/", "--dst-prefix=b/", "--no-renames",
++		     "--default-prefix", "--no-renames",
+ 		     "--no-cover-letter", "--pretty=mboxrd", "--topo-order",
+ 		     "--no-base", NULL);
+ 	if (opts->git_format_patch_opt.len)
+-- 
+2.39.3 (Apple Git-145)
+

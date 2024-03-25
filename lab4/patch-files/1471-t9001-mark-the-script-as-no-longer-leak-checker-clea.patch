@@ -1,0 +1,35 @@
+From 20bd08aefb20168c6c227d2bfd1965761f9201ea Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 17 May 2023 14:10:39 -0700
+Subject: [PATCH 1471/2871] t9001: mark the script as no longer leak checker
+ clean
+
+The test uses "format-patch --thread" which is known to leak the
+generated message ID list.
+
+Plugging these leaks involves straightening out the memory ownership
+rules around rev_info.message_id and rev_info.ref_message_ids, and
+is beyond the scope of send-email fix, so for now mark the test as
+leaky to unblock the topic before the release.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9001-send-email.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 8d49eff91a..2051103226 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -4,7 +4,7 @@ test_description='git send-email'
+ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
+ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+ 
+-TEST_PASSES_SANITIZE_LEAK=true
++# no longer TEST_PASSES_SANITIZE_LEAK=true - format-patch --thread leaks
+ . ./test-lib.sh
+ 
+ # May be altered later in the test
+-- 
+2.39.3 (Apple Git-145)
+

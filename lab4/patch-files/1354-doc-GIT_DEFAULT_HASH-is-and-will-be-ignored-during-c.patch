@@ -1,0 +1,49 @@
+From 5f0e37b4c1b2acde0d102a5d53766894771457f8 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Wed, 26 Apr 2023 08:13:55 -0700
+Subject: [PATCH 1354/2871] doc: GIT_DEFAULT_HASH is and will be ignored during
+ "clone"
+
+The phrasing "is currently ignored" was prone to be misinterpreted
+as if we were wishing if it were honored.  Rephrase it to make it
+clear that the experimental variable will be ignored.
+
+In the longer term, after/when we allow incremental/over-the-wire
+migration of the object-format, i.e. cloning from an SHA-1
+repository to create an SHA-256 repository (or vice versa) and
+fetching and pushing between them would bidirectionally convert the
+object format on the fly, it is likely that we would teach a new
+option "--object-format" to "git clone" to say "you would use
+whatever object format the origin uses by default, but this time, I
+am telling you to use this format on our side, doing on-the-fly
+object format conversion as needed".  So it is perfectly OK to
+ignore the settings of this experimental variable, even after such
+an extension happens that makes it necessary for us to have a way to
+create a new repository that uses different object format from the
+origin repository.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git.txt | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git.txt b/Documentation/git.txt
+index 1d33e083ab..9fc8d6b1c1 100644
+--- a/Documentation/git.txt
++++ b/Documentation/git.txt
+@@ -552,9 +552,9 @@ double-quotes and respecting backslash escapes. E.g., the value
+ 
+ `GIT_DEFAULT_HASH`::
+ 	If this variable is set, the default hash algorithm for new
+-	repositories will be set to this value. This value is currently
+-	ignored when cloning; the setting of the remote repository
+-	is used instead. The default is "sha1". THIS VARIABLE IS
++	repositories will be set to this value. This value is
++	ignored when cloning and the setting of the remote repository
++	is always used. The default is "sha1". THIS VARIABLE IS
+ 	EXPERIMENTAL! See `--object-format` in linkgit:git-init[1].
+ 
+ Git Commits
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,27 @@
+From 42db324c0f71be44c7e524623d2f516b26f1f736 Mon Sep 17 00:00:00 2001
+From: Kyle Meyer <kyle@kyleam.com>
+Date: Fri, 25 Nov 2022 12:37:45 -0500
+Subject: [PATCH 0448/2871] merge-recursive: fix variable typo in error message
+
+Signed-off-by: Kyle Meyer <kyle@kyleam.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-recursive.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/merge-recursive.c b/merge-recursive.c
+index 4ddd3adea0..2fd0aa9687 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -2100,7 +2100,7 @@ static char *handle_path_level_conflicts(struct merge_options *opt,
+ 	if (!new_path) {
+ 		/* This should only happen when entry->non_unique_new_dir set */
+ 		if (!entry->non_unique_new_dir)
+-			BUG("entry->non_unqiue_dir not set and !new_path");
++			BUG("entry->non_unique_new_dir not set and !new_path");
+ 		output(opt, 1, _("CONFLICT (directory rename split): "
+ 			       "Unclear where to place %s because directory "
+ 			       "%s was renamed to multiple other directories, "
+-- 
+2.39.3 (Apple Git-145)
+

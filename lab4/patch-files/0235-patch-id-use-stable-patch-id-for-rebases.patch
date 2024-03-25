@@ -1,0 +1,145 @@
+From 51276c1832d64d3b8f4dfc06c3ef21bf74f1916e Mon Sep 17 00:00:00 2001
+From: Jerry Zhang <jerry@skydio.com>
+Date: Mon, 24 Oct 2022 20:07:40 +0000
+Subject: [PATCH 0235/2871] patch-id: use stable patch-id for rebases
+
+Git doesn't persist patch-ids during the rebase process, so there is
+no need to specifically invoke the unstable variant. Use the stable
+logic for all internal patch-id calculations to minimize the number of
+code paths and improve test coverage.
+
+Signed-off-by: Jerry Zhang <jerry@skydio.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c |  2 +-
+ diff.c        | 12 ++++--------
+ diff.h        |  2 +-
+ patch-ids.c   | 10 +++++-----
+ patch-ids.h   |  2 +-
+ 5 files changed, 12 insertions(+), 16 deletions(-)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index 88a5e98875..306103f302 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1694,7 +1694,7 @@ static void prepare_bases(struct base_tree_info *bases,
+ 		struct object_id *patch_id;
+ 		if (*commit_base_at(&commit_base, commit))
+ 			continue;
+-		if (commit_patch_id(commit, &diffopt, &oid, 0, 1))
++		if (commit_patch_id(commit, &diffopt, &oid, 0))
+ 			die(_("cannot get patch id"));
+ 		ALLOC_GROW(bases->patch_id, bases->nr_patch_id + 1, bases->alloc_patch_id);
+ 		patch_id = bases->patch_id + bases->nr_patch_id;
+diff --git a/diff.c b/diff.c
+index 2aee15f2f1..c86688794f 100644
+--- a/diff.c
++++ b/diff.c
+@@ -6174,7 +6174,7 @@ static void patch_id_add_mode(git_hash_ctx *ctx, unsigned mode)
+ }
+ 
+ /* returns 0 upon success, and writes result into oid */
+-static int diff_get_patch_id(struct diff_options *options, struct object_id *oid, int diff_header_only, int stable)
++static int diff_get_patch_id(struct diff_options *options, struct object_id *oid, int diff_header_only)
+ {
+ 	struct diff_queue_struct *q = &diff_queued_diff;
+ 	int i;
+@@ -6261,21 +6261,17 @@ static int diff_get_patch_id(struct diff_options *options, struct object_id *oid
+ 				return error("unable to generate patch-id diff for %s",
+ 					     p->one->path);
+ 		}
+-		if (stable)
+-			flush_one_hunk(oid, &ctx);
++		flush_one_hunk(oid, &ctx);
+ 	}
+ 
+-	if (!stable)
+-		the_hash_algo->final_oid_fn(oid, &ctx);
+-
+ 	return 0;
+ }
+ 
+-int diff_flush_patch_id(struct diff_options *options, struct object_id *oid, int diff_header_only, int stable)
++int diff_flush_patch_id(struct diff_options *options, struct object_id *oid, int diff_header_only)
+ {
+ 	struct diff_queue_struct *q = &diff_queued_diff;
+ 	int i;
+-	int result = diff_get_patch_id(options, oid, diff_header_only, stable);
++	int result = diff_get_patch_id(options, oid, diff_header_only);
+ 
+ 	for (i = 0; i < q->nr; i++)
+ 		diff_free_filepair(q->queue[i]);
+diff --git a/diff.h b/diff.h
+index 8ae18e5ab1..fd33caeb25 100644
+--- a/diff.h
++++ b/diff.h
+@@ -634,7 +634,7 @@ int run_diff_files(struct rev_info *revs, unsigned int option);
+ int run_diff_index(struct rev_info *revs, unsigned int option);
+ 
+ int do_diff_cache(const struct object_id *, struct diff_options *);
+-int diff_flush_patch_id(struct diff_options *, struct object_id *, int, int);
++int diff_flush_patch_id(struct diff_options *, struct object_id *, int);
+ void flush_one_hunk(struct object_id *result, git_hash_ctx *ctx);
+ 
+ int diff_result_code(struct diff_options *, int);
+diff --git a/patch-ids.c b/patch-ids.c
+index 8bf425555d..fefddc487e 100644
+--- a/patch-ids.c
++++ b/patch-ids.c
+@@ -11,7 +11,7 @@ static int patch_id_defined(struct commit *commit)
+ }
+ 
+ int commit_patch_id(struct commit *commit, struct diff_options *options,
+-		    struct object_id *oid, int diff_header_only, int stable)
++		    struct object_id *oid, int diff_header_only)
+ {
+ 	if (!patch_id_defined(commit))
+ 		return -1;
+@@ -22,7 +22,7 @@ int commit_patch_id(struct commit *commit, struct diff_options *options,
+ 	else
+ 		diff_root_tree_oid(&commit->object.oid, "", options);
+ 	diffcore_std(options);
+-	return diff_flush_patch_id(options, oid, diff_header_only, stable);
++	return diff_flush_patch_id(options, oid, diff_header_only);
+ }
+ 
+ /*
+@@ -48,11 +48,11 @@ static int patch_id_neq(const void *cmpfn_data,
+ 	b = container_of(entry_or_key, struct patch_id, ent);
+ 
+ 	if (is_null_oid(&a->patch_id) &&
+-	    commit_patch_id(a->commit, opt, &a->patch_id, 0, 0))
++	    commit_patch_id(a->commit, opt, &a->patch_id, 0))
+ 		return error("Could not get patch ID for %s",
+ 			oid_to_hex(&a->commit->object.oid));
+ 	if (is_null_oid(&b->patch_id) &&
+-	    commit_patch_id(b->commit, opt, &b->patch_id, 0, 0))
++	    commit_patch_id(b->commit, opt, &b->patch_id, 0))
+ 		return error("Could not get patch ID for %s",
+ 			oid_to_hex(&b->commit->object.oid));
+ 	return !oideq(&a->patch_id, &b->patch_id);
+@@ -82,7 +82,7 @@ static int init_patch_id_entry(struct patch_id *patch,
+ 	struct object_id header_only_patch_id;
+ 
+ 	patch->commit = commit;
+-	if (commit_patch_id(commit, &ids->diffopts, &header_only_patch_id, 1, 0))
++	if (commit_patch_id(commit, &ids->diffopts, &header_only_patch_id, 1))
+ 		return -1;
+ 
+ 	hashmap_entry_init(&patch->ent, oidhash(&header_only_patch_id));
+diff --git a/patch-ids.h b/patch-ids.h
+index ab6c6a6804..490d739371 100644
+--- a/patch-ids.h
++++ b/patch-ids.h
+@@ -20,7 +20,7 @@ struct patch_ids {
+ };
+ 
+ int commit_patch_id(struct commit *commit, struct diff_options *options,
+-		    struct object_id *oid, int, int);
++		    struct object_id *oid, int);
+ int init_patch_ids(struct repository *, struct patch_ids *);
+ int free_patch_ids(struct patch_ids *);
+ 
+-- 
+2.39.3 (Apple Git-145)
+

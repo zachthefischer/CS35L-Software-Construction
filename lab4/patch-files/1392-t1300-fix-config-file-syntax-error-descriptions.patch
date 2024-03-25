@@ -1,0 +1,47 @@
+From 6fc68e7ca3363a15104e7fc30fd1cae4758ac91c Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Mon, 17 Apr 2023 21:10:40 +0200
+Subject: [PATCH 1392/2871] t1300: fix config file syntax error descriptions
+
+Three tests in t1300-config.sh check that "git config --get" barfs when
+the config file contains various syntax errors: key=value pair without
+equals sign, broken section line, and broken value string.  The sample
+config files include a comment describing the kind of broken syntax.
+This description seems to have been copy-pasted from the "broken section
+line" sample to the other two samples.
+
+Fix descriptions of broken config file syntax in samples used in
+t1300-config.sh.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Reviewed-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1300-config.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t1300-config.sh b/t/t1300-config.sh
+index 2575279ab8..d566729d74 100755
+--- a/t/t1300-config.sh
++++ b/t/t1300-config.sh
+@@ -1571,7 +1571,7 @@ test_expect_success 'git config --edit respects core.editor' '
+ # malformed configuration files
+ test_expect_success 'barf on syntax error' '
+ 	cat >.git/config <<-\EOF &&
+-	# broken section line
++	# broken key=value
+ 	[section]
+ 	key garbage
+ 	EOF
+@@ -1591,7 +1591,7 @@ test_expect_success 'barf on incomplete section header' '
+ 
+ test_expect_success 'barf on incomplete string' '
+ 	cat >.git/config <<-\EOF &&
+-	# broken section line
++	# broken value string
+ 	[section]
+ 	key = "value string
+ 	EOF
+-- 
+2.39.3 (Apple Git-145)
+

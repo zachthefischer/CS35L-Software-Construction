@@ -1,0 +1,35 @@
+From 4eb1ccecd4f809d0e783b941ed1283ecb2778e09 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Dani=C3=ABl=20Haazen?= <danielhaazen@hotmail.com>
+Date: Mon, 19 Dec 2022 02:26:50 +0000
+Subject: [PATCH 0582/2871] mingw: fix typo in an error message from ownership
+ check
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When a repository is on a FAT32 file system, the user sees a message
+that the path ownership cannot be determined.  Fix a typo in the
+message.
+
+Signed-off-by: Daniël Haazen <danielhaazen@hotmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ compat/mingw.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/compat/mingw.c b/compat/mingw.c
+index 901375d584..9e59a56f27 100644
+--- a/compat/mingw.c
++++ b/compat/mingw.c
+@@ -2749,7 +2749,7 @@ int is_path_owned_by_current_sid(const char *path, struct strbuf *report)
+ 			/*
+ 			 * On FAT32 volumes, ownership is not actually recorded.
+ 			 */
+-			strbuf_addf(report, "'%s' is on a file system that does"
++			strbuf_addf(report, "'%s' is on a file system that does "
+ 				    "not record ownership\n", path);
+ 		} else if (report) {
+ 			LPSTR str1, str2, to_free1 = NULL, to_free2 = NULL;
+-- 
+2.39.3 (Apple Git-145)
+

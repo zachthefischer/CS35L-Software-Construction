@@ -1,0 +1,37 @@
+From a646b86cd10282de2ceb64ef33b5412e4fb2a54c Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 4 Jul 2023 15:23:39 -0700
+Subject: [PATCH 1716/2871] The seventh batch
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/RelNotes/2.42.0.txt | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Documentation/RelNotes/2.42.0.txt b/Documentation/RelNotes/2.42.0.txt
+index 310f899306..8cbcba7384 100644
+--- a/Documentation/RelNotes/2.42.0.txt
++++ b/Documentation/RelNotes/2.42.0.txt
+@@ -13,6 +13,9 @@ UI, Workflows & Features
+    enumerates extra objects to be used as anchoring points to keep
+    otherwise unreachable objects in cruft packs.
+ 
++ * Add more "git var" for toolsmiths to learn various locations Git is
++   configured with either via the configuration or hardcoded defaults.
++
+ 
+ Performance, Internal Implementation, Development Support etc.
+ 
+@@ -35,6 +38,9 @@ Performance, Internal Implementation, Development Support etc.
+    should not be trusted as a resolution with conflicts that is
+    proposed by the driver, but the code did.
+ 
++ * The set-up code for the get_revision() API now allows feeding
++   options like --all and --not in the --stdin mode.
++
+ 
+ Fixes since v2.41
+ -----------------
+-- 
+2.39.3 (Apple Git-145)
+

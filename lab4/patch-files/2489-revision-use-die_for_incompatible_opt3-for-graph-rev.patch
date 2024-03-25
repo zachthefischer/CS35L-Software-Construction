@@ -1,0 +1,54 @@
+From fa518aef564a24649ee6d8bbb29ed9c183a4b7c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Wed, 6 Dec 2023 12:51:57 +0100
+Subject: [PATCH 2489/2871] revision: use die_for_incompatible_opt3() for -
+ -graph/--reverse/--walk-reflogs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The revision option --reverse is incompatible with --walk-reflogs and
+--graph is incompatible with both --reverse and --walk-reflogs.  So they
+are all incompatible with each other.
+
+Use the function for checking three mutually incompatible options,
+die_for_incompatible_opt3(), to perform this check in one place and
+without repetition.  This is shorter and clearer.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ revision.c | 9 +++------
+ 1 file changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/revision.c b/revision.c
+index 00d5c29bfc..34bd386a81 100644
+--- a/revision.c
++++ b/revision.c
+@@ -3036,8 +3036,6 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
+ 		revs->grep_filter.ignore_locale = 1;
+ 	compile_grep_patterns(&revs->grep_filter);
+ 
+-	if (revs->reverse && revs->reflog_info)
+-		die(_("options '%s' and '%s' cannot be used together"), "--reverse", "--walk-reflogs");
+ 	if (revs->reflog_info && revs->limited)
+ 		die("cannot combine --walk-reflogs with history-limiting options");
+ 	if (revs->rewrite_parents && revs->children.name)
+@@ -3048,11 +3046,10 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
+ 	/*
+ 	 * Limitations on the graph functionality
+ 	 */
+-	if (revs->reverse && revs->graph)
+-		die(_("options '%s' and '%s' cannot be used together"), "--reverse", "--graph");
++	die_for_incompatible_opt3(!!revs->graph, "--graph",
++				  !!revs->reverse, "--reverse",
++				  !!revs->reflog_info, "--walk-reflogs");
+ 
+-	if (revs->reflog_info && revs->graph)
+-		die(_("options '%s' and '%s' cannot be used together"), "--walk-reflogs", "--graph");
+ 	if (revs->no_walk && revs->graph)
+ 		die(_("options '%s' and '%s' cannot be used together"), "--no-walk", "--graph");
+ 	if (!revs->reflog_info && revs->grep_filter.use_reflog_filter)
+-- 
+2.39.3 (Apple Git-145)
+

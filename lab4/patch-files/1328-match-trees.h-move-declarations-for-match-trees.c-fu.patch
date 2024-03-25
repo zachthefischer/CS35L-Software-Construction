@@ -1,0 +1,99 @@
+From d4ff2072abed071bc9fd291d179162da46d1427f Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:15 +0000
+Subject: [PATCH 1328/2871] match-trees.h: move declarations for match-trees.c
+ functions from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h                     |  4 ----
+ match-trees.c               |  1 +
+ match-trees.h               | 10 ++++++++++
+ merge-ort.c                 |  1 +
+ merge-recursive.c           |  1 +
+ t/helper/test-match-trees.c |  1 +
+ 6 files changed, 14 insertions(+), 4 deletions(-)
+ create mode 100644 match-trees.h
+
+diff --git a/cache.h b/cache.h
+index fde782a96f..0570f9ad07 100644
+--- a/cache.h
++++ b/cache.h
+@@ -603,10 +603,6 @@ int add_files_to_cache(const char *prefix, const struct pathspec *pathspec, int
+ /* diff.c */
+ extern int diff_auto_refresh_index;
+ 
+-/* match-trees.c */
+-void shift_tree(struct repository *, const struct object_id *, const struct object_id *, struct object_id *, int);
+-void shift_tree_by(struct repository *, const struct object_id *, const struct object_id *, struct object_id *, const char *);
+-
+ /*
+  * whitespace rules.
+  * used by both diff and apply
+diff --git a/match-trees.c b/match-trees.c
+index 5877fc64a8..9b78d99507 100644
+--- a/match-trees.c
++++ b/match-trees.c
+@@ -1,5 +1,6 @@
+ #include "cache.h"
+ #include "hex.h"
++#include "match-trees.h"
+ #include "tree.h"
+ #include "tree-walk.h"
+ #include "object-store.h"
+diff --git a/match-trees.h b/match-trees.h
+new file mode 100644
+index 0000000000..e3877acd58
+--- /dev/null
++++ b/match-trees.h
+@@ -0,0 +1,10 @@
++#ifndef MATCH_TREES_H
++#define MATCH_TREES_H
++
++struct object_id;
++struct repository;
++
++void shift_tree(struct repository *, const struct object_id *, const struct object_id *, struct object_id *, int);
++void shift_tree_by(struct repository *, const struct object_id *, const struct object_id *, struct object_id *, const char *);
++
++#endif /* MATCH_TREES_H */
+diff --git a/merge-ort.c b/merge-ort.c
+index 2c6a9ed9a4..65837db77f 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -31,6 +31,7 @@
+ #include "hex.h"
+ #include "entry.h"
+ #include "ll-merge.h"
++#include "match-trees.h"
+ #include "mem-pool.h"
+ #include "object-name.h"
+ #include "object-store.h"
+diff --git a/merge-recursive.c b/merge-recursive.c
+index d4d2ab05b2..8e87b6386d 100644
+--- a/merge-recursive.c
++++ b/merge-recursive.c
+@@ -22,6 +22,7 @@
+ #include "hex.h"
+ #include "ll-merge.h"
+ #include "lockfile.h"
++#include "match-trees.h"
+ #include "object-file.h"
+ #include "object-name.h"
+ #include "object-store.h"
+diff --git a/t/helper/test-match-trees.c b/t/helper/test-match-trees.c
+index 3808e1ac38..a498fece7a 100644
+--- a/t/helper/test-match-trees.c
++++ b/t/helper/test-match-trees.c
+@@ -1,6 +1,7 @@
+ #include "test-tool.h"
+ #include "cache.h"
+ #include "hex.h"
++#include "match-trees.h"
+ #include "object-name.h"
+ #include "setup.h"
+ #include "tree.h"
+-- 
+2.39.3 (Apple Git-145)
+

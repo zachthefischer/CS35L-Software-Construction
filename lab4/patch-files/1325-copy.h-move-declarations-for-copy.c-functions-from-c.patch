@@ -1,0 +1,200 @@
+From d5fff46f4025e23ec61b9d74eac2bb19e7a2385d Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:12 +0000
+Subject: [PATCH 1325/2871] copy.h: move declarations for copy.c functions from
+ cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bisect.c     |  1 +
+ builtin/clone.c      |  1 +
+ builtin/difftool.c   |  1 +
+ builtin/init-db.c    |  1 +
+ builtin/worktree.c   |  1 +
+ bundle-uri.c         |  1 +
+ cache.h              |  6 ------
+ convert.c            |  1 +
+ copy.c               |  1 +
+ copy.h               | 10 ++++++++++
+ pkt-line.c           |  1 +
+ refs/files-backend.c |  1 +
+ rerere.c             |  1 +
+ sequencer.c          |  1 +
+ 14 files changed, 22 insertions(+), 6 deletions(-)
+ create mode 100644 copy.h
+
+diff --git a/builtin/bisect.c b/builtin/bisect.c
+index 4b2143d455..4812450c39 100644
+--- a/builtin/bisect.c
++++ b/builtin/bisect.c
+@@ -1,5 +1,6 @@
+ #include "builtin.h"
+ #include "cache.h"
++#include "copy.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/builtin/clone.c b/builtin/clone.c
+index 4ed0a1d5aa..017ebc3faa 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -13,6 +13,7 @@
+ #include "abspath.h"
+ #include "advice.h"
+ #include "config.h"
++#include "copy.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/builtin/difftool.c b/builtin/difftool.c
+index 3ffb0524be..409507983f 100644
+--- a/builtin/difftool.c
++++ b/builtin/difftool.c
+@@ -15,6 +15,7 @@
+ #include "cache.h"
+ #include "abspath.h"
+ #include "config.h"
++#include "copy.h"
+ #include "builtin.h"
+ #include "run-command.h"
+ #include "environment.h"
+diff --git a/builtin/init-db.c b/builtin/init-db.c
+index 6183f3fb3f..cda6ee75eb 100644
+--- a/builtin/init-db.c
++++ b/builtin/init-db.c
+@@ -6,6 +6,7 @@
+ #include "cache.h"
+ #include "abspath.h"
+ #include "config.h"
++#include "copy.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "refs.h"
+diff --git a/builtin/worktree.c b/builtin/worktree.c
+index 0621f6f708..0b411e9dee 100644
+--- a/builtin/worktree.c
++++ b/builtin/worktree.c
+@@ -2,6 +2,7 @@
+ #include "abspath.h"
+ #include "checkout.h"
+ #include "config.h"
++#include "copy.h"
+ #include "builtin.h"
+ #include "dir.h"
+ #include "environment.h"
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 1ff1cf51da..6d44662ee1 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -1,6 +1,7 @@
+ #include "cache.h"
+ #include "bundle-uri.h"
+ #include "bundle.h"
++#include "copy.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "object-store.h"
+diff --git a/cache.h b/cache.h
+index 2eb4546473..2b66176479 100644
+--- a/cache.h
++++ b/cache.h
+@@ -593,12 +593,6 @@ int df_name_compare(const char *name1, size_t len1, int mode1,
+ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2);
+ int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2);
+ 
+-#define COPY_READ_ERROR (-2)
+-#define COPY_WRITE_ERROR (-3)
+-int copy_fd(int ifd, int ofd);
+-int copy_file(const char *dst, const char *src, int mode);
+-int copy_file_with_time(const char *dst, const char *src, int mode);
+-
+ /* base85 */
+ int decode_85(char *dst, const char *line, int linelen);
+ void encode_85(char *buf, const unsigned char *data, int bytes);
+diff --git a/convert.c b/convert.c
+index 5a2ea5308d..7cf7bd0c88 100644
+--- a/convert.c
++++ b/convert.c
+@@ -2,6 +2,7 @@
+ #include "advice.h"
+ #include "config.h"
+ #include "convert.h"
++#include "copy.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "object-store.h"
+diff --git a/copy.c b/copy.c
+index c3250f0822..db6b615c18 100644
+--- a/copy.c
++++ b/copy.c
+@@ -1,4 +1,5 @@
+ #include "cache.h"
++#include "copy.h"
+ #include "wrapper.h"
+ 
+ int copy_fd(int ifd, int ofd)
+diff --git a/copy.h b/copy.h
+new file mode 100644
+index 0000000000..2af77cba86
+--- /dev/null
++++ b/copy.h
+@@ -0,0 +1,10 @@
++#ifndef COPY_H
++#define COPY_H
++
++#define COPY_READ_ERROR (-2)
++#define COPY_WRITE_ERROR (-3)
++int copy_fd(int ifd, int ofd);
++int copy_file(const char *dst, const char *src, int mode);
++int copy_file_with_time(const char *dst, const char *src, int mode);
++
++#endif /* COPY_H */
+diff --git a/pkt-line.c b/pkt-line.c
+index 3561d85358..8b5fa78851 100644
+--- a/pkt-line.c
++++ b/pkt-line.c
+@@ -1,4 +1,5 @@
+ #include "cache.h"
++#include "copy.h"
+ #include "pkt-line.h"
+ #include "gettext.h"
+ #include "hex.h"
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index d0581ee41a..1128a9af29 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -1,5 +1,6 @@
+ #include "../cache.h"
+ #include "../config.h"
++#include "../copy.h"
+ #include "../environment.h"
+ #include "../gettext.h"
+ #include "../hex.h"
+diff --git a/rerere.c b/rerere.c
+index 7abc94bf44..e968d413d6 100644
+--- a/rerere.c
++++ b/rerere.c
+@@ -2,6 +2,7 @@
+ #include "abspath.h"
+ #include "alloc.h"
+ #include "config.h"
++#include "copy.h"
+ #include "gettext.h"
+ #include "hex.h"
+ #include "lockfile.h"
+diff --git a/sequencer.c b/sequencer.c
+index fcca3b8144..c16df51443 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -3,6 +3,7 @@
+ #include "advice.h"
+ #include "alloc.h"
+ #include "config.h"
++#include "copy.h"
+ #include "environment.h"
+ #include "gettext.h"
+ #include "hex.h"
+-- 
+2.39.3 (Apple Git-145)
+

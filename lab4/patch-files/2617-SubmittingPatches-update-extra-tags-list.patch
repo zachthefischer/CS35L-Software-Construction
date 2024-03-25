@@ -1,0 +1,54 @@
+From c771ef6f77d36fc9bfe6e70f805f52f84f681536 Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Thu, 28 Dec 2023 04:55:20 +0000
+Subject: [PATCH 2617/2871] SubmittingPatches: update extra tags list
+
+Add items with at least 100 uses in the past three years:
+- Co-authored-by
+- Helped-by
+- Mentored-by
+- Suggested-by
+
+git log --since=3.years|
+  perl -ne 'next unless /^\s+[A-Z][a-z]+-\S+:/;s/^\s+//;s/:.*/:/;print'|
+  sort|uniq -c|sort -n|grep '[0-9][0-9] '
+  14 Based-on-patch-by:
+  14 Original-patch-by:
+  17 Tested-by:
+ 100 Suggested-by:
+ 121 Co-authored-by:
+ 163 Mentored-by:
+ 274 Reported-by:
+ 290 Acked-by:
+ 450 Helped-by:
+ 602 Reviewed-by:
+14111 Signed-off-by:
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index 58dfe40504..31878cb70b 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -355,6 +355,14 @@ If you like, you can put extra tags at the end:
+   patch after a detailed analysis.
+ . `Tested-by:` is used to indicate that the person applied the patch
+   and found it to have the desired effect.
++. `Co-authored-by:` is used to indicate that people exchanged drafts
++   of a patch before submitting it.
++. `Helped-by:` is used to credit someone who suggested ideas for
++  changes without providing the precise changes in patch form.
++. `Mentored-by:` is used to credit someone with helping develop a
++  patch as part of a mentorship program (e.g., GSoC or Outreachy).
++. `Suggested-by:` is used to credit someone with suggesting the idea
++  for a patch.
+ 
+ While you can also create your own trailer if the situation warrants it, we
+ encourage you to instead use one of the common trailers in this project
+-- 
+2.39.3 (Apple Git-145)
+

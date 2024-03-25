@@ -1,0 +1,92 @@
+From 03744bbdc4284fbb358abd5347c8bb157f301243 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 15 Nov 2022 13:53:17 -0500
+Subject: [PATCH 0389/2871] builtin/gc.c: fix use-after-free in
+ maintenance_unregister()
+
+While trying to fix a move based on an uninitialized value (along with a
+declaration after the first statement), be0fd57228
+(maintenance --unregister: fix uninit'd data use &
+-Wdeclaration-after-statement, 2022-11-15) unintentionally introduced a
+use-after-free.
+
+The problem arises when `maintenance_unregister()` sees a non-NULL
+`config_file` string and thus tries to call
+git_configset_get_value_multi() to lookup the corresponding values.
+
+We store the result off, and then call git_configset_clear(), which
+frees the pointer that we just stored. We then try to read that
+now-freed pointer a few lines below, and there we have our
+use-after-free:
+
+    $ ./t7900-maintenance.sh -vxi --run=23 --valgrind
+    [...]
+    + git maintenance unregister --config-file ./other
+    ==3048727== Invalid read of size 8
+    ==3048727==    at 0x1869CA: maintenance_unregister (gc.c:1590)
+    ==3048727==    by 0x188F42: cmd_maintenance (gc.c:2651)
+    ==3048727==    by 0x128C62: run_builtin (git.c:466)
+    ==3048727==    by 0x12907E: handle_builtin (git.c:721)
+    ==3048727==    by 0x1292EC: run_argv (git.c:788)
+    ==3048727==    by 0x12988E: cmd_main (git.c:926)
+    ==3048727==    by 0x21ED39: main (common-main.c:57)
+    ==3048727==  Address 0x4b38bc8 is 24 bytes inside a block of size 64 free'd
+    ==3048727==    at 0x484617B: free (vg_replace_malloc.c:872)
+    ==3048727==    by 0x2D207E: free_individual_entries (hashmap.c:188)
+    ==3048727==    by 0x2D2153: hashmap_clear_ (hashmap.c:207)
+    ==3048727==    by 0x270B5C: git_configset_clear (config.c:2375)
+    ==3048727==    by 0x1869AC: maintenance_unregister (gc.c:1585)
+    ==3048727==    by 0x188F42: cmd_maintenance (gc.c:2651)
+    ==3048727==    by 0x128C62: run_builtin (git.c:466)
+    ==3048727==    by 0x12907E: handle_builtin (git.c:721)
+    ==3048727==    by 0x1292EC: run_argv (git.c:788)
+    ==3048727==    by 0x12988E: cmd_main (git.c:926)
+    ==3048727==    by 0x21ED39: main (common-main.c:57)
+    [...]
+
+Resolve this via a partial-revert of be0fd57228. The config_set struct
+now gets a zero initialization, which makes free()-ing it a noop even
+without calling git_configset_init(). When we do initialize it to a
+non-zero value, it is only free()'d after our last read of `list`.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/gc.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index d87cf84041..38882a1e35 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -1543,6 +1543,7 @@ static int maintenance_unregister(int argc, const char **argv, const char *prefi
+ 	int found = 0;
+ 	struct string_list_item *item;
+ 	const struct string_list *list;
++	struct config_set cs = { { 0 } };
+ 
+ 	argc = parse_options(argc, argv, prefix, options,
+ 			     builtin_maintenance_unregister_usage, 0);
+@@ -1551,12 +1552,9 @@ static int maintenance_unregister(int argc, const char **argv, const char *prefi
+ 				   options);
+ 
+ 	if (config_file) {
+-		struct config_set cs;
+-
+ 		git_configset_init(&cs);
+ 		git_configset_add_file(&cs, config_file);
+ 		list = git_configset_get_value_multi(&cs, key);
+-		git_configset_clear(&cs);
+ 	} else {
+ 		list = git_config_get_value_multi(key);
+ 	}
+@@ -1592,6 +1590,7 @@ static int maintenance_unregister(int argc, const char **argv, const char *prefi
+ 		die(_("repository '%s' is not registered"), maintpath);
+ 	}
+ 
++	git_configset_clear(&cs);
+ 	free(maintpath);
+ 	return 0;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,59 @@
+From e4298ccd7ff74cd2e11ff952b42c33ccc746e617 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 9 Mar 2023 22:51:43 +0100
+Subject: [PATCH 1027/2871] t0003: GETTEXT_POISON fix, part 1
+
+In dfa6b32b5e59 (attr: ignore attribute lines exceeding 2048 bytes,
+2022-12-01), we backported a patch onto v2.30.* that was originally
+based on a much newer version. The v2.30.* release train still has the
+GETTEXT_POISON CI job, though, and hence needs `test_i18n*` in its
+tests.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ t/t0003-attributes.sh | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/t/t0003-attributes.sh b/t/t0003-attributes.sh
+index 9d9aa2855d..5bd9d9832d 100755
+--- a/t/t0003-attributes.sh
++++ b/t/t0003-attributes.sh
+@@ -344,7 +344,7 @@ test_expect_success 'large attributes line ignored in tree' '
+ 	printf "path %02043d" 1 >.gitattributes &&
+ 	git check-attr --all path >actual 2>err &&
+ 	echo "warning: ignoring overly long attributes line 1" >expect &&
+-	test_cmp expect err &&
++	test_i18ncmp expect err &&
+ 	test_must_be_empty actual
+ '
+ 
+@@ -357,7 +357,7 @@ test_expect_success 'large attributes line ignores trailing content in tree' '
+ 	printf "a %02045dtrailing attribute\n" 1 >.gitattributes &&
+ 	git check-attr --all trailing >actual 2>err &&
+ 	echo "warning: ignoring overly long attributes line 1" >expect &&
+-	test_cmp expect err &&
++	test_i18ncmp expect err &&
+ 	test_must_be_empty actual
+ '
+ 
+@@ -375,7 +375,7 @@ test_expect_success 'large attributes line ignored in index' '
+ 	git update-index --add --cacheinfo 100644,$blob,.gitattributes &&
+ 	git check-attr --cached --all path >actual 2>err &&
+ 	echo "warning: ignoring overly long attributes line 1" >expect &&
+-	test_cmp expect err &&
++	test_i18ncmp expect err &&
+ 	test_must_be_empty actual
+ '
+ 
+@@ -385,7 +385,7 @@ test_expect_success 'large attributes line ignores trailing content in index' '
+ 	git update-index --add --cacheinfo 100644,$blob,.gitattributes &&
+ 	git check-attr --cached --all trailing >actual 2>err &&
+ 	echo "warning: ignoring overly long attributes line 1" >expect &&
+-	test_cmp expect err &&
++	test_i18ncmp expect err &&
+ 	test_must_be_empty actual
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,70 @@
+From 34a94897e02fda653cf0c71edc2d5df207855160 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 5 May 2023 14:19:16 -0700
+Subject: [PATCH 1401/2871] diff: refactor common tail part of dirstat
+ computation
+
+This will become useful when we plug leaks in these two functions.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 29 +++++++++++++++--------------
+ 1 file changed, 15 insertions(+), 14 deletions(-)
+
+diff --git a/diff.c b/diff.c
+index 648f6717a5..e13d0f8b67 100644
+--- a/diff.c
++++ b/diff.c
+@@ -2971,6 +2971,19 @@ static int dirstat_compare(const void *_a, const void *_b)
+ 	return strcmp(a->name, b->name);
+ }
+ 
++static void conclude_dirstat(struct diff_options *options,
++			     struct dirstat_dir *dir,
++			     unsigned long changed)
++{
++	/* This can happen even with many files, if everything was renames */
++	if (!changed)
++		return;
++
++	/* Show all directories with more than x% of the changes */
++	QSORT(dir->files, dir->nr, dirstat_compare);
++	gather_dirstat(options, dir, changed, "", 0);
++}
++
+ static void show_dirstat(struct diff_options *options)
+ {
+ 	int i;
+@@ -3060,13 +3073,7 @@ static void show_dirstat(struct diff_options *options)
+ 		dir.nr++;
+ 	}
+ 
+-	/* This can happen even with many files, if everything was renames */
+-	if (!changed)
+-		return;
+-
+-	/* Show all directories with more than x% of the changes */
+-	QSORT(dir.files, dir.nr, dirstat_compare);
+-	gather_dirstat(options, &dir, changed, "", 0);
++	conclude_dirstat(options, &dir, changed);
+ }
+ 
+ static void show_dirstat_by_line(struct diffstat_t *data, struct diff_options *options)
+@@ -3104,13 +3111,7 @@ static void show_dirstat_by_line(struct diffstat_t *data, struct diff_options *o
+ 		dir.nr++;
+ 	}
+ 
+-	/* This can happen even with many files, if everything was renames */
+-	if (!changed)
+-		return;
+-
+-	/* Show all directories with more than x% of the changes */
+-	QSORT(dir.files, dir.nr, dirstat_compare);
+-	gather_dirstat(options, &dir, changed, "", 0);
++	conclude_dirstat(options, &dir, changed);
+ }
+ 
+ static void free_diffstat_file(struct diffstat_file *f)
+-- 
+2.39.3 (Apple Git-145)
+

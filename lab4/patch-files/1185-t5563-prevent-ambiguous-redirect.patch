@@ -1,0 +1,71 @@
+From 92c7b3d473623e25bdc790b89abe8b126eeb3bdf Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 31 Mar 2023 06:52:05 +0000
+Subject: [PATCH 1185/2871] t5563: prevent "ambiguous redirect"
+
+When I ran this test using `TEST_SHELL_PATH=/bin/bash` in my Ubuntu
+setup (where Bash is at version 5.0.17(1)-release), I was greeted with
+this error message:
+
+	./test-lib.sh: line 1072: $CHALLENGE: ambiguous redirect
+
+This commit fixes that error by quoting the `CHALLENGE` variable (which
+has as value a path containing spaces), and by avoiding to cuddle the
+empty string parameter in the `printf` call with the redirect character
+(in fact, the `printf ''>$CHALLENGE` is removed because the next line
+overwrites the file anyway because it _also_ uses a single `>` to
+redirect the output).
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5563-simple-http-auth.sh | 26 ++++++++++++--------------
+ 1 file changed, 12 insertions(+), 14 deletions(-)
+
+diff --git a/t/t5563-simple-http-auth.sh b/t/t5563-simple-http-auth.sh
+index ccf7e54b07..f45a43b4b5 100755
+--- a/t/t5563-simple-http-auth.sh
++++ b/t/t5563-simple-http-auth.sh
+@@ -252,15 +252,14 @@ test_expect_success 'access using basic auth with wwwauth header empty continuat
+ 
+ 	# Note that leading and trailing whitespace is important to correctly
+ 	# simulate a continuation/folded header.
+-	printf "">$CHALLENGE &&
+-	printf "WWW-Authenticate: FooBar param1=\"value1\"\r\n" >$CHALLENGE &&
+-	printf " \r\n" >>$CHALLENGE &&
+-	printf " param2=\"value2\"\r\n" >>$CHALLENGE &&
+-	printf "WWW-Authenticate: Bearer authorize_uri=\"id.example.com\"\r\n" >>$CHALLENGE &&
+-	printf " p=1\r\n" >>$CHALLENGE &&
+-	printf " \r\n" >>$CHALLENGE &&
+-	printf " q=0\r\n" >>$CHALLENGE &&
+-	printf "WWW-Authenticate: Basic realm=\"example.com\"\r\n" >>$CHALLENGE &&
++	printf "WWW-Authenticate: FooBar param1=\"value1\"\r\n" >"$CHALLENGE" &&
++	printf " \r\n" >>"$CHALLENGE" &&
++	printf " param2=\"value2\"\r\n" >>"$CHALLENGE" &&
++	printf "WWW-Authenticate: Bearer authorize_uri=\"id.example.com\"\r\n" >>"$CHALLENGE" &&
++	printf " p=1\r\n" >>"$CHALLENGE" &&
++	printf " \r\n" >>"$CHALLENGE" &&
++	printf " q=0\r\n" >>"$CHALLENGE" &&
++	printf "WWW-Authenticate: Basic realm=\"example.com\"\r\n" >>"$CHALLENGE" &&
+ 
+ 	test_config_global credential.helper test-helper &&
+ 	git ls-remote "$HTTPD_URL/custom_auth/repo.git" &&
+@@ -298,11 +297,10 @@ test_expect_success 'access using basic auth with wwwauth header mixed line-endi
+ 
+ 	# Note that leading and trailing whitespace is important to correctly
+ 	# simulate a continuation/folded header.
+-	printf "">$CHALLENGE &&
+-	printf "WWW-Authenticate: FooBar param1=\"value1\"\r\n" >$CHALLENGE &&
+-	printf " \r\n" >>$CHALLENGE &&
+-	printf "\tparam2=\"value2\"\r\n" >>$CHALLENGE &&
+-	printf "WWW-Authenticate: Basic realm=\"example.com\"" >>$CHALLENGE &&
++	printf "WWW-Authenticate: FooBar param1=\"value1\"\r\n" >"$CHALLENGE" &&
++	printf " \r\n" >>"$CHALLENGE" &&
++	printf "\tparam2=\"value2\"\r\n" >>"$CHALLENGE" &&
++	printf "WWW-Authenticate: Basic realm=\"example.com\"" >>"$CHALLENGE" &&
+ 
+ 	test_config_global credential.helper test-helper &&
+ 	git ls-remote "$HTTPD_URL/custom_auth/repo.git" &&
+-- 
+2.39.3 (Apple Git-145)
+

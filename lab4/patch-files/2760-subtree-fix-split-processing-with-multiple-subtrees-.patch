@@ -1,0 +1,196 @@
+From 98ba49ccc247c3521659aa3d43c970e8978922c5 Mon Sep 17 00:00:00 2001
+From: Zach FettersMoore <zach.fetters@apollographql.com>
+Date: Fri, 1 Dec 2023 14:54:54 +0000
+Subject: [PATCH 2760/2871] subtree: fix split processing with multiple
+ subtrees present
+
+When there are multiple subtrees present in a repository and they are
+all using 'git subtree split', the 'split' command can take a
+significant (and constantly growing) amount of time to run even when
+using the '--rejoin' flag. This is due to the fact that when processing
+commits to determine the last known split to start from when looking
+for changes, if there has been a split/merge done from another subtree
+there will be 2 split commits, one mainline and one subtree, for the
+second subtree that are part of the processing. The non-mainline
+subtree split commit will cause the processing to always need to search
+the entire history of the given subtree as part of its processing even
+though those commits are totally irrelevant to the current subtree
+split being run.
+
+To see this in practice you can use the open source GitHub repo
+'apollo-ios-dev' and do the following in order:
+
+-Make a changes to a file in 'apollo-ios' and 'apollo-ios-codegen'
+ directories
+-Create a commit containing these changes
+-Do a split on apollo-ios-codegen
+   - Do a fetch on the subtree repo
+      - git fetch git@github.com:apollographql/apollo-ios-codegen.git
+   - git subtree split --prefix=apollo-ios-codegen --squash --rejoin
+   - Depending on the current state of the 'apollo-ios-dev' repo
+     you may see the issue at this point if the last split was on
+     apollo-ios
+-Do a split on apollo-ios
+   - Do a fetch on the subtree repo
+      - git fetch git@github.com:apollographql/apollo-ios.git
+   - git subtree split --prefix=apollo-ios --squash --rejoin
+-Make changes to a file in apollo-ios-codegen
+-Create a commit containing the change(s)
+-Do a split on apollo-ios-codegen
+   - git subtree split --prefix=apollo-ios-codegen --squash --rejoin
+-To see that the patch fixes the issue you can use the custom subtree
+ script in the repo so following the same steps as above, except
+ instead of using 'git subtree ...' for the commands use
+ 'git-subtree.sh ...' for the commands
+
+You will see that the final split is looking for the last split
+on apollo-ios-codegen to use as it's starting point to process
+commits. Since there is a split commit from apollo-ios in between the
+2 splits run on apollo-ios-codegen, the processing ends up traversing
+the entire history of apollo-ios which increases the time it takes to
+do a split based on how long of a history apollo-ios has, while none
+of these commits are relevant to the split being done on
+apollo-ios-codegen.
+
+So this commit makes a change to the processing of commits for the
+split command in order to ignore non-mainline commits from other
+subtrees such as apollo-ios in the above breakdown by adding a new
+function 'should_ignore_subtree_commit' which is called during
+'process_split_commit'. This allows the split/rejoin processing to
+still function as expected but removes all of the unnecessary
+processing that takes place currently which greatly inflates the
+processing time. In the above example, previously the final split
+would take ~10-12 minutes, while after this fix it takes seconds.
+
+Added a test to validate that the proposed fix
+solves the issue.
+
+The test accomplishes this by checking the output
+of the split command to ensure the output from
+the progress of 'process_split_commit' function
+that represents the 'extracount' of commits
+processed remains at 0, meaning none of the commits
+from the second subtree were processed.
+
+This was tested against the original functionality
+to show the test failed, and then with this fix
+to show the test passes.
+
+This illustrated that when using multiple subtrees,
+A and B, when doing a split on subtree B, the
+processing does not traverse the entire history
+of subtree A which is unnecessary and would cause
+the 'extracount' of processed commits to climb
+based on the number of commits in the history of
+subtree A.
+
+Signed-off-by: Zach FettersMoore <zach.fetters@apollographql.com>
+Reviewed-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/git-subtree.sh     | 30 +++++++++++++++++++++-
+ contrib/subtree/t/t7900-subtree.sh | 40 ++++++++++++++++++++++++++++++
+ 2 files changed, 69 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index 3028029ac2..5dab3f506c 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -787,6 +787,22 @@ ensure_valid_ref_format () {
+ 		die "fatal: '$1' does not look like a ref"
+ }
+ 
++# Usage: check if a commit from another subtree should be
++# ignored from processing for splits
++should_ignore_subtree_split_commit () {
++	assert test $# = 1
++	local rev="$1"
++	if test -n "$(git log -1 --grep="git-subtree-dir:" $rev)"
++	then
++		if test -z "$(git log -1 --grep="git-subtree-mainline:" $rev)" &&
++			test -z "$(git log -1 --grep="git-subtree-dir: $arg_prefix$" $rev)"
++		then
++			return 0
++		fi
++	fi
++	return 1
++}
++
+ # Usage: process_split_commit REV PARENTS
+ process_split_commit () {
+ 	assert test $# = 2
+@@ -972,7 +988,19 @@ cmd_split () {
+ 	eval "$grl" |
+ 	while read rev parents
+ 	do
+-		process_split_commit "$rev" "$parents"
++		if should_ignore_subtree_split_commit "$rev"
++		then
++			continue
++		fi
++		parsedparents=''
++		for parent in $parents
++		do
++			if ! should_ignore_subtree_split_commit "$parent"
++			then
++				parsedparents="$parsedparents$parent "
++			fi
++		done
++		process_split_commit "$rev" "$parsedparents"
+ 	done || exit $?
+ 
+ 	latest_new=$(cache_get latest_new) || exit $?
+diff --git a/contrib/subtree/t/t7900-subtree.sh b/contrib/subtree/t/t7900-subtree.sh
+index 49a21dd7c9..ca4df5be83 100755
+--- a/contrib/subtree/t/t7900-subtree.sh
++++ b/contrib/subtree/t/t7900-subtree.sh
+@@ -385,6 +385,46 @@ test_expect_success 'split sub dir/ with --rejoin' '
+ 	)
+ '
+ 
++# Tests that commits from other subtrees are not processed as
++# part of a split.
++#
++# This test performs the following:
++# - Creates Repo with subtrees 'subA' and 'subB'
++# - Creates commits in the repo including changes to subtrees
++# - Runs the following 'split' and commit' commands in order:
++# 	- Perform 'split' on subtree A
++# 	- Perform 'split' on subtree B
++# 	- Create new commits with changes to subtree A and B
++# 	- Perform split on subtree A
++# 	- Check that the commits in subtree B are not processed
++#			as part of the subtree A split
++test_expect_success 'split with multiple subtrees' '
++	subtree_test_create_repo "$test_count" &&
++	subtree_test_create_repo "$test_count/subA" &&
++	subtree_test_create_repo "$test_count/subB" &&
++	test_create_commit "$test_count" main1 &&
++	test_create_commit "$test_count/subA" subA1 &&
++	test_create_commit "$test_count/subA" subA2 &&
++	test_create_commit "$test_count/subA" subA3 &&
++	test_create_commit "$test_count/subB" subB1 &&
++	git -C "$test_count" fetch ./subA HEAD &&
++	git -C "$test_count" subtree add --prefix=subADir FETCH_HEAD &&
++	git -C "$test_count" fetch ./subB HEAD &&
++	git -C "$test_count" subtree add --prefix=subBDir FETCH_HEAD &&
++	test_create_commit "$test_count" subADir/main-subA1 &&
++	test_create_commit "$test_count" subBDir/main-subB1 &&
++	git -C "$test_count" subtree split --prefix=subADir \
++		--squash --rejoin -m "Sub A Split 1" &&
++	git -C "$test_count" subtree split --prefix=subBDir \
++		--squash --rejoin -m "Sub B Split 1" &&
++	test_create_commit "$test_count" subADir/main-subA2 &&
++	test_create_commit "$test_count" subBDir/main-subB2 &&
++	git -C "$test_count" subtree split --prefix=subADir \
++		--squash --rejoin -m "Sub A Split 2" &&
++	test "$(git -C "$test_count" subtree split --prefix=subBDir \
++		--squash --rejoin -d -m "Sub B Split 1" 2>&1 | grep -w "\[1\]")" = ""
++'
++
+ test_expect_success 'split sub dir/ with --rejoin from scratch' '
+ 	subtree_test_create_repo "$test_count" &&
+ 	test_create_commit "$test_count" main1 &&
+-- 
+2.39.3 (Apple Git-145)
+

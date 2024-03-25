@@ -1,0 +1,129 @@
+From c90db53d203d7ade1dc7abe63857cfb5616fe34f Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 7 Nov 2022 18:25:01 +0000
+Subject: [PATCH 0307/2871] scalar reconfigure -a: remove stale `scalar.repo`
+ entries
+
+Every once in a while, a Git for Windows installation fails because the
+attempt to reconfigure a Scalar enlistment failed because it was deleted
+manually without removing the corresponding entries in the global Git
+config.
+
+In f5f0842d0b5 (scalar: let 'unregister' handle a deleted enlistment
+directory gracefully, 2021-12-03), we already taught `scalar delete` to
+handle the case of a manually deleted enlistment gracefully. This patch
+adds the same graceful handling to `scalar reconfigure --all`.
+
+This patch is best viewed with `--color-moved`.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ scalar.c          | 54 +++++++++++++++++++++++++++++------------------
+ t/t9210-scalar.sh | 11 ++++++++++
+ 2 files changed, 45 insertions(+), 20 deletions(-)
+
+diff --git a/scalar.c b/scalar.c
+index 6de9c0ee52..7f4bdb6c15 100644
+--- a/scalar.c
++++ b/scalar.c
+@@ -599,6 +599,24 @@ static int get_scalar_repos(const char *key, const char *value, void *data)
+ 	return 0;
+ }
+ 
++static int remove_deleted_enlistment(struct strbuf *path)
++{
++	int res = 0;
++	strbuf_realpath_forgiving(path, path->buf, 1);
++
++	if (run_git("config", "--global",
++		    "--unset", "--fixed-value",
++		    "scalar.repo", path->buf, NULL) < 0)
++		res = -1;
++
++	if (run_git("config", "--global",
++		    "--unset", "--fixed-value",
++		    "maintenance.repo", path->buf, NULL) < 0)
++		res = -1;
++
++	return res;
++}
++
+ static int cmd_reconfigure(int argc, const char **argv)
+ {
+ 	int all = 0;
+@@ -638,8 +656,22 @@ static int cmd_reconfigure(int argc, const char **argv)
+ 		strbuf_reset(&gitdir);
+ 
+ 		if (chdir(dir) < 0) {
+-			warning_errno(_("could not switch to '%s'"), dir);
+-			res = -1;
++			struct strbuf buf = STRBUF_INIT;
++
++			if (errno != ENOENT) {
++				warning_errno(_("could not switch to '%s'"), dir);
++				res = -1;
++				continue;
++			}
++
++			strbuf_addstr(&buf, dir);
++			if (remove_deleted_enlistment(&buf))
++				res = error(_("could not remove stale "
++					      "scalar.repo '%s'"), dir);
++			else
++				warning(_("removing stale scalar.repo '%s'"),
++					dir);
++			strbuf_release(&buf);
+ 		} else if (discover_git_directory(&commondir, &gitdir) < 0) {
+ 			warning_errno(_("git repository gone in '%s'"), dir);
+ 			res = -1;
+@@ -725,24 +757,6 @@ static int cmd_run(int argc, const char **argv)
+ 	return 0;
+ }
+ 
+-static int remove_deleted_enlistment(struct strbuf *path)
+-{
+-	int res = 0;
+-	strbuf_realpath_forgiving(path, path->buf, 1);
+-
+-	if (run_git("config", "--global",
+-		    "--unset", "--fixed-value",
+-		    "scalar.repo", path->buf, NULL) < 0)
+-		res = -1;
+-
+-	if (run_git("config", "--global",
+-		    "--unset", "--fixed-value",
+-		    "maintenance.repo", path->buf, NULL) < 0)
+-		res = -1;
+-
+-	return res;
+-}
+-
+ static int cmd_unregister(int argc, const char **argv)
+ {
+ 	struct option options[] = {
+diff --git a/t/t9210-scalar.sh b/t/t9210-scalar.sh
+index be51a8bb7a..c7f8a37910 100755
+--- a/t/t9210-scalar.sh
++++ b/t/t9210-scalar.sh
+@@ -166,6 +166,17 @@ test_expect_success 'scalar reconfigure' '
+ 	test true = "$(git -C one/src config core.preloadIndex)"
+ '
+ 
++test_expect_success '`reconfigure -a` removes stale config entries' '
++	git init stale/src &&
++	scalar register stale &&
++	scalar list >scalar.repos &&
++	grep stale scalar.repos &&
++	rm -rf stale &&
++	scalar reconfigure -a &&
++	scalar list >scalar.repos &&
++	! grep stale scalar.repos
++'
++
+ test_expect_success 'scalar delete without enlistment shows a usage' '
+ 	test_expect_code 129 scalar delete
+ '
+-- 
+2.39.3 (Apple Git-145)
+

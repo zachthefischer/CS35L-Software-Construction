@@ -1,0 +1,454 @@
+From 0025dde775ea20c64dfedff17da15bbef047a1c9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 28 Oct 2023 13:53:01 +0200
+Subject: [PATCH 2313/2871] parse-options: make CMDMODE errors more precise
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Only a single PARSE_OPT_CMDMODE option can be specified for the same
+variable at the same time.  This is enforced by get_value(), but the
+error messages are imprecise in three ways:
+
+1. If a non-PARSE_OPT_CMDMODE option changes the value variable of a
+PARSE_OPT_CMDMODE option then an ominously vague message is shown:
+
+   $ t/helper/test-tool parse-options --set23 --mode1
+   error: option `mode1' : incompatible with something else
+
+Worse: If the order of options is reversed then no error is reported at
+all:
+
+   $ t/helper/test-tool parse-options --mode1 --set23
+   boolean: 0
+   integer: 23
+   magnitude: 0
+   timestamp: 0
+   string: (not set)
+   abbrev: 7
+   verbose: -1
+   quiet: 0
+   dry run: no
+   file: (not set)
+
+Fortunately this can currently only happen in the test helper; actual
+Git commands don't share the same variable for the value of options with
+and without the flag PARSE_OPT_CMDMODE.
+
+2. If there are multiple options with the same value (synonyms), then
+the one that is defined first is shown rather than the one actually
+given on the command line, which is confusing:
+
+   $ git am --resolved --quit
+   error: option `quit' is incompatible with --continue
+
+3. Arguments of PARSE_OPT_CMDMODE options are not handled by the
+parse-option machinery.  This is left to the callback function.  We
+currently only have a single affected option, --show-current-patch of
+git am.  Errors for it can show an argument that was not actually given
+on the command line:
+
+   $ git am --show-current-patch --show-current-patch=diff
+   error: options '--show-current-patch=diff' and '--show-current-patch=raw' cannot be used together
+
+The options --show-current-patch and --show-current-patch=raw are
+synonyms, but the error accuses the user of input they did not actually
+made.  Or it can awkwardly print a NULL pointer:
+
+   $ git am --show-current-patch=diff --show-current-patch
+   error: options '--show-current-patch=(null)' and '--show-current-patch=diff' cannot be used together
+
+The reasons for these shortcomings is that the current code checks
+incompatibility only when encountering a PARSE_OPT_CMDMODE option at the
+command line, and that it searches the previous incompatible option by
+value.
+
+Fix the first two points by checking all PARSE_OPT_CMDMODE variables
+after parsing each option and by storing all relevant details if their
+value changed.  Do that whether or not the changing options has the flag
+PARSE_OPT_CMDMODE set.  Report an incompatibility only if two options
+change the variable to different values and at least one of them is a
+PARSE_OPT_CMDMODE option.  This changes the output of the first three
+examples above to:
+
+   $ t/helper/test-tool parse-options --set23 --mode1
+   error: --mode1 is incompatible with --set23
+   $ t/helper/test-tool parse-options --mode1 --set23
+   error: --set23 is incompatible with --mode1
+   $ git am --resolved --quit
+   error: --quit is incompatible with --resolved
+
+Store the argument of PARSE_OPT_CMDMODE options of type OPTION_CALLBACK
+as well to allow taking over the responsibility for compatibility
+checking from the callback function.  The next patch will use this
+capability to fix the messages for git am --show-current-patch.
+
+Use a linked list for storing the PARSE_OPT_CMDMODE variables.  This
+somewhat outdated data structure is simple and suffices, as the number
+of elements per command is currently only zero or one.  We do support
+multiple different command modes variables per command, but I don't
+expect that we'd ever use a significant number of them.  Once we do we
+can switch to a hashmap.
+
+Since we no longer need to search the conflicting option, the all_opts
+parameter of get_value() is no longer used.  Remove it.
+
+Extend the tests to check for both conflicting option names, but don't
+insist on a particular order.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c               | 144 ++++++++++++++++++++++------------
+ parse-options.h               |   3 +
+ t/helper/test-parse-options.c |  16 ++++
+ t/t0040-parse-options.sh      |  33 ++++++--
+ 4 files changed, 139 insertions(+), 57 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index 093eaf2db8..e0c94b0546 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -70,42 +70,10 @@ static void fix_filename(const char *prefix, char **file)
+ 		*file = prefix_filename_except_for_dash(prefix, *file);
+ }
+ 
+-static enum parse_opt_result opt_command_mode_error(
+-	const struct option *opt,
+-	const struct option *all_opts,
+-	enum opt_parsed flags)
+-{
+-	const struct option *that;
+-	struct strbuf that_name = STRBUF_INIT;
+-
+-	/*
+-	 * Find the other option that was used to set the variable
+-	 * already, and report that this is not compatible with it.
+-	 */
+-	for (that = all_opts; that->type != OPTION_END; that++) {
+-		if (that == opt ||
+-		    !(that->flags & PARSE_OPT_CMDMODE) ||
+-		    that->value != opt->value ||
+-		    that->defval != *(int *)opt->value)
+-			continue;
+-
+-		if (that->long_name)
+-			strbuf_addf(&that_name, "--%s", that->long_name);
+-		else
+-			strbuf_addf(&that_name, "-%c", that->short_name);
+-		error(_("%s is incompatible with %s"),
+-		      optname(opt, flags), that_name.buf);
+-		strbuf_release(&that_name);
+-		return PARSE_OPT_ERROR;
+-	}
+-	return error(_("%s : incompatible with something else"),
+-		     optname(opt, flags));
+-}
+-
+-static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
+-				       const struct option *opt,
+-				       const struct option *all_opts,
+-				       enum opt_parsed flags)
++static enum parse_opt_result do_get_value(struct parse_opt_ctx_t *p,
++					  const struct option *opt,
++					  enum opt_parsed flags,
++					  const char **argp)
+ {
+ 	const char *s, *arg;
+ 	const int unset = flags & OPT_UNSET;
+@@ -118,14 +86,6 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
+ 	if (!(flags & OPT_SHORT) && p->opt && (opt->flags & PARSE_OPT_NOARG))
+ 		return error(_("%s takes no value"), optname(opt, flags));
+ 
+-	/*
+-	 * Giving the same mode option twice, although unnecessary,
+-	 * is not a grave error, so let it pass.
+-	 */
+-	if ((opt->flags & PARSE_OPT_CMDMODE) &&
+-	    *(int *)opt->value && *(int *)opt->value != opt->defval)
+-		return opt_command_mode_error(opt, all_opts, flags);
+-
+ 	switch (opt->type) {
+ 	case OPTION_LOWLEVEL_CALLBACK:
+ 		return opt->ll_callback(p, opt, NULL, unset);
+@@ -200,6 +160,8 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
+ 			p_unset = 0;
+ 			p_arg = arg;
+ 		}
++		if (opt->flags & PARSE_OPT_CMDMODE)
++			*argp = p_arg;
+ 		if (opt->callback)
+ 			return (*opt->callback)(opt, p_arg, p_unset) ? (-1) : 0;
+ 		else
+@@ -247,16 +209,91 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
+ 	}
+ }
+ 
++struct parse_opt_cmdmode_list {
++	int value, *value_ptr;
++	const struct option *opt;
++	const char *arg;
++	enum opt_parsed flags;
++	struct parse_opt_cmdmode_list *next;
++};
++
++static void build_cmdmode_list(struct parse_opt_ctx_t *ctx,
++			       const struct option *opts)
++{
++	ctx->cmdmode_list = NULL;
++
++	for (; opts->type != OPTION_END; opts++) {
++		struct parse_opt_cmdmode_list *elem = ctx->cmdmode_list;
++		int *value_ptr = opts->value;
++
++		if (!(opts->flags & PARSE_OPT_CMDMODE) || !value_ptr)
++			continue;
++
++		while (elem && elem->value_ptr != value_ptr)
++			elem = elem->next;
++		if (elem)
++			continue;
++
++		CALLOC_ARRAY(elem, 1);
++		elem->value_ptr = value_ptr;
++		elem->value = *value_ptr;
++		elem->next = ctx->cmdmode_list;
++		ctx->cmdmode_list = elem;
++	}
++}
++
++static char *optnamearg(const struct option *opt, const char *arg,
++			enum opt_parsed flags)
++{
++	if (flags & OPT_SHORT)
++		return xstrfmt("-%c%s", opt->short_name, arg ? arg : "");
++	return xstrfmt("--%s%s%s%s", flags & OPT_UNSET ? "no-" : "",
++		       opt->long_name, arg ? "=" : "", arg ? arg : "");
++}
++
++static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
++				       const struct option *opt,
++				       enum opt_parsed flags)
++{
++	const char *arg = NULL;
++	enum parse_opt_result result = do_get_value(p, opt, flags, &arg);
++	struct parse_opt_cmdmode_list *elem = p->cmdmode_list;
++	char *opt_name, *other_opt_name;
++
++	for (; elem; elem = elem->next) {
++		if (*elem->value_ptr == elem->value)
++			continue;
++
++		if (elem->opt &&
++		    (elem->opt->flags | opt->flags) & PARSE_OPT_CMDMODE)
++			break;
++
++		elem->opt = opt;
++		elem->arg = arg;
++		elem->flags = flags;
++		elem->value = *elem->value_ptr;
++	}
++
++	if (result || !elem)
++		return result;
++
++	opt_name = optnamearg(opt, arg, flags);
++	other_opt_name = optnamearg(elem->opt, elem->arg, elem->flags);
++	error(_("%s is incompatible with %s"), opt_name, other_opt_name);
++	free(opt_name);
++	free(other_opt_name);
++	return -1;
++}
++
+ static enum parse_opt_result parse_short_opt(struct parse_opt_ctx_t *p,
+ 					     const struct option *options)
+ {
+-	const struct option *all_opts = options;
+ 	const struct option *numopt = NULL;
+ 
+ 	for (; options->type != OPTION_END; options++) {
+ 		if (options->short_name == *p->opt) {
+ 			p->opt = p->opt[1] ? p->opt + 1 : NULL;
+-			return get_value(p, options, all_opts, OPT_SHORT);
++			return get_value(p, options, OPT_SHORT);
+ 		}
+ 
+ 		/*
+@@ -318,7 +355,6 @@ static enum parse_opt_result parse_long_opt(
+ 	struct parse_opt_ctx_t *p, const char *arg,
+ 	const struct option *options)
+ {
+-	const struct option *all_opts = options;
+ 	const char *arg_end = strchrnul(arg, '=');
+ 	const struct option *abbrev_option = NULL, *ambiguous_option = NULL;
+ 	enum opt_parsed abbrev_flags = OPT_LONG, ambiguous_flags = OPT_LONG;
+@@ -387,7 +423,7 @@ static enum parse_opt_result parse_long_opt(
+ 				continue;
+ 			p->opt = rest + 1;
+ 		}
+-		return get_value(p, options, all_opts, flags ^ opt_flags);
++		return get_value(p, options, flags ^ opt_flags);
+ 	}
+ 
+ 	if (disallow_abbreviated_options && (ambiguous_option || abbrev_option))
+@@ -405,7 +441,7 @@ static enum parse_opt_result parse_long_opt(
+ 		return PARSE_OPT_HELP;
+ 	}
+ 	if (abbrev_option)
+-		return get_value(p, abbrev_option, all_opts, abbrev_flags);
++		return get_value(p, abbrev_option, abbrev_flags);
+ 	return PARSE_OPT_UNKNOWN;
+ }
+ 
+@@ -413,13 +449,11 @@ static enum parse_opt_result parse_nodash_opt(struct parse_opt_ctx_t *p,
+ 					      const char *arg,
+ 					      const struct option *options)
+ {
+-	const struct option *all_opts = options;
+-
+ 	for (; options->type != OPTION_END; options++) {
+ 		if (!(options->flags & PARSE_OPT_NODASH))
+ 			continue;
+ 		if (options->short_name == arg[0] && arg[1] == '\0')
+-			return get_value(p, options, all_opts, OPT_SHORT);
++			return get_value(p, options, OPT_SHORT);
+ 	}
+ 	return PARSE_OPT_ERROR;
+ }
+@@ -574,6 +608,7 @@ static void parse_options_start_1(struct parse_opt_ctx_t *ctx,
+ 	    (flags & PARSE_OPT_KEEP_ARGV0))
+ 		BUG("Can't keep argv0 if you don't have it");
+ 	parse_options_check(options);
++	build_cmdmode_list(ctx, options);
+ }
+ 
+ void parse_options_start(struct parse_opt_ctx_t *ctx,
+@@ -1006,6 +1041,11 @@ int parse_options(int argc, const char **argv,
+ 	precompose_argv_prefix(argc, argv, NULL);
+ 	free_preprocessed_options(real_options);
+ 	free(ctx.alias_groups);
++	for (struct parse_opt_cmdmode_list *elem = ctx.cmdmode_list; elem;) {
++		struct parse_opt_cmdmode_list *next = elem->next;
++		free(elem);
++		elem = next;
++	}
+ 	return parse_options_end(&ctx);
+ }
+ 
+diff --git a/parse-options.h b/parse-options.h
+index 4a66ec3bf5..bd62e20268 100644
+--- a/parse-options.h
++++ b/parse-options.h
+@@ -445,6 +445,8 @@ static inline void die_for_incompatible_opt3(int opt1, const char *opt1_name,
+ 
+ /*----- incremental advanced APIs -----*/
+ 
++struct parse_opt_cmdmode_list;
++
+ /*
+  * It's okay for the caller to consume argv/argc in the usual way.
+  * Other fields of that structure are private to parse-options and should not
+@@ -459,6 +461,7 @@ struct parse_opt_ctx_t {
+ 	unsigned has_subcommands;
+ 	const char *prefix;
+ 	const char **alias_groups; /* must be in groups of 3 elements! */
++	struct parse_opt_cmdmode_list *cmdmode_list;
+ };
+ 
+ void parse_options_start(struct parse_opt_ctx_t *ctx,
+diff --git a/t/helper/test-parse-options.c b/t/helper/test-parse-options.c
+index a4f6e24b0c..ded8116cc5 100644
+--- a/t/helper/test-parse-options.c
++++ b/t/helper/test-parse-options.c
+@@ -21,6 +21,19 @@ static struct {
+ 	int unset;
+ } length_cb;
+ 
++static int mode34_callback(const struct option *opt, const char *arg, int unset)
++{
++	if (unset)
++		*(int *)opt->value = 0;
++	else if (!strcmp(arg, "3"))
++		*(int *)opt->value = 3;
++	else if (!strcmp(arg, "4"))
++		*(int *)opt->value = 4;
++	else
++		return error("invalid value for '%s': '%s'", "--mode34", arg);
++	return 0;
++}
++
+ static int length_callback(const struct option *opt, const char *arg, int unset)
+ {
+ 	length_cb.called = 1;
+@@ -124,6 +137,9 @@ int cmd__parse_options(int argc, const char **argv)
+ 		OPT_SET_INT(0, "set23", &integer, "set integer to 23", 23),
+ 		OPT_CMDMODE(0, "mode1", &integer, "set integer to 1 (cmdmode option)", 1),
+ 		OPT_CMDMODE(0, "mode2", &integer, "set integer to 2 (cmdmode option)", 2),
++		OPT_CALLBACK_F(0, "mode34", &integer, "(3|4)",
++			"set integer to 3 or 4 (cmdmode option)",
++			PARSE_OPT_CMDMODE, mode34_callback),
+ 		OPT_CALLBACK('L', "length", &integer, "str",
+ 			"get length of <str>", length_callback),
+ 		OPT_FILENAME('F', "file", &file, "set file to <file>"),
+diff --git a/t/t0040-parse-options.sh b/t/t0040-parse-options.sh
+index a0ad6192d6..06fb9e6457 100755
+--- a/t/t0040-parse-options.sh
++++ b/t/t0040-parse-options.sh
+@@ -28,6 +28,7 @@ usage: test-tool parse-options <options>
+     --[no-]set23          set integer to 23
+     --mode1               set integer to 1 (cmdmode option)
+     --mode2               set integer to 2 (cmdmode option)
++    --[no-]mode34 (3|4)   set integer to 3 or 4 (cmdmode option)
+     -L, --[no-]length <str>
+                           get length of <str>
+     -F, --[no-]file <file>
+@@ -366,19 +367,41 @@ test_expect_success 'OPT_NEGBIT() works' '
+ '
+ 
+ test_expect_success 'OPT_CMDMODE() works' '
+-	test-tool parse-options --expect="integer: 1" --mode1
++	test-tool parse-options --expect="integer: 1" --mode1 &&
++	test-tool parse-options --expect="integer: 3" --mode34=3
+ '
+ 
+-test_expect_success 'OPT_CMDMODE() detects incompatibility' '
++test_expect_success 'OPT_CMDMODE() detects incompatibility (1)' '
+ 	test_must_fail test-tool parse-options --mode1 --mode2 >output 2>output.err &&
+ 	test_must_be_empty output &&
+-	test_i18ngrep "incompatible with --mode" output.err
++	test_i18ngrep "mode1" output.err &&
++	test_i18ngrep "mode2" output.err &&
++	test_i18ngrep "is incompatible with" output.err
+ '
+ 
+-test_expect_success 'OPT_CMDMODE() detects incompatibility with something else' '
++test_expect_success 'OPT_CMDMODE() detects incompatibility (2)' '
+ 	test_must_fail test-tool parse-options --set23 --mode2 >output 2>output.err &&
+ 	test_must_be_empty output &&
+-	test_i18ngrep "incompatible with something else" output.err
++	test_i18ngrep "mode2" output.err &&
++	test_i18ngrep "set23" output.err &&
++	test_i18ngrep "is incompatible with" output.err
++'
++
++test_expect_success 'OPT_CMDMODE() detects incompatibility (3)' '
++	test_must_fail test-tool parse-options --mode2 --set23 >output 2>output.err &&
++	test_must_be_empty output &&
++	test_i18ngrep "mode2" output.err &&
++	test_i18ngrep "set23" output.err &&
++	test_i18ngrep "is incompatible with" output.err
++'
++
++test_expect_success 'OPT_CMDMODE() detects incompatibility (4)' '
++	test_must_fail test-tool parse-options --mode2 --mode34=3 \
++		>output 2>output.err &&
++	test_must_be_empty output &&
++	test_i18ngrep "mode2" output.err &&
++	test_i18ngrep "mode34.3" output.err &&
++	test_i18ngrep "is incompatible with" output.err
+ '
+ 
+ test_expect_success 'OPT_COUNTUP() with PARSE_OPT_NODASH works' '
+-- 
+2.39.3 (Apple Git-145)
+

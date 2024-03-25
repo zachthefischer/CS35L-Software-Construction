@@ -1,0 +1,71 @@
+From be6bc048d74779476610caa7bfb51ef0b71ba5a6 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:26:11 -0500
+Subject: [PATCH 2508/2871] config: use git_config_string() for
+ core.checkRoundTripEncoding
+
+Since this code path was recently converted to check for a NULL value,
+it now behaves exactly like git_config_string(). We can shorten the code
+a bit by using that helper.
+
+Note that git_config_string() takes a const pointer, but our storage
+variable is non-const. We're better off making this "const", though,
+since the default value points to a string literal (and thus it would be
+an error if anybody tried to write to it).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ config.c      | 8 ++------
+ convert.h     | 2 +-
+ environment.c | 2 +-
+ 3 files changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/config.c b/config.c
+index d997c55e33..00a11b5d98 100644
+--- a/config.c
++++ b/config.c
+@@ -1551,12 +1551,8 @@ static int git_default_core_config(const char *var, const char *value,
+ 		return 0;
+ 	}
+ 
+-	if (!strcmp(var, "core.checkroundtripencoding")) {
+-		if (!value)
+-			return config_error_nonbool(var);
+-		check_roundtrip_encoding = xstrdup(value);
+-		return 0;
+-	}
++	if (!strcmp(var, "core.checkroundtripencoding"))
++		return git_config_string(&check_roundtrip_encoding, var, value);
+ 
+ 	if (!strcmp(var, "core.notesref")) {
+ 		if (!value)
+diff --git a/convert.h b/convert.h
+index d925589444..ab8b4fa68d 100644
+--- a/convert.h
++++ b/convert.h
+@@ -92,7 +92,7 @@ void convert_attrs(struct index_state *istate,
+ 		   struct conv_attrs *ca, const char *path);
+ 
+ extern enum eol core_eol;
+-extern char *check_roundtrip_encoding;
++extern const char *check_roundtrip_encoding;
+ const char *get_cached_convert_stats_ascii(struct index_state *istate,
+ 					   const char *path);
+ const char *get_wt_convert_stats_ascii(const char *path);
+diff --git a/environment.c b/environment.c
+index 9e37bf58c0..90632a39bc 100644
+--- a/environment.c
++++ b/environment.c
+@@ -64,7 +64,7 @@ const char *excludes_file;
+ enum auto_crlf auto_crlf = AUTO_CRLF_FALSE;
+ enum eol core_eol = EOL_UNSET;
+ int global_conv_flags_eol = CONV_EOL_RNDTRP_WARN;
+-char *check_roundtrip_encoding = "SHIFT-JIS";
++const char *check_roundtrip_encoding = "SHIFT-JIS";
+ enum branch_track git_branch_track = BRANCH_TRACK_REMOTE;
+ enum rebase_setup_type autorebase = AUTOREBASE_NEVER;
+ enum push_default_type push_default = PUSH_DEFAULT_UNSPECIFIED;
+-- 
+2.39.3 (Apple Git-145)
+

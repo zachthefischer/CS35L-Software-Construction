@@ -1,0 +1,138 @@
+From 67f4b36e339d91c06ff9cdc254864c830158e10f Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Date: Mon, 21 Aug 2023 19:07:20 +0200
+Subject: [PATCH 1970/2871] format-patch: add --description-file option
+
+This patch makes it possible to directly feed a branch description to
+derive the cover letter from. The use case is formatting dynamically
+created temporary commits which are not referenced anywhere.
+
+The most obvious alternative would be creating a temporary branch and
+setting a description on it, but that doesn't seem particularly elegant.
+
+Signed-off-by: Oswald Buddenhagen <oswald.buddenhagen@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-format-patch.txt |  4 ++++
+ builtin/log.c                      | 21 ++++++++++++++++++---
+ t/t4014-format-patch.sh            | 14 ++++++++++++++
+ 3 files changed, 36 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-format-patch.txt b/Documentation/git-format-patch.txt
+index 373b46fc0d..8e515c7dbb 100644
+--- a/Documentation/git-format-patch.txt
++++ b/Documentation/git-format-patch.txt
+@@ -215,6 +215,10 @@ is greater than 100 bytes, then the mode will be `message`, otherwise
+ If `<mode>` is `none`, both the cover letter subject and body will be
+ populated with placeholder text.
+ 
++--description-file=<file>::
++	Use the contents of <file> instead of the branch's description
++	for generating the cover letter.
++
+ --subject-prefix=<subject prefix>::
+ 	Instead of the standard '[PATCH]' prefix in the subject
+ 	line, instead use '[<subject prefix>]'. This
+diff --git a/builtin/log.c b/builtin/log.c
+index db3a88bfe9..3ced8b22cb 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1253,7 +1253,15 @@ static void show_diffstat(struct rev_info *rev,
+ 	fprintf(rev->diffopt.file, "\n");
+ }
+ 
++static void read_desc_file(struct strbuf *buf, const char *desc_file)
++{
++	if (strbuf_read_file(buf, desc_file, 0) < 0)
++		die_errno(_("unable to read branch description file '%s'"),
++			  desc_file);
++}
++
+ static void prepare_cover_text(struct pretty_print_context *pp,
++			       const char *description_file,
+ 			       const char *branch_name,
+ 			       struct strbuf *sb,
+ 			       const char *encoding,
+@@ -1267,7 +1275,9 @@ static void prepare_cover_text(struct pretty_print_context *pp,
+ 	if (cover_from_description_mode == COVER_FROM_NONE)
+ 		goto do_pp;
+ 
+-	if (branch_name && *branch_name)
++	if (description_file && *description_file)
++		read_desc_file(&description_sb, description_file);
++	else if (branch_name && *branch_name)
+ 		read_branch_desc(&description_sb, branch_name);
+ 	if (!description_sb.len)
+ 		goto do_pp;
+@@ -1313,6 +1323,7 @@ static void get_notes_args(struct strvec *arg, struct rev_info *rev)
+ static void make_cover_letter(struct rev_info *rev, int use_separate_file,
+ 			      struct commit *origin,
+ 			      int nr, struct commit **list,
++			      const char *description_file,
+ 			      const char *branch_name,
+ 			      int quiet)
+ {
+@@ -1352,7 +1363,8 @@ static void make_cover_letter(struct rev_info *rev, int use_separate_file,
+ 	pp.rev = rev;
+ 	pp.print_email_subject = 1;
+ 	pp_user_info(&pp, NULL, &sb, committer, encoding);
+-	prepare_cover_text(&pp, branch_name, &sb, encoding, need_8bit_cte);
++	prepare_cover_text(&pp, description_file, branch_name, &sb,
++			   encoding, need_8bit_cte);
+ 	fprintf(rev->diffopt.file, "%s\n", sb.buf);
+ 
+ 	strbuf_release(&sb);
+@@ -1893,6 +1905,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 	int quiet = 0;
+ 	const char *reroll_count = NULL;
+ 	char *cover_from_description_arg = NULL;
++	char *description_file = NULL;
+ 	char *branch_name = NULL;
+ 	char *base_commit = NULL;
+ 	struct base_tree_info bases;
+@@ -1936,6 +1949,8 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 		OPT_STRING(0, "cover-from-description", &cover_from_description_arg,
+ 			    N_("cover-from-description-mode"),
+ 			    N_("generate parts of a cover letter based on a branch's description")),
++		OPT_FILENAME(0, "description-file", &description_file,
++			     N_("use branch description from file")),
+ 		OPT_CALLBACK_F(0, "subject-prefix", &rev, N_("prefix"),
+ 			    N_("use [<prefix>] instead of [PATCH]"),
+ 			    PARSE_OPT_NONEG, subject_prefix_callback),
+@@ -2321,7 +2336,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 		if (thread)
+ 			gen_message_id(&rev, "cover");
+ 		make_cover_letter(&rev, !!output_directory,
+-				  origin, nr, list, branch_name, quiet);
++				  origin, nr, list, description_file, branch_name, quiet);
+ 		print_bases(&bases, rev.diffopt.file);
+ 		print_signature(rev.diffopt.file);
+ 		total++;
+diff --git a/t/t4014-format-patch.sh b/t/t4014-format-patch.sh
+index 3cf2b7a7fb..bc0e29b31a 100755
+--- a/t/t4014-format-patch.sh
++++ b/t/t4014-format-patch.sh
+@@ -1991,6 +1991,20 @@ test_expect_success 'cover letter using branch description (6)' '
+ 	grep hello actual
+ '
+ 
++test_expect_success 'cover letter with --description-file' '
++	test_when_finished "rm -f description.txt" &&
++	cat >description.txt <<-\EOF &&
++	subject from file
++
++	body from file
++	EOF
++	git checkout rebuild-1 &&
++	git format-patch --stdout --cover-letter --cover-from-description auto \
++		--description-file description.txt main >actual &&
++	grep "^Subject: \[PATCH 0/2\] subject from file$" actual &&
++	grep "^body from file$" actual
++'
++
+ test_expect_success 'cover letter with nothing' '
+ 	git format-patch --stdout --cover-letter >actual &&
+ 	test_line_count = 0 actual
+-- 
+2.39.3 (Apple Git-145)
+

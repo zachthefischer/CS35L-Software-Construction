@@ -1,0 +1,82 @@
+From 2eb1d0c45271faf149a13b61bb74af52abd7b3aa Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 8 Jan 2024 11:05:35 +0100
+Subject: [PATCH 2659/2871] refs/files: skip creation of "refs/{heads,tags}"
+ for worktrees
+
+The files ref backend will create both "refs/heads" and "refs/tags" in
+the Git directory. While this logic makes sense for normal repositories,
+it does not for worktrees because those refs are "common" refs that
+would always be contained in the main repository's ref database.
+
+Introduce a new flag telling the backend that it is expected to create a
+per-worktree ref database and skip creation of these dirs in the files
+backend when the flag is set. No other backends (currently) need
+worktree-specific logic, so this is the only required change to start
+creating per-worktree ref databases via `refs_init_db()`.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ refs.h               |  2 ++
+ refs/files-backend.c | 22 ++++++++++++++--------
+ 2 files changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/refs.h b/refs.h
+index 114caa272a..c2dfe451a1 100644
+--- a/refs.h
++++ b/refs.h
+@@ -126,6 +126,8 @@ int should_autocreate_reflog(const char *refname);
+ 
+ int is_branch(const char *refname);
+ 
++#define REFS_INIT_DB_IS_WORKTREE (1 << 0)
++
+ int refs_init_db(struct ref_store *refs, int flags, struct strbuf *err);
+ 
+ /*
+diff --git a/refs/files-backend.c b/refs/files-backend.c
+index 054ecdbca3..6dae37e351 100644
+--- a/refs/files-backend.c
++++ b/refs/files-backend.c
+@@ -3221,7 +3221,7 @@ static int files_reflog_expire(struct ref_store *ref_store,
+ }
+ 
+ static int files_init_db(struct ref_store *ref_store,
+-			 int flags UNUSED,
++			 int flags,
+ 			 struct strbuf *err UNUSED)
+ {
+ 	struct files_ref_store *refs =
+@@ -3245,15 +3245,21 @@ static int files_init_db(struct ref_store *ref_store,
+ 	adjust_shared_perm(sb.buf);
+ 
+ 	/*
+-	 * Create .git/refs/{heads,tags}
++	 * There is no need to create directories for common refs when creating
++	 * a worktree ref store.
+ 	 */
+-	strbuf_reset(&sb);
+-	files_ref_path(refs, &sb, "refs/heads");
+-	safe_create_dir(sb.buf, 1);
++	if (!(flags & REFS_INIT_DB_IS_WORKTREE)) {
++		/*
++		 * Create .git/refs/{heads,tags}
++		 */
++		strbuf_reset(&sb);
++		files_ref_path(refs, &sb, "refs/heads");
++		safe_create_dir(sb.buf, 1);
+ 
+-	strbuf_reset(&sb);
+-	files_ref_path(refs, &sb, "refs/tags");
+-	safe_create_dir(sb.buf, 1);
++		strbuf_reset(&sb);
++		files_ref_path(refs, &sb, "refs/tags");
++		safe_create_dir(sb.buf, 1);
++	}
+ 
+ 	strbuf_release(&sb);
+ 	return 0;
+-- 
+2.39.3 (Apple Git-145)
+

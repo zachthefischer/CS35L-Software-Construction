@@ -1,0 +1,37 @@
+From ac9fff2bf1ca4174efeac57ff1ef43df8a6b9517 Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Thu, 28 Dec 2023 04:55:19 +0000
+Subject: [PATCH 2616/2871] SubmittingPatches: discourage new trailers
+
+There seems to be consensus amongst the core Git community on a working
+set of common trailers, and there are non-trivial costs to people
+inventing new trailers (research to discover what they mean/how they
+differ from existing trailers) such that inventing new ones is generally
+unwarranted and not something to be recommended to new contributors.
+
+Suggested-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/SubmittingPatches | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/SubmittingPatches b/Documentation/SubmittingPatches
+index 32e9023877..58dfe40504 100644
+--- a/Documentation/SubmittingPatches
++++ b/Documentation/SubmittingPatches
+@@ -356,8 +356,9 @@ If you like, you can put extra tags at the end:
+ . `Tested-by:` is used to indicate that the person applied the patch
+   and found it to have the desired effect.
+ 
+-You can also create your own tag or use one that's in common usage
+-such as "Thanks-to:", "Based-on-patch-by:", or "Mentored-by:".
++While you can also create your own trailer if the situation warrants it, we
++encourage you to instead use one of the common trailers in this project
++highlighted above.
+ 
+ [[git-tools]]
+ === Generate your patch using Git tools out of your commits.
+-- 
+2.39.3 (Apple Git-145)
+

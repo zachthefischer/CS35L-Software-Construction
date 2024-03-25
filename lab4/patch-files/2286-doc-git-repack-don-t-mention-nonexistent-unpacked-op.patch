@@ -1,0 +1,40 @@
+From ca3285dd69413c599687e9024127767dd4a3be62 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 16 Oct 2023 09:19:56 +0200
+Subject: [PATCH 2286/2871] doc/git-repack: don't mention nonexistent
+ "--unpacked" option
+
+The documentation for geometric repacking mentions a "--unpacked" option
+that supposedly changes how loose objects are rolled up. This option has
+never existed, and the implied behaviour, namely to include all unpacked
+objects into the resulting packfile, is in fact the default behaviour.
+
+Correct the documentation to not mention this option.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-repack.txt | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/git-repack.txt b/Documentation/git-repack.txt
+index 60ffe830a6..b63e8abc7d 100644
+--- a/Documentation/git-repack.txt
++++ b/Documentation/git-repack.txt
+@@ -203,11 +203,8 @@ uniquely by the set of packs being "rolled-up"; in other words, the
+ packs determined to need to be combined in order to restore a geometric
+ progression.
+ +
+-When `--unpacked` is specified, loose objects are implicitly included in
+-this "roll-up", without respect to their reachability. This is subject
+-to change in the future. This option (implying a drastically different
+-repack mode) is not guaranteed to work with all other combinations of
+-option to `git repack`.
++Loose objects are implicitly included in this "roll-up", without respect to
++their reachability. This is subject to change in the future.
+ +
+ When writing a multi-pack bitmap, `git repack` selects the largest resulting
+ pack as the preferred pack for object selection by the MIDX (see
+-- 
+2.39.3 (Apple Git-145)
+

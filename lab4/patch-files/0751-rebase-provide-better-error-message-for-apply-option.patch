@@ -1,0 +1,155 @@
+From eddfcd8eced9b9f840491064b35a3956f959fd12 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Wed, 25 Jan 2023 04:03:54 +0000
+Subject: [PATCH 0751/2871] rebase: provide better error message for apply
+ options vs. merge config
+
+When config which selects the merge backend (currently,
+rebase.autosquash=true or rebase.updateRefs=true) conflicts with other
+options on the command line (such as --whitespace=fix), make the error
+message specifically call out the config option and specify how to
+override that config option on the command line.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt           |  2 +-
+ builtin/rebase.c                       | 27 ++++++++++++++++++++------
+ t/t3422-rebase-incompatible-options.sh | 24 +++++++++++++++++++++++
+ 3 files changed, 46 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index 99aadac28e..9a295bcee4 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -648,7 +648,7 @@ are incompatible with the following options:
+  * --merge
+  * --strategy
+  * --strategy-option
+- * --[no-]autosquash
++ * --autosquash
+  * --rebase-merges
+  * --interactive
+  * --exec
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index ad5ebecbbd..7171be40ee 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -122,6 +122,8 @@ struct rebase_options {
+ 	int reapply_cherry_picks;
+ 	int fork_point;
+ 	int update_refs;
++	int config_autosquash;
++	int config_update_refs;
+ };
+ 
+ #define REBASE_OPTIONS_INIT {			  	\
+@@ -136,6 +138,10 @@ struct rebase_options {
+ 		.fork_point = -1,			\
+ 		.reapply_cherry_picks = -1,             \
+ 		.allow_empty_message = 1,               \
++		.autosquash = -1,                       \
++		.config_autosquash = -1,                \
++		.update_refs = -1,                      \
++		.config_update_refs = -1,               \
+ 	}
+ 
+ static struct replay_opts get_replay_opts(const struct rebase_options *opts)
+@@ -778,7 +784,7 @@ static int rebase_config(const char *var, const char *value, void *data)
+ 	}
+ 
+ 	if (!strcmp(var, "rebase.autosquash")) {
+-		opts->autosquash = git_config_bool(var, value);
++		opts->config_autosquash = git_config_bool(var, value);
+ 		return 0;
+ 	}
+ 
+@@ -795,7 +801,7 @@ static int rebase_config(const char *var, const char *value, void *data)
+ 	}
+ 
+ 	if (!strcmp(var, "rebase.updaterefs")) {
+-		opts->update_refs = git_config_bool(var, value);
++		opts->config_update_refs = git_config_bool(var, value);
+ 		return 0;
+ 	}
+ 
+@@ -1366,7 +1372,8 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 	if ((options.flags & REBASE_INTERACTIVE_EXPLICIT) ||
+ 	    (options.action != ACTION_NONE) ||
+ 	    (options.exec.nr > 0) ||
+-	    options.autosquash) {
++	    (options.autosquash == -1 && options.config_autosquash == 1) ||
++	    options.autosquash == 1) {
+ 		allow_preemptive_ff = 0;
+ 	}
+ 	if (options.committer_date_is_author_date || options.ignore_date)
+@@ -1499,20 +1506,28 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 			if (strcmp(options.git_am_opts.v[i], "-q"))
+ 				break;
+ 
+-		if (i >= 0) {
++		if (i >= 0 || options.type == REBASE_APPLY) {
+ 			if (is_merge(&options))
+ 				die(_("apply options and merge options "
+ 					  "cannot be used together"));
++			else if (options.autosquash == -1 && options.config_autosquash == 1)
++				die(_("apply options are incompatible with rebase.autosquash.  Consider adding --no-autosquash"));
++			else if (options.update_refs == -1 && options.config_update_refs == 1)
++				die(_("apply options are incompatible with rebase.updateRefs.  Consider adding --no-update-refs"));
+ 			else
+ 				options.type = REBASE_APPLY;
+ 		}
+ 	}
+ 
+-	if (options.update_refs)
++	if (options.update_refs == 1)
+ 		imply_merge(&options, "--update-refs");
++	options.update_refs = (options.update_refs >= 0) ? options.update_refs :
++			     ((options.config_update_refs >= 0) ? options.config_update_refs : 0);
+ 
+-	if (options.autosquash)
++	if (options.autosquash == 1)
+ 		imply_merge(&options, "--autosquash");
++	options.autosquash = (options.autosquash >= 0) ? options.autosquash :
++			     ((options.config_autosquash >= 0) ? options.config_autosquash : 0);
+ 
+ 	if (options.type == REBASE_UNSPECIFIED) {
+ 		if (!strcmp(options.default_backend, "merge"))
+diff --git a/t/t3422-rebase-incompatible-options.sh b/t/t3422-rebase-incompatible-options.sh
+index 6a17b571ec..4711b37a28 100755
+--- a/t/t3422-rebase-incompatible-options.sh
++++ b/t/t3422-rebase-incompatible-options.sh
+@@ -94,6 +94,30 @@ test_rebase_am_only () {
+ 		git checkout B^0 &&
+ 		test_must_fail git rebase $opt --root A
+ 	"
++
++	test_expect_success "$opt incompatible with rebase.autosquash" "
++		git checkout B^0 &&
++		test_must_fail git -c rebase.autosquash=true rebase $opt A 2>err &&
++		grep -e --no-autosquash err
++	"
++
++	test_expect_success "$opt incompatible with rebase.updateRefs" "
++		git checkout B^0 &&
++		test_must_fail git -c rebase.updateRefs=true rebase $opt A 2>err &&
++		grep -e --no-update-refs err
++	"
++
++	test_expect_success "$opt okay with overridden rebase.autosquash" "
++		test_when_finished \"git reset --hard B^0\" &&
++		git checkout B^0 &&
++		git -c rebase.autosquash=true rebase --no-autosquash $opt A
++	"
++
++	test_expect_success "$opt okay with overridden rebase.updateRefs" "
++		test_when_finished \"git reset --hard B^0\" &&
++		git checkout B^0 &&
++		git -c rebase.updateRefs=true rebase --no-update-refs $opt A
++	"
+ }
+ 
+ # Check options which imply --apply
+-- 
+2.39.3 (Apple Git-145)
+

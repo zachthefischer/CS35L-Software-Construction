@@ -1,0 +1,88 @@
+From 94430d03df639ef49f178f1339ed48a31d84061f Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Sat, 9 Sep 2023 06:16:14 +0000
+Subject: [PATCH 2093/2871] trailer: split process_command_line_args into
+ separate functions
+
+Previously, process_command_line_args did two things:
+
+    (1) parse trailers from the configuration, and
+    (2) parse trailers defined on the command line.
+
+Separate (1) outside to a new function, parse_trailers_from_config.
+Rename the remaining logic to parse_trailers_from_command_line_args.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trailer.c | 34 +++++++++++++++++++++-------------
+ 1 file changed, 21 insertions(+), 13 deletions(-)
+
+diff --git a/trailer.c b/trailer.c
+index 2c56cbc4a2..b6de5d9cb2 100644
+--- a/trailer.c
++++ b/trailer.c
+@@ -711,30 +711,35 @@ static void add_arg_item(struct list_head *arg_head, char *tok, char *val,
+ 	list_add_tail(&new_item->list, arg_head);
+ }
+ 
+-static void process_command_line_args(struct list_head *arg_head,
+-				      struct list_head *new_trailer_head)
++static void parse_trailers_from_config(struct list_head *config_head)
+ {
+ 	struct arg_item *item;
+-	struct strbuf tok = STRBUF_INIT;
+-	struct strbuf val = STRBUF_INIT;
+-	const struct conf_info *conf;
+ 	struct list_head *pos;
+ 
+-	/*
+-	 * In command-line arguments, '=' is accepted (in addition to the
+-	 * separators that are defined).
+-	 */
+-	char *cl_separators = xstrfmt("=%s", separators);
+-
+ 	/* Add an arg item for each configured trailer with a command */
+ 	list_for_each(pos, &conf_head) {
+ 		item = list_entry(pos, struct arg_item, list);
+ 		if (item->conf.command)
+-			add_arg_item(arg_head,
++			add_arg_item(config_head,
+ 				     xstrdup(token_from_item(item, NULL)),
+ 				     xstrdup(""),
+ 				     &item->conf, NULL);
+ 	}
++}
++
++static void parse_trailers_from_command_line_args(struct list_head *arg_head,
++						  struct list_head *new_trailer_head)
++{
++	struct strbuf tok = STRBUF_INIT;
++	struct strbuf val = STRBUF_INIT;
++	const struct conf_info *conf;
++	struct list_head *pos;
++
++	/*
++	 * In command-line arguments, '=' is accepted (in addition to the
++	 * separators that are defined).
++	 */
++	char *cl_separators = xstrfmt("=%s", separators);
+ 
+ 	/* Add an arg item for each trailer on the command line */
+ 	list_for_each(pos, new_trailer_head) {
+@@ -1069,8 +1074,11 @@ void process_trailers(const char *file,
+ 
+ 
+ 	if (!opts->only_input) {
++		LIST_HEAD(config_head);
+ 		LIST_HEAD(arg_head);
+-		process_command_line_args(&arg_head, new_trailer_head);
++		parse_trailers_from_config(&config_head);
++		parse_trailers_from_command_line_args(&arg_head, new_trailer_head);
++		list_splice(&config_head, &arg_head);
+ 		process_trailers_lists(&head, &arg_head);
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

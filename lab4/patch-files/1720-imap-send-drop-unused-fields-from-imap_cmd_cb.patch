@@ -1,0 +1,51 @@
+From d378637d2fe9eed3bd3bd0858e6cc79a8f23510a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 3 Jul 2023 02:34:28 -0400
+Subject: [PATCH 1720/2871] imap-send: drop unused fields from imap_cmd_cb
+
+The imap_cmd_cb struct has several fields which are totally unused.
+Presumably they did useful things in the upstream isync code from which
+this is derived, but they don't in our more limited program. This is
+particularly confusing for the "done" callback, which (as of the
+previous patch) no longer matches the signature of the adjacent "cont"
+callback.
+
+Since we're unlikely to share code with isync going forward, we should
+feel free to simplify the code here. Note that "done" is examined but
+never set, so we can also drop a little bit of code outside of the
+struct definition.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ imap-send.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/imap-send.c b/imap-send.c
+index 81a87f434b..c1952d99e8 100644
+--- a/imap-send.c
++++ b/imap-send.c
+@@ -138,11 +138,9 @@ struct imap_store {
+ 
+ struct imap_cmd_cb {
+ 	int (*cont)(struct imap_store *ctx, const char *prompt);
+-	void (*done)(struct imap_store *ctx, struct imap_cmd *cmd, int response);
+ 	void *ctx;
+ 	char *data;
+ 	int dlen;
+-	int uid;
+ };
+ 
+ struct imap_cmd {
+@@ -828,8 +826,6 @@ static int get_cmd_result(struct imap_store *ctx, struct imap_cmd *tcmd)
+ 			}
+ 			if ((resp2 = parse_response_code(ctx, &cmdp->cb, cmd)) > resp)
+ 				resp = resp2;
+-			if (cmdp->cb.done)
+-				cmdp->cb.done(ctx, cmdp, resp);
+ 			free(cmdp->cb.data);
+ 			free(cmdp->cmd);
+ 			free(cmdp);
+-- 
+2.39.3 (Apple Git-145)
+

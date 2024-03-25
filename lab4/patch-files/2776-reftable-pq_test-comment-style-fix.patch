@@ -1,0 +1,26 @@
+From de65079d7b2801316e398b8806a60607ba45c520 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Mon, 29 Jan 2024 12:28:39 -0800
+Subject: [PATCH 2776/2871] reftable/pq_test: comment style fix
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ reftable/pq_test.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/reftable/pq_test.c b/reftable/pq_test.c
+index 011b5c7502..c202eff848 100644
+--- a/reftable/pq_test.c
++++ b/reftable/pq_test.c
+@@ -60,7 +60,7 @@ static void test_pq(void)
+ 		if (last) {
+ 			EXPECT(strcmp(last, rec->u.ref.refname) < 0);
+ 		}
+-		// this is names[i], so don't dealloc.
++		/* this is names[i], so don't dealloc. */
+ 		last = rec->u.ref.refname;
+ 		rec->u.ref.refname = NULL;
+ 		reftable_record_release(rec);
+-- 
+2.39.3 (Apple Git-145)
+

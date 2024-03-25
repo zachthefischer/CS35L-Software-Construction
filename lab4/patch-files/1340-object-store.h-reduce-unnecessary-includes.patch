@@ -1,0 +1,78 @@
+From e3d2f20e6f14d3cba641a365a733a615278e9e5e Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:27 +0000
+Subject: [PATCH 1340/2871] object-store.h: reduce unnecessary includes
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-file.c      | 1 +
+ object-name.c      | 1 +
+ object-store.h     | 8 ++++----
+ submodule-config.c | 1 +
+ 4 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/object-file.c b/object-file.c
+index 8e0df7360a..921a717d8a 100644
+--- a/object-file.c
++++ b/object-file.c
+@@ -38,6 +38,7 @@
+ #include "packfile.h"
+ #include "object-file.h"
+ #include "object-store.h"
++#include "oidtree.h"
+ #include "promisor-remote.h"
+ #include "setup.h"
+ #include "submodule.h"
+diff --git a/object-name.c b/object-name.c
+index 5ccbe854b6..88d839f70b 100644
+--- a/object-name.c
++++ b/object-name.c
+@@ -14,6 +14,7 @@
+ #include "remote.h"
+ #include "dir.h"
+ #include "oid-array.h"
++#include "oidtree.h"
+ #include "packfile.h"
+ #include "pretty.h"
+ #include "object-store.h"
+diff --git a/object-store.h b/object-store.h
+index f9d225783a..23ea86d370 100644
+--- a/object-store.h
++++ b/object-store.h
+@@ -2,16 +2,16 @@
+ #define OBJECT_STORE_H
+ 
+ #include "object.h"
+-#include "oidmap.h"
+ #include "list.h"
+-#include "oid-array.h"
+-#include "strbuf.h"
+ #include "thread-utils.h"
+ #include "khash.h"
+ #include "dir.h"
+-#include "oidtree.h"
+ #include "oidset.h"
+ 
++struct oidmap;
++struct oidtree;
++struct strbuf;
++
+ struct object_directory {
+ 	struct object_directory *next;
+ 
+diff --git a/submodule-config.c b/submodule-config.c
+index 7fc0812b64..58dfbde9ae 100644
+--- a/submodule-config.c
++++ b/submodule-config.c
+@@ -12,6 +12,7 @@
+ #include "object-name.h"
+ #include "object-store.h"
+ #include "parse-options.h"
++#include "thread-utils.h"
+ #include "tree-walk.h"
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

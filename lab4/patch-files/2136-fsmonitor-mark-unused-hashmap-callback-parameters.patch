@@ -1,0 +1,36 @@
+From 1fe41944b268c5e999c5bbd9539e7dcd18c2c5de Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 18 Sep 2023 18:33:14 -0400
+Subject: [PATCH 2136/2871] fsmonitor: mark unused hashmap callback parameters
+
+Like many hashmap comparison functions, our cookies_cmp() does not look
+at its extra void data parameter. This should have been annotated in
+02c3c59e62 (hashmap: mark unused callback parameters, 2022-08-19), but
+this new case was added around the same time (plus fsmonitor is not
+built at all on Linux, so it is easy to miss there).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fsmonitor--daemon.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/fsmonitor--daemon.c b/builtin/fsmonitor--daemon.c
+index 7c4130c981..ce511c3ed6 100644
+--- a/builtin/fsmonitor--daemon.c
++++ b/builtin/fsmonitor--daemon.c
+@@ -129,8 +129,9 @@ struct fsmonitor_cookie_item {
+ 	enum fsmonitor_cookie_item_result result;
+ };
+ 
+-static int cookies_cmp(const void *data, const struct hashmap_entry *he1,
+-		     const struct hashmap_entry *he2, const void *keydata)
++static int cookies_cmp(const void *data UNUSED,
++		       const struct hashmap_entry *he1,
++		       const struct hashmap_entry *he2, const void *keydata)
+ {
+ 	const struct fsmonitor_cookie_item *a =
+ 		container_of(he1, const struct fsmonitor_cookie_item, entry);
+-- 
+2.39.3 (Apple Git-145)
+

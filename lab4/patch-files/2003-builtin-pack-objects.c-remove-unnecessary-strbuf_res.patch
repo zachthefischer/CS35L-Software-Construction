@@ -1,0 +1,40 @@
+From e741c078721f8232da769a1100433d96c4393b32 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 28 Aug 2023 18:49:04 -0400
+Subject: [PATCH 2003/2871] builtin/pack-objects.c: remove unnecessary
+ strbuf_reset()
+
+When reading input with the `--cruft` option, `git pack-objects` reads
+each line into a strbuf, and then moves it to either the list of
+discarded or fresh packs, depending on whether or not the input line
+starts with a '-' character.
+
+At the beginning of each loop iteration, the next line of input is read
+with `strbuf_getline()`, which calls `strbuf_reset()` (as a part of
+`strbuf_getwholeline()`) before reading the next line of input.
+
+Thus, the call to `strbuf_reset()` (added back in b757353676
+(builtin/pack-objects.c: --cruft without expiration, 2022-05-20)) at the
+end of the loop is unnecessary, so let's remove it accordingly.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/pack-objects.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index d2a162d528..868efe7e0f 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -3603,7 +3603,6 @@ static void read_cruft_objects(void)
+ 			string_list_append(&discard_packs, buf.buf + 1);
+ 		else
+ 			string_list_append(&fresh_packs, buf.buf);
+-		strbuf_reset(&buf);
+ 	}
+ 
+ 	string_list_sort(&discard_packs);
+-- 
+2.39.3 (Apple Git-145)
+

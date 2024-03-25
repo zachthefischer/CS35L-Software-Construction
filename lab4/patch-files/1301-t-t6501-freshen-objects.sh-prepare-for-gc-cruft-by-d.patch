@@ -1,0 +1,73 @@
+From b31d45b8315adc49b729496f3c0ed18a41ca08f6 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 18 Apr 2023 16:40:43 -0400
+Subject: [PATCH 1301/2871] t/t6501-freshen-objects.sh: prepare for `gc
+ --cruft` by default
+
+In a similar spirit as previous commits, prepare for `gc --cruft`
+becoming the default by ensuring that the tests in t6501 explicitly
+cover the case of freshening loose objects not using cruft packs.
+
+We could run this test twice, once with `--cruft` and once with
+`--no-cruft`, but doing so is unnecessary, since we already test object
+rescuing, freshening, and dealing with corrupt parts of the unreachable
+object graph extensively via t5329.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t6501-freshen-objects.sh | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/t/t6501-freshen-objects.sh b/t/t6501-freshen-objects.sh
+index 3968b47ed5..dbfa8a4d4c 100755
+--- a/t/t6501-freshen-objects.sh
++++ b/t/t6501-freshen-objects.sh
+@@ -101,7 +101,7 @@ do
+ 	'
+ 
+ 	test_expect_success "simultaneous gc ($title)" '
+-		git gc --prune=12.hours.ago
++		git gc --no-cruft --prune=12.hours.ago
+ 	'
+ 
+ 	test_expect_success "finish writing out commit ($title)" '
+@@ -131,7 +131,7 @@ do
+ 	'
+ 
+ 	test_expect_success "simultaneous gc ($title)" '
+-		git gc --prune=12.hours.ago
++		git gc --no-cruft --prune=12.hours.ago
+ 	'
+ 
+ 	# tree should have been refreshed by write-tree
+@@ -151,7 +151,7 @@ test_expect_success 'do not complain about existing broken links (commit)' '
+ 	some message
+ 	EOF
+ 	commit=$(git hash-object -t commit -w broken-commit) &&
+-	git gc -q 2>stderr &&
++	git gc --no-cruft -q 2>stderr &&
+ 	verbose git cat-file -e $commit &&
+ 	test_must_be_empty stderr
+ '
+@@ -161,7 +161,7 @@ test_expect_success 'do not complain about existing broken links (tree)' '
+ 	100644 blob $(test_oid 003)	foo
+ 	EOF
+ 	tree=$(git mktree --missing <broken-tree) &&
+-	git gc -q 2>stderr &&
++	git gc --no-cruft -q 2>stderr &&
+ 	git cat-file -e $tree &&
+ 	test_must_be_empty stderr
+ '
+@@ -176,7 +176,7 @@ test_expect_success 'do not complain about existing broken links (tag)' '
+ 	this is a broken tag
+ 	EOF
+ 	tag=$(git hash-object -t tag -w broken-tag) &&
+-	git gc -q 2>stderr &&
++	git gc --no-cruft -q 2>stderr &&
+ 	git cat-file -e $tag &&
+ 	test_must_be_empty stderr
+ '
+-- 
+2.39.3 (Apple Git-145)
+

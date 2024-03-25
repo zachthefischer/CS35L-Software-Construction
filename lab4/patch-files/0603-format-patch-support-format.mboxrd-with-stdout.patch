@@ -1,0 +1,111 @@
+From 4810946f6032a973ad752d06a32437bc9bb35e67 Mon Sep 17 00:00:00 2001
+From: Eric Wong <e@80x24.org>
+Date: Thu, 22 Dec 2022 20:16:19 +0000
+Subject: [PATCH 0603/2871] format-patch: support format.mboxrd with --stdout
+
+mboxrd is a more robust output format when used with --stdout
+and needs more exposure.  Introducing this config knob lets
+users choose the more robust format for all their --stdout
+uses.
+
+Relying on --pretty=mboxrd and including all of pretty-formats.txt
+in the `git format-patch' documentation would likely be
+confusing to users.  Furthermore, this setting is useful across
+multiple invocations.  So introduce `format.mboxrd' as a boolean
+configuration knob that changes the default --pretty=email format
+to --pretty=mboxrd when (and only when) --stdout is in use.
+
+Signed-off-by: Eric Wong <e@80x24.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/format.txt | 4 ++++
+ builtin/log.c                   | 8 ++++++++
+ t/t4014-format-patch.sh         | 6 ++++--
+ t/t4150-am.sh                   | 2 +-
+ 4 files changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/config/format.txt b/Documentation/config/format.txt
+index c7303d8d9f..3bd78269e2 100644
+--- a/Documentation/config/format.txt
++++ b/Documentation/config/format.txt
+@@ -139,3 +139,7 @@ For example,
+ ------------
+ +
+ will only show notes from `refs/notes/bar`.
++
++format.mboxrd::
++	A boolean value which enables the robust "mboxrd" format when
++	`--stdout` is in use to escape "^>+From " lines.
+diff --git a/builtin/log.c b/builtin/log.c
+index 89447a5083..057e299c24 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -52,6 +52,7 @@ static int decoration_style;
+ static int decoration_given;
+ static int use_mailmap_config = 1;
+ static unsigned int force_in_body_from;
++static int stdout_mboxrd;
+ static const char *fmt_patch_subject_prefix = "PATCH";
+ static int fmt_patch_name_max = FORMAT_PATCH_NAME_MAX_DEFAULT;
+ static const char *fmt_pretty;
+@@ -1077,6 +1078,10 @@ static int git_format_config(const char *var, const char *value, void *cb)
+ 		cover_from_description_mode = parse_cover_from_description(value);
+ 		return 0;
+ 	}
++	if (!strcmp(var, "format.mboxrd")) {
++		stdout_mboxrd = git_config_bool(var, value);
++		return 0;
++	}
+ 
+ 	return git_log_config(var, value, cb);
+ }
+@@ -2105,6 +2110,9 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
+ 				  rev.diffopt.close_file, "--output",
+ 				  !!output_directory, "--output-directory");
+ 
++	if (use_stdout && stdout_mboxrd)
++		rev.commit_format = CMIT_FMT_MBOXRD;
++
+ 	if (use_stdout) {
+ 		setup_pager();
+ 	} else if (!rev.diffopt.close_file) {
+diff --git a/t/t4014-format-patch.sh b/t/t4014-format-patch.sh
+index de1da4673d..012f155e10 100755
+--- a/t/t4014-format-patch.sh
++++ b/t/t4014-format-patch.sh
+@@ -2281,7 +2281,7 @@ test_expect_success 'format-patch --attach cover-letter only is non-multipart' '
+ 	test_line_count = 1 output
+ '
+ 
+-test_expect_success 'format-patch --pretty=mboxrd' '
++test_expect_success '-c format.mboxrd format-patch' '
+ 	sp=" " &&
+ 	cat >msg <<-INPUT_END &&
+ 	mboxrd should escape the body
+@@ -2316,7 +2316,9 @@ test_expect_success 'format-patch --pretty=mboxrd' '
+ 	INPUT_END
+ 
+ 	C=$(git commit-tree HEAD^^{tree} -p HEAD <msg) &&
+-	git format-patch --pretty=mboxrd --stdout -1 $C~1..$C >patch &&
++	git -c format.mboxrd format-patch --stdout -1 $C~1..$C >patch &&
++	git format-patch --pretty=mboxrd --stdout -1 $C~1..$C >compat &&
++	test_cmp patch compat &&
+ 	git grep -h --no-index -A11 \
+ 		"^>From could trip up a loose mbox parser" patch >actual &&
+ 	test_cmp expect actual
+diff --git a/t/t4150-am.sh b/t/t4150-am.sh
+index cdad4b6880..7646e856d5 100755
+--- a/t/t4150-am.sh
++++ b/t/t4150-am.sh
+@@ -1033,7 +1033,7 @@ test_expect_success 'am --patch-format=mboxrd handles mboxrd' '
+ 	>From extra escape for reversibility
+ 	INPUT_END
+ 	git commit -F msg &&
+-	git format-patch --pretty=mboxrd --stdout -1 >mboxrd1 &&
++	git -c format.mboxrd format-patch --stdout -1 >mboxrd1 &&
+ 	grep "^>From could trip up a loose mbox parser" mboxrd1 &&
+ 	git checkout -f first &&
+ 	git am --patch-format=mboxrd mboxrd1 &&
+-- 
+2.39.3 (Apple Git-145)
+

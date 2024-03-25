@@ -1,0 +1,44 @@
+From 42bdb80a084f1405f2e57394146c977ad4f3b75a Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:23 +0000
+Subject: [PATCH 2237/2871] documentation: fix whitespace issues
+
+Get rid of extraneous whitespace, replace tab-after-fullstop with
+space, etc.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-blame.txt        | 2 +-
+ Documentation/git-check-ignore.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-blame.txt b/Documentation/git-blame.txt
+index 6f39147c05..5720d04ffe 100644
+--- a/Documentation/git-blame.txt
++++ b/Documentation/git-blame.txt
+@@ -170,7 +170,7 @@ which limits the annotation to the body of the `hello` subroutine.
+ 
+ When you are not interested in changes older than version
+ v2.6.18, or changes older than 3 weeks, you can use revision
+-range specifiers  similar to 'git rev-list':
++range specifiers similar to 'git rev-list':
+ 
+ 	git blame v2.6.18.. -- foo
+ 	git blame --since=3.weeks -- foo
+diff --git a/Documentation/git-check-ignore.txt b/Documentation/git-check-ignore.txt
+index 2892799e32..3e3b4e3446 100644
+--- a/Documentation/git-check-ignore.txt
++++ b/Documentation/git-check-ignore.txt
+@@ -50,7 +50,7 @@ linkgit:gitignore[5].
+ 	with a NUL character instead of a linefeed character.
+ 
+ -n, --non-matching::
+-	Show given paths which don't match any pattern.	 This only
++	Show given paths which don't match any pattern.  This only
+ 	makes sense when `--verbose` is enabled, otherwise it would
+ 	not be possible to distinguish between paths which match a
+ 	pattern and those which don't.
+-- 
+2.39.3 (Apple Git-145)
+

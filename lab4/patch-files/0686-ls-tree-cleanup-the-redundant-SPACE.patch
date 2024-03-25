@@ -1,0 +1,30 @@
+From 925a7c6b6b00154be667af7a67e886cfb8d812db Mon Sep 17 00:00:00 2001
+From: Teng Long <dyroneteng@gmail.com>
+Date: Thu, 12 Jan 2023 17:11:34 +0800
+Subject: [PATCH 0686/2871] ls-tree: cleanup the redundant SPACE
+
+An redundant space was found in ls-tree.c, which is no doubt
+a small change, but it might be OK to make a commit on its own.
+
+Signed-off-by: Teng Long <dyroneteng@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/ls-tree.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/ls-tree.c b/builtin/ls-tree.c
+index a743959f2b..72eb70823d 100644
+--- a/builtin/ls-tree.c
++++ b/builtin/ls-tree.c
+@@ -14,7 +14,7 @@
+ #include "parse-options.h"
+ #include "pathspec.h"
+ 
+-static const  char * const ls_tree_usage[] = {
++static const char * const ls_tree_usage[] = {
+ 	N_("git ls-tree [<options>] <tree-ish> [<path>...]"),
+ 	NULL
+ };
+-- 
+2.39.3 (Apple Git-145)
+

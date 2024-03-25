@@ -1,0 +1,48 @@
+From df521462f01b61314c9c18a4b58a53db0cd7bf3c Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 5 Jul 2023 20:49:29 +0100
+Subject: [PATCH 1730/2871] t4054: test diff --no-index with stdin
+
+"git diff --no-index" supports reading from stdin with the path "-".
+There is no test coverage for this so add a regression test before
+changing the code in the next commit.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t4053-diff-no-index.sh | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/t/t4053-diff-no-index.sh b/t/t4053-diff-no-index.sh
+index 5bfb282e98..4870443609 100755
+--- a/t/t4053-diff-no-index.sh
++++ b/t/t4053-diff-no-index.sh
+@@ -205,6 +205,25 @@ test_expect_success POSIXPERM,SYMLINKS 'diff --no-index normalizes: mode not lik
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success "diff --no-index treats '-' as stdin" '
++	cat >expect <<-EOF &&
++	diff --git a/- b/a/1
++	index $ZERO_OID..$(git hash-object --stdin <a/1) 100644
++	--- a/-
++	+++ b/a/1
++	@@ -1 +1 @@
++	-x
++	+1
++	EOF
++
++	test_write_lines x | test_expect_code 1 \
++		git -c core.abbrev=no diff --no-index -- - a/1 >actual &&
++	test_cmp expect actual &&
++
++	test_write_lines 1 | git diff --no-index -- a/1 - >actual &&
++	test_must_be_empty actual
++'
++
+ test_expect_success 'diff --no-index refuses to diff stdin and a directory' '
+ 	test_must_fail git diff --no-index -- - a </dev/null 2>err &&
+ 	grep "fatal: cannot compare stdin to a directory" err
+-- 
+2.39.3 (Apple Git-145)
+

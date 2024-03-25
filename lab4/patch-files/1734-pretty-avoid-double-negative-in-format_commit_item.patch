@@ -1,0 +1,39 @@
+From 1dd14e8e934873eac6168649da4f200cda029b7b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 7 Jul 2023 20:46:26 +0200
+Subject: [PATCH 1734/2871] pretty: avoid double negative in
+ format_commit_item()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Test for equality with no_flush, which has enough negation already.  Get
+rid of the unnecessary parentheses while at it.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pretty.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/pretty.c b/pretty.c
+index 4c08f9856b..a6c617b475 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1852,10 +1852,10 @@ static size_t format_commit_item(struct strbuf *sb, /* in UTF-8 */
+ 	}
+ 
+ 	orig_len = sb->len;
+-	if ((context)->flush_type != no_flush)
+-		consumed = format_and_pad_commit(sb, placeholder, context);
+-	else
++	if (context->flush_type == no_flush)
+ 		consumed = format_commit_one(sb, placeholder, context);
++	else
++		consumed = format_and_pad_commit(sb, placeholder, context);
+ 	if (magic == NO_MAGIC)
+ 		return consumed;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

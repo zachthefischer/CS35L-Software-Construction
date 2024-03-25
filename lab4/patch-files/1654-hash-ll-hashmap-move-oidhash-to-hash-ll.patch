@@ -1,0 +1,165 @@
+From b9a7ac2c6897efbf78fd546b21986498577e3585 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Tue, 16 May 2023 06:34:07 +0000
+Subject: [PATCH 1654/2871] hash-ll, hashmap: move oidhash() to hash-ll
+
+oidhash() was used by both hashmap and khash, which makes sense.
+However, the location of this function in hashmap.[ch] meant that
+khash.h had to depend upon hashmap.h, making people unfamiliar with
+khash think that it was built upon hashmap.  (Or at least, I personally
+was confused for a while about this in the past.)
+
+Move this function to hash-ll, so that khash.h can stop depending upon
+hashmap.h.
+
+This has another benefit as well: it allows us to remove hashmap.h's
+dependency on hash-ll.h.  While some callers of hashmap.h were making
+use of oidhash, most were not, so this change provides another way to
+reduce the number of includes.
+
+Diff best viewed with `--color-moved`.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ decorate.c |  1 -
+ dir.h      |  1 +
+ hash-ll.h  | 19 +++++++++++++++++++
+ hashmap.h  | 21 ---------------------
+ khash.h    |  1 -
+ remote.h   |  1 +
+ serve.c    |  1 +
+ 7 files changed, 22 insertions(+), 23 deletions(-)
+
+diff --git a/decorate.c b/decorate.c
+index 71e79daa82..a5c43c0c14 100644
+--- a/decorate.c
++++ b/decorate.c
+@@ -3,7 +3,6 @@
+  * data.
+  */
+ #include "git-compat-util.h"
+-#include "hashmap.h"
+ #include "object.h"
+ #include "decorate.h"
+ 
+diff --git a/dir.h b/dir.h
+index 79b85a01ee..279a066080 100644
+--- a/dir.h
++++ b/dir.h
+@@ -1,6 +1,7 @@
+ #ifndef DIR_H
+ #define DIR_H
+ 
++#include "hash-ll.h"
+ #include "hashmap.h"
+ #include "pathspec.h"
+ #include "statinfo.h"
+diff --git a/hash-ll.h b/hash-ll.h
+index 8050925137..8d7973769f 100644
+--- a/hash-ll.h
++++ b/hash-ll.h
+@@ -270,6 +270,25 @@ static inline void oid_set_algo(struct object_id *oid, const struct git_hash_alg
+ 	oid->algo = hash_algo_by_ptr(algop);
+ }
+ 
++/*
++ * Converts a cryptographic hash (e.g. SHA-1) into an int-sized hash code
++ * for use in hash tables. Cryptographic hashes are supposed to have
++ * uniform distribution, so in contrast to `memhash()`, this just copies
++ * the first `sizeof(int)` bytes without shuffling any bits. Note that
++ * the results will be different on big-endian and little-endian
++ * platforms, so they should not be stored or transferred over the net.
++ */
++static inline unsigned int oidhash(const struct object_id *oid)
++{
++	/*
++	 * Equivalent to 'return *(unsigned int *)oid->hash;', but safe on
++	 * platforms that don't support unaligned reads.
++	 */
++	unsigned int hash;
++	memcpy(&hash, oid->hash, sizeof(hash));
++	return hash;
++}
++
+ const char *empty_tree_oid_hex(void);
+ const char *empty_blob_oid_hex(void);
+ 
+diff --git a/hashmap.h b/hashmap.h
+index 2695f3d3a6..c8216e47bb 100644
+--- a/hashmap.h
++++ b/hashmap.h
+@@ -1,8 +1,6 @@
+ #ifndef HASHMAP_H
+ #define HASHMAP_H
+ 
+-#include "hash-ll.h"
+-
+ /*
+  * Generic implementation of hash-based key-value mappings.
+  *
+@@ -120,25 +118,6 @@ unsigned int memhash(const void *buf, size_t len);
+ unsigned int memihash(const void *buf, size_t len);
+ unsigned int memihash_cont(unsigned int hash_seed, const void *buf, size_t len);
+ 
+-/*
+- * Converts a cryptographic hash (e.g. SHA-1) into an int-sized hash code
+- * for use in hash tables. Cryptographic hashes are supposed to have
+- * uniform distribution, so in contrast to `memhash()`, this just copies
+- * the first `sizeof(int)` bytes without shuffling any bits. Note that
+- * the results will be different on big-endian and little-endian
+- * platforms, so they should not be stored or transferred over the net.
+- */
+-static inline unsigned int oidhash(const struct object_id *oid)
+-{
+-	/*
+-	 * Equivalent to 'return *(unsigned int *)oid->hash;', but safe on
+-	 * platforms that don't support unaligned reads.
+-	 */
+-	unsigned int hash;
+-	memcpy(&hash, oid->hash, sizeof(hash));
+-	return hash;
+-}
+-
+ /*
+  * struct hashmap_entry is an opaque structure representing an entry in the
+  * hash table.
+diff --git a/khash.h b/khash.h
+index a0a08dad8b..ff88163177 100644
+--- a/khash.h
++++ b/khash.h
+@@ -26,7 +26,6 @@
+ #ifndef __AC_KHASH_H
+ #define __AC_KHASH_H
+ 
+-#include "hashmap.h"
+ #include "hash.h"
+ 
+ #define AC_VERSION_KHASH_H "0.2.8"
+diff --git a/remote.h b/remote.h
+index 73638cefeb..929c7c676d 100644
+--- a/remote.h
++++ b/remote.h
+@@ -1,6 +1,7 @@
+ #ifndef REMOTE_H
+ #define REMOTE_H
+ 
++#include "hash-ll.h"
+ #include "hashmap.h"
+ #include "refspec.h"
+ 
+diff --git a/serve.c b/serve.c
+index 5329c91011..a1d71134d4 100644
+--- a/serve.c
++++ b/serve.c
+@@ -1,6 +1,7 @@
+ #include "git-compat-util.h"
+ #include "repository.h"
+ #include "config.h"
++#include "hash-ll.h"
+ #include "pkt-line.h"
+ #include "version.h"
+ #include "ls-refs.h"
+-- 
+2.39.3 (Apple Git-145)
+

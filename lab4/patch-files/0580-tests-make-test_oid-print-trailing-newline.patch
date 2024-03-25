@@ -1,0 +1,176 @@
+From a48a88019b408157cf3b76e1a198afd824f4f0a3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?SZEDER=20G=C3=A1bor?= <szeder.dev@gmail.com>
+Date: Sun, 18 Dec 2022 17:29:05 +0100
+Subject: [PATCH 0580/2871] tests: make 'test_oid' print trailing newline
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Unlike other test helper functions, 'test_oid' doesn't terminate its
+output with a LF, but, alas, the reason for this, if any, is not
+mentioned in 2c02b110da (t: add test functions to translate
+hash-related values, 2018-09-13)).
+
+Now, in the vast majority of cases 'test_oid' is invoked in a command
+substitution that is part of a heredoc or supplies an argument to a
+command or the value to a variable, and the command substitution would
+chop off any trailing LFs, so in these cases the lack or presence of a
+trailing LF in its output doesn't matter.  However:
+
+  - There appear to be only three cases where 'test_oid' is not
+    invoked in a command substitution:
+
+      $ git grep '\stest_oid ' -- ':/t/*.sh'
+      t0000-basic.sh:  test_oid zero >actual &&
+      t0000-basic.sh:  test_oid zero >actual &&
+      t0000-basic.sh:  test_oid zero >actual &&
+
+    These are all in test cases checking that 'test_oid' actually
+    works, and that the size of its output matches the size of the
+    corresponding hash function with conditions like
+
+      test $(wc -c <actual) -eq 40
+
+    In these cases the lack of trailing LF does actually matter,
+    though they could be trivially updated to account for the presence
+    of a trailing LF.
+
+  - There are also a few cases where the lack of trailing LF in
+    'test_oid's output actually hurts, because tests need to compare
+    its output with LF terminated file contents, forcing developers to
+    invoke it as 'echo $(test_oid ...)' to append the missing LF:
+
+      $ git grep 'echo "\?$(test_oid ' -- ':/t/*.sh'
+      t1302-repo-version.sh:  echo $(test_oid version) >expect &&
+      t1500-rev-parse.sh:     echo "$(test_oid algo)" >expect &&
+      t4044-diff-index-unique-abbrev.sh:      echo "$(test_oid val1)" > foo &&
+      t4044-diff-index-unique-abbrev.sh:      echo "$(test_oid val2)" > foo &&
+      t5313-pack-bounds-checks.sh:    echo $(test_oid oidfff) >file &&
+
+    And there is yet another similar case in an in-flight topic at:
+
+      https://public-inbox.org/git/813e81a058227bd373cec802e443fcd677042fb4.1670862677.git.gitgitgadget@gmail.com/
+
+Arguably we would be better off if 'test_oid' terminated its output
+with a LF.  So let's update 'test_oid' accordingly, update its tests
+in t0000 to account for the extra character in those size tests, and
+remove the now unnecessary 'echo $(...)' command substitutions around
+'test_oid' invocations as well.
+
+Signed-off-by: SZEDER Gábor <szeder.dev@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0000-basic.sh                    | 7 ++++---
+ t/t1302-repo-version.sh             | 2 +-
+ t/t1500-rev-parse.sh                | 2 +-
+ t/t4044-diff-index-unique-abbrev.sh | 4 ++--
+ t/t5313-pack-bounds-checks.sh       | 2 +-
+ t/test-lib-functions.sh             | 2 +-
+ 6 files changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/t/t0000-basic.sh b/t/t0000-basic.sh
+index 502b4bcf9e..8ea31d187a 100755
+--- a/t/t0000-basic.sh
++++ b/t/t0000-basic.sh
+@@ -815,7 +815,8 @@ test_expect_success 'test_oid provides sane info by default' '
+ 	grep "^00*\$" actual &&
+ 	rawsz="$(test_oid rawsz)" &&
+ 	hexsz="$(test_oid hexsz)" &&
+-	test "$hexsz" -eq $(wc -c <actual) &&
++	# +1 accounts for the trailing newline
++	test $(( $hexsz + 1)) -eq $(wc -c <actual) &&
+ 	test $(( $rawsz * 2)) -eq "$hexsz"
+ '
+ 
+@@ -826,7 +827,7 @@ test_expect_success 'test_oid can look up data for SHA-1' '
+ 	grep "^00*\$" actual &&
+ 	rawsz="$(test_oid rawsz)" &&
+ 	hexsz="$(test_oid hexsz)" &&
+-	test $(wc -c <actual) -eq 40 &&
++	test $(wc -c <actual) -eq 41 &&
+ 	test "$rawsz" -eq 20 &&
+ 	test "$hexsz" -eq 40
+ '
+@@ -838,7 +839,7 @@ test_expect_success 'test_oid can look up data for SHA-256' '
+ 	grep "^00*\$" actual &&
+ 	rawsz="$(test_oid rawsz)" &&
+ 	hexsz="$(test_oid hexsz)" &&
+-	test $(wc -c <actual) -eq 64 &&
++	test $(wc -c <actual) -eq 65 &&
+ 	test "$rawsz" -eq 32 &&
+ 	test "$hexsz" -eq 64
+ '
+diff --git a/t/t1302-repo-version.sh b/t/t1302-repo-version.sh
+index 0acabb6d11..7cf80bf66a 100755
+--- a/t/t1302-repo-version.sh
++++ b/t/t1302-repo-version.sh
+@@ -27,7 +27,7 @@ test_expect_success 'setup' '
+ '
+ 
+ test_expect_success 'gitdir selection on normal repos' '
+-	echo $(test_oid version) >expect &&
++	test_oid version >expect &&
+ 	git config core.repositoryformatversion >actual &&
+ 	git -C test config core.repositoryformatversion >actual2 &&
+ 	test_cmp expect actual &&
+diff --git a/t/t1500-rev-parse.sh b/t/t1500-rev-parse.sh
+index 81de584ea2..37ee5091b5 100755
+--- a/t/t1500-rev-parse.sh
++++ b/t/t1500-rev-parse.sh
+@@ -195,7 +195,7 @@ test_expect_success 'rev-parse --is-shallow-repository in non-shallow repo' '
+ '
+ 
+ test_expect_success 'rev-parse --show-object-format in repo' '
+-	echo "$(test_oid algo)" >expect &&
++	test_oid algo >expect &&
+ 	git rev-parse --show-object-format >actual &&
+ 	test_cmp expect actual &&
+ 	git rev-parse --show-object-format=storage >actual &&
+diff --git a/t/t4044-diff-index-unique-abbrev.sh b/t/t4044-diff-index-unique-abbrev.sh
+index 29e49d2290..9f6043daba 100755
+--- a/t/t4044-diff-index-unique-abbrev.sh
++++ b/t/t4044-diff-index-unique-abbrev.sh
+@@ -34,12 +34,12 @@ test_expect_success 'setup' '
+ 	100644 blob $(test_oid hash2)	foo
+ 	EOF
+ 
+-	echo "$(test_oid val1)" > foo &&
++	test_oid val1 > foo &&
+ 	git add foo &&
+ 	git commit -m "initial" &&
+ 	git cat-file -p HEAD: > actual &&
+ 	test_cmp expect_initial actual &&
+-	echo "$(test_oid val2)" > foo &&
++	test_oid val2 > foo &&
+ 	git commit -a -m "update" &&
+ 	git cat-file -p HEAD: > actual &&
+ 	test_cmp expect_update actual
+diff --git a/t/t5313-pack-bounds-checks.sh b/t/t5313-pack-bounds-checks.sh
+index cc4cfaa9d3..ceaa6700a2 100755
+--- a/t/t5313-pack-bounds-checks.sh
++++ b/t/t5313-pack-bounds-checks.sh
+@@ -59,7 +59,7 @@ test_expect_success 'setup' '
+ test_expect_success 'set up base packfile and variables' '
+ 	# the hash of this content starts with ff, which
+ 	# makes some later computations much simpler
+-	echo $(test_oid oidfff) >file &&
++	test_oid oidfff >file &&
+ 	git add file &&
+ 	git commit -m base &&
+ 	git repack -ad &&
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 796093a7b3..f51b97663f 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1682,7 +1682,7 @@ test_oid () {
+ 	then
+ 		BUG "undefined key '$1'"
+ 	fi &&
+-	eval "printf '%s' \"\${$var}\""
++	eval "printf '%s\n' \"\${$var}\""
+ }
+ 
+ # Insert a slash into an object ID so it can be used to reference a location
+-- 
+2.39.3 (Apple Git-145)
+

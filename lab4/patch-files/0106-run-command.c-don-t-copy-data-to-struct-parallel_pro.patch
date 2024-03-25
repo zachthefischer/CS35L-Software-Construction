@@ -1,0 +1,78 @@
+From 2aa8d2259ffd477b5d8ff090c90b7d38910b4741 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Wed, 12 Oct 2022 23:02:31 +0200
+Subject: [PATCH 0106/2871] run-command.c: don't copy "data" to "struct
+ parallel_processes"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+As with the *_fn members removed in a preceding commit, let's not copy
+the "data" member of the "struct run_process_parallel_opts" over to
+the "struct parallel_processes". Now that we're passing the "opts"
+down there's no reason to do so.
+
+This makes the code easier to follow, as we have a "const" attribute
+on the "struct run_process_parallel_opts", but not "struct
+parallel_processes". We do not alter the "ungroup" argument, so
+storing it in the non-const structure would make this control flow
+less obvious.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ run-command.c | 9 +++------
+ 1 file changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/run-command.c b/run-command.c
+index 19d5cff8c6..d382c42f82 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -1497,8 +1497,6 @@ enum child_state {
+ };
+ 
+ struct parallel_processes {
+-	void *const data;
+-
+ 	const size_t max_processes;
+ 	size_t nr_processes;
+ 
+@@ -1609,7 +1607,7 @@ static int pp_start_one(struct parallel_processes *pp,
+ 
+ 	code = opts->get_next_task(&pp->children[i].process,
+ 				   opts->ungroup ? NULL : &pp->children[i].err,
+-				   pp->data,
++				   opts->data,
+ 				   &pp->children[i].data);
+ 	if (!code) {
+ 		if (!opts->ungroup) {
+@@ -1628,7 +1626,7 @@ static int pp_start_one(struct parallel_processes *pp,
+ 		if (opts->start_failure)
+ 			code = opts->start_failure(opts->ungroup ? NULL :
+ 						   &pp->children[i].err,
+-						   pp->data,
++						   opts->data,
+ 						   pp->children[i].data);
+ 		else
+ 			code = 0;
+@@ -1705,7 +1703,7 @@ static int pp_collect_finished(struct parallel_processes *pp,
+ 
+ 		if (opts->task_finished)
+ 			code = opts->task_finished(code, opts->ungroup ? NULL :
+-						   &pp->children[i].err, pp->data,
++						   &pp->children[i].err, opts->data,
+ 						   pp->children[i].data);
+ 		else
+ 			code = 0;
+@@ -1758,7 +1756,6 @@ void run_processes_parallel(const struct run_process_parallel_opts *opts)
+ 	int spawn_cap = 4;
+ 	struct parallel_processes pp = {
+ 		.max_processes = opts->processes,
+-		.data = opts->data,
+ 		.buffered_output = STRBUF_INIT,
+ 	};
+ 	/* options */
+-- 
+2.39.3 (Apple Git-145)
+

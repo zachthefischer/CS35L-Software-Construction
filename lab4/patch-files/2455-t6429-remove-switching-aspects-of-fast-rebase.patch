@@ -1,0 +1,133 @@
+From b9d0991cc702204e14e65abf95d5fc24305e542b Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:30 +0100
+Subject: [PATCH 2455/2871] t6429: remove switching aspects of fast-rebase
+
+At the time t6429 was written, merge-ort was still under development,
+did not have quite as many tests, and certainly was not widely deployed.
+Since t6429 was exercising some codepaths just a little differently, we
+thought having them also test the "merge_switch_to_result()" bits of
+merge-ort was useful even though they weren't intrinsic to the real
+point of these tests.
+
+However, the value provided by doing extra testing of the
+"merge_switch_to_result()" bits has decreased a bit over time, and it's
+actively making it harder to refactor `test-tool fast-rebase` into `git
+replay`, which we are going to do in following commits.  Dispense with
+these bits.
+
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-fast-rebase.c              | 9 +--------
+ t/t6429-merge-sequence-rename-caching.sh | 9 +++++++--
+ 2 files changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/t/helper/test-fast-rebase.c b/t/helper/test-fast-rebase.c
+index cac20a72b3..2bfab66b1b 100644
+--- a/t/helper/test-fast-rebase.c
++++ b/t/helper/test-fast-rebase.c
+@@ -194,7 +194,7 @@ int cmd__fast_rebase(int argc, const char **argv)
+ 		last_commit = create_commit(result.tree, commit, last_commit);
+ 	}
+ 
+-	merge_switch_to_result(&merge_opt, head_tree, &result, 1, !result.clean);
++	merge_finalize(&merge_opt, &result);
+ 
+ 	if (result.clean < 0)
+ 		exit(128);
+@@ -213,9 +213,6 @@ int cmd__fast_rebase(int argc, const char **argv)
+ 		}
+ 		if (create_symref("HEAD", branch_name.buf, reflog_msg.buf) < 0)
+ 			die(_("unable to update HEAD"));
+-
+-		prime_cache_tree(the_repository, the_repository->index,
+-				 result.tree);
+ 	} else {
+ 		fprintf(stderr, "\nAborting: Hit a conflict.\n");
+ 		strbuf_addf(&reflog_msg, "rebase progress up to %s",
+@@ -228,10 +225,6 @@ int cmd__fast_rebase(int argc, const char **argv)
+ 			die("Failed to update %s", argv[4]);
+ 		}
+ 	}
+-	if (write_locked_index(&the_index, &lock,
+-			       COMMIT_LOCK | SKIP_IF_UNCHANGED))
+-		die(_("unable to write %s"), get_index_file());
+-
+ 	ret = (result.clean == 0);
+ cleanup:
+ 	strbuf_release(&reflog_msg);
+diff --git a/t/t6429-merge-sequence-rename-caching.sh b/t/t6429-merge-sequence-rename-caching.sh
+index d02fa16614..75d3fd2dba 100755
+--- a/t/t6429-merge-sequence-rename-caching.sh
++++ b/t/t6429-merge-sequence-rename-caching.sh
+@@ -72,6 +72,7 @@ test_expect_success 'caching renames does not preclude finding new ones' '
+ 		git switch upstream &&
+ 
+ 		test-tool fast-rebase --onto HEAD upstream~1 topic &&
++		git reset --hard topic &&
+ 		#git cherry-pick upstream~1..topic
+ 
+ 		git ls-files >tracked-files &&
+@@ -200,6 +201,7 @@ test_expect_success 'rename same file identically, then reintroduce it' '
+ 		export GIT_TRACE2_PERF &&
+ 
+ 		test-tool fast-rebase --onto HEAD upstream~1 topic &&
++		git reset --hard topic &&
+ 		#git cherry-pick upstream~1..topic &&
+ 
+ 		git ls-files >tracked &&
+@@ -277,6 +279,7 @@ test_expect_success 'rename same file identically, then add file to old dir' '
+ 		export GIT_TRACE2_PERF &&
+ 
+ 		test-tool fast-rebase --onto HEAD upstream~1 topic &&
++		git reset --hard topic &&
+ 		#git cherry-pick upstream~1..topic &&
+ 
+ 		git ls-files >tracked &&
+@@ -356,8 +359,6 @@ test_expect_success 'cached dir rename does not prevent noticing later conflict'
+ 		test_must_fail test-tool fast-rebase --onto HEAD upstream~1 topic >output &&
+ 		#git cherry-pick upstream..topic &&
+ 
+-		grep CONFLICT..rename/rename output &&
+-
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+ 		test_line_count = 2 calls
+ 	)
+@@ -456,6 +457,7 @@ test_expect_success 'dir rename unneeded, then add new file to old dir' '
+ 		export GIT_TRACE2_PERF &&
+ 
+ 		test-tool fast-rebase --onto HEAD upstream~1 topic &&
++		git reset --hard topic &&
+ 		#git cherry-pick upstream..topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+@@ -522,6 +524,7 @@ test_expect_success 'dir rename unneeded, then rename existing file into old dir
+ 		export GIT_TRACE2_PERF &&
+ 
+ 		test-tool fast-rebase --onto HEAD upstream~1 topic &&
++		git reset --hard topic &&
+ 		#git cherry-pick upstream..topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+@@ -624,6 +627,7 @@ test_expect_success 'caching renames only on upstream side, part 1' '
+ 		export GIT_TRACE2_PERF &&
+ 
+ 		test-tool fast-rebase --onto HEAD upstream~1 topic &&
++		git reset --hard topic &&
+ 		#git cherry-pick upstream..topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+@@ -682,6 +686,7 @@ test_expect_success 'caching renames only on upstream side, part 2' '
+ 		export GIT_TRACE2_PERF &&
+ 
+ 		test-tool fast-rebase --onto HEAD upstream~1 topic &&
++		git reset --hard topic &&
+ 		#git cherry-pick upstream..topic &&
+ 
+ 		grep region_enter.*diffcore_rename trace.output >calls &&
+-- 
+2.39.3 (Apple Git-145)
+

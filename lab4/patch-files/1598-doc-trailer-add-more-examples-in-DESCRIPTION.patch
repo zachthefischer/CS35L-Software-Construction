@@ -1,0 +1,58 @@
+From d57fa7fc73202af226b6c0e0d9788c6460ce23b9 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Thu, 15 Jun 2023 02:53:50 +0000
+Subject: [PATCH 1598/2871] doc: trailer: add more examples in DESCRIPTION
+
+Be more up-front about what trailers are in practice with examples, to
+give the reader a visual cue while they go on to read the rest of the
+description.
+
+Also add an example for multiline values.
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-interpret-trailers.txt | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-interpret-trailers.txt b/Documentation/git-interpret-trailers.txt
+index 7e77cbb1ca..55d8961466 100644
+--- a/Documentation/git-interpret-trailers.txt
++++ b/Documentation/git-interpret-trailers.txt
+@@ -16,7 +16,18 @@ DESCRIPTION
+ -----------
+ Add or parse 'trailer' lines that look similar to RFC 822 e-mail
+ headers, at the end of the otherwise free-form part of a commit
+-message.
++message. For example, in the following commit message
++
++------------------------------------------------
++subject
++
++Lorem ipsum dolor sit amet, consectetur adipiscing elit.
++
++Signed-off-by: Alice <alice@example.com>
++Signed-off-by: Bob <bob@example.com>
++------------------------------------------------
++
++the last two lines starting with "Signed-off-by" are trailers.
+ 
+ This command reads commit messages from either the
+ <file> arguments or the standard input if no <file> is specified.
+@@ -73,7 +84,12 @@ When reading trailers, there can be no whitespace before or inside the
+ between the <token> and the separator. There can be whitespaces before,
+ inside or after the <value>. The <value> may be split over multiple lines
+ with each subsequent line starting with at least one whitespace, like
+-the "folding" in RFC 822.
++the "folding" in RFC 822. Example:
++
++------------------------------------------------
++token: This is a very long value, with spaces and
++  newlines in it.
++------------------------------------------------
+ 
+ Note that trailers do not follow (nor are they intended to follow) many of the
+ rules for RFC 822 headers. For example they do not follow the encoding rule.
+-- 
+2.39.3 (Apple Git-145)
+

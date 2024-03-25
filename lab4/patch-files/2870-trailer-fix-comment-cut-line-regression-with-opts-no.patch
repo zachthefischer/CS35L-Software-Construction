@@ -1,0 +1,127 @@
+From bc47139f4ff6c0c41d4c854ca74c35b1006a464a Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 19 Feb 2024 20:09:36 -0500
+Subject: [PATCH 2870/2871] trailer: fix comment/cut-line regression with
+ opts->no_divider
+
+Commit 97e9d0b78a (trailer: find the end of the log message, 2023-10-20)
+combined two code paths for finding the end of the log message. For the
+"no_divider" case, we used to use find_trailer_end(), and that has now
+been rolled into find_end_of_log_message(). But there's a regression;
+that function returns early when no_divider is set, returning the whole
+string.
+
+That's not how find_trailer_end() behaved. Although it did skip the
+"---" processing (which is what "no_divider" is meant to do), we should
+still respect ignored_log_message_bytes(), which covers things like
+comments, "commit -v" cut lines, and so on.
+
+The bug is actually in the interpret-trailers command, but the obvious
+way to experience it is by running "commit -v" with a "--trailer"
+option. The new trailer will be added at the end of the verbose diff,
+rather than before it (and consequently will be ignored entirely, since
+everything after the diff's intro scissors line is thrown away).
+
+I've added two tests here: one for interpret-trailers directly, which
+shows the bug via the parsing routines, and one for "commit -v".
+
+The fix itself is pretty simple: instead of returning early, no_divider
+just skips the "---" handling but still calls ignored_log_message_bytes().
+
+Reported-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7502-commit-porcelain.sh   | 18 ++++++++++++++++++
+ t/t7513-interpret-trailers.sh | 19 +++++++++++++++++++
+ trailer.c                     | 15 +++++++--------
+ 3 files changed, 44 insertions(+), 8 deletions(-)
+
+diff --git a/t/t7502-commit-porcelain.sh b/t/t7502-commit-porcelain.sh
+index b5bf7de7cd..d8e216613f 100755
+--- a/t/t7502-commit-porcelain.sh
++++ b/t/t7502-commit-porcelain.sh
+@@ -485,6 +485,24 @@ test_expect_success 'commit --trailer not confused by --- separator' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'commit --trailer with --verbose' '
++	cat >msg <<-\EOF &&
++	subject
++
++	body
++	EOF
++	GIT_EDITOR=: git commit --edit -F msg --allow-empty \
++		--trailer="my-trailer: value" --verbose &&
++	{
++		cat msg &&
++		echo &&
++		echo "my-trailer: value"
++	} >expected &&
++	git cat-file commit HEAD >commit.msg &&
++	sed -e "1,/^\$/d" commit.msg >actual &&
++	test_cmp expected actual
++'
++
+ test_expect_success 'multiple -m' '
+ 
+ 	>negative &&
+diff --git a/t/t7513-interpret-trailers.sh b/t/t7513-interpret-trailers.sh
+index 97f10905d2..3343ad0eb6 100755
+--- a/t/t7513-interpret-trailers.sh
++++ b/t/t7513-interpret-trailers.sh
+@@ -1560,4 +1560,23 @@ test_expect_success 'suppress --- handling' '
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'suppressing --- does not disable cut-line handling' '
++	echo "real-trailer: before the cut" >expected &&
++
++	git interpret-trailers --parse --no-divider >actual <<-\EOF &&
++	subject
++
++	This input has a cut-line in it; we should stop parsing when we see it
++	and consider only trailers before that line.
++
++	real-trailer: before the cut
++
++	# ------------------------ >8 ------------------------
++	# Nothing below this line counts as part of the commit message.
++	not-a-trailer: too late
++	EOF
++
++	test_cmp expected actual
++'
++
+ test_done
+diff --git a/trailer.c b/trailer.c
+index 816f8b28a9..009ee80dee 100644
+--- a/trailer.c
++++ b/trailer.c
+@@ -837,16 +837,15 @@ static size_t find_end_of_log_message(const char *input, int no_divider)
+ 	/* Assume the naive end of the input is already what we want. */
+ 	end = strlen(input);
+ 
+-	if (no_divider)
+-		return end;
+-
+ 	/* Optionally skip over any patch part ("---" line and below). */
+-	for (s = input; *s; s = next_line(s)) {
+-		const char *v;
++	if (!no_divider) {
++		for (s = input; *s; s = next_line(s)) {
++			const char *v;
+ 
+-		if (skip_prefix(s, "---", &v) && isspace(*v)) {
+-			end = s - input;
+-			break;
++			if (skip_prefix(s, "---", &v) && isspace(*v)) {
++				end = s - input;
++				break;
++			}
+ 		}
+ 	}
+ 
+-- 
+2.39.3 (Apple Git-145)
+

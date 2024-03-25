@@ -1,0 +1,67 @@
+From 3467663d47a56f9debd86cae75963eee023b3b89 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:17 +0000
+Subject: [PATCH 1330/2871] versioncmp.h: move declarations for versioncmp.c
+ functions from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache.h      | 2 --
+ ref-filter.c | 1 +
+ versioncmp.c | 3 ++-
+ versioncmp.h | 6 ++++++
+ 4 files changed, 9 insertions(+), 3 deletions(-)
+ create mode 100644 versioncmp.h
+
+diff --git a/cache.h b/cache.h
+index dde275c930..6955745ccc 100644
+--- a/cache.h
++++ b/cache.h
+@@ -648,6 +648,4 @@ int stat_validity_check(struct stat_validity *sv, const char *path);
+  */
+ void stat_validity_update(struct stat_validity *sv, int fd);
+ 
+-int versioncmp(const char *s1, const char *s2);
+-
+ #endif /* CACHE_H */
+diff --git a/ref-filter.c b/ref-filter.c
+index 57a5884aec..5387f79be6 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -19,6 +19,7 @@
+ #include "revision.h"
+ #include "utf8.h"
+ #include "version.h"
++#include "versioncmp.h"
+ #include "trailer.h"
+ #include "wt-status.h"
+ #include "commit-slab.h"
+diff --git a/versioncmp.c b/versioncmp.c
+index 069ee94a4d..9b21ec142d 100644
+--- a/versioncmp.c
++++ b/versioncmp.c
+@@ -1,6 +1,7 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "config.h"
+ #include "string-list.h"
++#include "versioncmp.h"
+ 
+ /*
+  * versioncmp(): copied from string/strverscmp.c in glibc commit
+diff --git a/versioncmp.h b/versioncmp.h
+new file mode 100644
+index 0000000000..879b510e82
+--- /dev/null
++++ b/versioncmp.h
+@@ -0,0 +1,6 @@
++#ifndef VERSIONCMP_H
++#define VERSIONCMP_H
++
++int versioncmp(const char *s1, const char *s2);
++
++#endif /* VERSIONCMP_H */
+-- 
+2.39.3 (Apple Git-145)
+

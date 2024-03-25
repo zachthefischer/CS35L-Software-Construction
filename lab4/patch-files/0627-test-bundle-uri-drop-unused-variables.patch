@@ -1,0 +1,51 @@
+From d4e241a14510934420aa67c5480361376446e117 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 6 Jan 2023 03:48:23 -0500
+Subject: [PATCH 0627/2871] test-bundle-uri: drop unused variables
+
+Commit 70b9c10373 (bundle-uri client: add helper for testing server,
+2022-12-22) added a cmd_ls_remote() function which contains "uploadpack"
+and "server_options" variables. Neither of these variables is ever
+modified after being initialized, so the code to handle non-NULL and
+non-empty values is impossible to reach.
+
+While in theory we might add command-line parsing to set these, let's
+drop the dead code for now in the name of cleanliness. It's easy enough
+to add it back later if need be.
+
+Noticed by Coverity.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/helper/test-bundle-uri.c | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/t/helper/test-bundle-uri.c b/t/helper/test-bundle-uri.c
+index 5df5bc3b89..b18e760310 100644
+--- a/t/helper/test-bundle-uri.c
++++ b/t/helper/test-bundle-uri.c
+@@ -76,8 +76,6 @@ static int cmd__bundle_uri_parse(int argc, const char **argv, enum input_mode mo
+ 
+ static int cmd_ls_remote(int argc, const char **argv)
+ {
+-	const char *uploadpack = NULL;
+-	struct string_list server_options = STRING_LIST_INIT_DUP;
+ 	const char *dest;
+ 	struct remote *remote;
+ 	struct transport *transport;
+@@ -95,11 +93,6 @@ static int cmd_ls_remote(int argc, const char **argv)
+ 		die(_("remote '%s' has no configured URL"), dest);
+ 
+ 	transport = transport_get(remote, NULL);
+-	if (uploadpack)
+-		transport_set_option(transport, TRANS_OPT_UPLOADPACK, uploadpack);
+-	if (server_options.nr)
+-		transport->server_options = &server_options;
+-
+ 	if (transport_get_remote_bundle_uri(transport) < 0) {
+ 		error(_("could not get the bundle-uri list"));
+ 		status = 1;
+-- 
+2.39.3 (Apple Git-145)
+

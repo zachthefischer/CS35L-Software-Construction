@@ -1,0 +1,72 @@
+From d9ec3b0dc0fe51b4e56df5a809d3a1f8d83b89eb Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 10 Feb 2023 23:52:56 -0500
+Subject: [PATCH 0859/2871] doc/ls-remote: clarify pattern format
+
+We document that you can specify "refs" to ls-remote, but we don't
+explain any further than that they are "matched" as patterns. Since this
+can be interpreted in a lot of ways, let's clarify that they are
+tail-matched globs.
+
+Likewise, let's use the word "patterns" to refer to them consistently,
+rather than "refs" (both here and in the quick "-h" help), and mention
+more explicitly that only one pattern needs to be matched (though there
+is also an example already that shows this in action).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-ls-remote.txt | 15 ++++++++++-----
+ builtin/ls-remote.c             |  2 +-
+ 2 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/git-ls-remote.txt b/Documentation/git-ls-remote.txt
+index f17567945f..ff3da547dd 100644
+--- a/Documentation/git-ls-remote.txt
++++ b/Documentation/git-ls-remote.txt
+@@ -11,7 +11,7 @@ SYNOPSIS
+ [verse]
+ 'git ls-remote' [--heads] [--tags] [--refs] [--upload-pack=<exec>]
+ 	      [-q | --quiet] [--exit-code] [--get-url] [--sort=<key>]
+-	      [--symref] [<repository> [<refs>...]]
++	      [--symref] [<repository> [<patterns>...]]
+ 
+ DESCRIPTION
+ -----------
+@@ -85,11 +85,16 @@ OPTIONS
+ 	either a URL or the name of a remote (see the GIT URLS and
+ 	REMOTES sections of linkgit:git-fetch[1]).
+ 
+-<refs>...::
++<patterns>...::
+ 	When unspecified, all references, after filtering done
+-	with --heads and --tags, are shown.  When <refs>... are
+-	specified, only references matching the given patterns
+-	are displayed.
++	with --heads and --tags, are shown.  When <patterns>... are
++	specified, only references matching one or more of the given
++	patterns are displayed. Each pattern is interpreted as a glob
++	(see `glob` in linkgit:gitglossary[7]) which is matched against
++	the "tail" of a ref, starting either from the start of the ref
++	(so a full name like `refs/heads/foo` matches) or from a slash
++	separator (so `bar` matches `refs/heads/bar` but not
++	`refs/heads/foobar`).
+ 
+ EXAMPLES
+ --------
+diff --git a/builtin/ls-remote.c b/builtin/ls-remote.c
+index 5d5ac03871..6516177348 100644
+--- a/builtin/ls-remote.c
++++ b/builtin/ls-remote.c
+@@ -8,7 +8,7 @@
+ static const char * const ls_remote_usage[] = {
+ 	N_("git ls-remote [--heads] [--tags] [--refs] [--upload-pack=<exec>]\n"
+ 	   "              [-q | --quiet] [--exit-code] [--get-url] [--sort=<key>]\n"
+-	   "              [--symref] [<repository> [<refs>...]]"),
++	   "              [--symref] [<repository> [<patterns>...]]"),
+ 	NULL
+ };
+ 
+-- 
+2.39.3 (Apple Git-145)
+

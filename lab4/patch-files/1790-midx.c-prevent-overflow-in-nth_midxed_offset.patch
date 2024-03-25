@@ -1,0 +1,37 @@
+From 5675150cc3bfc03c5721edcfc49fbe43b15b5209 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:37:41 -0400
+Subject: [PATCH 1790/2871] midx.c: prevent overflow in `nth_midxed_offset()`
+
+In a similar spirit as previous patches, avoid an overflow when looking
+up object offsets in the MIDX's large offset table by guarding the
+computation via `st_mult()`.
+
+This instance is also OK as-is, since the left operand is the result of
+`sizeof(...)`, which is already a `size_t`. But use `st_mult()` instead
+here to make it explicit that this computation is to be performed using
+64-bit unsigned integers.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/midx.c b/midx.c
+index c774cd69c7..cf7d06d78b 100644
+--- a/midx.c
++++ b/midx.c
+@@ -271,7 +271,8 @@ off_t nth_midxed_offset(struct multi_pack_index *m, uint32_t pos)
+ 			die(_("multi-pack-index stores a 64-bit offset, but off_t is too small"));
+ 
+ 		offset32 ^= MIDX_LARGE_OFFSET_NEEDED;
+-		return get_be64(m->chunk_large_offsets + sizeof(uint64_t) * offset32);
++		return get_be64(m->chunk_large_offsets +
++				st_mult(sizeof(uint64_t), offset32));
+ 	}
+ 
+ 	return offset32;
+-- 
+2.39.3 (Apple Git-145)
+

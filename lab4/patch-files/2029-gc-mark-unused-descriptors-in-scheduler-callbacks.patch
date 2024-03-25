@@ -1,0 +1,50 @@
+From 316b3a226a16f52fb152d8869aa71233ce47768d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:40 -0400
+Subject: [PATCH 2029/2871] gc: mark unused descriptors in scheduler callbacks
+
+Each of the scheduler update callbacks gets the descriptor of the lock
+file, but only the crontab updater needs it. We have to retain the
+unused descriptors because these are dispatched from a table of function
+pointers, but we should mark them to silence -Wunused-parameter.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 1f53b66c7b..369bd43fb2 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -1934,7 +1934,7 @@ static int launchctl_add_plists(void)
+ 	       launchctl_schedule_plist(exec_path, SCHEDULE_WEEKLY);
+ }
+ 
+-static int launchctl_update_schedule(int run_maintenance, int fd)
++static int launchctl_update_schedule(int run_maintenance, int fd UNUSED)
+ {
+ 	if (run_maintenance)
+ 		return launchctl_add_plists();
+@@ -2115,7 +2115,7 @@ static int schtasks_schedule_tasks(void)
+ 	       schtasks_schedule_task(exec_path, SCHEDULE_WEEKLY);
+ }
+ 
+-static int schtasks_update_schedule(int run_maintenance, int fd)
++static int schtasks_update_schedule(int run_maintenance, int fd UNUSED)
+ {
+ 	if (run_maintenance)
+ 		return schtasks_schedule_tasks();
+@@ -2556,7 +2556,7 @@ static int systemd_timer_setup_units(void)
+ 	return ret;
+ }
+ 
+-static int systemd_timer_update_schedule(int run_maintenance, int fd)
++static int systemd_timer_update_schedule(int run_maintenance, int fd UNUSED)
+ {
+ 	if (run_maintenance)
+ 		return systemd_timer_setup_units();
+-- 
+2.39.3 (Apple Git-145)
+

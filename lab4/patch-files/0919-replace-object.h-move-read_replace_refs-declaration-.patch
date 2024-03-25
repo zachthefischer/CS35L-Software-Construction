@@ -1,0 +1,231 @@
+From cbeab74713b6a97dfe6cf9e3bd9dbf7c68ea4e7b Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:33 +0000
+Subject: [PATCH 0919/2871] replace-object.h: move read_replace_refs
+ declaration from cache.h to here
+
+Adjust several files to be more explicit about their dependency on
+replace-objects to accommodate this change.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/cat-file.c       | 1 +
+ builtin/commit-graph.c   | 1 +
+ builtin/fsck.c           | 1 +
+ builtin/index-pack.c     | 1 +
+ builtin/pack-objects.c   | 1 +
+ builtin/prune.c          | 1 +
+ builtin/replace.c        | 1 +
+ builtin/unpack-objects.c | 1 +
+ builtin/upload-pack.c    | 1 +
+ cache.h                  | 8 --------
+ config.c                 | 1 +
+ environment.c            | 1 +
+ git.c                    | 1 +
+ log-tree.c               | 1 +
+ replace-object.h         | 9 ++++++++-
+ 15 files changed, 21 insertions(+), 9 deletions(-)
+
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index 88c5ea8b26..b7a73acb07 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -18,6 +18,7 @@
+ #include "oid-array.h"
+ #include "packfile.h"
+ #include "object-store.h"
++#include "replace-object.h"
+ #include "promisor-remote.h"
+ #include "mailmap.h"
+ 
+diff --git a/builtin/commit-graph.c b/builtin/commit-graph.c
+index 6dc83dc51b..d3be7f3b31 100644
+--- a/builtin/commit-graph.c
++++ b/builtin/commit-graph.c
+@@ -8,6 +8,7 @@
+ #include "commit-graph.h"
+ #include "object-store.h"
+ #include "progress.h"
++#include "replace-object.h"
+ #include "tag.h"
+ 
+ #define BUILTIN_COMMIT_GRAPH_VERIFY_USAGE \
+diff --git a/builtin/fsck.c b/builtin/fsck.c
+index af0fab660d..134b0bd18c 100644
+--- a/builtin/fsck.c
++++ b/builtin/fsck.c
+@@ -20,6 +20,7 @@
+ #include "decorate.h"
+ #include "packfile.h"
+ #include "object-store.h"
++#include "replace-object.h"
+ #include "resolve-undo.h"
+ #include "run-command.h"
+ #include "worktree.h"
+diff --git a/builtin/index-pack.c b/builtin/index-pack.c
+index 21c0e109dd..b451755f40 100644
+--- a/builtin/index-pack.c
++++ b/builtin/index-pack.c
+@@ -16,6 +16,7 @@
+ #include "thread-utils.h"
+ #include "packfile.h"
+ #include "object-store.h"
++#include "replace-object.h"
+ #include "promisor-remote.h"
+ 
+ static const char index_pack_usage[] =
+diff --git a/builtin/pack-objects.c b/builtin/pack-objects.c
+index 2b5e85988c..2e73284f10 100644
+--- a/builtin/pack-objects.c
++++ b/builtin/pack-objects.c
+@@ -32,6 +32,7 @@
+ #include "list.h"
+ #include "packfile.h"
+ #include "object-store.h"
++#include "replace-object.h"
+ #include "dir.h"
+ #include "midx.h"
+ #include "trace2.h"
+diff --git a/builtin/prune.c b/builtin/prune.c
+index db767b7a8f..f2ed45ccf0 100644
+--- a/builtin/prune.c
++++ b/builtin/prune.c
+@@ -8,6 +8,7 @@
+ #include "parse-options.h"
+ #include "progress.h"
+ #include "prune-packed.h"
++#include "replace-object.h"
+ #include "object-store.h"
+ #include "shallow.h"
+ 
+diff --git a/builtin/replace.c b/builtin/replace.c
+index cdcb39f737..71d8e949e3 100644
+--- a/builtin/replace.c
++++ b/builtin/replace.c
+@@ -16,6 +16,7 @@
+ #include "parse-options.h"
+ #include "run-command.h"
+ #include "object-store.h"
++#include "replace-object.h"
+ #include "repository.h"
+ #include "tag.h"
+ 
+diff --git a/builtin/unpack-objects.c b/builtin/unpack-objects.c
+index e125b12188..1908dcfcff 100644
+--- a/builtin/unpack-objects.c
++++ b/builtin/unpack-objects.c
+@@ -9,6 +9,7 @@
+ #include "pack.h"
+ #include "blob.h"
+ #include "commit.h"
++#include "replace-object.h"
+ #include "tag.h"
+ #include "tree.h"
+ #include "tree-walk.h"
+diff --git a/builtin/upload-pack.c b/builtin/upload-pack.c
+index 25b69da2bf..7a3c68720f 100644
+--- a/builtin/upload-pack.c
++++ b/builtin/upload-pack.c
+@@ -4,6 +4,7 @@
+ #include "pkt-line.h"
+ #include "parse-options.h"
+ #include "protocol.h"
++#include "replace-object.h"
+ #include "upload-pack.h"
+ #include "serve.h"
+ 
+diff --git a/cache.h b/cache.h
+index fdb3125f00..0221bc6d5c 100644
+--- a/cache.h
++++ b/cache.h
+@@ -886,14 +886,6 @@ void set_shared_repository(int value);
+ int get_shared_repository(void);
+ void reset_shared_repository(void);
+ 
+-/*
+- * Do replace refs need to be checked this run?  This variable is
+- * initialized to true unless --no-replace-object is used or
+- * $GIT_NO_REPLACE_OBJECTS is set, but is set to false by some
+- * commands that do not want replace references to be active.
+- */
+-extern int read_replace_refs;
+-
+ /*
+  * These values are used to help identify parts of a repository to fsync.
+  * FSYNC_COMPONENT_NONE identifies data that will not be a persistent part of the
+diff --git a/config.c b/config.c
+index d3ab9417a4..d0aff55fa6 100644
+--- a/config.c
++++ b/config.c
+@@ -23,6 +23,7 @@
+ #include "utf8.h"
+ #include "dir.h"
+ #include "color.h"
++#include "replace-object.h"
+ #include "refs.h"
+ #include "worktree.h"
+ 
+diff --git a/environment.c b/environment.c
+index 1ee3686fd8..89d89110e4 100644
+--- a/environment.c
++++ b/environment.c
+@@ -17,6 +17,7 @@
+ #include "commit.h"
+ #include "strvec.h"
+ #include "object-store.h"
++#include "replace-object.h"
+ #include "tmp-objdir.h"
+ #include "chdir-notify.h"
+ #include "shallow.h"
+diff --git a/git.c b/git.c
+index 96b0a2837d..389f46887e 100644
+--- a/git.c
++++ b/git.c
+@@ -4,6 +4,7 @@
+ #include "help.h"
+ #include "run-command.h"
+ #include "alias.h"
++#include "replace-object.h"
+ #include "shallow.h"
+ 
+ #define RUN_SETUP		(1<<0)
+diff --git a/log-tree.c b/log-tree.c
+index ee3dfb6b65..043e0df685 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -13,6 +13,7 @@
+ #include "merge-ort.h"
+ #include "reflog-walk.h"
+ #include "refs.h"
++#include "replace-object.h"
+ #include "string-list.h"
+ #include "color.h"
+ #include "gpg-interface.h"
+diff --git a/replace-object.h b/replace-object.h
+index 3c92ae9461..500482b02b 100644
+--- a/replace-object.h
++++ b/replace-object.h
+@@ -1,11 +1,18 @@
+ #ifndef REPLACE_OBJECT_H
+ #define REPLACE_OBJECT_H
+ 
+-#include "cache.h"
+ #include "oidmap.h"
+ #include "repository.h"
+ #include "object-store.h"
+ 
++/*
++ * Do replace refs need to be checked this run?  This variable is
++ * initialized to true unless --no-replace-object is used or
++ * $GIT_NO_REPLACE_OBJECTS is set, but is set to false by some
++ * commands that do not want replace references to be active.
++ */
++extern int read_replace_refs;
++
+ struct replace_object {
+ 	struct oidmap_entry original;
+ 	struct object_id replacement;
+-- 
+2.39.3 (Apple Git-145)
+

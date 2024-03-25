@@ -1,0 +1,26 @@
+From f524970185963a180ecf3a750a31405c4d0de484 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Feb 2023 00:09:36 +0000
+Subject: [PATCH 0922/2871] diff.h: remove unnecessary include of object.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/diff.h b/diff.h
+index b90036f529..f80bd297ca 100644
+--- a/diff.h
++++ b/diff.h
+@@ -6,7 +6,6 @@
+ 
+ #include "tree-walk.h"
+ #include "pathspec.h"
+-#include "object.h"
+ #include "oidset.h"
+ #include "strbuf.h"
+ 
+-- 
+2.39.3 (Apple Git-145)
+

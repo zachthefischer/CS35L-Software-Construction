@@ -1,0 +1,144 @@
+From c4611130f47242af19fbd8eca2be039742c122b1 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:42 +0100
+Subject: [PATCH 2467/2871] replay: add --contained to rebase contained
+ branches
+
+Let's add a `--contained` option that can be used along with
+`--onto` to rebase all the branches contained in the <revision-range>
+argument.
+
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-replay.txt | 12 +++++++++++-
+ builtin/replay.c             | 14 ++++++++++++--
+ t/t3650-replay-basics.sh     | 29 +++++++++++++++++++++++++++++
+ 3 files changed, 52 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-replay.txt b/Documentation/git-replay.txt
+index c4c64f955a..f6c269c62d 100644
+--- a/Documentation/git-replay.txt
++++ b/Documentation/git-replay.txt
+@@ -9,7 +9,7 @@ git-replay - EXPERIMENTAL: Replay commits on a new base, works with bare repos t
+ SYNOPSIS
+ --------
+ [verse]
+-(EXPERIMENTAL!) 'git replay' (--onto <newbase> | --advance <branch>) <revision-range>...
++(EXPERIMENTAL!) 'git replay' ([--contained] --onto <newbase> | --advance <branch>) <revision-range>...
+ 
+ DESCRIPTION
+ -----------
+@@ -96,6 +96,16 @@ top of the exact same new base, they only differ in that the first
+ provides instructions to make mybranch point at the new commits and
+ the second provides instructions to make target point at them.
+ 
++What if you have a stack of branches, one depending upon another, and
++you'd really like to rebase the whole set?
++
++------------
++$ git replay --contained --onto origin/main origin/main..tipbranch
++update refs/heads/branch1 ${NEW_branch1_HASH} ${OLD_branch1_HASH}
++update refs/heads/branch2 ${NEW_branch2_HASH} ${OLD_branch2_HASH}
++update refs/heads/tipbranch ${NEW_tipbranch_HASH} ${OLD_tipbranch_HASH}
++------------
++
+ When calling `git replay`, one does not need to specify a range of
+ commits to replay using the syntax `A..B`; any range expression will
+ do:
+diff --git a/builtin/replay.c b/builtin/replay.c
+index f26806d7e2..df14657e2f 100644
+--- a/builtin/replay.c
++++ b/builtin/replay.c
+@@ -258,6 +258,7 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	const char *advance_name = NULL;
+ 	struct commit *onto = NULL;
+ 	const char *onto_name = NULL;
++	int contained = 0;
+ 
+ 	struct rev_info revs;
+ 	struct commit *last_commit = NULL;
+@@ -268,7 +269,9 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 	int ret = 0;
+ 
+ 	const char * const replay_usage[] = {
+-		N_("(EXPERIMENTAL!) git replay (--onto <newbase> | --advance <branch>) <revision-range>..."),
++		N_("(EXPERIMENTAL!) git replay "
++		   "([--contained] --onto <newbase> | --advance <branch>) "
++		   "<revision-range>..."),
+ 		NULL
+ 	};
+ 	struct option replay_options[] = {
+@@ -278,6 +281,8 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 		OPT_STRING(0, "onto", &onto_name,
+ 			   N_("revision"),
+ 			   N_("replay onto given commit")),
++		OPT_BOOL(0, "contained", &contained,
++			 N_("advance all branches contained in revision-range")),
+ 		OPT_END()
+ 	};
+ 
+@@ -289,6 +294,10 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 		usage_with_options(replay_usage, replay_options);
+ 	}
+ 
++	if (advance_name && contained)
++		die(_("options '%s' and '%s' cannot be used together"),
++		    "--advance", "--contained");
++
+ 	repo_init_revisions(the_repository, &revs, prefix);
+ 
+ 	/*
+@@ -377,7 +386,8 @@ int cmd_replay(int argc, const char **argv, const char *prefix)
+ 			continue;
+ 		while (decoration) {
+ 			if (decoration->type == DECORATION_REF_LOCAL &&
+-			    strset_contains(update_refs, decoration->name)) {
++			    (contained || strset_contains(update_refs,
++							  decoration->name))) {
+ 				printf("update %s %s %s\n",
+ 				       decoration->name,
+ 				       oid_to_hex(&last_commit->object.oid),
+diff --git a/t/t3650-replay-basics.sh b/t/t3650-replay-basics.sh
+index 68a87e7803..d6286f9580 100755
+--- a/t/t3650-replay-basics.sh
++++ b/t/t3650-replay-basics.sh
+@@ -114,4 +114,33 @@ test_expect_success 'replay fails when both --advance and --onto are omitted' '
+ 	test_must_fail git replay topic1..topic2 >result
+ '
+ 
++test_expect_success 'using replay to also rebase a contained branch' '
++	git replay --contained --onto main main..topic3 >result &&
++
++	test_line_count = 2 result &&
++	cut -f 3 -d " " result >new-branch-tips &&
++
++	git log --format=%s $(head -n 1 new-branch-tips) >actual &&
++	test_write_lines F C M L B A >expect &&
++	test_cmp expect actual &&
++
++	git log --format=%s $(tail -n 1 new-branch-tips) >actual &&
++	test_write_lines H G F C M L B A >expect &&
++	test_cmp expect actual &&
++
++	printf "update refs/heads/topic1 " >expect &&
++	printf "%s " $(head -n 1 new-branch-tips) >>expect &&
++	git rev-parse topic1 >>expect &&
++	printf "update refs/heads/topic3 " >>expect &&
++	printf "%s " $(tail -n 1 new-branch-tips) >>expect &&
++	git rev-parse topic3 >>expect &&
++
++	test_cmp expect result
++'
++
++test_expect_success 'using replay on bare repo to also rebase a contained branch' '
++	git -C bare replay --contained --onto main main..topic3 >result-bare &&
++	test_cmp expect result-bare
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

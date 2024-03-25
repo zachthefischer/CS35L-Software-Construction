@@ -1,0 +1,32 @@
+From 3dbb69e1f22219dd8cc590947dc4daa3dad32581 Mon Sep 17 00:00:00 2001
+From: Britton Leo Kerin <britton.kerin@gmail.com>
+Date: Tue, 2 Jan 2024 19:02:06 -0900
+Subject: [PATCH 2667/2871] doc: use singular form of repeatable path arg
+
+This is more correct because the <path>... doc syntax already indicates
+that the arg is "array-type".  It's how other tools do it.  Finally, the
+later document text mentions 'path' arguments, while it doesn't mention
+'paths'.
+
+Signed-off-by: Britton Leo Kerin <britton.kergin@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-bisect.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-bisect.txt b/Documentation/git-bisect.txt
+index 191b4a42b6..58821f7e11 100644
+--- a/Documentation/git-bisect.txt
++++ b/Documentation/git-bisect.txt
+@@ -17,7 +17,7 @@ The command takes various subcommands, and different options depending
+ on the subcommand:
+ 
+  git bisect start [--term-(new|bad)=<term-new> --term-(old|good)=<term-old>]
+-		  [--no-checkout] [--first-parent] [<bad> [<good>...]] [--] [<paths>...]
++		  [--no-checkout] [--first-parent] [<bad> [<good>...]] [--] [<path>...]
+  git bisect (bad|new|<term-new>) [<rev>]
+  git bisect (good|old|<term-old>) [<rev>...]
+  git bisect terms [--term-good | --term-bad]
+-- 
+2.39.3 (Apple Git-145)
+

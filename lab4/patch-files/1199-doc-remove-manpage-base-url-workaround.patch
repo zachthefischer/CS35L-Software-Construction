@@ -1,0 +1,87 @@
+From 092df21dfca2b53e459947931245cb0e06d35ca8 Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Tue, 21 Mar 2023 18:08:15 -0600
+Subject: [PATCH 1199/2871] doc: remove manpage-base-url workaround
+
+Commit 50d9bbba92 (Documentation: Avoid use of xmlto --stringparam,
+2009-12-04) introduced manpage-base-url.xsl because ancient versions of
+xmlto did not have --stringparam.
+
+However, that was more than ten years ago, no need for that complexity
+anymore, we can just use --stringparam.
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Acked-by: Todd Zullinger <tmz@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/.gitignore              |  1 -
+ Documentation/Makefile                |  9 ++-------
+ Documentation/manpage-base-url.xsl.in | 10 ----------
+ 3 files changed, 2 insertions(+), 18 deletions(-)
+ delete mode 100644 Documentation/manpage-base-url.xsl.in
+
+diff --git a/Documentation/.gitignore b/Documentation/.gitignore
+index 1c3771e7d7..a48448de32 100644
+--- a/Documentation/.gitignore
++++ b/Documentation/.gitignore
+@@ -10,7 +10,6 @@ howto-index.txt
+ doc.dep
+ cmds-*.txt
+ mergetools-*.txt
+-manpage-base-url.xsl
+ SubmittingPatches.txt
+ tmp-doc-diff/
+ GIT-ASCIIDOCFLAGS
+diff --git a/Documentation/Makefile b/Documentation/Makefile
+index a6ba5bd460..5cd35df61c 100644
+--- a/Documentation/Makefile
++++ b/Documentation/Makefile
+@@ -189,7 +189,7 @@ endif
+ ifndef MAN_BASE_URL
+ MAN_BASE_URL = file://$(htmldir)/
+ endif
+-XMLTO_EXTRA += -m manpage-base-url.xsl
++XMLTO_EXTRA += --stringparam man.base.url.for.relative.links='$(MAN_BASE_URL)'
+ 
+ ifdef USE_ASCIIDOCTOR
+ ASCIIDOC = asciidoctor
+@@ -331,7 +331,6 @@ clean:
+ 	$(RM) technical/*.html technical/api-index.txt
+ 	$(RM) SubmittingPatches.txt
+ 	$(RM) $(cmds_txt) $(mergetools_txt) *.made
+-	$(RM) manpage-base-url.xsl
+ 	$(RM) GIT-ASCIIDOCFLAGS
+ 
+ $(MAN_HTML): %.html : %.txt $(ASCIIDOC_DEPS)
+@@ -340,11 +339,7 @@ $(MAN_HTML): %.html : %.txt $(ASCIIDOC_DEPS)
+ $(OBSOLETE_HTML): %.html : %.txto $(ASCIIDOC_DEPS)
+ 	$(QUIET_ASCIIDOC)$(TXT_TO_HTML) -o $@ $<
+ 
+-manpage-base-url.xsl: manpage-base-url.xsl.in
+-	$(QUIET_GEN)sed "s|@@MAN_BASE_URL@@|$(MAN_BASE_URL)|" $< > $@
+-
+-
+-manpage-prereqs := manpage-base-url.xsl $(wildcard manpage*.xsl)
++manpage-prereqs := $(wildcard manpage*.xsl)
+ manpage-cmd = $(QUIET_XMLTO)$(XMLTO) -m $(MANPAGE_XSL) $(XMLTO_EXTRA) man $<
+ 
+ %.1 : %.xml $(manpage-prereqs)
+diff --git a/Documentation/manpage-base-url.xsl.in b/Documentation/manpage-base-url.xsl.in
+deleted file mode 100644
+index e800904df3..0000000000
+--- a/Documentation/manpage-base-url.xsl.in
++++ /dev/null
+@@ -1,10 +0,0 @@
+-<!-- manpage-base-url.xsl:
+-     special settings for manpages rendered from newer docbook -->
+-<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+-		version="1.0">
+-
+-<!-- set a base URL for relative links -->
+-<xsl:param name="man.base.url.for.relative.links"
+-	>@@MAN_BASE_URL@@</xsl:param>
+-
+-</xsl:stylesheet>
+-- 
+2.39.3 (Apple Git-145)
+

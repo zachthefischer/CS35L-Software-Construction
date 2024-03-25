@@ -1,0 +1,163 @@
+From 91c5a5e000f765d8da351a094e8952317fe4e5dc Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 29 Jan 2024 12:07:17 +0100
+Subject: [PATCH 2768/2871] t1300: make tests more robust with non-default ref
+ backends
+
+The t1300 test suite exercises the git-config(1) tool. To do so, the
+test overwrites ".git/config" to contain custom contents in several
+places with code like the following:
+
+```
+cat > .git/config <<\EOF
+...
+EOF
+```
+
+While this is easy enough to do, it may create problems when using a
+non-default repository format because this causes us to overwrite the
+repository format version as well as any potential extensions. With the
+upcoming "reftable" ref backend the result is that Git would try to
+access refs via the "files" backend even though the repository has been
+initialized with the "reftable" backend, which will cause failures when
+trying to access any refs.
+
+Ideally, we would rewrite the whole test suite to not depend on state
+written by previous tests, but that would result in a lot of changes in
+this test suite. Instead, we only refactor tests which access the refdb
+to be more robust by using their own separate repositories, which allows
+us to be more careful and not discard required extensions.
+
+Note that we also have to touch up how the CUSTOM_CONFIG_FILE gets
+accessed. This environment variable contains the relative path to a
+custom config file which we're setting up. But because we are now using
+subrepositories, this relative path will not be found anymore because
+our working directory changes. This issue is addressed by storing the
+absolute path to the file in CUSTOM_CONFIG_FILE instead.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Reviewed-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1300-config.sh | 78 ++++++++++++++++++++++++++++++-----------------
+ 1 file changed, 50 insertions(+), 28 deletions(-)
+
+diff --git a/t/t1300-config.sh b/t/t1300-config.sh
+index f4e2752134..31c3878687 100755
+--- a/t/t1300-config.sh
++++ b/t/t1300-config.sh
+@@ -1098,15 +1098,20 @@ test_expect_success SYMLINKS 'symlink to nonexistent configuration' '
+ 	test_must_fail git config --file=linktolinktonada --list
+ '
+ 
+-test_expect_success 'check split_cmdline return' "
+-	git config alias.split-cmdline-fix 'echo \"' &&
+-	test_must_fail git split-cmdline-fix &&
+-	echo foo > foo &&
+-	git add foo &&
+-	git commit -m 'initial commit' &&
+-	git config branch.main.mergeoptions 'echo \"' &&
+-	test_must_fail git merge main
+-"
++test_expect_success 'check split_cmdline return' '
++	test_when_finished "rm -rf repo" &&
++	git init repo &&
++	(
++		cd repo &&
++		git config alias.split-cmdline-fix "echo \"" &&
++		test_must_fail git split-cmdline-fix &&
++		echo foo >foo &&
++		git add foo &&
++		git commit -m "initial commit" &&
++		git config branch.main.mergeoptions "echo \"" &&
++		test_must_fail git merge main
++	)
++'
+ 
+ test_expect_success 'git -c "key=value" support' '
+ 	cat >expect <<-\EOF &&
+@@ -1157,10 +1162,16 @@ test_expect_success 'git -c works with aliases of builtins' '
+ '
+ 
+ test_expect_success 'aliases can be CamelCased' '
+-	test_config alias.CamelCased "rev-parse HEAD" &&
+-	git CamelCased >out &&
+-	git rev-parse HEAD >expect &&
+-	test_cmp expect out
++	test_when_finished "rm -rf repo" &&
++	git init repo &&
++	(
++		cd repo &&
++		test_commit A &&
++		git config alias.CamelCased "rev-parse HEAD" &&
++		git CamelCased >out &&
++		git rev-parse HEAD >expect &&
++		test_cmp expect out
++	)
+ '
+ 
+ test_expect_success 'git -c does not split values on equals' '
+@@ -2009,11 +2020,11 @@ test_expect_success '--show-origin getting a single key' '
+ '
+ 
+ test_expect_success 'set up custom config file' '
+-	CUSTOM_CONFIG_FILE="custom.conf" &&
+-	cat >"$CUSTOM_CONFIG_FILE" <<-\EOF
++	cat >"custom.conf" <<-\EOF &&
+ 	[user]
+ 		custom = true
+ 	EOF
++	CUSTOM_CONFIG_FILE="$(test-tool path-utils real_path custom.conf)"
+ '
+ 
+ test_expect_success !MINGW 'set up custom config file with special name characters' '
+@@ -2052,22 +2063,33 @@ test_expect_success '--show-origin stdin with file include' '
+ '
+ 
+ test_expect_success '--show-origin blob' '
+-	blob=$(git hash-object -w "$CUSTOM_CONFIG_FILE") &&
+-	cat >expect <<-EOF &&
+-	blob:$blob	user.custom=true
+-	EOF
+-	git config --blob=$blob --show-origin --list >output &&
+-	test_cmp expect output
++	test_when_finished "rm -rf repo" &&
++	git init repo &&
++	(
++		cd repo &&
++		blob=$(git hash-object -w "$CUSTOM_CONFIG_FILE") &&
++		cat >expect <<-EOF &&
++		blob:$blob	user.custom=true
++		EOF
++		git config --blob=$blob --show-origin --list >output &&
++		test_cmp expect output
++	)
+ '
+ 
+ test_expect_success '--show-origin blob ref' '
+-	cat >expect <<-\EOF &&
+-	blob:main:custom.conf	user.custom=true
+-	EOF
+-	git add "$CUSTOM_CONFIG_FILE" &&
+-	git commit -m "new config file" &&
+-	git config --blob=main:"$CUSTOM_CONFIG_FILE" --show-origin --list >output &&
+-	test_cmp expect output
++	test_when_finished "rm -rf repo" &&
++	git init repo &&
++	(
++		cd repo &&
++		cat >expect <<-\EOF &&
++		blob:main:custom.conf	user.custom=true
++		EOF
++		cp "$CUSTOM_CONFIG_FILE" custom.conf &&
++		git add custom.conf &&
++		git commit -m "new config file" &&
++		git config --blob=main:custom.conf --show-origin --list >output &&
++		test_cmp expect output
++	)
+ '
+ 
+ test_expect_success '--show-origin with --default' '
+-- 
+2.39.3 (Apple Git-145)
+

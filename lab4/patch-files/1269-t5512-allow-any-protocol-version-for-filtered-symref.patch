@@ -1,0 +1,46 @@
+From d6747adfa832be381d2c537a4fd458034487ada1 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 14 Apr 2023 17:25:16 -0400
+Subject: [PATCH 1269/2871] t5512: allow any protocol version for filtered
+ symref test
+
+We have a test that checks that ls-remote, when asked only about HEAD,
+will report the HEAD symref, and not others. This was marked to always
+run with the v0 protocol by b2f73b70b2 (t5512: compensate for v0 only
+sending HEAD symrefs, 2019-02-25).
+
+But in v0 this test is doing nothing! For v0, upload-pack only reports
+the HEAD symref anyway, so we'd never have any other symref to report.
+
+For v2, it is useful; we learn about all symrefs (and the test repo has
+multiple), so this demonstrates that we correctly avoid showing them.
+
+We could perhaps mark this to test explicitly with v2, but since that is
+the default these days, it's sufficient to just run ls-remote without
+any protocol specification. It still passes if somebody does an explicit
+GIT_TEST_PROTOCOL_VERSION=0; it's just testing less.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5512-ls-remote.sh | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/t/t5512-ls-remote.sh b/t/t5512-ls-remote.sh
+index a34cab12ae..fbf23d12a6 100755
+--- a/t/t5512-ls-remote.sh
++++ b/t/t5512-ls-remote.sh
+@@ -271,9 +271,7 @@ test_expect_success 'ls-remote with filtered symref (refname)' '
+ 	ref: refs/heads/main	HEAD
+ 	$rev	HEAD
+ 	EOF
+-	# Protocol v2 supports sending symrefs for refs other than HEAD, so use
+-	# protocol v0 here.
+-	GIT_TEST_PROTOCOL_VERSION=0 git ls-remote --symref . HEAD >actual &&
++	git ls-remote --symref . HEAD >actual &&
+ 	test_cmp expect actual
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

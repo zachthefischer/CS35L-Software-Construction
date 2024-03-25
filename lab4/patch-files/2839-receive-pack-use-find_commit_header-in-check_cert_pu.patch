@@ -1,0 +1,78 @@
+From f51d790b67255dd40b55654527fc4f59a53f44b0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 9 Feb 2024 21:36:40 +0100
+Subject: [PATCH 2839/2871] receive-pack: use find_commit_header() in
+ check_cert_push_options()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use the public function find_commit_header() instead of find_header() to
+simplify the code.  This is possible and safe because we're operating on
+a strbuf, which is always NUL-terminated, so there is no risk of running
+over the end of the buffer.  It cannot contain NUL within the buffer, as
+it is built using strbuf_addstr(), only.
+
+The string comparison becomes more complicated because we need to check
+for NUL explicitly after comparing the length-limited option, but on the
+flip side we don't need to clean up allocations or track the remaining
+buffer length.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c | 24 +++++++++---------------
+ 1 file changed, 9 insertions(+), 15 deletions(-)
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index e36b1d619f..8ebb3a872f 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -718,35 +718,29 @@ static const char *check_nonce(const char *buf, size_t len)
+ static int check_cert_push_options(const struct string_list *push_options)
+ {
+ 	const char *buf = push_cert.buf;
+-	int len = push_cert.len;
+ 
+-	char *option;
+-	const char *next_line;
++	const char *option;
++	size_t optionlen;
+ 	int options_seen = 0;
+ 
+ 	int retval = 1;
+ 
+-	if (!len)
++	if (!*buf)
+ 		return 1;
+ 
+-	while ((option = find_header(buf, len, "push-option", &next_line))) {
+-		len -= (next_line - buf);
+-		buf = next_line;
++	while ((option = find_commit_header(buf, "push-option", &optionlen))) {
++		buf = option + optionlen + 1;
+ 		options_seen++;
+ 		if (options_seen > push_options->nr
+-		    || strcmp(option,
+-			      push_options->items[options_seen - 1].string)) {
+-			retval = 0;
+-			goto leave;
+-		}
+-		free(option);
++		    || strncmp(push_options->items[options_seen - 1].string,
++			       option, optionlen)
++		    || push_options->items[options_seen - 1].string[optionlen])
++			return 0;
+ 	}
+ 
+ 	if (options_seen != push_options->nr)
+ 		retval = 0;
+ 
+-leave:
+-	free(option);
+ 	return retval;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

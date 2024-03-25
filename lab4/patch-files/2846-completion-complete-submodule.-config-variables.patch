@@ -1,0 +1,92 @@
+From b1d0cc68d1921f8d26a947fe662697e42dffb730 Mon Sep 17 00:00:00 2001
+From: Philippe Blain <levraiphilippeblain@gmail.com>
+Date: Sat, 10 Feb 2024 18:32:21 +0000
+Subject: [PATCH 2846/2871] completion: complete 'submodule.*' config variables
+
+In the Bash completion script, function
+__git_complete_config_variable_name completes config variables and has
+special logic to deal with config variables involving user-defined
+names, like branch.<name>.* and remote.<name>.*.
+
+This special logic is missing for submodule-related config variables.
+Add the appropriate branches to the case statement, making use of the
+in-tree '.gitmodules' to list relevant submodules.
+
+Add corresponding tests in t9902-completion.sh, making sure we complete
+both first level submodule config variables as well as second level
+variables involving submodule names.
+
+Signed-off-by: Philippe Blain <levraiphilippeblain@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 13 ++++++++++++
+ t/t9902-completion.sh                  | 29 ++++++++++++++++++++++++++
+ 2 files changed, 42 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 159a4fd8ad..8af9bc3f4e 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -2803,6 +2803,19 @@ __git_complete_config_variable_name ()
+ 		__gitcomp_nl_append "pushDefault" "$pfx" "$cur_" "${sfx:- }"
+ 		return
+ 		;;
++	submodule.*.*)
++		local pfx="${cur_%.*}."
++		cur_="${cur_##*.}"
++		__gitcomp "url update branch fetchRecurseSubmodules ignore active" "$pfx" "$cur_" "$sfx"
++		return
++		;;
++	submodule.*)
++		local pfx="${cur_%.*}."
++		cur_="${cur_#*.}"
++		__gitcomp_nl "$(__git config -f "$(__git rev-parse --show-toplevel)/.gitmodules" --get-regexp 'submodule.*.path' | awk -F. '{print $2}')" "$pfx" "$cur_" "."
++		__gitcomp_nl_append $'alternateErrorStrategy\nfetchJobs\nactive\nalternateLocation\nrecurse\npropagateBranches' "$pfx" "$cur_" "${sfx:- }"
++		return
++		;;
+ 	url.*.*)
+ 		local pfx="${cur_%.*}."
+ 		cur_="${cur_##*.}"
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index 35eb534fdd..23d0e71324 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -2583,6 +2583,35 @@ test_expect_success 'git config - variable name include' '
+ 	EOF
+ '
+ 
++test_expect_success 'setup for git config submodule tests' '
++	test_create_repo sub &&
++	test_commit -C sub initial &&
++	git submodule add ./sub
++'
++
++test_expect_success 'git config - variable name - submodule' '
++	test_completion "git config submodule." <<-\EOF
++	submodule.active Z
++	submodule.alternateErrorStrategy Z
++	submodule.alternateLocation Z
++	submodule.fetchJobs Z
++	submodule.propagateBranches Z
++	submodule.recurse Z
++	submodule.sub.Z
++	EOF
++'
++
++test_expect_success 'git config - variable name - submodule names' '
++	test_completion "git config submodule.sub." <<-\EOF
++	submodule.sub.url Z
++	submodule.sub.update Z
++	submodule.sub.branch Z
++	submodule.sub.fetchRecurseSubmodules Z
++	submodule.sub.ignore Z
++	submodule.sub.active Z
++	EOF
++'
++
+ test_expect_success 'git config - value' '
+ 	test_completion "git config color.pager " <<-\EOF
+ 	false Z
+-- 
+2.39.3 (Apple Git-145)
+

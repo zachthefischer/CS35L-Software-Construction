@@ -1,0 +1,41 @@
+From 77a1310e6b3f39f405275faa8c5af02cf5453cb6 Mon Sep 17 00:00:00 2001
+From: Michael McClimon <michael@mcclimon.org>
+Date: Sun, 16 Oct 2022 17:22:36 -0400
+Subject: [PATCH 0181/2871] Git.pm: add semicolon after catch statement
+
+When attempting to initialize a repository object in an unsafe
+directory, a syntax error is reported (Can't use string as a HASH ref
+while strict refs in use). Fix this runtime error by adding the required
+semicolon after the catch statement.
+
+Without the semicolon, the result of the following line (i.e., the
+result of Cwd::abs_path) is passed as the third argument to Error.pm's
+catch function. That function expects that its third argument,
+$clauses, is a hash reference, and trying to access a string as a hash
+reference is a fatal error.
+
+[1] https://lore.kernel.org/git/20221011182607.f1113fff-9333-427d-ba45-741a78fa6040@korelogic.com/
+
+Reported-by: Hank Leininger <hlein@korelogic.com>
+Signed-off-by: Michael McClimon <michael@mcclimon.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ perl/Git.pm | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/perl/Git.pm b/perl/Git.pm
+index 080cdc2a21..cf15ead664 100644
+--- a/perl/Git.pm
++++ b/perl/Git.pm
+@@ -217,7 +217,7 @@ sub repository {
+ 			} catch Git::Error::Command with {
+ 				# Mimic git-rev-parse --git-dir error message:
+ 				throw Error::Simple("fatal: Not a git repository: $dir");
+-			}
++			};
+ 
+ 			$opts{Repository} = Cwd::abs_path($dir);
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

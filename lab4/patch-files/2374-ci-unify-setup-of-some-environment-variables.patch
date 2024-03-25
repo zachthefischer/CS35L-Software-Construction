@@ -1,0 +1,82 @@
+From 9f17bef9a6ead213ea62d399baa4c67e1e89398b Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 9 Nov 2023 09:05:42 +0100
+Subject: [PATCH 2374/2871] ci: unify setup of some environment variables
+
+Both GitHub Actions and Azure Pipelines set up the environment variables
+GIT_TEST_OPTS, GIT_PROVE_OPTS and MAKEFLAGS. And while most values are
+actually the same, the setup is completely duplicate. With the upcoming
+support for GitLab CI this duplication would only extend even further.
+
+Unify the setup of those environment variables so that only the uncommon
+parts are separated. While at it, we also perform some additional small
+improvements:
+
+    - We now always pass `--state=failed,slow,save` via GIT_PROVE_OPTS.
+      It doesn't hurt on platforms where we don't persist the state, so
+      this further reduces boilerplate.
+
+    - When running on Windows systems we set `--no-chain-lint` and
+      `--no-bin-wrappers`. Interestingly though, we did so _after_
+      already having exported the respective environment variables.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 27 +++++++++++++++++----------
+ 1 file changed, 17 insertions(+), 10 deletions(-)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 9abecf18b0..33be93852f 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -174,11 +174,8 @@ then
+ 	# among *all* phases)
+ 	cache_dir="$HOME/test-cache/$SYSTEM_PHASENAME"
+ 
+-	export GIT_PROVE_OPTS="--timer --jobs 10 --state=failed,slow,save"
+-	export GIT_TEST_OPTS="--verbose-log -x --write-junit-xml"
+-	MAKEFLAGS="$MAKEFLAGS --jobs=10"
+-	test windows_nt != "$CI_OS_NAME" ||
+-	GIT_TEST_OPTS="--no-chain-lint --no-bin-wrappers $GIT_TEST_OPTS"
++	GIT_TEST_OPTS="--write-junit-xml"
++	JOBS=10
+ elif test true = "$GITHUB_ACTIONS"
+ then
+ 	CI_TYPE=github-actions
+@@ -198,17 +195,27 @@ then
+ 
+ 	cache_dir="$HOME/none"
+ 
+-	export GIT_PROVE_OPTS="--timer --jobs 10"
+-	export GIT_TEST_OPTS="--verbose-log -x --github-workflow-markup"
+-	MAKEFLAGS="$MAKEFLAGS --jobs=10"
+-	test windows != "$CI_OS_NAME" ||
+-	GIT_TEST_OPTS="--no-chain-lint --no-bin-wrappers $GIT_TEST_OPTS"
++	GIT_TEST_OPTS="--github-workflow-markup"
++	JOBS=10
+ else
+ 	echo "Could not identify CI type" >&2
+ 	env >&2
+ 	exit 1
+ fi
+ 
++MAKEFLAGS="$MAKEFLAGS --jobs=$JOBS"
++GIT_PROVE_OPTS="--timer --jobs $JOBS --state=failed,slow,save"
++
++GIT_TEST_OPTS="$GIT_TEST_OPTS --verbose-log -x"
++case "$CI_OS_NAME" in
++windows|windows_nt)
++	GIT_TEST_OPTS="$GIT_TEST_OPTS --no-chain-lint --no-bin-wrappers"
++	;;
++esac
++
++export GIT_TEST_OPTS
++export GIT_PROVE_OPTS
++
+ good_trees_file="$cache_dir/good-trees"
+ 
+ mkdir -p "$cache_dir"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,51 @@
+From fd3fe4914a59df93aeb67572d8932d2ae4cedb0d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:39 -0400
+Subject: [PATCH 2028/2871] bundle-uri: mark unused parameters in callbacks
+
+The first hunk is similar to 02c3c59e62 (hashmap: mark unused callback
+parameters, 2022-08-19), but was added after that commit.
+
+The other two are used with for_all_bundles_in_list(), but don't use
+their void data pointer.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 4b5c49b93d..8492fffd2f 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -20,7 +20,7 @@ static struct {
+ 	{ BUNDLE_HEURISTIC_CREATIONTOKEN, "creationToken" },
+ };
+ 
+-static int compare_bundles(const void *hashmap_cmp_fn_data,
++static int compare_bundles(const void *hashmap_cmp_fn_data UNUSED,
+ 			   const struct hashmap_entry *he1,
+ 			   const struct hashmap_entry *he2,
+ 			   const void *id)
+@@ -45,7 +45,7 @@ void init_bundle_list(struct bundle_list *list)
+ }
+ 
+ static int clear_remote_bundle_info(struct remote_bundle_info *bundle,
+-				    void *data)
++				    void *data UNUSED)
+ {
+ 	FREE_AND_NULL(bundle->id);
+ 	FREE_AND_NULL(bundle->uri);
+@@ -779,7 +779,7 @@ static int unbundle_all_bundles(struct repository *r,
+ 	return 0;
+ }
+ 
+-static int unlink_bundle(struct remote_bundle_info *info, void *data)
++static int unlink_bundle(struct remote_bundle_info *info, void *data UNUSED)
+ {
+ 	if (info->file)
+ 		unlink_or_warn(info->file);
+-- 
+2.39.3 (Apple Git-145)
+

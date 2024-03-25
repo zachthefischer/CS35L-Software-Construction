@@ -1,0 +1,35 @@
+From fef08dd32edb3ca751a51a0b88cf96b84fa79be8 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 23 Aug 2022 17:28:11 +0000
+Subject: [PATCH 1272/2871] ci: update 'static-analysis' to Ubuntu 22.04
+
+GitHub Actions scheduled a brownout of Ubuntu 18.04, which canceled all
+runs of the 'static-analysis' job in our CI runs. Update to 22.04 to
+avoid this as the brownout later turns into a complete deprecation.
+
+The use of 18.04 was set in d051ed77ee6 (.github/workflows/main.yml: run
+static-analysis on bionic, 2021-02-08) due to the lack of Coccinelle
+being available on 20.04 (which continues today).
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index a3fbbe6398..8c61544f67 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -340,7 +340,7 @@ jobs:
+     if: needs.ci-config.outputs.enabled == 'yes'
+     env:
+       jobname: StaticAnalysis
+-    runs-on: ubuntu-18.04
++    runs-on: ubuntu-22.04
+     steps:
+     - uses: actions/checkout@v1
+     - run: ci/install-dependencies.sh
+-- 
+2.39.3 (Apple Git-145)
+

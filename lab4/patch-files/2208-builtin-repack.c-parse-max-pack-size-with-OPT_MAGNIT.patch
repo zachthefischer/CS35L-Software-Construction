@@ -1,0 +1,60 @@
+From b5b1f4c0ecf20c069d0301732edfdbfec167aa0c Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 2 Oct 2023 20:44:29 -0400
+Subject: [PATCH 2208/2871] builtin/repack.c: parse `--max-pack-size` with
+ OPT_MAGNITUDE
+
+The repack builtin takes a `--max-pack-size` command-line argument which
+it uses to feed into any of the pack-objects children that it may spawn
+when generating a new pack.
+
+This option is parsed with OPT_STRING, meaning that we'll accept
+anything as input, punting on more fine-grained validation until we get
+down into pack-objects.
+
+This is fine, but it's wasteful to spend an entire sub-process just to
+figure out that one of its option is bogus. Instead, parse the value of
+`--max-pack-size` with OPT_MAGNITUDE in 'git repack', and then pass the
+known-good result down to pack-objects.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/repack.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/repack.c b/builtin/repack.c
+index 529e13120d..8a5bbb9cba 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -51,7 +51,7 @@ struct pack_objects_args {
+ 	const char *window_memory;
+ 	const char *depth;
+ 	const char *threads;
+-	const char *max_pack_size;
++	unsigned long max_pack_size;
+ 	int no_reuse_delta;
+ 	int no_reuse_object;
+ 	int quiet;
+@@ -242,7 +242,7 @@ static void prepare_pack_objects(struct child_process *cmd,
+ 	if (args->threads)
+ 		strvec_pushf(&cmd->args, "--threads=%s", args->threads);
+ 	if (args->max_pack_size)
+-		strvec_pushf(&cmd->args, "--max-pack-size=%s", args->max_pack_size);
++		strvec_pushf(&cmd->args, "--max-pack-size=%lu", args->max_pack_size);
+ 	if (args->no_reuse_delta)
+ 		strvec_pushf(&cmd->args, "--no-reuse-delta");
+ 	if (args->no_reuse_object)
+@@ -946,7 +946,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
+ 				N_("limits the maximum delta depth")),
+ 		OPT_STRING(0, "threads", &po_args.threads, N_("n"),
+ 				N_("limits the maximum number of threads")),
+-		OPT_STRING(0, "max-pack-size", &po_args.max_pack_size, N_("bytes"),
++		OPT_MAGNITUDE(0, "max-pack-size", &po_args.max_pack_size,
+ 				N_("maximum size of each packfile")),
+ 		OPT_BOOL(0, "pack-kept-objects", &pack_kept_objects,
+ 				N_("repack objects in packs marked with .keep")),
+-- 
+2.39.3 (Apple Git-145)
+

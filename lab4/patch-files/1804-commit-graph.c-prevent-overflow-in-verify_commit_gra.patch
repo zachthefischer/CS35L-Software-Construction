@@ -1,0 +1,41 @@
+From 9a25cad7e0228bfd16f2c41b34e9d71a4217085c Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Jul 2023 19:38:19 -0400
+Subject: [PATCH 1804/2871] commit-graph.c: prevent overflow in
+ `verify_commit_graph()`
+
+In a similar spirit as previous commits, ensure that we don't overflow
+when trying to read an OID out of an existing commit-graph during
+verification.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ commit-graph.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/commit-graph.c b/commit-graph.c
+index 54697e7a4d..dc5bcfe05b 100644
+--- a/commit-graph.c
++++ b/commit-graph.c
+@@ -2585,7 +2585,7 @@ int verify_commit_graph(struct repository *r, struct commit_graph *g, int flags)
+ 	for (i = 0; i < g->num_commits; i++) {
+ 		struct commit *graph_commit;
+ 
+-		oidread(&cur_oid, g->chunk_oid_lookup + g->hash_len * i);
++		oidread(&cur_oid, g->chunk_oid_lookup + st_mult(g->hash_len, i));
+ 
+ 		if (i && oidcmp(&prev_oid, &cur_oid) >= 0)
+ 			graph_report(_("commit-graph has incorrect OID order: %s then %s"),
+@@ -2633,7 +2633,7 @@ int verify_commit_graph(struct repository *r, struct commit_graph *g, int flags)
+ 		timestamp_t generation;
+ 
+ 		display_progress(progress, i + 1);
+-		oidread(&cur_oid, g->chunk_oid_lookup + g->hash_len * i);
++		oidread(&cur_oid, g->chunk_oid_lookup + st_mult(g->hash_len, i));
+ 
+ 		graph_commit = lookup_commit(r, &cur_oid);
+ 		odb_commit = (struct commit *)create_object(r, &cur_oid, alloc_commit_node(r));
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,29 @@
+From e6397c5cc83979d4808e9aeeb0276d3302987782 Mon Sep 17 00:00:00 2001
+From: Josh Soref <jsoref@gmail.com>
+Date: Thu, 28 Dec 2023 04:55:17 +0000
+Subject: [PATCH 2614/2871] CodingGuidelines: write punctuation marks
+
+- Match style in Release Notes
+
+Signed-off-by: Josh Soref <jsoref@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/CodingGuidelines | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/CodingGuidelines b/Documentation/CodingGuidelines
+index b64e52fdbe..169d4eb3ac 100644
+--- a/Documentation/CodingGuidelines
++++ b/Documentation/CodingGuidelines
+@@ -578,7 +578,7 @@ Externally Visible Names
+    . The variable name describes the effect of tweaking this knob.
+ 
+    The section and variable names that consist of multiple words are
+-   formed by concatenating the words without punctuations (e.g. `-`),
++   formed by concatenating the words without punctuation marks (e.g. `-`),
+    and are broken using bumpyCaps in documentation as a hint to the
+    reader.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,58 @@
+From 219d54ae8c96bcb84d0216797af7572fff7199b8 Mon Sep 17 00:00:00 2001
+From: Simon Ser <contact@emersion.fr>
+Date: Thu, 9 Nov 2023 11:19:56 +0000
+Subject: [PATCH 2398/2871] format-patch: fix ignored encode_email_headers for
+ cover letter
+
+When writing the cover letter, the encode_email_headers option was
+ignored. That is, UTF-8 subject lines and email addresses were
+written out as-is, without any Q-encoding, even if
+--encode-email-headers was passed on the command line.
+
+This is due to encode_email_headers not being copied over from
+struct rev_info to struct pretty_print_context. Fix that and add
+a test.
+
+Signed-off-by: Simon Ser <contact@emersion.fr>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/log.c           |  1 +
+ t/t4014-format-patch.sh | 10 ++++++++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/builtin/log.c b/builtin/log.c
+index ba775d7b5c..87fd1c8560 100644
+--- a/builtin/log.c
++++ b/builtin/log.c
+@@ -1364,6 +1364,7 @@ static void make_cover_letter(struct rev_info *rev, int use_separate_file,
+ 	pp.date_mode.type = DATE_RFC2822;
+ 	pp.rev = rev;
+ 	pp.print_email_subject = 1;
++	pp.encode_email_headers = rev->encode_email_headers;
+ 	pp_user_info(&pp, NULL, &sb, committer, encoding);
+ 	prepare_cover_text(&pp, description_file, branch_name, &sb,
+ 			   encoding, need_8bit_cte);
+diff --git a/t/t4014-format-patch.sh b/t/t4014-format-patch.sh
+index 5ced27ed45..e37a1411ee 100755
+--- a/t/t4014-format-patch.sh
++++ b/t/t4014-format-patch.sh
+@@ -1906,6 +1906,16 @@ body" &&
+ 	grep "^body$" actual
+ '
+ 
++test_expect_success 'cover letter with --cover-from-description subject (UTF-8 subject line)' '
++	test_config branch.rebuild-1.description "Café?
++
++body" &&
++	git checkout rebuild-1 &&
++	git format-patch --stdout --cover-letter --cover-from-description subject --encode-email-headers main >actual &&
++	grep "^Subject: \[PATCH 0/2\] =?UTF-8?q?Caf=C3=A9=3F?=$" actual &&
++	! grep "Café" actual
++'
++
+ test_expect_success 'cover letter with format.coverFromDescription = auto (short subject line)' '
+ 	test_config branch.rebuild-1.description "config subject
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,50 @@
+From 004c9432f7e4c9f1f3b915b0785d0f175dc664fe Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:26:31 -0500
+Subject: [PATCH 2510/2871] gpg-interface: drop pointless
+ config_error_nonbool() checks
+
+Config callbacks which use git_config_string() or git_config_pathname()
+have no need to check for a NULL value. This is handled automatically
+by those helpers.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gpg-interface.c | 15 +++------------
+ 1 file changed, 3 insertions(+), 12 deletions(-)
+
+diff --git a/gpg-interface.c b/gpg-interface.c
+index 48f43c5a21..25c42cb9fd 100644
+--- a/gpg-interface.c
++++ b/gpg-interface.c
+@@ -762,23 +762,14 @@ static int git_gpg_config(const char *var, const char *value,
+ 		return 0;
+ 	}
+ 
+-	if (!strcmp(var, "gpg.ssh.defaultkeycommand")) {
+-		if (!value)
+-			return config_error_nonbool(var);
++	if (!strcmp(var, "gpg.ssh.defaultkeycommand"))
+ 		return git_config_string(&ssh_default_key_command, var, value);
+-	}
+ 
+-	if (!strcmp(var, "gpg.ssh.allowedsignersfile")) {
+-		if (!value)
+-			return config_error_nonbool(var);
++	if (!strcmp(var, "gpg.ssh.allowedsignersfile"))
+ 		return git_config_pathname(&ssh_allowed_signers, var, value);
+-	}
+ 
+-	if (!strcmp(var, "gpg.ssh.revocationfile")) {
+-		if (!value)
+-			return config_error_nonbool(var);
++	if (!strcmp(var, "gpg.ssh.revocationfile"))
+ 		return git_config_pathname(&ssh_revocation_file, var, value);
+-	}
+ 
+ 	if (!strcmp(var, "gpg.program") || !strcmp(var, "gpg.openpgp.program"))
+ 		fmtname = "openpgp";
+-- 
+2.39.3 (Apple Git-145)
+

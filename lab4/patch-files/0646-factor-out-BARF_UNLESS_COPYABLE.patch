@@ -1,0 +1,48 @@
+From 1891846fa4d439be7f9a1a32c062f62cd863df2b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 1 Jan 2023 22:08:53 +0100
+Subject: [PATCH 0646/2871] factor out BARF_UNLESS_COPYABLE
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Move the common basic element type check of COPY_ARRAY and MOVE_ARRAY to
+a new macro.  This reduces code duplication and simplifies adding more
+elaborate checks.
+
+Suggested-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-compat-util.h | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/git-compat-util.h b/git-compat-util.h
+index 76e4b11131..940d03150c 100644
+--- a/git-compat-util.h
++++ b/git-compat-util.h
+@@ -1093,8 +1093,11 @@ int xstrncmpz(const char *s, const char *t, size_t len);
+ #define CALLOC_ARRAY(x, alloc) (x) = xcalloc((alloc), sizeof(*(x)))
+ #define REALLOC_ARRAY(x, alloc) (x) = xrealloc((x), st_mult(sizeof(*(x)), (alloc)))
+ 
++#define BARF_UNLESS_COPYABLE(dst, src) \
++	BUILD_ASSERT_OR_ZERO(sizeof(*(dst)) == sizeof(*(src)))
++
+ #define COPY_ARRAY(dst, src, n) copy_array((dst), (src), (n), sizeof(*(dst)) + \
+-	BUILD_ASSERT_OR_ZERO(sizeof(*(dst)) == sizeof(*(src))))
++	BARF_UNLESS_COPYABLE((dst), (src)))
+ static inline void copy_array(void *dst, const void *src, size_t n, size_t size)
+ {
+ 	if (n)
+@@ -1102,7 +1105,7 @@ static inline void copy_array(void *dst, const void *src, size_t n, size_t size)
+ }
+ 
+ #define MOVE_ARRAY(dst, src, n) move_array((dst), (src), (n), sizeof(*(dst)) + \
+-	BUILD_ASSERT_OR_ZERO(sizeof(*(dst)) == sizeof(*(src))))
++	BARF_UNLESS_COPYABLE((dst), (src)))
+ static inline void move_array(void *dst, const void *src, size_t n, size_t size)
+ {
+ 	if (n)
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,105 @@
+From dda4fc1a849e2407c30b4619d64221c2b38bd570 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 14 Dec 2022 11:20:19 -0500
+Subject: [PATCH 0574/2871] ref-filter: factor out "unrecognized %(foo) arg"
+ errors
+
+Atom parsers that take arguments generally have a catch-all for "this
+arg is not recognized". Most of them use the same printf template, which
+is good, because it makes life easier for translators. Let's pull this
+template into a helper function, which makes the code in the parsers
+shorter and avoids any possibility of differences.
+
+As with the previous commit, we'll pick an arbitrary atom to make sure
+the test suite covers this code.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c            | 16 +++++++++++-----
+ t/t6300-for-each-ref.sh |  6 ++++++
+ 2 files changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index 639b18ab36..271d619da9 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -234,6 +234,12 @@ static int err_no_arg(struct strbuf *sb, const char *name)
+ 	return -1;
+ }
+ 
++static int err_bad_arg(struct strbuf *sb, const char *name, const char *arg)
++{
++	strbuf_addf(sb, _("unrecognized %%(%s) argument: %s"), name, arg);
++	return -1;
++}
++
+ static int color_atom_parser(struct ref_format *format, struct used_atom *atom,
+ 			     const char *color_value, struct strbuf *err)
+ {
+@@ -347,7 +353,7 @@ static int objectsize_atom_parser(struct ref_format *format, struct used_atom *a
+ 		else
+ 			oi.info.disk_sizep = &oi.disk_size;
+ 	} else
+-		return strbuf_addf_ret(err, -1, _("unrecognized %%(%s) argument: %s"), "objectsize", arg);
++		return err_bad_arg(err, "objectsize", arg);
+ 	return 0;
+ }
+ 
+@@ -380,7 +386,7 @@ static int subject_atom_parser(struct ref_format *format, struct used_atom *atom
+ 	else if (!strcmp(arg, "sanitize"))
+ 		atom->u.contents.option = C_SUB_SANITIZE;
+ 	else
+-		return strbuf_addf_ret(err, -1, _("unrecognized %%(%s) argument: %s"), "subject", arg);
++		return err_bad_arg(err, "subject", arg);
+ 	return 0;
+ }
+ 
+@@ -434,7 +440,7 @@ static int contents_atom_parser(struct ref_format *format, struct used_atom *ato
+ 		if (strtoul_ui(arg, 10, &atom->u.contents.nlines))
+ 			return strbuf_addf_ret(err, -1, _("positive value expected contents:lines=%s"), arg);
+ 	} else
+-		return strbuf_addf_ret(err, -1, _("unrecognized %%(%s) argument: %s"), "contents", arg);
++		return err_bad_arg(err, "contents", arg);
+ 	return 0;
+ }
+ 
+@@ -446,7 +452,7 @@ static int raw_atom_parser(struct ref_format *format, struct used_atom *atom,
+ 	else if (!strcmp(arg, "size"))
+ 		atom->u.raw_data.option = RAW_LENGTH;
+ 	else
+-		return strbuf_addf_ret(err, -1, _("unrecognized %%(%s) argument: %s"), "raw", arg);
++		return err_bad_arg(err, "raw", arg);
+ 	return 0;
+ }
+ 
+@@ -563,7 +569,7 @@ static int if_atom_parser(struct ref_format *format, struct used_atom *atom,
+ 	} else if (skip_prefix(arg, "notequals=", &atom->u.if_then_else.str)) {
+ 		atom->u.if_then_else.cmp_status = COMPARE_UNEQUAL;
+ 	} else
+-		return strbuf_addf_ret(err, -1, _("unrecognized %%(%s) argument: %s"), "if", arg);
++		return err_bad_arg(err, "if", arg);
+ 	return 0;
+ }
+ 
+diff --git a/t/t6300-for-each-ref.sh b/t/t6300-for-each-ref.sh
+index 8d99658ef8..010ba5a2cb 100755
+--- a/t/t6300-for-each-ref.sh
++++ b/t/t6300-for-each-ref.sh
+@@ -1248,6 +1248,12 @@ test_expect_success 'HEAD atom does not take arguments' '
+ 	test_cmp expect err
+ '
+ 
++test_expect_success 'subject atom rejects unknown arguments' '
++	test_must_fail git for-each-ref --format="%(subject:foo)" 2>err &&
++	echo "fatal: unrecognized %(subject) argument: foo" >expect &&
++	test_cmp expect err
++'
++
+ test_expect_success 'trailer parsing not fooled by --- line' '
+ 	git commit --allow-empty -F - <<-\EOF &&
+ 	this is the subject
+-- 
+2.39.3 (Apple Git-145)
+

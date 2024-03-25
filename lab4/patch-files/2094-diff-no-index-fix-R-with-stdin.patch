@@ -1,0 +1,68 @@
+From 48944f214c7cd7402e70e661cf9efb8dd118fe0c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sun, 10 Sep 2023 00:12:52 +0200
+Subject: [PATCH 2094/2871] diff --no-index: fix -R with stdin
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When -R is given, queue_diff() swaps the mode and name variables of the
+two files to produce a reverse diff.  1e3f26542a (diff --no-index:
+support reading from named pipes, 2023-07-05) added variables that
+indicate whether files are special, i.e named pipes or - for stdin.
+These new variables were not swapped, though, which broke the handling
+of stdin with with -R.  Swap them like the other metadata variables.
+
+Reported-by: Martin Storsjö <martin@martin.st>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff-no-index.c          |  1 +
+ t/t4053-diff-no-index.sh | 19 +++++++++++++++++++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/diff-no-index.c b/diff-no-index.c
+index 4771cf02aa..3e573505e0 100644
+--- a/diff-no-index.c
++++ b/diff-no-index.c
+@@ -232,6 +232,7 @@ static int queue_diff(struct diff_options *o,
+ 		if (o->flags.reverse_diff) {
+ 			SWAP(mode1, mode2);
+ 			SWAP(name1, name2);
++			SWAP(special1, special2);
+ 		}
+ 
+ 		d1 = noindex_filespec(name1, mode1, special1);
+diff --git a/t/t4053-diff-no-index.sh b/t/t4053-diff-no-index.sh
+index 6781cc9078..5f059f65fc 100755
+--- a/t/t4053-diff-no-index.sh
++++ b/t/t4053-diff-no-index.sh
+@@ -224,6 +224,25 @@ test_expect_success "diff --no-index treats '-' as stdin" '
+ 	test_must_be_empty actual
+ '
+ 
++test_expect_success "diff --no-index -R treats '-' as stdin" '
++	cat >expect <<-EOF &&
++	diff --git b/a/1 a/-
++	index $(git hash-object --stdin <a/1)..$ZERO_OID 100644
++	--- b/a/1
++	+++ a/-
++	@@ -1 +1 @@
++	-1
++	+x
++	EOF
++
++	test_write_lines x | test_expect_code 1 \
++		git -c core.abbrev=no diff --no-index -R -- - a/1 >actual &&
++	test_cmp expect actual &&
++
++	test_write_lines 1 | git diff --no-index -R -- a/1 - >actual &&
++	test_must_be_empty actual
++'
++
+ test_expect_success 'diff --no-index refuses to diff stdin and a directory' '
+ 	test_must_fail git diff --no-index -- - a </dev/null 2>err &&
+ 	grep "fatal: cannot compare stdin to a directory" err
+-- 
+2.39.3 (Apple Git-145)
+

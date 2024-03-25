@@ -1,0 +1,66 @@
+From 85a62951e5afc43450779a361da1367c1edee06c Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 1 Jun 2023 14:03:51 -0400
+Subject: [PATCH 1545/2871] ci: use clang for ASan/UBSan checks
+
+Both gcc and clang support the "address" and "undefined" sanitizers.
+However, they may produce different results. We've seen at least two
+real world cases where gcc missed a UBSan problem but clang found it:
+
+  1. Clang's UBSan (using clang 14.0.6) found a string index that was
+     subtracted to "-1", causing an out-of-bounds read (curiously this
+     didn't trigger ASan, but that may be because the string was in the
+     argv memory, not stack or heap). Using gcc (version 12.2.0) didn't
+     find the same problem.
+
+     Original thread:
+     https://lore.kernel.org/git/20230519005447.GA2955320@coredump.intra.peff.net/
+
+  2. Clang's UBSan (using clang 4.0.1) complained about pointer
+     arithmetic with NULL, but gcc at the time did not. This was in
+     2017, and modern gcc does seem to find the issue, though.
+
+     Original thread:
+     https://lore.kernel.org/git/32a8b949-638a-1784-7fba-948ae32206fc@web.de/
+
+Since we don't otherwise have a particular preference for one compiler
+over the other for this test, let's switch to the one that we think may
+be more thorough.
+
+Note that it's entirely possible that the two are simply _different_,
+and we are trading off problems that gcc would find that clang wouldn't.
+However, my subjective and anecdotal experience has been that clang's
+sanitizer support is a bit more mature (e.g., I recall other oddities
+around leak-checking where clang performed more sensibly).
+
+Obviously running both and cross-checking the results would give us the
+best coverage, but that's very expensive to run (and these are already
+some of our most expensive CI jobs). So let's use clang as our best
+guess, and we can re-evaluate if we get more data points.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 30492eacdd..487ad31e66 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -274,10 +274,10 @@ jobs:
+             cc: gcc
+             pool: ubuntu-latest
+           - jobname: linux-asan
+-            cc: gcc
++            cc: clang
+             pool: ubuntu-latest
+           - jobname: linux-ubsan
+-            cc: gcc
++            cc: clang
+             pool: ubuntu-latest
+     env:
+       CC: ${{matrix.vector.cc}}
+-- 
+2.39.3 (Apple Git-145)
+

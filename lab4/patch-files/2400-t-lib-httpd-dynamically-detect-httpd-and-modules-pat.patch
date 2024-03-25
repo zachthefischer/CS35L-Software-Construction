@@ -1,0 +1,79 @@
+From 7d05974d725a68b2498b2b0041e5e1e01c0187ac Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Nov 2023 09:17:00 +0100
+Subject: [PATCH 2400/2871] t/lib-httpd: dynamically detect httpd and modules
+ path
+
+In order to set up the Apache httpd server, we need to locate both the
+httpd binary and its default module path. This is done with a hardcoded
+list of locations that we scan. While this works okayish with distros
+that more-or-less follow the Filesystem Hierarchy Standard, it falls
+apart on others like NixOS that don't.
+
+While it is possible to specify these paths via `LIB_HTTPD_PATH` and
+`LIB_HTTPD_MODULE_PATH`, it is not a nice experience for the developer
+to figure out how to set those up. And in fact we can do better by
+dynamically detecting both httpd and its module path at runtime:
+
+    - The httpd binary can be located via PATH.
+
+    - The module directory can (in many cases) be derived via the
+      `HTTPD_ROOT` compile-time variable.
+
+Amend the code to do so.
+
+Note that the new runtime-detected paths will only be used as a fallback
+in case none of the hardcoded paths are usable. For the PATH lookup this
+is because httpd is typically installed into "/usr/sbin", which is often
+not included in the user's PATH variable. And the module path detection
+relies on a configured httpd installation and may thus not work in all
+cases, either.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-httpd.sh | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/t/lib-httpd.sh b/t/lib-httpd.sh
+index 5fe3c8ab69..03493ee72b 100644
+--- a/t/lib-httpd.sh
++++ b/t/lib-httpd.sh
+@@ -55,21 +55,30 @@ fi
+ 
+ HTTPD_PARA=""
+ 
+-for DEFAULT_HTTPD_PATH in '/usr/sbin/httpd' '/usr/sbin/apache2'
++for DEFAULT_HTTPD_PATH in '/usr/sbin/httpd' \
++			  '/usr/sbin/apache2' \
++			  "$(command -v httpd)" \
++			  "$(command -v apache2)"
+ do
+-	if test -x "$DEFAULT_HTTPD_PATH"
++	if test -n "$DEFAULT_HTTPD_PATH" && test -x "$DEFAULT_HTTPD_PATH"
+ 	then
+ 		break
+ 	fi
+ done
+ 
++if test -x "$DEFAULT_HTTPD_PATH"
++then
++	DETECTED_HTTPD_ROOT="$("$DEFAULT_HTTPD_PATH" -V 2>/dev/null | sed -n 's/^ -D HTTPD_ROOT="\(.*\)"$/\1/p')"
++fi
++
+ for DEFAULT_HTTPD_MODULE_PATH in '/usr/libexec/apache2' \
+ 				 '/usr/lib/apache2/modules' \
+ 				 '/usr/lib64/httpd/modules' \
+ 				 '/usr/lib/httpd/modules' \
+-				 '/usr/libexec/httpd'
++				 '/usr/libexec/httpd' \
++				 "${DETECTED_HTTPD_ROOT:+${DETECTED_HTTPD_ROOT}/modules}"
+ do
+-	if test -d "$DEFAULT_HTTPD_MODULE_PATH"
++	if test -n "$DEFAULT_HTTPD_MODULE_PATH" && test -d "$DEFAULT_HTTPD_MODULE_PATH"
+ 	then
+ 		break
+ 	fi
+-- 
+2.39.3 (Apple Git-145)
+

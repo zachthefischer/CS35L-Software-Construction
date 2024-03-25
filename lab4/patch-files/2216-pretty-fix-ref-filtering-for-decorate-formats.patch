@@ -1,0 +1,57 @@
+From 2b09d16abac5c0cf389098a58f113f2053357dee Mon Sep 17 00:00:00 2001
+From: Andy Koppe <andy.koppe@gmail.com>
+Date: Sun, 8 Oct 2023 21:23:07 +0100
+Subject: [PATCH 2216/2871] pretty: fix ref filtering for %(decorate) formats
+
+Mark pretty formats containing "%(decorate" as requiring decoration in
+userformat_find_requirements(), same as "%d" and "%D".
+
+Without this, cmd_log_init_finish() didn't invoke load_ref_decorations()
+with the decoration_filter it puts together, and hence filtering options
+such as --decorate-refs were quietly ignored.
+
+Amend one of the %(decorate) checks in t4205-log-pretty-formats.sh to
+test this.
+
+Signed-off-by: Andy Koppe <andy.koppe@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pretty.c                      | 4 ++++
+ t/t4205-log-pretty-formats.sh | 6 +++---
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/pretty.c b/pretty.c
+index 7f3abb676c..cf964b060c 100644
+--- a/pretty.c
++++ b/pretty.c
+@@ -1961,6 +1961,10 @@ void userformat_find_requirements(const char *fmt, struct userformat_want *w)
+ 		case 'D':
+ 			w->decorate = 1;
+ 			break;
++		case '(':
++			if (starts_with(fmt + 1, "decorate"))
++				w->decorate = 1;
++			break;
+ 		}
+ 	}
+ }
+diff --git a/t/t4205-log-pretty-formats.sh b/t/t4205-log-pretty-formats.sh
+index 16626e4fe9..5aabc9f7d8 100755
+--- a/t/t4205-log-pretty-formats.sh
++++ b/t/t4205-log-pretty-formats.sh
+@@ -590,9 +590,9 @@ test_expect_success 'pretty format %decorate' '
+ 	git log --format="%(decorate:prefix=,suffix=)" -1 >actual2 &&
+ 	test_cmp expect2 actual2 &&
+ 
+-	echo "[ HEAD -> foo; tag: bar; qux ]" >expect3 &&
+-	git log --format="%(decorate:prefix=[ ,suffix= ],separator=%x3B )" \
+-		-1 >actual3 &&
++	echo "[ bar; qux; foo ]" >expect3 &&
++	git log --format="%(decorate:prefix=[ ,suffix= ],separator=%x3B ,tag=)" \
++		--decorate-refs=refs/ -1 >actual3 &&
+ 	test_cmp expect3 actual3 &&
+ 
+ 	# Try with a typo (in "separator"), in which case the placeholder should
+-- 
+2.39.3 (Apple Git-145)
+

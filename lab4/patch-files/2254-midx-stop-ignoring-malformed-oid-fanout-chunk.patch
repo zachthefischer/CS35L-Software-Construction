@@ -1,0 +1,104 @@
+From e3c9600397bde3dcd2f628ff1eec098f79f79b67 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 9 Oct 2023 16:59:19 -0400
+Subject: [PATCH 2254/2871] midx: stop ignoring malformed oid fanout chunk
+
+When we load the oid-fanout chunk, our callback checks that its size is
+reasonable and returns an error if not. However, the caller only checks
+our return value against CHUNK_NOT_FOUND, so we end up ignoring the
+error completely! Using a too-small fanout table means we end up
+accessing random memory for the fanout and segfault.
+
+We can fix this by checking for any non-zero return value, rather than
+just CHUNK_NOT_FOUND, and adjusting our error message to cover both
+cases. We could handle each error code individually, but there's not
+much point for such a rare case. The extra message produced in the
+callback makes it clear what is going on.
+
+The same pattern is used in the adjacent code. Those cases are actually
+OK for now because they do not use a custom callback, so the only error
+they can get is CHUNK_NOT_FOUND. But let's convert them, as this is an
+accident waiting to happen (especially as we convert some of them away
+from pair_chunk). The error messages are more verbose, but it should be
+rare for a user to see these anyway.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ midx.c                      | 16 ++++++++--------
+ t/t5319-multi-pack-index.sh | 20 +++++++++++++++++++-
+ 2 files changed, 27 insertions(+), 9 deletions(-)
+
+diff --git a/midx.c b/midx.c
+index 3165218ab5..21d7dd15ef 100644
+--- a/midx.c
++++ b/midx.c
+@@ -143,14 +143,14 @@ struct multi_pack_index *load_multi_pack_index(const char *object_dir, int local
+ 				   MIDX_HEADER_SIZE, m->num_chunks))
+ 		goto cleanup_fail;
+ 
+-	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_PACKNAMES, &m->chunk_pack_names) == CHUNK_NOT_FOUND)
+-		die(_("multi-pack-index missing required pack-name chunk"));
+-	if (read_chunk(cf, MIDX_CHUNKID_OIDFANOUT, midx_read_oid_fanout, m) == CHUNK_NOT_FOUND)
+-		die(_("multi-pack-index missing required OID fanout chunk"));
+-	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_OIDLOOKUP, &m->chunk_oid_lookup) == CHUNK_NOT_FOUND)
+-		die(_("multi-pack-index missing required OID lookup chunk"));
+-	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_OBJECTOFFSETS, &m->chunk_object_offsets) == CHUNK_NOT_FOUND)
+-		die(_("multi-pack-index missing required object offsets chunk"));
++	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_PACKNAMES, &m->chunk_pack_names))
++		die(_("multi-pack-index required pack-name chunk missing or corrupted"));
++	if (read_chunk(cf, MIDX_CHUNKID_OIDFANOUT, midx_read_oid_fanout, m))
++		die(_("multi-pack-index required OID fanout chunk missing or corrupted"));
++	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_OIDLOOKUP, &m->chunk_oid_lookup))
++		die(_("multi-pack-index required OID lookup chunk missing or corrupted"));
++	if (pair_chunk_unsafe(cf, MIDX_CHUNKID_OBJECTOFFSETS, &m->chunk_object_offsets))
++		die(_("multi-pack-index required object offsets chunk missing or corrupted"));
+ 
+ 	pair_chunk_unsafe(cf, MIDX_CHUNKID_LARGEOFFSETS, &m->chunk_large_offsets);
+ 
+diff --git a/t/t5319-multi-pack-index.sh b/t/t5319-multi-pack-index.sh
+index 1bcc02004d..b8fe85aeba 100755
+--- a/t/t5319-multi-pack-index.sh
++++ b/t/t5319-multi-pack-index.sh
+@@ -2,6 +2,7 @@
+ 
+ test_description='multi-pack-indexes'
+ . ./test-lib.sh
++. "$TEST_DIRECTORY"/lib-chunk.sh
+ 
+ GIT_TEST_MULTI_PACK_INDEX=0
+ objdir=.git/objects
+@@ -438,7 +439,7 @@ test_expect_success 'verify extended chunk count' '
+ 
+ test_expect_success 'verify missing required chunk' '
+ 	corrupt_midx_and_verify $MIDX_BYTE_CHUNK_ID "\01" $objdir \
+-		"missing required"
++		"required pack-name chunk missing"
+ '
+ 
+ test_expect_success 'verify invalid chunk offset' '
+@@ -1055,4 +1056,21 @@ test_expect_success 'repack with delta islands' '
+ 	)
+ '
+ 
++corrupt_chunk () {
++	midx=.git/objects/pack/multi-pack-index &&
++	test_when_finished "rm -rf $midx" &&
++	git repack -ad --write-midx &&
++	corrupt_chunk_file $midx "$@"
++}
++
++test_expect_success 'reader notices too-small oid fanout chunk' '
++	corrupt_chunk OIDF clear 00000000 &&
++	test_must_fail git log 2>err &&
++	cat >expect <<-\EOF &&
++	error: multi-pack-index OID fanout is of the wrong size
++	fatal: multi-pack-index required OID fanout chunk missing or corrupted
++	EOF
++	test_cmp expect err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

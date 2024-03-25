@@ -1,0 +1,124 @@
+From b49529230d512c9a9551e064e3181bc8c1264880 Mon Sep 17 00:00:00 2001
+From: Karthik Nayak <karthik.188@gmail.com>
+Date: Thu, 26 Oct 2023 12:11:08 +0200
+Subject: [PATCH 2323/2871] rev-list: move `show_commit()` to the bottom
+
+The `show_commit()` function already depends on `finish_commit()`, and
+in the upcoming commit, we'll also add a dependency on
+`finish_object__ma()`. Since in C symbols must be declared before
+they're used, let's move `show_commit()` below both `finish_commit()`
+and `finish_object__ma()`, so the code is cleaner as a whole without the
+need for declarations.
+
+Signed-off-by: Karthik Nayak <karthik.188@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rev-list.c | 85 +++++++++++++++++++++++-----------------------
+ 1 file changed, 42 insertions(+), 43 deletions(-)
+
+diff --git a/builtin/rev-list.c b/builtin/rev-list.c
+index ea77489c38..98542e8b3c 100644
+--- a/builtin/rev-list.c
++++ b/builtin/rev-list.c
+@@ -100,7 +100,48 @@ static off_t get_object_disk_usage(struct object *obj)
+ 	return size;
+ }
+ 
+-static void finish_commit(struct commit *commit);
++static inline void finish_object__ma(struct object *obj)
++{
++	/*
++	 * Whether or not we try to dynamically fetch missing objects
++	 * from the server, we currently DO NOT have the object.  We
++	 * can either print, allow (ignore), or conditionally allow
++	 * (ignore) them.
++	 */
++	switch (arg_missing_action) {
++	case MA_ERROR:
++		die("missing %s object '%s'",
++		    type_name(obj->type), oid_to_hex(&obj->oid));
++		return;
++
++	case MA_ALLOW_ANY:
++		return;
++
++	case MA_PRINT:
++		oidset_insert(&missing_objects, &obj->oid);
++		return;
++
++	case MA_ALLOW_PROMISOR:
++		if (is_promisor_object(&obj->oid))
++			return;
++		die("unexpected missing %s object '%s'",
++		    type_name(obj->type), oid_to_hex(&obj->oid));
++		return;
++
++	default:
++		BUG("unhandled missing_action");
++		return;
++	}
++}
++
++static void finish_commit(struct commit *commit)
++{
++	free_commit_list(commit->parents);
++	commit->parents = NULL;
++	free_commit_buffer(the_repository->parsed_objects,
++			   commit);
++}
++
+ static void show_commit(struct commit *commit, void *data)
+ {
+ 	struct rev_list_info *info = data;
+@@ -219,48 +260,6 @@ static void show_commit(struct commit *commit, void *data)
+ 	finish_commit(commit);
+ }
+ 
+-static void finish_commit(struct commit *commit)
+-{
+-	free_commit_list(commit->parents);
+-	commit->parents = NULL;
+-	free_commit_buffer(the_repository->parsed_objects,
+-			   commit);
+-}
+-
+-static inline void finish_object__ma(struct object *obj)
+-{
+-	/*
+-	 * Whether or not we try to dynamically fetch missing objects
+-	 * from the server, we currently DO NOT have the object.  We
+-	 * can either print, allow (ignore), or conditionally allow
+-	 * (ignore) them.
+-	 */
+-	switch (arg_missing_action) {
+-	case MA_ERROR:
+-		die("missing %s object '%s'",
+-		    type_name(obj->type), oid_to_hex(&obj->oid));
+-		return;
+-
+-	case MA_ALLOW_ANY:
+-		return;
+-
+-	case MA_PRINT:
+-		oidset_insert(&missing_objects, &obj->oid);
+-		return;
+-
+-	case MA_ALLOW_PROMISOR:
+-		if (is_promisor_object(&obj->oid))
+-			return;
+-		die("unexpected missing %s object '%s'",
+-		    type_name(obj->type), oid_to_hex(&obj->oid));
+-		return;
+-
+-	default:
+-		BUG("unhandled missing_action");
+-		return;
+-	}
+-}
+-
+ static int finish_object(struct object *obj, const char *name UNUSED,
+ 			 void *cb_data)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

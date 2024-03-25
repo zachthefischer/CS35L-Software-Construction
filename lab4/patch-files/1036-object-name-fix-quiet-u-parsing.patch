@@ -1,0 +1,64 @@
+From dfbfdc521daece092a599959da79c3c134f26b3c Mon Sep 17 00:00:00 2001
+From: Felipe Contreras <felipe.contreras@gmail.com>
+Date: Thu, 16 Mar 2023 11:15:14 -0600
+Subject: [PATCH 1036/2871] object-name: fix quiet @{u} parsing
+
+Currently `git rev-parse --quiet @{u}` is not actually quiet when
+upstream isn't configured:
+
+  fatal: no upstream configured for branch 'foo'
+
+Make it so.
+
+Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-name.c                 | 5 +++--
+ t/t1507-rev-parse-upstream.sh | 5 +++++
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/object-name.c b/object-name.c
+index 2dd1a0f56e..d9f3a176d8 100644
+--- a/object-name.c
++++ b/object-name.c
+@@ -898,6 +898,7 @@ static int get_oid_basic(struct repository *r, const char *str, int len,
+ 	char *real_ref = NULL;
+ 	int refs_found = 0;
+ 	int at, reflog_len, nth_prior = 0;
++	int fatal = !(flags & GET_OID_QUIETLY);
+ 
+ 	if (len == r->hash_algo->hexsz && !get_oid_hex(str, oid)) {
+ 		if (warn_ambiguous_refs && warn_on_object_refname_ambiguity) {
+@@ -952,11 +953,11 @@ static int get_oid_basic(struct repository *r, const char *str, int len,
+ 
+ 	if (!len && reflog_len)
+ 		/* allow "@{...}" to mean the current branch reflog */
+-		refs_found = repo_dwim_ref(r, "HEAD", 4, oid, &real_ref, 0);
++		refs_found = repo_dwim_ref(r, "HEAD", 4, oid, &real_ref, !fatal);
+ 	else if (reflog_len)
+ 		refs_found = repo_dwim_log(r, str, len, oid, &real_ref);
+ 	else
+-		refs_found = repo_dwim_ref(r, str, len, oid, &real_ref, 0);
++		refs_found = repo_dwim_ref(r, str, len, oid, &real_ref, !fatal);
+ 
+ 	if (!refs_found)
+ 		return -1;
+diff --git a/t/t1507-rev-parse-upstream.sh b/t/t1507-rev-parse-upstream.sh
+index c34714ffe3..549eb315a9 100755
+--- a/t/t1507-rev-parse-upstream.sh
++++ b/t/t1507-rev-parse-upstream.sh
+@@ -183,6 +183,11 @@ test_expect_success '@{u} error message when no upstream' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success '@{u} silent error when no upstream' '
++	test_must_fail git rev-parse --verify --quiet @{u} 2>actual &&
++	test_must_be_empty actual
++'
++
+ test_expect_success 'branch@{u} error message with misspelt branch' '
+ 	cat >expect <<-EOF &&
+ 	fatal: no such branch: ${SQ}no-such-branch${SQ}
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,87 @@
+From 58786d73ba4a70e57aa4f45b1bfb696f2c420575 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=90o=C3=A0n=20Tr=E1=BA=A7n=20C=C3=B4ng=20Danh?=
+ <congdanhqx@gmail.com>
+Date: Thu, 10 Nov 2022 23:36:20 +0700
+Subject: [PATCH 0358/2871] bisect--helper: remove unused options
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+'git-bisect.sh' used to have a 'bisect_next_check' to check if we have
+both good/bad, old/new terms set or not.  In commit 129a6cf344
+(bisect--helper: `bisect_next_check` shell function in C, 2019-01-02),
+a subcommand for bisect--helper was introduced to port the check to C.
+Since d1bbbe45df (bisect--helper: reimplement `bisect_run` shell
+function in C, 2021-09-13), all users of 'bisect_next_check' was
+re-implemented in C, this subcommand was no longer used but we forgot
+to remove '--bisect-next-check'.
+
+'git-bisect.sh' also used to have a 'bisect_write' function, whose
+third positional parameter was a "nolog" flag.  This flag was only used
+when 'bisect_start' invoked 'bisect_write' to write the starting good
+and bad revisions.  Then 0f30233a11 (bisect--helper: `bisect_write`
+shell function in C, 2019-01-02) ported it to C as a command mode of
+'bisect--helper', which (incorrectly) added the '--no-log' option,
+and convert the only place ('bisect_start') that call 'bisect_write'
+with 'nolog' to 'git bisect--helper --bisect-write' with 'nolog'
+instead of '--no-log', since 'bisect--helper' has command modes not
+subcommands, all other command modes see and handle that option as well.
+This bogus state didn't last long, however, because in the same patch
+series 06f5608c14 (bisect--helper: `bisect_start` shell function
+partially in C, 2019-01-02) the C reimplementation of bisect_start()
+started calling the bisect_write() C function, this time with the
+right 'nolog' function parameter. From then on there was no need for
+the '--no-log' option in 'bisect--helper'. Eventually all bisect
+subcommands were ported to C as 'bisect--helper' command modes, each
+calling the bisect_write() C function instead, but when the
+'--bisect-write' command mode was removed in 68efed8c8a
+(bisect--helper: retire `--bisect-write` subcommand, 2021-02-03) it
+forgot to remove that '--no-log' option.
+'--no-log' option had never been used and it's unused now.
+
+Let's remove --bisect-next-check and --no-log from option parsing.
+
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/bisect--helper.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/builtin/bisect--helper.c b/builtin/bisect--helper.c
+index 28ef7ec2a4..968357c984 100644
+--- a/builtin/bisect--helper.c
++++ b/builtin/bisect--helper.c
+@@ -1281,7 +1281,6 @@ int cmd_bisect__helper(int argc, const char **argv, const char *prefix)
+ {
+ 	enum {
+ 		BISECT_RESET = 1,
+-		BISECT_NEXT_CHECK,
+ 		BISECT_TERMS,
+ 		BISECT_START,
+ 		BISECT_AUTOSTART,
+@@ -1293,12 +1292,10 @@ int cmd_bisect__helper(int argc, const char **argv, const char *prefix)
+ 		BISECT_VISUALIZE,
+ 		BISECT_RUN,
+ 	} cmdmode = 0;
+-	int res = 0, nolog = 0;
++	int res = 0;
+ 	struct option options[] = {
+ 		OPT_CMDMODE(0, "bisect-reset", &cmdmode,
+ 			 N_("reset the bisection state"), BISECT_RESET),
+-		OPT_CMDMODE(0, "bisect-next-check", &cmdmode,
+-			 N_("check whether bad or good terms exist"), BISECT_NEXT_CHECK),
+ 		OPT_CMDMODE(0, "bisect-terms", &cmdmode,
+ 			 N_("print out the bisect terms"), BISECT_TERMS),
+ 		OPT_CMDMODE(0, "bisect-start", &cmdmode,
+@@ -1317,8 +1314,6 @@ int cmd_bisect__helper(int argc, const char **argv, const char *prefix)
+ 			 N_("visualize the bisection"), BISECT_VISUALIZE),
+ 		OPT_CMDMODE(0, "bisect-run", &cmdmode,
+ 			 N_("use <cmd>... to automatically bisect"), BISECT_RUN),
+-		OPT_BOOL(0, "no-log", &nolog,
+-			 N_("no log for BISECT_WRITE")),
+ 		OPT_END()
+ 	};
+ 	struct bisect_terms terms = { .term_good = NULL, .term_bad = NULL };
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,63 @@
+From 0dd1324a73e404a2b02356c77088ec1f71beec11 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Tue, 20 Jun 2023 19:01:15 +0000
+Subject: [PATCH 1619/2871] packfile: delete .idx files before .pack files
+
+When installing a packfile, we place the .pack file before the .idx
+file. The intention is that Git scans for .idx files in the pack
+directory and then loads the .pack files from that list.
+
+However, when we delete packfiles, we do not do this in the reverse
+order as we should. The unlink_pack_path() method deletes the .pack
+followed by the .idx.
+
+This creates a window where the process could be interrupted between
+the .pack deletion and the .idx deletion, leaving the repository in a
+state that looks strange, but isn't actually too problematic if we
+assume the pack was safe to delete. The .idx without a .pack will cause
+some overhead, but will not interrupt other Git processes.
+
+This ordering was introduced into the 'git repack' builtin by
+a1bbc6c0176 (repack: rewrite the shell script in C, 2013-09-15), though
+we must be careful to track history through the code move in 8434e85d5f9
+(repack: refactor pack deletion for future use, 2019-06-10) to see that.
+
+This became more important after 73320e49add (builtin/repack.c: only
+collect fully-formed packs, 2023-06-07) changed how 'git repack' scanned
+for packfiles for use in the cruft pack process. It previously looked
+for .pack files, but that was problematic due to the order that packs
+are installed: repacks between the creation of a .pack and the creation
+of its .idx would result in hard failures.
+
+There is an independent proposal about what to do in the case of a .idx
+without a .pack during this 'git repack' scenario, but this change is
+focused on deleting .pack files more safely.
+
+Modify the order to delete the .idx before the .pack. The rest of the
+modifiers on the .pack should still come after the .pack so we know all
+of the presumed properties of the packfile as long as it exists in the
+filesystem, in case we wish to reinstate it by re-indexing the .pack
+file.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ packfile.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/packfile.c b/packfile.c
+index c0d7dd93f4..3a595a4efd 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -373,7 +373,7 @@ void close_object_store(struct raw_object_store *o)
+ 
+ void unlink_pack_path(const char *pack_name, int force_delete)
+ {
+-	static const char *exts[] = {".pack", ".idx", ".rev", ".keep", ".bitmap", ".promisor", ".mtimes"};
++	static const char *exts[] = {".idx", ".pack", ".rev", ".keep", ".bitmap", ".promisor", ".mtimes"};
+ 	int i;
+ 	struct strbuf buf = STRBUF_INIT;
+ 	size_t plen;
+-- 
+2.39.3 (Apple Git-145)
+

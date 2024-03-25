@@ -1,0 +1,60 @@
+From d390e08076b4486b603f0c8496cc09a5eba4106b Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Tue, 7 Feb 2023 18:12:27 +0000
+Subject: [PATCH 0838/2871] Documentation: clarify multiple pushurls vs urls
+
+In a remote with multiple configured URLs, `git remote -v` shows the
+correct url that fetch uses. However, `git config remote.<remote>.url`
+returns the last defined url instead. This discrepancy can cause
+confusion for users with a remote defined as such, since any url
+defined after the first essentially acts as a pushurl.
+
+Add documentation to clarify how fetch interacts with multiple urls
+and how push interacts with multiple pushurls and urls.
+
+Add test affirming interaction between fetch and multiple urls.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/urls-remotes.txt | 4 +++-
+ t/t5510-fetch.sh               | 8 ++++++++
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/urls-remotes.txt b/Documentation/urls-remotes.txt
+index 86d0008f94..e410912fe5 100644
+--- a/Documentation/urls-remotes.txt
++++ b/Documentation/urls-remotes.txt
+@@ -33,7 +33,9 @@ config file would appear like this:
+ ------------
+ 
+ The `<pushurl>` is used for pushes only. It is optional and defaults
+-to `<URL>`.
++to `<URL>`. Pushing to a remote affects all defined pushurls or to all
++defined urls if no pushurls are defined. Fetch, however, will only
++fetch from the first defined url if muliple urls are defined.
+ 
+ Named file in `$GIT_DIR/remotes`
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+diff --git a/t/t5510-fetch.sh b/t/t5510-fetch.sh
+index c0b745e33b..34a1261520 100755
+--- a/t/t5510-fetch.sh
++++ b/t/t5510-fetch.sh
+@@ -806,6 +806,14 @@ test_expect_success 'fetch.writeCommitGraph with submodules' '
+ 	)
+ '
+ 
++# fetches from first configured url
++test_expect_success 'fetch from multiple configured URLs in single remote' '
++	git init url1 &&
++	git remote add multipleurls url1 &&
++	git remote set-url --add multipleurls url2 &&
++	git fetch multipleurls
++'
++
+ # configured prune tests
+ 
+ set_config_tristate () {
+-- 
+2.39.3 (Apple Git-145)
+

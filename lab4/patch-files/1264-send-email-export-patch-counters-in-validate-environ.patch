@@ -1,0 +1,228 @@
+From 3c8d3adeae8326d3b73fee0b134abd68d55f7c67 Mon Sep 17 00:00:00 2001
+From: Robin Jarry <robin@jarry.cc>
+Date: Fri, 14 Apr 2023 17:52:49 +0200
+Subject: [PATCH 1264/2871] send-email: export patch counters in validate
+ environment
+
+When sending patch series (with a cover-letter or not)
+sendemail-validate is called with every email/patch file independently
+from the others. When one of the patches depends on a previous one, it
+may not be possible to use this hook in a meaningful way. A hook that
+wants to check some property of the whole series needs to know which
+patch is the final one.
+
+Expose the current and total number of patches to the hook via the
+GIT_SENDEMAIL_PATCH_COUNTER and GIT_SENDEMAIL_PATCH_TOTAL environment
+variables so that both incremental and global validation is possible.
+
+Sharing any other state between successive invocations of the validate
+hook must be done via external means. For example, by storing it in
+a git config sendemail.validateWorktree entry.
+
+Add a sample script with placeholder validations and update tests to
+check that the counters are properly exported.
+
+Suggested-by: Phillip Wood <phillip.wood123@gmail.com>
+Signed-off-by: Robin Jarry <robin@jarry.cc>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/githooks.txt                 | 22 +++++++
+ git-send-email.perl                        | 17 ++++-
+ t/t9001-send-email.sh                      | 31 +++++++++
+ templates/hooks--sendemail-validate.sample | 77 ++++++++++++++++++++++
+ 4 files changed, 146 insertions(+), 1 deletion(-)
+ create mode 100755 templates/hooks--sendemail-validate.sample
+
+diff --git a/Documentation/githooks.txt b/Documentation/githooks.txt
+index 62908602e7..c8e55b2613 100644
+--- a/Documentation/githooks.txt
++++ b/Documentation/githooks.txt
+@@ -600,6 +600,28 @@ the name of the file that holds the e-mail to be sent.  Exiting with a
+ non-zero status causes `git send-email` to abort before sending any
+ e-mails.
+ 
++The following environment variables are set when executing the hook.
++
++`GIT_SENDEMAIL_FILE_COUNTER`::
++	A 1-based counter incremented by one for every file holding an e-mail
++	to be sent (excluding any FIFOs). This counter does not follow the
++	patch series counter scheme. It will always start at 1 and will end at
++	GIT_SENDEMAIL_FILE_TOTAL.
++
++`GIT_SENDEMAIL_FILE_TOTAL`::
++	The total number of files that will be sent (excluding any FIFOs). This
++	counter does not follow the patch series counter scheme. It will always
++	be equal to the number of files being sent, whether there is a cover
++	letter or not.
++
++These variables may for instance be used to validate patch series.
++
++The sample `sendemail-validate` hook that comes with Git checks that all sent
++patches (excluding the cover letter) can be applied on top of the upstream
++repository default branch without conflicts. Some placeholders are left for
++additional validation steps to be performed after all patches of a given series
++have been applied.
++
+ fsmonitor-watchman
+ ~~~~~~~~~~~~~~~~~~
+ 
+diff --git a/git-send-email.perl b/git-send-email.perl
+index fd8cd0d46f..66c9171109 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -795,11 +795,26 @@ sub is_format_patch_arg {
+ @files = handle_backup_files(@files);
+ 
+ if ($validate) {
++	# FIFOs can only be read once, exclude them from validation.
++	my @real_files = ();
+ 	foreach my $f (@files) {
+ 		unless (-p $f) {
+-			validate_patch($f, $target_xfer_encoding);
++			push(@real_files, $f);
+ 		}
+ 	}
++
++	# Run the loop once again to avoid gaps in the counter due to FIFO
++	# arguments provided by the user.
++	my $num = 1;
++	my $num_files = scalar @real_files;
++	$ENV{GIT_SENDEMAIL_FILE_TOTAL} = "$num_files";
++	foreach my $r (@real_files) {
++		$ENV{GIT_SENDEMAIL_FILE_COUNTER} = "$num";
++		validate_patch($r, $target_xfer_encoding);
++		$num += 1;
++	}
++	delete $ENV{GIT_SENDEMAIL_FILE_COUNTER};
++	delete $ENV{GIT_SENDEMAIL_FILE_TOTAL};
+ }
+ 
+ if (@files) {
+diff --git a/t/t9001-send-email.sh b/t/t9001-send-email.sh
+index 0de83b5d2b..6520346246 100755
+--- a/t/t9001-send-email.sh
++++ b/t/t9001-send-email.sh
+@@ -2326,6 +2326,37 @@ test_expect_success $PREREQ 'invoke hook' '
+ 	)
+ '
+ 
++expected_file_counter_output () {
++	total=$1
++	count=0
++	while test $count -ne $total
++	do
++		count=$((count + 1)) &&
++		echo "$count/$total" || return
++	done
++}
++
++test_expect_success $PREREQ '--validate hook allows counting of messages' '
++	test_when_finished "rm -rf my-hooks.log" &&
++	test_config core.hooksPath "my-hooks" &&
++	mkdir -p my-hooks &&
++
++	write_script my-hooks/sendemail-validate <<-\EOF &&
++		num=$GIT_SENDEMAIL_FILE_COUNTER &&
++		tot=$GIT_SENDEMAIL_FILE_TOTAL &&
++		echo "$num/$tot" >>my-hooks.log || exit 1
++	EOF
++
++	>my-hooks.log &&
++	expected_file_counter_output 4 >expect &&
++	git send-email \
++		--from="Example <from@example.com>" \
++		--to=nobody@example.com \
++		--smtp-server="$(pwd)/fake.sendmail" \
++		--validate -3 --cover-letter --force &&
++	test_cmp expect my-hooks.log
++'
++
+ test_expect_success $PREREQ 'test that send-email works outside a repo' '
+ 	nongit git send-email \
+ 		--from="Example <nobody@example.com>" \
+diff --git a/templates/hooks--sendemail-validate.sample b/templates/hooks--sendemail-validate.sample
+new file mode 100755
+index 0000000000..640bcf874d
+--- /dev/null
++++ b/templates/hooks--sendemail-validate.sample
+@@ -0,0 +1,77 @@
++#!/bin/sh
++
++# An example hook script to validate a patch (and/or patch series) before
++# sending it via email.
++#
++# The hook should exit with non-zero status after issuing an appropriate
++# message if it wants to prevent the email(s) from being sent.
++#
++# To enable this hook, rename this file to "sendemail-validate".
++#
++# By default, it will only check that the patch(es) can be applied on top of
++# the default upstream branch without conflicts in a secondary worktree. After
++# validation (successful or not) of the last patch of a series, the worktree
++# will be deleted.
++#
++# The following config variables can be set to change the default remote and
++# remote ref that are used to apply the patches against:
++#
++#   sendemail.validateRemote (default: origin)
++#   sendemail.validateRemoteRef (default: HEAD)
++#
++# Replace the TODO placeholders with appropriate checks according to your
++# needs.
++
++validate_cover_letter () {
++	file="$1"
++	# TODO: Replace with appropriate checks (e.g. spell checking).
++	true
++}
++
++validate_patch () {
++	file="$1"
++	# Ensure that the patch applies without conflicts.
++	git am -3 "$file" || return
++	# TODO: Replace with appropriate checks for this patch
++	# (e.g. checkpatch.pl).
++	true
++}
++
++validate_series () {
++	# TODO: Replace with appropriate checks for the whole series
++	# (e.g. quick build, coding style checks, etc.).
++	true
++}
++
++# main -------------------------------------------------------------------------
++
++if test "$GIT_SENDEMAIL_FILE_COUNTER" = 1
++then
++	remote=$(git config --default origin --get sendemail.validateRemote) &&
++	ref=$(git config --default HEAD --get sendemail.validateRemoteRef) &&
++	worktree=$(mktemp --tmpdir -d sendemail-validate.XXXXXXX) &&
++	git worktree add -fd --checkout "$worktree" "refs/remotes/$remote/$ref" &&
++	git config --replace-all sendemail.validateWorktree "$worktree"
++else
++	worktree=$(git config --get sendemail.validateWorktree)
++fi || {
++	echo "sendemail-validate: error: failed to prepare worktree" >&2
++	exit 1
++}
++
++unset GIT_DIR GIT_WORK_TREE
++cd "$worktree" &&
++
++if grep -q "^diff --git " "$1"
++then
++	validate_patch "$1"
++else
++	validate_cover_letter "$1"
++fi &&
++
++if test "$GIT_SENDEMAIL_FILE_COUNTER" = "$GIT_SENDEMAIL_FILE_TOTAL"
++then
++	git config --unset-all sendemail.validateWorktree &&
++	trap 'git worktree remove -ff "$worktree"' EXIT &&
++	validate_series
++fi
+-- 
+2.39.3 (Apple Git-145)
+

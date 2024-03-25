@@ -1,0 +1,43 @@
+From 3dc0b7f0dcd10e9b10018e43d248d245b78bf9be Mon Sep 17 00:00:00 2001
+From: Michael J Gruber <git@grubix.eu>
+Date: Fri, 24 Mar 2023 23:17:11 +0100
+Subject: [PATCH 1130/2871] t3070: make chain lint tester happy
+
+1f2e05f0b7 ("wildmatch: fix exponential behavior", 2023-03-20)
+introduced a new test with a background process. Backgrounding
+necessarily gives a result of 0, so that a seemingly broken && chain is
+not really broken.
+
+Adjust t3070 slightly so that our chain lint test recognizes the
+construct for what it is and does not raise a false positive.
+
+Signed-off-by: Michael J Gruber <git@grubix.eu>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t3070-wildmatch.sh | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/t/t3070-wildmatch.sh b/t/t3070-wildmatch.sh
+index b91a7cb712..4dd42df38c 100755
+--- a/t/t3070-wildmatch.sh
++++ b/t/t3070-wildmatch.sh
+@@ -432,10 +432,12 @@ match 0 1 0 1 'z' '[Z-y]'
+ match 1 1 1 1 'Z' '[Z-y]'
+ 
+ test_expect_success 'matching does not exhibit exponential behavior' '
+-	test-tool wildmatch wildmatch \
+-		aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab \
+-		"*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a" &
+-	pid=$! &&
++	{
++		test-tool wildmatch wildmatch \
++			aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab \
++			"*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a" &
++		pid=$!
++	} &&
+ 	sleep 2 &&
+ 	! kill $!
+ '
+-- 
+2.39.3 (Apple Git-145)
+

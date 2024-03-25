@@ -1,0 +1,87 @@
+From c08cfc395fa40f9ee610a05c23c982a7e11c8fa9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:39:11 +0200
+Subject: [PATCH 0126/2871] doc txt & -h consistency: add or fix optional "--"
+ syntax
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add the "[--]" for those cases where the *.txt and -h were
+inconsistent, or where we incorrectly stated in one but not the other
+that the "--" was mandatory.
+
+In the case of "rev-list" both sides were wrong, as we we don't
+require one or more paths if "--" is used, e.g. this is OK:
+
+	git rev-list HEAD --
+
+That part of this change is not a "doc txt & -h consistency" change,
+as we're changing both versions, doing so here makes both sides
+consistent.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rev-list.txt | 2 +-
+ builtin/for-each-repo.c        | 2 +-
+ builtin/rev-list.c             | 2 +-
+ builtin/verify-pack.c          | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-rev-list.txt b/Documentation/git-rev-list.txt
+index 20bb8e8217..51029a2271 100644
+--- a/Documentation/git-rev-list.txt
++++ b/Documentation/git-rev-list.txt
+@@ -9,7 +9,7 @@ git-rev-list - Lists commit objects in reverse chronological order
+ SYNOPSIS
+ --------
+ [verse]
+-'git rev-list' [<options>] <commit>... [[--] <path>...]
++'git rev-list' [<options>] <commit>... [--] [<path>...]
+ 
+ DESCRIPTION
+ -----------
+diff --git a/builtin/for-each-repo.c b/builtin/for-each-repo.c
+index c6379b783c..d45d873f57 100644
+--- a/builtin/for-each-repo.c
++++ b/builtin/for-each-repo.c
+@@ -6,7 +6,7 @@
+ #include "string-list.h"
+ 
+ static const char * const for_each_repo_usage[] = {
+-	N_("git for-each-repo --config=<config> <arguments>"),
++	N_("git for-each-repo --config=<config> [--] <arguments>"),
+ 	NULL
+ };
+ 
+diff --git a/builtin/rev-list.c b/builtin/rev-list.c
+index ada68a4af5..3acd93f71e 100644
+--- a/builtin/rev-list.c
++++ b/builtin/rev-list.c
+@@ -20,7 +20,7 @@
+ #include "packfile.h"
+ 
+ static const char rev_list_usage[] =
+-"git rev-list [<options>] <commit>... [-- <path>...]\n"
++"git rev-list [<options>] <commit>... [--] [<path>...]\n"
+ "\n"
+ "  limiting output:\n"
+ "    --max-count=<n>\n"
+diff --git a/builtin/verify-pack.c b/builtin/verify-pack.c
+index db9ac5c460..27d6f75fd8 100644
+--- a/builtin/verify-pack.c
++++ b/builtin/verify-pack.c
+@@ -56,7 +56,7 @@ static int verify_one_pack(const char *path, unsigned int flags, const char *has
+ }
+ 
+ static const char * const verify_pack_usage[] = {
+-	N_("git verify-pack [-v | --verbose] [-s | --stat-only] <pack>.idx..."),
++	N_("git verify-pack [-v | --verbose] [-s | --stat-only] [--] <pack>.idx..."),
+ 	NULL
+ };
+ 
+-- 
+2.39.3 (Apple Git-145)
+

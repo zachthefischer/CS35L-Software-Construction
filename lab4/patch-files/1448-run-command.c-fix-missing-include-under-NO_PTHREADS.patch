@@ -1,0 +1,64 @@
+From 52c0f3318d98dd065ceb68d91bb6720eee20deb3 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Tue, 16 May 2023 17:33:43 -0400
+Subject: [PATCH 1448/2871] run-command.c: fix missing include under
+ `NO_PTHREADS`
+
+Git 2.41-rc0 fails to compile run-command.c with `NO_PTHREADS` defined,
+i.e.
+
+  $ make NO_PTHREADS=1 run-command.o
+
+as `ALLOC_GROW()` macro is used in the `atexit()` emulation but the
+macro definition is not available.
+
+This bisects to 36bf195890 (alloc.h: move ALLOC_GROW() functions from
+cache.h, 2023-02-24), which replaced includes of <cache.h> with
+<alloc.h>, which is the new home of `ALLOC_GROW()` (and
+`ALLOC_GROW_BY()`).
+
+We can see that run-command.c is the only one that try to use these
+macros without including <alloc.h>.
+
+  $ git grep -l -e '[^_]ALLOC_GROW(' -e 'ALLOC_GROW_BY(' \*.c | sort >/tmp/1
+  $ git grep -l 'alloc\.h' \*.c | sort >/tmp/2
+  $ comm -23 /tmp/[12]
+  compat/simple-ipc/ipc-unix-socket.c
+  run-command.c
+
+The "compat/" file only talks about the macro in the comment,
+and is not broken.
+
+We could fix this by conditionally including "alloc.h" when
+`NO_PTHREADS` is defined.  But we have relatively few examples of
+conditional includes throughout the tree[^1].
+
+Instead, include "alloc.h" unconditionally in run-command.c to allow it
+to successfully compile even when NO_PTHREADS is defined.
+
+[^1]: With `git grep -E -A1 '#if(n)?def' -- **/*.c | grep '#include' -B1`.
+
+Reported-by: Randall S. Becker <randall.becker@nexbridge.ca>
+Co-authored-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ run-command.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/run-command.c b/run-command.c
+index 6bd16acb06..f19f875252 100644
+--- a/run-command.c
++++ b/run-command.c
+@@ -11,6 +11,7 @@
+ #include "packfile.h"
+ #include "hook.h"
+ #include "compat/nonblock.h"
++#include "alloc.h"
+ 
+ void child_process_init(struct child_process *child)
+ {
+-- 
+2.39.3 (Apple Git-145)
+

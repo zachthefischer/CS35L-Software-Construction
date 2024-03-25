@@ -1,0 +1,111 @@
+From 49050a043bf767d370e7288cb6cca0ca21f13404 Mon Sep 17 00:00:00 2001
+From: Siddharth Asthana <siddharthasthana31@gmail.com>
+Date: Tue, 20 Dec 2022 11:31:12 +0530
+Subject: [PATCH 0588/2871] cat-file: add mailmap support to -s option
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Even though the cat-file command with `-s` option does not complain when
+`--use-mailmap` option is given, the latter option is ignored. Compute
+the size of the object after replacing the idents and report it instead.
+
+In order to make `-s` option honour the mailmap mechanism we have to
+read the contents of the commit/tag object. Make use of the call to
+`oid_object_info_extended()` to get the contents of the object and store
+in `buf`. `buf` is later freed in the function.
+
+Mentored-by: Christian Couder <christian.couder@gmail.com>
+Mentored-by: John Cai <johncai86@gmail.com>
+Helped-by: Taylor Blau <me@ttaylorr.com>
+Helped-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Siddharth Asthana <siddharthasthana31@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-cat-file.txt |  4 +++-
+ builtin/cat-file.c             | 13 +++++++++++++
+ t/t4203-mailmap.sh             | 29 +++++++++++++++++++++++++++++
+ 3 files changed, 45 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/git-cat-file.txt b/Documentation/git-cat-file.txt
+index ec30b5c574..f82d702d6b 100644
+--- a/Documentation/git-cat-file.txt
++++ b/Documentation/git-cat-file.txt
+@@ -45,7 +45,9 @@ OPTIONS
+ 
+ -s::
+ 	Instead of the content, show the object size identified by
+-	`<object>`.
++	`<object>`. If used with `--use-mailmap` option, will show
++	the size of updated object after replacing idents using the
++	mailmap mechanism.
+ 
+ -e::
+ 	Exit with zero status if `<object>` exists and is a valid
+diff --git a/builtin/cat-file.c b/builtin/cat-file.c
+index fa7bd89169..8a6e2343ec 100644
+--- a/builtin/cat-file.c
++++ b/builtin/cat-file.c
+@@ -132,8 +132,21 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
+ 
+ 	case 's':
+ 		oi.sizep = &size;
++
++		if (use_mailmap) {
++			oi.typep = &type;
++			oi.contentp = (void**)&buf;
++		}
++
+ 		if (oid_object_info_extended(the_repository, &oid, &oi, flags) < 0)
+ 			die("git cat-file: could not get object info");
++
++		if (use_mailmap && (type == OBJ_COMMIT || type == OBJ_TAG)) {
++			size_t s = size;
++			buf = replace_idents_using_mailmap(buf, &s);
++			size = cast_size_t_to_ulong(s);
++		}
++
+ 		printf("%"PRIuMAX"\n", (uintmax_t)size);
+ 		ret = 0;
+ 		goto cleanup;
+diff --git a/t/t4203-mailmap.sh b/t/t4203-mailmap.sh
+index cd1cab3e54..b8ec5e0959 100755
+--- a/t/t4203-mailmap.sh
++++ b/t/t4203-mailmap.sh
+@@ -1022,4 +1022,33 @@ test_expect_success '--mailmap enables mailmap in cat-file for annotated tag obj
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'git cat-file -s returns correct size with --use-mailmap' '
++	test_when_finished "rm .mailmap" &&
++	cat >.mailmap <<-\EOF &&
++	C O Mitter <committer@example.com> Orig <orig@example.com>
++	EOF
++	git cat-file commit HEAD >commit.out &&
++	echo $(wc -c <commit.out) >expect &&
++	git cat-file --use-mailmap commit HEAD >commit.out &&
++	echo $(wc -c <commit.out) >>expect &&
++	git cat-file -s HEAD >actual &&
++	git cat-file --use-mailmap -s HEAD >>actual &&
++	test_cmp expect actual
++'
++
++test_expect_success 'git cat-file -s returns correct size with --use-mailmap for tag objects' '
++	test_when_finished "rm .mailmap" &&
++	cat >.mailmap <<-\EOF &&
++	Orig <orig@example.com> C O Mitter <committer@example.com>
++	EOF
++	git tag -a -m "annotated tag" v3 &&
++	git cat-file tag v3 >tag.out &&
++	echo $(wc -c <tag.out) >expect &&
++	git cat-file --use-mailmap tag v3 >tag.out &&
++	echo $(wc -c <tag.out) >>expect &&
++	git cat-file -s v3 >actual &&
++	git cat-file --use-mailmap -s v3 >>actual &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

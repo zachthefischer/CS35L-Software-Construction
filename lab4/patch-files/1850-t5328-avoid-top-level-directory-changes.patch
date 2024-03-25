@@ -1,0 +1,88 @@
+From 749f126b296f1147c7994de41c93a0afb9a250dd Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Mon, 24 Jul 2023 12:39:31 -0400
+Subject: [PATCH 1850/2871] t5328: avoid top-level directory changes
+
+In a similar spirit as the last commit, avoid top-level directory
+changes in the last remaining commit-graph related test, t5328.
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5328-commit-graph-64bit-time.sh | 54 +++++++++++++++---------------
+ 1 file changed, 27 insertions(+), 27 deletions(-)
+
+diff --git a/t/t5328-commit-graph-64bit-time.sh b/t/t5328-commit-graph-64bit-time.sh
+index 57e4d9c699..e9c521c061 100755
+--- a/t/t5328-commit-graph-64bit-time.sh
++++ b/t/t5328-commit-graph-64bit-time.sh
+@@ -37,39 +37,39 @@ test_expect_success 'lower layers have overflow chunk' '
+ graph_git_behavior 'overflow' '' HEAD~2 HEAD
+ 
+ test_expect_success 'set up and verify repo with generation data overflow chunk' '
+-	mkdir repo &&
+-	cd repo &&
+-	git init &&
+-	test_commit --date "$UNIX_EPOCH_ZERO" 1 &&
+-	test_commit 2 &&
+-	test_commit --date "$UNIX_EPOCH_ZERO" 3 &&
+-	git commit-graph write --reachable &&
+-	graph_read_expect 3 generation_data &&
+-	test_commit --date "$FUTURE_DATE" 4 &&
+-	test_commit 5 &&
+-	test_commit --date "$UNIX_EPOCH_ZERO" 6 &&
+-	git branch left &&
+-	git reset --hard 3 &&
+-	test_commit 7 &&
+-	test_commit --date "$FUTURE_DATE" 8 &&
+-	test_commit 9 &&
+-	git branch right &&
+-	git reset --hard 3 &&
+-	test_merge M left right &&
+-	git commit-graph write --reachable &&
+-	graph_read_expect 10 "generation_data generation_data_overflow" &&
+-	git commit-graph verify
++	git init repo &&
++	(
++		cd repo &&
++		test_commit --date "$UNIX_EPOCH_ZERO" 1 &&
++		test_commit 2 &&
++		test_commit --date "$UNIX_EPOCH_ZERO" 3 &&
++		git commit-graph write --reachable &&
++		graph_read_expect 3 generation_data &&
++		test_commit --date "$FUTURE_DATE" 4 &&
++		test_commit 5 &&
++		test_commit --date "$UNIX_EPOCH_ZERO" 6 &&
++		git branch left &&
++		git reset --hard 3 &&
++		test_commit 7 &&
++		test_commit --date "$FUTURE_DATE" 8 &&
++		test_commit 9 &&
++		git branch right &&
++		git reset --hard 3 &&
++		test_merge M left right &&
++		git commit-graph write --reachable &&
++		graph_read_expect 10 "generation_data generation_data_overflow" &&
++		git commit-graph verify
++	)
+ '
+ 
+ graph_git_behavior 'overflow 2' repo left right
+ 
+ test_expect_success 'single commit with generation data exceeding UINT32_MAX' '
+ 	git init repo-uint32-max &&
+-	cd repo-uint32-max &&
+-	test_commit --date "@4294967297 +0000" 1 &&
+-	git commit-graph write --reachable &&
+-	graph_read_expect 1 "generation_data" &&
+-	git commit-graph verify
++	test_commit -C repo-uint32-max --date "@4294967297 +0000" 1 &&
++	git -C repo-uint32-max commit-graph write --reachable &&
++	graph_read_expect -C repo-uint32-max 1 "generation_data" &&
++	git -C repo-uint32-max commit-graph verify
+ '
+ 
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

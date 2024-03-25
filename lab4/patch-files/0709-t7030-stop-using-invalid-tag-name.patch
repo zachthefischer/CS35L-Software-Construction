@@ -1,0 +1,51 @@
+From ad5dfeac040c16057a23f341408d229656e42ab4 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Wed, 18 Jan 2023 15:36:22 -0500
+Subject: [PATCH 0709/2871] t7030: stop using invalid tag name
+
+We intentionally invalidate the signature of a tag by switching its tag
+name from "seventh" to "7th forged". However, the latter is not a valid
+tag name because it contains a space. This doesn't currently affect the
+test, but we're better off using something syntactically valid. That
+reduces the number of possible failure modes in the test, and
+future-proofs us if git hash-object gets more picky about its input.
+
+The t7031 script, which was mostly copied from t7030, has the same
+problem, so we'll fix it, too.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7030-verify-tag.sh            | 2 +-
+ t/t7031-verify-tag-signed-ssh.sh | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t7030-verify-tag.sh b/t/t7030-verify-tag.sh
+index 10faa64515..6f526c37c2 100755
+--- a/t/t7030-verify-tag.sh
++++ b/t/t7030-verify-tag.sh
+@@ -115,7 +115,7 @@ test_expect_success GPGSM 'verify and show signatures x509 with high minTrustLev
+ 
+ test_expect_success GPG 'detect fudged signature' '
+ 	git cat-file tag seventh-signed >raw &&
+-	sed -e "/^tag / s/seventh/7th forged/" raw >forged1 &&
++	sed -e "/^tag / s/seventh/7th-forged/" raw >forged1 &&
+ 	git hash-object -w -t tag forged1 >forged1.tag &&
+ 	test_must_fail git verify-tag $(cat forged1.tag) 2>actual1 &&
+ 	grep "BAD signature from" actual1 &&
+diff --git a/t/t7031-verify-tag-signed-ssh.sh b/t/t7031-verify-tag-signed-ssh.sh
+index 1cb36b9ab8..36eb86a4b1 100755
+--- a/t/t7031-verify-tag-signed-ssh.sh
++++ b/t/t7031-verify-tag-signed-ssh.sh
+@@ -125,7 +125,7 @@ test_expect_success GPGSSH,GPGSSH_VERIFYTIME 'verify-tag failes with tag date ou
+ test_expect_success GPGSSH 'detect fudged ssh signature' '
+ 	test_config gpg.ssh.allowedSignersFile "${GPGSSH_ALLOWED_SIGNERS}" &&
+ 	git cat-file tag seventh-signed >raw &&
+-	sed -e "/^tag / s/seventh/7th forged/" raw >forged1 &&
++	sed -e "/^tag / s/seventh/7th-forged/" raw >forged1 &&
+ 	git hash-object -w -t tag forged1 >forged1.tag &&
+ 	test_must_fail git verify-tag $(cat forged1.tag) 2>actual1 &&
+ 	grep "${GPGSSH_BAD_SIGNATURE}" actual1 &&
+-- 
+2.39.3 (Apple Git-145)
+

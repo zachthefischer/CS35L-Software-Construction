@@ -1,0 +1,54 @@
+From 36fb0d07d83df475bc6b716795b2111f8408cbcf Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Tue, 4 Oct 2022 10:01:34 +0000
+Subject: [PATCH 0032/2871] ssh signing: return an error when signature cannot
+ be read
+
+If the signature file cannot be read we print an error message but do
+not return an error to the caller. In practice it seems unlikely that
+the file would be unreadable if the call to ssh-keygen succeeds.
+
+The unlink_or_warn() call is moved to the end of the function so that
+we always try and remove the signature file. This isn't strictly
+necessary at the moment but it protects us against any extra code
+being added between trying to read the signature file and the cleanup
+at the end of the function in the future. unlink_or_warn() only prints
+a warning if it exists and cannot be removed.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ gpg-interface.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/gpg-interface.c b/gpg-interface.c
+index 947b58ad4d..b5c2bbb3b9 100644
+--- a/gpg-interface.c
++++ b/gpg-interface.c
+@@ -1043,12 +1043,11 @@ static int sign_buffer_ssh(struct strbuf *buffer, struct strbuf *signature,
+ 	strbuf_addbuf(&ssh_signature_filename, &buffer_file->filename);
+ 	strbuf_addstr(&ssh_signature_filename, ".sig");
+ 	if (strbuf_read_file(signature, ssh_signature_filename.buf, 0) < 0) {
+-		error_errno(
++		ret = error_errno(
+ 			_("failed reading ssh signing data buffer from '%s'"),
+ 			ssh_signature_filename.buf);
++		goto out;
+ 	}
+-	unlink_or_warn(ssh_signature_filename.buf);
+-
+ 	/* Strip CR from the line endings, in case we are on Windows. */
+ 	remove_cr_after(signature, bottom);
+ 
+@@ -1057,6 +1056,8 @@ static int sign_buffer_ssh(struct strbuf *buffer, struct strbuf *signature,
+ 		delete_tempfile(&key_file);
+ 	if (buffer_file)
+ 		delete_tempfile(&buffer_file);
++	if (ssh_signature_filename.len)
++		unlink_or_warn(ssh_signature_filename.buf);
+ 	strbuf_release(&signer_stderr);
+ 	strbuf_release(&ssh_signature_filename);
+ 	FREE_AND_NULL(ssh_signing_key_file);
+-- 
+2.39.3 (Apple Git-145)
+

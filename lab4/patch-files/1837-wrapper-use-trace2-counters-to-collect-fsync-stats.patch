@@ -1,0 +1,170 @@
+From a27eecea75b3858b4052b191143f144a7e966869 Mon Sep 17 00:00:00 2001
+From: Beat Bolli <dev+git@drbeat.li>
+Date: Thu, 20 Jul 2023 18:48:23 +0200
+Subject: [PATCH 1837/2871] wrapper: use trace2 counters to collect fsync stats
+
+As mentioned in the thread starting at [1], trace2 counters should be
+used to count events instead of ad-hoc static variables.
+
+Convert the two fsync static variables to trace2 counters, reducing the
+coupling between wrapper.c and the trace2 subsystem. Adjust t/t5351 to
+match the trace2 counter output format.
+
+The counters are not per-thread because the ones being replaced also
+were not.
+
+[1] https://lore.kernel.org/git/20230627195251.1973421-2-calvinwan@google.com/
+
+Signed-off-by: Beat Bolli <dev+git@drbeat.li>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5351-unpack-large-objects.sh |  6 +++---
+ trace2.c                        |  1 -
+ trace2.h                        |  4 ++++
+ trace2/tr2_ctr.c                | 10 ++++++++++
+ wrapper.c                       | 19 ++-----------------
+ wrapper.h                       |  5 -----
+ 6 files changed, 19 insertions(+), 26 deletions(-)
+
+diff --git a/t/t5351-unpack-large-objects.sh b/t/t5351-unpack-large-objects.sh
+index 8c8af99b84..43cbcd5d49 100755
+--- a/t/t5351-unpack-large-objects.sh
++++ b/t/t5351-unpack-large-objects.sh
+@@ -55,7 +55,7 @@ check_fsync_events () {
+ 
+ 	cat >expect &&
+ 	sed -n \
+-		-e '/^{"event":"data",.*"category":"fsync",/ {
++		-e '/^{"event":"counter",.*"category":"fsync",/ {
+ 			s/.*"category":"fsync",//;
+ 			s/}$//;
+ 			p;
+@@ -78,8 +78,8 @@ test_expect_success 'unpack big object in stream (core.fsyncmethod=batch)' '
+ 		flush_count=1
+ 	fi &&
+ 	check_fsync_events trace2.txt <<-EOF &&
+-	"key":"fsync/writeout-only","value":"6"
+-	"key":"fsync/hardware-flush","value":"$flush_count"
++	"name":"writeout-only","count":6
++	"name":"hardware-flush","count":$flush_count
+ 	EOF
+ 
+ 	test_dir_is_empty dest.git/objects/pack &&
+diff --git a/trace2.c b/trace2.c
+index 49c23bfd05..6dc74dff4c 100644
+--- a/trace2.c
++++ b/trace2.c
+@@ -276,7 +276,6 @@ void trace2_cmd_exit_fl(const char *file, int line, int code)
+ 	if (!trace2_enabled)
+ 		return;
+ 
+-	trace_git_fsync_stats();
+ 	trace2_collect_process_info(TRACE2_PROCESS_INFO_EXIT);
+ 
+ 	tr2main_exit_code = code;
+diff --git a/trace2.h b/trace2.h
+index f5c5a9e6ba..1890de3436 100644
+--- a/trace2.h
++++ b/trace2.h
+@@ -552,6 +552,10 @@ enum trace2_counter_id {
+ 	TRACE2_COUNTER_ID_TEST1 = 0, /* emits summary event only */
+ 	TRACE2_COUNTER_ID_TEST2,     /* emits summary and thread events */
+ 
++	/* counts number of fsyncs */
++	TRACE2_COUNTER_ID_FSYNC_WRITEOUT_ONLY,
++	TRACE2_COUNTER_ID_FSYNC_HARDWARE_FLUSH,
++
+ 	/* Add additional counter definitions before here. */
+ 	TRACE2_NUMBER_OF_COUNTERS
+ };
+diff --git a/trace2/tr2_ctr.c b/trace2/tr2_ctr.c
+index b342d3b1a3..6491d25396 100644
+--- a/trace2/tr2_ctr.c
++++ b/trace2/tr2_ctr.c
+@@ -27,6 +27,16 @@ static struct tr2_counter_metadata tr2_counter_metadata[TRACE2_NUMBER_OF_COUNTER
+ 		.name = "test2",
+ 		.want_per_thread_events = 1,
+ 	},
++	[TRACE2_COUNTER_ID_FSYNC_WRITEOUT_ONLY] = {
++		.category = "fsync",
++		.name = "writeout-only",
++		.want_per_thread_events = 0,
++	},
++	[TRACE2_COUNTER_ID_FSYNC_HARDWARE_FLUSH] = {
++		.category = "fsync",
++		.name = "hardware-flush",
++		.want_per_thread_events = 0,
++	},
+ 
+ 	/* Add additional metadata before here. */
+ };
+diff --git a/wrapper.c b/wrapper.c
+index 22be9812a7..dea54a3260 100644
+--- a/wrapper.c
++++ b/wrapper.c
+@@ -10,9 +10,6 @@
+ #include "strbuf.h"
+ #include "trace2.h"
+ 
+-static intmax_t count_fsync_writeout_only;
+-static intmax_t count_fsync_hardware_flush;
+-
+ #ifdef HAVE_RTLGENRANDOM
+ /* This is required to get access to RtlGenRandom. */
+ #define SystemFunction036 NTAPI SystemFunction036
+@@ -551,7 +548,7 @@ int git_fsync(int fd, enum fsync_action action)
+ {
+ 	switch (action) {
+ 	case FSYNC_WRITEOUT_ONLY:
+-		count_fsync_writeout_only += 1;
++		trace2_counter_add(TRACE2_COUNTER_ID_FSYNC_WRITEOUT_ONLY, 1);
+ 
+ #ifdef __APPLE__
+ 		/*
+@@ -583,7 +580,7 @@ int git_fsync(int fd, enum fsync_action action)
+ 		return -1;
+ 
+ 	case FSYNC_HARDWARE_FLUSH:
+-		count_fsync_hardware_flush += 1;
++		trace2_counter_add(TRACE2_COUNTER_ID_FSYNC_HARDWARE_FLUSH, 1);
+ 
+ 		/*
+ 		 * On macOS, a special fcntl is required to really flush the
+@@ -600,18 +597,6 @@ int git_fsync(int fd, enum fsync_action action)
+ 	}
+ }
+ 
+-static void log_trace_fsync_if(const char *key, intmax_t value)
+-{
+-	if (value)
+-		trace2_data_intmax("fsync", the_repository, key, value);
+-}
+-
+-void trace_git_fsync_stats(void)
+-{
+-	log_trace_fsync_if("fsync/writeout-only", count_fsync_writeout_only);
+-	log_trace_fsync_if("fsync/hardware-flush", count_fsync_hardware_flush);
+-}
+-
+ static int warn_if_unremovable(const char *op, const char *file, int rc)
+ {
+ 	int err;
+diff --git a/wrapper.h b/wrapper.h
+index c85b1328d1..79a9c1b507 100644
+--- a/wrapper.h
++++ b/wrapper.h
+@@ -87,11 +87,6 @@ enum fsync_action {
+  */
+ int git_fsync(int fd, enum fsync_action action);
+ 
+-/*
+- * Writes out trace statistics for fsync using the trace2 API.
+- */
+-void trace_git_fsync_stats(void);
+-
+ /*
+  * Preserves errno, prints a message, but gives no warning for ENOENT.
+  * Returns 0 on success, which includes trying to unlink an object that does
+-- 
+2.39.3 (Apple Git-145)
+

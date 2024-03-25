@@ -1,0 +1,50 @@
+From 6807d3942c6104b32f6c7e04c1f7b5d2c82afa30 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 15 Jan 2024 11:36:02 +0100
+Subject: [PATCH 2688/2871] t9902: verify that completion does not print
+ anything
+
+The Bash completion script must not print anything to either stdout or
+stderr. Instead, it is only expected to populate certain variables.
+Tighten our `test_completion ()` test helper to verify this requirement.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t9902-completion.sh | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index aa9a614de3..95ec762a74 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -5,6 +5,12 @@
+ 
+ test_description='test bash completion'
+ 
++# The Bash completion scripts must not print anything to either stdout or
++# stderr, which we try to verify. When tracing is enabled without support for
++# BASH_XTRACEFD this assertion will fail, so we have to mark the test as
++# untraceable with such ancient Bash versions.
++test_untraceable=UnfortunatelyYes
++
+ . ./lib-bash.sh
+ 
+ complete ()
+@@ -87,9 +93,11 @@ test_completion ()
+ 	else
+ 		sed -e 's/Z$//' |sort >expected
+ 	fi &&
+-	run_completion "$1" &&
++	run_completion "$1" >"$TRASH_DIRECTORY"/bash-completion-output 2>&1 &&
+ 	sort out >out_sorted &&
+-	test_cmp expected out_sorted
++	test_cmp expected out_sorted &&
++	test_must_be_empty "$TRASH_DIRECTORY"/bash-completion-output &&
++	rm "$TRASH_DIRECTORY"/bash-completion-output
+ }
+ 
+ # Test __gitcomp.
+-- 
+2.39.3 (Apple Git-145)
+

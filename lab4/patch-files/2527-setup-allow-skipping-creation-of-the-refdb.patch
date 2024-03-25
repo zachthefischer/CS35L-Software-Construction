@@ -1,0 +1,83 @@
+From 56cd0334f7664feffcd8ed8f8f0d3929374c69e0 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 12 Dec 2023 08:00:46 +0100
+Subject: [PATCH 2527/2871] setup: allow skipping creation of the refdb
+
+Allow callers to skip creation of the reference database via a new flag
+`INIT_DB_SKIP_REFDB`, which is required for git-clone(1) so that we can
+create it at a later point once the object format has been discovered
+from the remote repository.
+
+Note that we also uplift the call to `create_reference_database()` into
+`init_db()`, which makes it easier to handle the new flag for us. This
+changes the order in which we do initialization so that we now set up
+the Git configuration before we create the reference database. In
+practice this move should not result in any change in behaviour.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ setup.c | 13 +++++--------
+ setup.h |  5 +++--
+ 2 files changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/setup.c b/setup.c
+index 865cfe6743..d6a1c59b7b 100644
+--- a/setup.c
++++ b/setup.c
+@@ -1949,11 +1949,9 @@ static void create_reference_database(const char *initial_branch, int quiet)
+ 
+ static int create_default_files(const char *template_path,
+ 				const char *original_git_dir,
+-				const char *initial_branch,
+ 				const struct repository_format *fmt,
+ 				int prev_bare_repository,
+-				int init_shared_repository,
+-				int quiet)
++				int init_shared_repository)
+ {
+ 	struct stat st1;
+ 	struct strbuf buf = STRBUF_INIT;
+@@ -2024,7 +2022,6 @@ static int create_default_files(const char *template_path,
+ 		adjust_shared_perm(get_git_dir());
+ 	}
+ 
+-	create_reference_database(initial_branch, quiet);
+ 	initialize_repository_version(fmt->hash_algo, 0);
+ 
+ 	/* Check filemode trustability */
+@@ -2184,11 +2181,11 @@ int init_db(const char *git_dir, const char *real_git_dir,
+ 	validate_hash_algorithm(&repo_fmt, hash);
+ 
+ 	reinit = create_default_files(template_dir, original_git_dir,
+-				      initial_branch, &repo_fmt,
+-				      prev_bare_repository,
+-				      init_shared_repository,
+-				      flags & INIT_DB_QUIET);
++				      &repo_fmt, prev_bare_repository,
++				      init_shared_repository);
+ 
++	if (!(flags & INIT_DB_SKIP_REFDB))
++		create_reference_database(initial_branch, flags & INIT_DB_QUIET);
+ 	create_object_directory();
+ 
+ 	if (get_shared_repository()) {
+diff --git a/setup.h b/setup.h
+index b48cf1c43b..cbf538286b 100644
+--- a/setup.h
++++ b/setup.h
+@@ -169,8 +169,9 @@ int verify_repository_format(const struct repository_format *format,
+  */
+ void check_repository_format(struct repository_format *fmt);
+ 
+-#define INIT_DB_QUIET 0x0001
+-#define INIT_DB_EXIST_OK 0x0002
++#define INIT_DB_QUIET      (1 << 0)
++#define INIT_DB_EXIST_OK   (1 << 1)
++#define INIT_DB_SKIP_REFDB (1 << 2)
+ 
+ int init_db(const char *git_dir, const char *real_git_dir,
+ 	    const char *template_dir, int hash_algo,
+-- 
+2.39.3 (Apple Git-145)
+

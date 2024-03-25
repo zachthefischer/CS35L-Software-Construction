@@ -1,0 +1,86 @@
+From dfd46bae92ec25d71e7c8a2887e9508aaf211ee8 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 8 Aug 2023 14:14:36 -0400
+Subject: [PATCH 1906/2871] send-email: drop FakeTerm hack
+
+Back in 280242d1cc (send-email: do not barf when Term::ReadLine does not
+like your terminal, 2006-07-02), we added a fallback for when
+Term::ReadLine's constructor failed: we'd have a FakeTerm object
+instead, which would then die if anybody actually tried to call
+readline() on it. Since we instantiated the $term variable at program
+startup, we needed this workaround to let the program run in modes when
+we did not prompt the user.
+
+But later, in f4dc9432fd (send-email: lazily load modules for a big
+speedup, 2021-05-28), we started loading Term::ReadLine lazily only when
+ask() is called. So at that point we know we're trying to prompt the
+user, and we can just die if ReadLine instantiation fails, rather than
+making this fake object to lazily delay showing the error.
+
+This should be OK even if there is no tty (e.g., we're in a cron job),
+because Term::ReadLine will return a stub object in that case whose "IN"
+and "OUT" functions return undef. And since 5906f54e47 (send-email:
+don't attempt to prompt if tty is closed, 2009-03-31), we check for that
+case and skip prompting.
+
+And we can be sure that FakeTerm was not kicking in for such a
+situation, because it has actually been broken since that commit! It
+does not define "IN" or "OUT" methods, so perl would barf with an error.
+If FakeTerm was in use, we were neither honoring what 5906f54e47 tried
+to do, nor producing the readable message that 280242d1cc intended.
+
+So we're better off just dropping FakeTerm entirely, and letting the
+error reported by constructing Term::ReadLine through.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Acked-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ git-send-email.perl | 22 ++--------------------
+ 1 file changed, 2 insertions(+), 20 deletions(-)
+
+diff --git a/git-send-email.perl b/git-send-email.perl
+index affbb88509..4cb6ee9327 100755
+--- a/git-send-email.perl
++++ b/git-send-email.perl
+@@ -26,18 +26,6 @@
+ 
+ Getopt::Long::Configure qw/ pass_through /;
+ 
+-package FakeTerm;
+-sub new {
+-	my ($class, $reason) = @_;
+-	return bless \$reason, shift;
+-}
+-sub readline {
+-	my $self = shift;
+-	die "Cannot use readline on FakeTerm: $$self";
+-}
+-package main;
+-
+-
+ sub usage {
+ 	print <<EOT;
+ git send-email' [<options>] <file|directory>
+@@ -972,16 +960,10 @@ sub get_patch_subject {
+ }
+ 
+ sub term {
+-	my $term = eval {
+-		require Term::ReadLine;
+-		$ENV{"GIT_SEND_EMAIL_NOTTY"}
++	require Term::ReadLine;
++	return $ENV{"GIT_SEND_EMAIL_NOTTY"}
+ 			? Term::ReadLine->new('git-send-email', \*STDIN, \*STDOUT)
+ 			: Term::ReadLine->new('git-send-email');
+-	};
+-	if ($@) {
+-		$term = FakeTerm->new("$@: going non-interactive");
+-	}
+-	return $term;
+ }
+ 
+ sub ask {
+-- 
+2.39.3 (Apple Git-145)
+

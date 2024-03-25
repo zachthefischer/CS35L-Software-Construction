@@ -1,0 +1,57 @@
+From c39952b925ccf59e49f3c174861a862dc1721492 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Matthias=20A=C3=9Fhauer?= <mha1993@live.de>
+Date: Mon, 20 Feb 2023 21:33:25 +0000
+Subject: [PATCH 0884/2871] fetch: choose a sensible default with --jobs=0
+ again
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+prior to 51243f9 (run-command API: don't fall back on online_cpus(),
+2022-10-12) `git fetch --multiple --jobs=0` would choose some default amount
+of jobs, similar to `git -c fetch.parallel=0 fetch --multiple`. While our
+documentation only ever promised that `fetch.parallel` would fall back to a
+"sensible default", it makes sense to do the same for `--jobs`. So fall back
+to online_cpus() and not BUG() out.
+
+This fixes https://github.com/git-for-windows/git/issues/4302
+
+Reported-by: Drew Noakes <drnoakes@microsoft.com>
+Signed-off-by: Matthias Aßhauer <mha1993@live.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c           | 3 +++
+ t/t5514-fetch-multiple.sh | 5 +++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index a21ce89312..a09606b472 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -2196,6 +2196,9 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 	if (dry_run)
+ 		write_fetch_head = 0;
+ 
++	if (!max_jobs)
++		max_jobs = online_cpus();
++
+ 	if (!git_config_get_string_tmp("fetch.bundleuri", &bundle_uri) &&
+ 	    fetch_bundle_uri(the_repository, bundle_uri, NULL))
+ 		warning(_("failed to fetch bundles from '%s'"), bundle_uri);
+diff --git a/t/t5514-fetch-multiple.sh b/t/t5514-fetch-multiple.sh
+index 511ba3bd45..54f422ced3 100755
+--- a/t/t5514-fetch-multiple.sh
++++ b/t/t5514-fetch-multiple.sh
+@@ -197,4 +197,9 @@ test_expect_success 'parallel' '
+ 	test_i18ngrep "could not fetch .two.*128" err
+ '
+ 
++test_expect_success 'git fetch --multiple --jobs=0 picks a default' '
++	(cd test &&
++	 git fetch --multiple --jobs=0)
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

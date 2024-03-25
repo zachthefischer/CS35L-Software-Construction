@@ -1,0 +1,39 @@
+From 170ba45acf4db996a58ce849e6901a65c13b94d6 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 2 Nov 2023 09:47:10 +0100
+Subject: [PATCH 2353/2871] t7900: assert the absence of refs via
+ git-for-each-ref(1)
+
+We're asserting that a prefetch of remotes via git-maintenance(1)
+doesn't write any references in refs/remotes by validating that the
+directory ".git/refs/remotes" is missing. This is quite roundabout: we
+don't care about the directory existing, we care about the references
+not existing, and the way these are stored is on the behest of the
+reference database.
+
+Convert the test to instead check via git-for-each-ref(1) whether any
+remote reference exist.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7900-maintenance.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/t/t7900-maintenance.sh b/t/t7900-maintenance.sh
+index e56f5980dc..cefecee732 100755
+--- a/t/t7900-maintenance.sh
++++ b/t/t7900-maintenance.sh
+@@ -157,7 +157,8 @@ test_expect_success 'prefetch multiple remotes' '
+ 	fetchargs="--prefetch --prune --no-tags --no-write-fetch-head --recurse-submodules=no --quiet" &&
+ 	test_subcommand git fetch remote1 $fetchargs <run-prefetch.txt &&
+ 	test_subcommand git fetch remote2 $fetchargs <run-prefetch.txt &&
+-	test_path_is_missing .git/refs/remotes &&
++	git for-each-ref refs/remotes >actual &&
++	test_must_be_empty actual &&
+ 	git log prefetch/remotes/remote1/one &&
+ 	git log prefetch/remotes/remote2/two &&
+ 	git fetch --all &&
+-- 
+2.39.3 (Apple Git-145)
+

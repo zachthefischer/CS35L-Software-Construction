@@ -1,0 +1,43 @@
+From 64685cb85566c1b0fb288690a300978d3c035431 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sun, 27 Nov 2022 01:18:52 +0000
+Subject: [PATCH 0451/2871] git-jump: move valid-mode check earlier
+
+We check if the "mode" argument supplied by the user is valid by seeing
+if we have a mode_$mode function defined. But we don't do that until
+after creating the tempfile. This is wasteful (we create a tempfile but
+never use it), and makes it harder to add new options (the recent stdout
+option exits before creating the tempfile, so it misses the check and
+"git jump --stdout foo" will produce "git-jump: 92: mode_foo: not found"
+rather than the regular usage message).
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/git-jump/git-jump | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/git-jump/git-jump b/contrib/git-jump/git-jump
+index be0642bbe3..a5a8a77e20 100755
+--- a/contrib/git-jump/git-jump
++++ b/contrib/git-jump/git-jump
+@@ -88,6 +88,8 @@ if test $# -lt 1; then
+ 	exit 1
+ fi
+ mode=$1; shift
++type "mode_$mode" >/dev/null 2>&1 || { usage >&2; exit 1; }
++
+ if test "$use_stdout" = "t"; then
+ 	"mode_$mode" "$@"
+ 	exit 0
+@@ -95,7 +97,6 @@ fi
+ 
+ trap 'rm -f "$tmp"' 0 1 2 3 15
+ tmp=`mktemp -t git-jump.XXXXXX` || exit 1
+-type "mode_$mode" >/dev/null 2>&1 || { usage >&2; exit 1; }
+ "mode_$mode" "$@" >"$tmp"
+ test -s "$tmp" || exit 0
+ open_editor "$tmp"
+-- 
+2.39.3 (Apple Git-145)
+

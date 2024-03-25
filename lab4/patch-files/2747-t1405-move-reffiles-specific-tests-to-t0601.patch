@@ -1,0 +1,57 @@
+From 0453030709d746f906ae5a45387ef72eac544099 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:53 +0000
+Subject: [PATCH 2747/2871] t1405: move reffiles specific tests to t0601
+
+Move this test to t0601 with other reffiles specific pack-refs tests
+since it is reffiles specific in that it looks into the loose refs
+directory for an assertion.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0601-reffiles-pack-refs.sh | 8 ++++++++
+ t/t1405-main-ref-store.sh     | 8 --------
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/t/t0601-reffiles-pack-refs.sh b/t/t0601-reffiles-pack-refs.sh
+index 4929cc7b45..9ec90ba7ce 100755
+--- a/t/t0601-reffiles-pack-refs.sh
++++ b/t/t0601-reffiles-pack-refs.sh
+@@ -32,6 +32,14 @@ test_expect_success 'prepare a trivial repository' '
+ 	HEAD=$(git rev-parse --verify HEAD)
+ '
+ 
++test_expect_success 'pack_refs(PACK_REFS_ALL | PACK_REFS_PRUNE)' '
++	N=`find .git/refs -type f | wc -l` &&
++	test "$N" != 0 &&
++	test-tool ref-store main pack-refs PACK_REFS_PRUNE,PACK_REFS_ALL &&
++	N=`find .git/refs -type f` &&
++	test -z "$N"
++'
++
+ SHA1=
+ 
+ test_expect_success 'see if git show-ref works as expected' '
+diff --git a/t/t1405-main-ref-store.sh b/t/t1405-main-ref-store.sh
+index 62c1eadb19..976bd71efb 100755
+--- a/t/t1405-main-ref-store.sh
++++ b/t/t1405-main-ref-store.sh
+@@ -15,14 +15,6 @@ test_expect_success 'setup' '
+ 	test_commit one
+ '
+ 
+-test_expect_success REFFILES 'pack_refs(PACK_REFS_ALL | PACK_REFS_PRUNE)' '
+-	N=`find .git/refs -type f | wc -l` &&
+-	test "$N" != 0 &&
+-	$RUN pack-refs PACK_REFS_PRUNE,PACK_REFS_ALL &&
+-	N=`find .git/refs -type f` &&
+-	test -z "$N"
+-'
+-
+ test_expect_success 'create_symref(FOO, refs/heads/main)' '
+ 	$RUN create-symref FOO refs/heads/main nothing &&
+ 	echo refs/heads/main >expected &&
+-- 
+2.39.3 (Apple Git-145)
+

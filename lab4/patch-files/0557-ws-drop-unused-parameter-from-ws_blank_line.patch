@@ -1,0 +1,122 @@
+From c5224f0f4cd53e3b205f54b98bc3dc66a9007c71 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 13 Dec 2022 06:12:58 -0500
+Subject: [PATCH 0557/2871] ws: drop unused parameter from ws_blank_line()
+
+We take a ws_rule parameter, but have never looked at it since the
+function was added in 877f23ccb8 (Teach "diff --check" about new blank
+lines at end, 2008-06-26). A comment in the function does mention how we
+_could_ use it, but nobody has felt the need to do so for over a decade.
+
+We could keep it around as reminder of what could be done, but the
+comment serves that purpose. And in the meantime, it triggers
+-Wunused-parameter.
+
+So let's drop it, which in turn allows us to drop similar arguments
+further up the callstack. I've left the comment intact. It does still
+say "ws_rule", but that name is used consistently in the whitespace
+code, so the meaning is clear.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ apply.c |  4 ++--
+ cache.h |  2 +-
+ diff.c  | 11 +++++------
+ ws.c    |  2 +-
+ 4 files changed, 9 insertions(+), 10 deletions(-)
+
+diff --git a/apply.c b/apply.c
+index bc33814313..8582228047 100644
+--- a/apply.c
++++ b/apply.c
+@@ -2913,7 +2913,7 @@ static int apply_one_fragment(struct apply_state *state,
+ 			break;
+ 		case ' ':
+ 			if (plen && (ws_rule & WS_BLANK_AT_EOF) &&
+-			    ws_blank_line(patch + 1, plen, ws_rule))
++			    ws_blank_line(patch + 1, plen))
+ 				is_blank_context = 1;
+ 			/* fallthrough */
+ 		case '-':
+@@ -2942,7 +2942,7 @@ static int apply_one_fragment(struct apply_state *state,
+ 				      (first == '+' ? 0 : LINE_COMMON));
+ 			if (first == '+' &&
+ 			    (ws_rule & WS_BLANK_AT_EOF) &&
+-			    ws_blank_line(patch + 1, plen, ws_rule))
++			    ws_blank_line(patch + 1, plen))
+ 				added_blank_line = 1;
+ 			break;
+ 		case '@': case '\\':
+diff --git a/cache.h b/cache.h
+index 07d40b0964..fcf49706ad 100644
+--- a/cache.h
++++ b/cache.h
+@@ -1865,7 +1865,7 @@ unsigned ws_check(const char *line, int len, unsigned ws_rule);
+ void ws_check_emit(const char *line, int len, unsigned ws_rule, FILE *stream, const char *set, const char *reset, const char *ws);
+ char *whitespace_error_string(unsigned ws);
+ void ws_fix_copy(struct strbuf *, const char *, int, unsigned, int *);
+-int ws_blank_line(const char *line, int len, unsigned ws_rule);
++int ws_blank_line(const char *line, int len);
+ #define ws_tab_width(rule)     ((rule) & WS_TAB_WIDTH_MASK)
+ 
+ /* ls-files */
+diff --git a/diff.c b/diff.c
+index 1054a4b732..74ebe247b4 100644
+--- a/diff.c
++++ b/diff.c
+@@ -604,7 +604,7 @@ static unsigned long diff_filespec_size(struct repository *r,
+ 	return one->size;
+ }
+ 
+-static int count_trailing_blank(mmfile_t *mf, unsigned ws_rule)
++static int count_trailing_blank(mmfile_t *mf)
+ {
+ 	char *ptr = mf->ptr;
+ 	long size = mf->size;
+@@ -622,7 +622,7 @@ static int count_trailing_blank(mmfile_t *mf, unsigned ws_rule)
+ 		for (prev_eol = ptr; mf->ptr <= prev_eol; prev_eol--)
+ 			if (*prev_eol == '\n')
+ 				break;
+-		if (!ws_blank_line(prev_eol + 1, ptr - prev_eol, ws_rule))
++		if (!ws_blank_line(prev_eol + 1, ptr - prev_eol))
+ 			break;
+ 		cnt++;
+ 		ptr = prev_eol - 1;
+@@ -634,9 +634,8 @@ static void check_blank_at_eof(mmfile_t *mf1, mmfile_t *mf2,
+ 			       struct emit_callback *ecbdata)
+ {
+ 	int l1, l2, at;
+-	unsigned ws_rule = ecbdata->ws_rule;
+-	l1 = count_trailing_blank(mf1, ws_rule);
+-	l2 = count_trailing_blank(mf2, ws_rule);
++	l1 = count_trailing_blank(mf1);
++	l2 = count_trailing_blank(mf2);
+ 	if (l2 <= l1) {
+ 		ecbdata->blank_at_eof_in_preimage = 0;
+ 		ecbdata->blank_at_eof_in_postimage = 0;
+@@ -1583,7 +1582,7 @@ static int new_blank_line_at_eof(struct emit_callback *ecbdata, const char *line
+ 	      ecbdata->blank_at_eof_in_preimage <= ecbdata->lno_in_preimage &&
+ 	      ecbdata->blank_at_eof_in_postimage <= ecbdata->lno_in_postimage))
+ 		return 0;
+-	return ws_blank_line(line, len, ecbdata->ws_rule);
++	return ws_blank_line(line, len);
+ }
+ 
+ static void emit_add_line(struct emit_callback *ecbdata,
+diff --git a/ws.c b/ws.c
+index 6e69877f25..46a77bcad6 100644
+--- a/ws.c
++++ b/ws.c
+@@ -252,7 +252,7 @@ unsigned ws_check(const char *line, int len, unsigned ws_rule)
+ 	return ws_check_emit_1(line, len, ws_rule, NULL, NULL, NULL, NULL);
+ }
+ 
+-int ws_blank_line(const char *line, int len, unsigned ws_rule)
++int ws_blank_line(const char *line, int len)
+ {
+ 	/*
+ 	 * We _might_ want to treat CR differently from other
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,145 @@
+From 501e3bab99da75eada3e2d6ef5257a3c44dd1ae4 Mon Sep 17 00:00:00 2001
+From: Kyle Zhao <kylezhao@tencent.com>
+Date: Fri, 11 Nov 2022 23:45:14 +0000
+Subject: [PATCH 0376/2871] merge-tree.c: allow specifying the merge-base when
+ --stdin is passed
+
+The previous commit added a `--merge-base` option in order to allow
+using a specified merge-base for the merge.  Extend the input accepted
+by `--stdin` to also allow a specified merge-base with each merge
+requested.  For example:
+
+    printf "<b3> -- <b1> <b2>" | git merge-tree --stdin
+
+does a merge of b1 and b2, and uses b3 as the merge-base.
+
+Signed-off-by: Kyle Zhao <kylezhao@tencent.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/git-merge-tree.txt | 14 ++++++++++++-
+ builtin/merge-tree.c             | 21 +++++++++++++++++--
+ t/t4301-merge-tree-write-tree.sh | 35 ++++++++++++++++++++++++++++++++
+ 3 files changed, 67 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/git-merge-tree.txt b/Documentation/git-merge-tree.txt
+index d9dacb2ce5..298c133fdb 100644
+--- a/Documentation/git-merge-tree.txt
++++ b/Documentation/git-merge-tree.txt
+@@ -66,7 +66,8 @@ OPTIONS
+ 
+ --merge-base=<commit>::
+ 	Instead of finding the merge-bases for <branch1> and <branch2>,
+-	specify a merge-base for the merge.
++	specify a merge-base for the merge. This option is incompatible
++	with `--stdin`.
+ 
+ [[OUTPUT]]
+ OUTPUT
+@@ -220,6 +221,17 @@ with linkgit:git-merge[1]:
+   * any messages that would have been printed to stdout (the
+     <<IM,Informational messages>>)
+ 
++INPUT FORMAT
++------------
++'git merge-tree --stdin' input format is fully text based. Each line
++has this format:
++
++	[<base-commit> -- ]<branch1> <branch2>
++
++If one line is separated by `--`, the string before the separator is
++used for specifying a merge-base for the merge and the string after
++the separator describes the branches to be merged.
++
+ MISTAKES TO AVOID
+ -----------------
+ 
+diff --git a/builtin/merge-tree.c b/builtin/merge-tree.c
+index 62c6d43cdb..330f779e8b 100644
+--- a/builtin/merge-tree.c
++++ b/builtin/merge-tree.c
+@@ -557,12 +557,29 @@ int cmd_merge_tree(int argc, const char **argv, const char *prefix)
+ 		while (strbuf_getline_lf(&buf, stdin) != EOF) {
+ 			struct strbuf **split;
+ 			int result;
++			const char *input_merge_base = NULL;
+ 
+ 			split = strbuf_split(&buf, ' ');
+-			if (!split[0] || !split[1] || split[2])
++			if (!split[0] || !split[1])
+ 				die(_("malformed input line: '%s'."), buf.buf);
+ 			strbuf_rtrim(split[0]);
+-			result = real_merge(&o, merge_base, split[0]->buf, split[1]->buf, prefix);
++			strbuf_rtrim(split[1]);
++
++			/* parse the merge-base */
++			if (!strcmp(split[1]->buf, "--")) {
++				input_merge_base = split[0]->buf;
++			}
++
++			if (input_merge_base && split[2] && split[3] && !split[4]) {
++				strbuf_rtrim(split[2]);
++				strbuf_rtrim(split[3]);
++				result = real_merge(&o, input_merge_base, split[2]->buf, split[3]->buf, prefix);
++			} else if (!input_merge_base && !split[2]) {
++				result = real_merge(&o, NULL, split[0]->buf, split[1]->buf, prefix);
++			} else {
++				die(_("malformed input line: '%s'."), buf.buf);
++			}
++
+ 			if (result < 0)
+ 				die(_("merging cannot continue; got unclean result of %d"), result);
+ 			strbuf_list_free(split);
+diff --git a/t/t4301-merge-tree-write-tree.sh b/t/t4301-merge-tree-write-tree.sh
+index 6db96ccbaa..a8983a0edc 100755
+--- a/t/t4301-merge-tree-write-tree.sh
++++ b/t/t4301-merge-tree-write-tree.sh
+@@ -860,6 +860,13 @@ test_expect_success '--stdin with both a successful and a conflicted merge' '
+ 	test_cmp expect actual
+ '
+ 
++
++test_expect_success '--merge-base is incompatible with --stdin' '
++	test_must_fail git merge-tree --merge-base=side1 --stdin 2>expect &&
++
++	grep "^fatal: --merge-base is incompatible with --stdin" expect
++'
++
+ # specify merge-base as parent of branch2
+ # git merge-tree --write-tree --merge-base=c2 c1 c3
+ #   Commit c1: add file1
+@@ -887,4 +894,32 @@ test_expect_success 'specify merge-base as parent of branch2' '
+ 	test_cmp expect actual
+ '
+ 
++# Since the earlier tests have verified that individual merge-tree calls
++# are doing the right thing, this test case is only used to verify that
++# we can also trigger merges via --stdin, and that when we do we get
++# the same answer as running a bunch of separate merges.
++
++test_expect_success 'check the input format when --stdin is passed' '
++	test_when_finished "rm -rf repo" &&
++	git init repo &&
++	test_commit -C repo c1 &&
++	test_commit -C repo c2 &&
++	test_commit -C repo c3 &&
++	printf "c1 c3\nc2 -- c1 c3\nc2 c3" | git -C repo merge-tree --stdin >actual &&
++
++	printf "1\0" >expect &&
++	git -C repo merge-tree --write-tree -z c1 c3 >>expect &&
++	printf "\0" >>expect &&
++
++	printf "1\0" >>expect &&
++	git -C repo merge-tree --write-tree -z --merge-base=c2 c1 c3 >>expect &&
++	printf "\0" >>expect &&
++
++	printf "1\0" >>expect &&
++	git -C repo merge-tree --write-tree -z c2 c3 >>expect &&
++	printf "\0" >>expect &&
++
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

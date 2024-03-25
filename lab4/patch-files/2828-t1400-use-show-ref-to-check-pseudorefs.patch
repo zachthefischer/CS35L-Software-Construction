@@ -1,0 +1,83 @@
+From 1af410d455c5cddae1cdea3e5333ffd6ab616045 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 7 Feb 2024 16:44:36 +0000
+Subject: [PATCH 2828/2871] t1400: use show-ref to check pseudorefs
+
+Now that "git show-ref --verify" accepts pseudorefs use that in
+preference to "git rev-parse" when checking pseudorefs as we do when
+checking branches etc.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t1400-update-ref.sh | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/t/t1400-update-ref.sh b/t/t1400-update-ref.sh
+index f18843bf7a..78a09abc35 100755
+--- a/t/t1400-update-ref.sh
++++ b/t/t1400-update-ref.sh
+@@ -524,51 +524,51 @@ test_expect_success 'given old value for missing pseudoref, do not create' '
+ 
+ test_expect_success 'create pseudoref' '
+ 	git update-ref PSEUDOREF $A &&
+-	test $A = $(git rev-parse PSEUDOREF)
++	test $A = $(git show-ref -s --verify PSEUDOREF)
+ '
+ 
+ test_expect_success 'overwrite pseudoref with no old value given' '
+ 	git update-ref PSEUDOREF $B &&
+-	test $B = $(git rev-parse PSEUDOREF)
++	test $B = $(git show-ref -s --verify PSEUDOREF)
+ '
+ 
+ test_expect_success 'overwrite pseudoref with correct old value' '
+ 	git update-ref PSEUDOREF $C $B &&
+-	test $C = $(git rev-parse PSEUDOREF)
++	test $C = $(git show-ref -s --verify PSEUDOREF)
+ '
+ 
+ test_expect_success 'do not overwrite pseudoref with wrong old value' '
+ 	test_must_fail git update-ref PSEUDOREF $D $E 2>err &&
+-	test $C = $(git rev-parse PSEUDOREF) &&
++	test $C = $(git show-ref -s --verify PSEUDOREF) &&
+ 	test_grep "cannot lock ref.*expected" err
+ '
+ 
+ test_expect_success 'delete pseudoref' '
+ 	git update-ref -d PSEUDOREF &&
+-	test_must_fail git rev-parse PSEUDOREF
++	test_must_fail git show-ref -s --verify PSEUDOREF
+ '
+ 
+ test_expect_success 'do not delete pseudoref with wrong old value' '
+ 	git update-ref PSEUDOREF $A &&
+ 	test_must_fail git update-ref -d PSEUDOREF $B 2>err &&
+-	test $A = $(git rev-parse PSEUDOREF) &&
++	test $A = $(git show-ref -s --verify PSEUDOREF) &&
+ 	test_grep "cannot lock ref.*expected" err
+ '
+ 
+ test_expect_success 'delete pseudoref with correct old value' '
+ 	git update-ref -d PSEUDOREF $A &&
+-	test_must_fail git rev-parse PSEUDOREF
++	test_must_fail git show-ref -s --verify PSEUDOREF
+ '
+ 
+ test_expect_success 'create pseudoref with old OID zero' '
+ 	git update-ref PSEUDOREF $A $Z &&
+-	test $A = $(git rev-parse PSEUDOREF)
++	test $A = $(git show-ref -s --verify PSEUDOREF)
+ '
+ 
+ test_expect_success 'do not overwrite pseudoref with old OID zero' '
+ 	test_when_finished git update-ref -d PSEUDOREF &&
+ 	test_must_fail git update-ref PSEUDOREF $B $Z 2>err &&
+-	test $A = $(git rev-parse PSEUDOREF) &&
++	test $A = $(git show-ref -s --verify PSEUDOREF) &&
+ 	test_grep "already exists" err
+ '
+ 
+-- 
+2.39.3 (Apple Git-145)
+

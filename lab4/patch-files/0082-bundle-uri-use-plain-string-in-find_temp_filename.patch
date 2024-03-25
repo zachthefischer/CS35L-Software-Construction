@@ -1,0 +1,100 @@
+From 23b6d00ba7fd4b3446319395cfe3791710e81d92 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Wed, 12 Oct 2022 12:52:28 +0000
+Subject: [PATCH 0082/2871] bundle-uri: use plain string in
+ find_temp_filename()
+
+The find_temp_filename() method was created in 53a50892be2 (bundle-uri:
+create basic file-copy logic, 2022-08-09) and uses odb_mkstemp() to
+create a temporary filename. The odb_mkstemp() method uses a strbuf in
+its interface, but we do not need to continue carrying a strbuf
+throughout the bundle URI code.
+
+Convert the find_temp_filename() method to use a 'char *' and modify its
+only caller. This makes sense that we don't actually need to modify this
+filename directly later, so using a strbuf is overkill.
+
+This change will simplify the data structure for tracking a bundle list
+to use plain strings instead of strbufs.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c | 28 ++++++++++++++++------------
+ 1 file changed, 16 insertions(+), 12 deletions(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 4a8cc74ed0..8b2f4e08c9 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -5,22 +5,23 @@
+ #include "refs.h"
+ #include "run-command.h"
+ 
+-static int find_temp_filename(struct strbuf *name)
++static char *find_temp_filename(void)
+ {
+ 	int fd;
++	struct strbuf name = STRBUF_INIT;
+ 	/*
+ 	 * Find a temporary filename that is available. This is briefly
+ 	 * racy, but unlikely to collide.
+ 	 */
+-	fd = odb_mkstemp(name, "bundles/tmp_uri_XXXXXX");
++	fd = odb_mkstemp(&name, "bundles/tmp_uri_XXXXXX");
+ 	if (fd < 0) {
+ 		warning(_("failed to create temporary file"));
+-		return -1;
++		return NULL;
+ 	}
+ 
+ 	close(fd);
+-	unlink(name->buf);
+-	return 0;
++	unlink(name.buf);
++	return strbuf_detach(&name, NULL);
+ }
+ 
+ static int download_https_uri_to_file(const char *file, const char *uri)
+@@ -141,28 +142,31 @@ static int unbundle_from_file(struct repository *r, const char *file)
+ int fetch_bundle_uri(struct repository *r, const char *uri)
+ {
+ 	int result = 0;
+-	struct strbuf filename = STRBUF_INIT;
++	char *filename;
+ 
+-	if ((result = find_temp_filename(&filename)))
++	if (!(filename = find_temp_filename())) {
++		result = -1;
+ 		goto cleanup;
++	}
+ 
+-	if ((result = copy_uri_to_file(filename.buf, uri))) {
++	if ((result = copy_uri_to_file(filename, uri))) {
+ 		warning(_("failed to download bundle from URI '%s'"), uri);
+ 		goto cleanup;
+ 	}
+ 
+-	if ((result = !is_bundle(filename.buf, 0))) {
++	if ((result = !is_bundle(filename, 0))) {
+ 		warning(_("file at URI '%s' is not a bundle"), uri);
+ 		goto cleanup;
+ 	}
+ 
+-	if ((result = unbundle_from_file(r, filename.buf))) {
++	if ((result = unbundle_from_file(r, filename))) {
+ 		warning(_("failed to unbundle bundle from URI '%s'"), uri);
+ 		goto cleanup;
+ 	}
+ 
+ cleanup:
+-	unlink(filename.buf);
+-	strbuf_release(&filename);
++	if (filename)
++		unlink(filename);
++	free(filename);
+ 	return result;
+ }
+-- 
+2.39.3 (Apple Git-145)
+

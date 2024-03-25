@@ -1,0 +1,134 @@
+From 0f8edf7317c7eb152bf045ed99b46072439088a6 Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Thu, 1 Feb 2024 01:38:02 +0000
+Subject: [PATCH 2793/2871] index-pack: --fsck-objects to take an optional
+ argument for fsck msgs
+
+git-index-pack has a --strict option that can take an optional argument
+to provide a list of fsck issues to change their severity.
+--fsck-objects does not have such a utility, which would be useful if
+one would like to be more lenient or strict on data integrity in a
+repository.
+
+Like --strict, allow --fsck-objects to also take a list of fsck msgs to
+change the severity.
+
+Remove the "For internal use only" note for --fsck-objects, and document
+the option. This won't often be used by the normal end user, but it
+turns out it is useful for Git forges like GitLab.
+
+Reviewed-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-index-pack.txt | 17 +++++++++++------
+ builtin/index-pack.c             |  5 +++--
+ t/t5300-pack-object.sh           | 29 ++++++++++++++++++++++++-----
+ 3 files changed, 38 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/git-index-pack.txt b/Documentation/git-index-pack.txt
+index 694bb9409b..5a20deefd5 100644
+--- a/Documentation/git-index-pack.txt
++++ b/Documentation/git-index-pack.txt
+@@ -96,13 +96,18 @@ default and "Indexing objects" when `--stdin` is specified.
+ --check-self-contained-and-connected::
+ 	Die if the pack contains broken links. For internal use only.
+ 
+---fsck-objects::
+-	For internal use only.
++--fsck-objects[=<msg-id>=<severity>...]::
++	Die if the pack contains broken objects, but unlike `--strict`, don't
++	choke on broken links. If the pack contains a tree pointing to a
++	.gitmodules blob that does not exist, prints the hash of that blob
++	(for the caller to check) after the hash that goes into the name of the
++	pack/idx file (see "Notes").
+ +
+-Die if the pack contains broken objects. If the pack contains a tree
+-pointing to a .gitmodules blob that does not exist, prints the hash of
+-that blob (for the caller to check) after the hash that goes into the
+-name of the pack/idx file (see "Notes").
++An optional comma-separated list of `<msg-id>=<severity>` can be passed to
++change the severity of some possible issues, e.g.,
++`--fsck-objects="missingEmail=ignore,badTagName=ignore"`. See the entry for the
++`fsck.<msg-id>` configuration options in linkgit:git-fsck[1] for more
++information on the possible values of `<msg-id>` and `<severity>`.
+ 
+ --threads=<n>::
+ 	Specifies the number of threads to spawn when resolving
+diff --git a/builtin/index-pack.c b/builtin/index-pack.c
+index 49a7c53259..44181f11cf 100644
+--- a/builtin/index-pack.c
++++ b/builtin/index-pack.c
+@@ -26,7 +26,7 @@
+ #include "setup.h"
+ 
+ static const char index_pack_usage[] =
+-"git index-pack [-v] [-o <index-file>] [--keep | --keep=<msg>] [--[no-]rev-index] [--verify] [--strict[=<msg-id>=<severity>...]] (<pack-file> | --stdin [--fix-thin] [<pack-file>])";
++"git index-pack [-v] [-o <index-file>] [--keep | --keep=<msg>] [--[no-]rev-index] [--verify] [--strict[=<msg-id>=<severity>...]] [--fsck-objects[=<msg-id>=<severity>...]] (<pack-file> | --stdin [--fix-thin] [<pack-file>])";
+ 
+ struct object_entry {
+ 	struct pack_idx_entry idx;
+@@ -1785,8 +1785,9 @@ int cmd_index_pack(int argc, const char **argv, const char *prefix)
+ 			} else if (!strcmp(arg, "--check-self-contained-and-connected")) {
+ 				strict = 1;
+ 				check_self_contained_and_connected = 1;
+-			} else if (!strcmp(arg, "--fsck-objects")) {
++			} else if (skip_to_optional_arg(arg, "--fsck-objects", &arg)) {
+ 				do_fsck_object = 1;
++				fsck_set_msg_types(&fsck_options, arg);
+ 			} else if (!strcmp(arg, "--verify")) {
+ 				verify = 1;
+ 			} else if (!strcmp(arg, "--verify-stat")) {
+diff --git a/t/t5300-pack-object.sh b/t/t5300-pack-object.sh
+index 496fffa0f8..a58f91035d 100755
+--- a/t/t5300-pack-object.sh
++++ b/t/t5300-pack-object.sh
+@@ -441,8 +441,7 @@ test_expect_success 'index-pack with --strict' '
+ 	)
+ '
+ 
+-test_expect_success 'index-pack with --strict downgrading fsck msgs' '
+-	test_when_finished rm -rf strict &&
++test_expect_success 'setup for --strict and --fsck-objects downgrading fsck msgs' '
+ 	git init strict &&
+ 	(
+ 		cd strict &&
+@@ -457,12 +456,32 @@ test_expect_success 'index-pack with --strict downgrading fsck msgs' '
+ 
+ 		EOF
+ 		git hash-object --literally -t commit -w --stdin <commit >commit_list &&
+-		PACK=$(git pack-objects test <commit_list) &&
+-		test_must_fail git index-pack --strict "test-$PACK.pack" &&
+-		git index-pack --strict="missingEmail=ignore" "test-$PACK.pack"
++		git pack-objects test <commit_list >pack-name
+ 	)
+ '
+ 
++test_with_bad_commit () {
++	must_fail_arg="$1" &&
++	must_pass_arg="$2" &&
++	(
++		cd strict &&
++		test_expect_fail git index-pack "$must_fail_arg" "test-$(cat pack-name).pack"
++		git index-pack "$must_pass_arg" "test-$(cat pack-name).pack"
++	)
++}
++
++test_expect_success 'index-pack with --strict downgrading fsck msgs' '
++	test_with_bad_commit --strict --strict="missingEmail=ignore"
++'
++
++test_expect_success 'index-pack with --fsck-objects downgrading fsck msgs' '
++	test_with_bad_commit --fsck-objects --fsck-objects="missingEmail=ignore"
++'
++
++test_expect_success 'cleanup for --strict and --fsck-objects downgrading fsck msgs' '
++	rm -rf strict
++'
++
+ test_expect_success 'honor pack.packSizeLimit' '
+ 	git config pack.packSizeLimit 3m &&
+ 	packname_10=$(git pack-objects test-10 <obj-list) &&
+-- 
+2.39.3 (Apple Git-145)
+

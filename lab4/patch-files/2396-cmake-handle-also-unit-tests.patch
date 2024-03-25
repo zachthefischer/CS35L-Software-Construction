@@ -1,0 +1,40 @@
+From 694e89baeb824a173b655507b7b62174d2d15688 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 25 Sep 2023 11:20:36 +0000
+Subject: [PATCH 2396/2871] cmake: handle also unit tests
+
+The unit tests should also be available e.g. in Visual Studio's Test
+Explorer when configuring Git's source code via CMake.
+
+Suggested-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/buildsystems/CMakeLists.txt | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/contrib/buildsystems/CMakeLists.txt b/contrib/buildsystems/CMakeLists.txt
+index 356f068cac..671c7ead75 100644
+--- a/contrib/buildsystems/CMakeLists.txt
++++ b/contrib/buildsystems/CMakeLists.txt
+@@ -981,6 +981,17 @@ foreach(unit_test ${unit_test_PROGRAMS})
+ 			PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/t/unit-tests/bin)
+ 	endif()
+ 	list(APPEND PROGRAMS_BUILT "${unit_test}")
++
++	# t-basic intentionally fails tests, to validate the unit-test infrastructure.
++	# Therefore, it should only be run as part of t0080, which verifies that it
++	# fails only in the expected ways.
++	#
++	# All other unit tests should be run.
++	if(NOT ${unit_test} STREQUAL "t-basic")
++		add_test(NAME "t.unit-tests.${unit_test}"
++			COMMAND "./${unit_test}"
++			WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/t/unit-tests/bin)
++	endif()
+ endforeach()
+ 
+ #test-tool
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,269 @@
+From 1c31764dda4fd4aacdcc95c4a53b8c778a2f9de2 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Wed, 10 May 2023 14:34:15 +0200
+Subject: [PATCH 1427/2871] fetch: print left-hand side when fetching HEAD:foo
+
+`store_updated_refs()` parses the remote reference for two purposes:
+
+    - It gets used as a note when writing FETCH_HEAD.
+
+    - It is passed through to `display_ref_update()` to display
+      updated references in the following format:
+
+      ```
+       * branch               master          -> master
+      ```
+
+In most cases, the parsed remote reference is the prettified reference
+name and can thus be used for both cases. But if the remote reference is
+HEAD, the parsed remote reference becomes empty. This is intended when
+we write the FETCH_HEAD, where we skip writing the note in that case.
+But when displaying the updated references this leads to inconsistent
+output where the left-hand side of reference updates is missing in some
+cases:
+
+```
+$ git fetch origin HEAD HEAD:explicit-head :implicit-head main
+From https://github.com/git/git
+ * branch                  HEAD       -> FETCH_HEAD
+ * [new ref]                          -> explicit-head
+ * [new ref]                          -> implicit-head
+ * branch                  main       -> FETCH_HEAD
+```
+
+This behaviour has existed ever since the table-based output has been
+introduced for git-fetch(1) via 165f390250 (git-fetch: more terse fetch
+output, 2007-11-03) and was never explicitly documented either in the
+commit message or in any of our tests. So while it may not be a bug per
+se, it feels like a weird inconsistency and not like it was a concious
+design decision.
+
+The logic of how we compute the remote reference name that we ultimately
+pass to `display_ref_update()` is not easy to follow. There are three
+different cases here:
+
+    - When the remote reference name is "HEAD" we set the remote
+      reference name to the empty string. This is the case that causes
+      the left-hand side to go missing, where we would indeed want to
+      print "HEAD" instead of the empty string. This is what
+      `prettify_refname()` would return.
+
+    - When the remote reference name has a well-known prefix then we
+      strip this prefix. This matches what `prettify_refname()` does.
+
+    - Otherwise, we keep the fully qualified reference name. This also
+      matches what `prettify_refname()` does.
+
+As the return value of `prettify_refname()` would do the correct thing
+for us in all three cases, we can thus fix the inconsistency by passing
+through the full remote reference name to `display_ref_update()`, which
+learns to call `prettify_refname()`. At the same time, this also
+simplifies the code a bit.
+
+Note that this patch also changes formatting of the block that computes
+the "kind" (which is the category like "branch" or "tag") and "what"
+(which is the prettified reference name like "master" or "v1.0")
+variables. This is done on purpose so that it is part of the diff,
+hopefully making the change easier to comprehend.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/fetch.c         | 37 ++++++++++++++++----------------
+ t/t5574-fetch-output.sh | 47 +++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 66 insertions(+), 18 deletions(-)
+
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 71959b2479..2b8d15fb9e 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -920,12 +920,14 @@ static void display_ref_update(struct display_state *display_state, char code,
+ 	}
+ 
+ 	width = (summary_width + strlen(summary) - gettext_width(summary));
++	remote = prettify_refname(remote);
++	local = prettify_refname(local);
+ 
+ 	strbuf_addf(&display_state->buf, " %c %-*s ", code, width, summary);
+ 	if (!display_state->compact_format)
+-		print_remote_to_local(display_state, remote, prettify_refname(local));
++		print_remote_to_local(display_state, remote, local);
+ 	else
+-		print_compact(display_state, remote, prettify_refname(local));
++		print_compact(display_state, remote, local);
+ 	if (error)
+ 		strbuf_addf(&display_state->buf, "  (%s)", error);
+ 	strbuf_addch(&display_state->buf, '\n');
+@@ -936,7 +938,7 @@ static void display_ref_update(struct display_state *display_state, char code,
+ static int update_local_ref(struct ref *ref,
+ 			    struct ref_transaction *transaction,
+ 			    struct display_state *display_state,
+-			    const char *remote, const struct ref *remote_ref,
++			    const struct ref *remote_ref,
+ 			    int summary_width)
+ {
+ 	struct commit *current = NULL, *updated;
+@@ -948,7 +950,7 @@ static int update_local_ref(struct ref *ref,
+ 	if (oideq(&ref->old_oid, &ref->new_oid)) {
+ 		if (verbosity > 0)
+ 			display_ref_update(display_state, '=', _("[up to date]"), NULL,
+-					   remote, ref->name, summary_width);
++					   remote_ref->name, ref->name, summary_width);
+ 		return 0;
+ 	}
+ 
+@@ -961,7 +963,7 @@ static int update_local_ref(struct ref *ref,
+ 		 */
+ 		display_ref_update(display_state, '!', _("[rejected]"),
+ 				   _("can't fetch into checked-out branch"),
+-				   remote, ref->name, summary_width);
++				   remote_ref->name, ref->name, summary_width);
+ 		return 1;
+ 	}
+ 
+@@ -972,12 +974,12 @@ static int update_local_ref(struct ref *ref,
+ 			r = s_update_ref("updating tag", ref, transaction, 0);
+ 			display_ref_update(display_state, r ? '!' : 't', _("[tag update]"),
+ 					   r ? _("unable to update local ref") : NULL,
+-					   remote, ref->name, summary_width);
++					   remote_ref->name, ref->name, summary_width);
+ 			return r;
+ 		} else {
+ 			display_ref_update(display_state, '!', _("[rejected]"),
+ 					   _("would clobber existing tag"),
+-					   remote, ref->name, summary_width);
++					   remote_ref->name, ref->name, summary_width);
+ 			return 1;
+ 		}
+ 	}
+@@ -1010,7 +1012,7 @@ static int update_local_ref(struct ref *ref,
+ 		r = s_update_ref(msg, ref, transaction, 0);
+ 		display_ref_update(display_state, r ? '!' : '*', what,
+ 				   r ? _("unable to update local ref") : NULL,
+-				   remote, ref->name, summary_width);
++				   remote_ref->name, ref->name, summary_width);
+ 		return r;
+ 	}
+ 
+@@ -1033,7 +1035,7 @@ static int update_local_ref(struct ref *ref,
+ 		r = s_update_ref("fast-forward", ref, transaction, 1);
+ 		display_ref_update(display_state, r ? '!' : ' ', quickref.buf,
+ 				   r ? _("unable to update local ref") : NULL,
+-				   remote, ref->name, summary_width);
++				   remote_ref->name, ref->name, summary_width);
+ 		strbuf_release(&quickref);
+ 		return r;
+ 	} else if (force || ref->force) {
+@@ -1045,12 +1047,12 @@ static int update_local_ref(struct ref *ref,
+ 		r = s_update_ref("forced-update", ref, transaction, 1);
+ 		display_ref_update(display_state, r ? '!' : '+', quickref.buf,
+ 				   r ? _("unable to update local ref") : _("forced update"),
+-				   remote, ref->name, summary_width);
++				   remote_ref->name, ref->name, summary_width);
+ 		strbuf_release(&quickref);
+ 		return r;
+ 	} else {
+ 		display_ref_update(display_state, '!', _("[rejected]"), _("non-fast-forward"),
+-				   remote, ref->name, summary_width);
++				   remote_ref->name, ref->name, summary_width);
+ 		return 1;
+ 	}
+ }
+@@ -1255,14 +1257,13 @@ static int store_updated_refs(struct display_state *display_state,
+ 			if (!strcmp(rm->name, "HEAD")) {
+ 				kind = "";
+ 				what = "";
+-			}
+-			else if (skip_prefix(rm->name, "refs/heads/", &what))
++			} else if (skip_prefix(rm->name, "refs/heads/", &what)) {
+ 				kind = "branch";
+-			else if (skip_prefix(rm->name, "refs/tags/", &what))
++			} else if (skip_prefix(rm->name, "refs/tags/", &what)) {
+ 				kind = "tag";
+-			else if (skip_prefix(rm->name, "refs/remotes/", &what))
++			} else if (skip_prefix(rm->name, "refs/remotes/", &what)) {
+ 				kind = "remote-tracking branch";
+-			else {
++			} else {
+ 				kind = "";
+ 				what = rm->name;
+ 			}
+@@ -1280,7 +1281,7 @@ static int store_updated_refs(struct display_state *display_state,
+ 					  display_state->url_len);
+ 
+ 			if (ref) {
+-				rc |= update_local_ref(ref, transaction, display_state, what,
++				rc |= update_local_ref(ref, transaction, display_state,
+ 						       rm, summary_width);
+ 				free(ref);
+ 			} else if (write_fetch_head || dry_run) {
+@@ -1291,7 +1292,7 @@ static int store_updated_refs(struct display_state *display_state,
+ 				 */
+ 				display_ref_update(display_state, '*',
+ 						   *kind ? kind : "branch", NULL,
+-						   *what ? what : "HEAD",
++						   rm->name,
+ 						   "FETCH_HEAD", summary_width);
+ 			}
+ 		}
+diff --git a/t/t5574-fetch-output.sh b/t/t5574-fetch-output.sh
+index 8a344e6790..9890f6f381 100755
+--- a/t/t5574-fetch-output.sh
++++ b/t/t5574-fetch-output.sh
+@@ -61,6 +61,53 @@ test_expect_success 'fetch compact output' '
+ 	test_cmp expect actual
+ '
+ 
++test_expect_success 'fetch output with HEAD' '
++	test_when_finished "rm -rf head" &&
++	git clone . head &&
++
++	git -C head fetch --dry-run origin HEAD >actual.out 2>actual.err &&
++	cat >expect <<-EOF &&
++	From $(test-tool path-utils real_path .)/.
++	 * branch            HEAD       -> FETCH_HEAD
++	EOF
++	test_must_be_empty actual.out &&
++	test_cmp expect actual.err &&
++
++	git -C head fetch origin HEAD >actual.out 2>actual.err &&
++	test_must_be_empty actual.out &&
++	test_cmp expect actual.err &&
++
++	git -C head fetch --dry-run origin HEAD:foo >actual.out 2>actual.err &&
++	cat >expect <<-EOF &&
++	From $(test-tool path-utils real_path .)/.
++	 * [new ref]         HEAD       -> foo
++	EOF
++	test_must_be_empty actual.out &&
++	test_cmp expect actual.err &&
++
++	git -C head fetch origin HEAD:foo >actual.out 2>actual.err &&
++	test_must_be_empty actual.out &&
++	test_cmp expect actual.err
++'
++
++test_expect_success 'fetch output with object ID' '
++	test_when_finished "rm -rf object-id" &&
++	git clone . object-id &&
++	commit=$(git rev-parse HEAD) &&
++
++	git -C object-id fetch --dry-run origin $commit:object-id >actual.out 2>actual.err &&
++	cat >expect <<-EOF &&
++	From $(test-tool path-utils real_path .)/.
++	 * [new ref]         $commit -> object-id
++	EOF
++	test_must_be_empty actual.out &&
++	test_cmp expect actual.err &&
++
++	git -C object-id fetch origin $commit:object-id >actual.out 2>actual.err &&
++	test_must_be_empty actual.out &&
++	test_cmp expect actual.err
++'
++
+ test_expect_success '--no-show-forced-updates' '
+ 	mkdir forced-updates &&
+ 	(
+-- 
+2.39.3 (Apple Git-145)
+

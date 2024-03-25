@@ -1,0 +1,44 @@
+From a5748670e387dd32450a59b00d17044a34818b9a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Thu, 13 Oct 2022 17:39:16 +0200
+Subject: [PATCH 0131/2871] doc txt & -h consistency: make "bundle" consistent
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Amend the -h output to match that of the *.txt output, the differences
+were fairly small. In the case of "[<options>]" we only have a few of
+them, so let's exhaustively list them as in the *.txt.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/bundle.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/builtin/bundle.c b/builtin/bundle.c
+index 1b08700bf9..544c78a5f3 100644
+--- a/builtin/bundle.c
++++ b/builtin/bundle.c
+@@ -12,13 +12,14 @@
+  */
+ 
+ #define BUILTIN_BUNDLE_CREATE_USAGE \
+-	N_("git bundle create [<options>] <file> <git-rev-list args>")
++	N_("git bundle create [-q | --quiet | --progress | --all-progress] [--all-progress-implied]\n" \
++	   "                  [--version=<version>] <file> <git-rev-list-args>")
+ #define BUILTIN_BUNDLE_VERIFY_USAGE \
+-	N_("git bundle verify [<options>] <file>")
++	N_("git bundle verify [-q | --quiet] <file>")
+ #define BUILTIN_BUNDLE_LIST_HEADS_USAGE \
+ 	N_("git bundle list-heads <file> [<refname>...]")
+ #define BUILTIN_BUNDLE_UNBUNDLE_USAGE \
+-	N_("git bundle unbundle <file> [<refname>...]")
++	N_("git bundle unbundle [--progress] <file> [<refname>...]")
+ 
+ static char const * const builtin_bundle_usage[] = {
+ 	BUILTIN_BUNDLE_CREATE_USAGE,
+-- 
+2.39.3 (Apple Git-145)
+

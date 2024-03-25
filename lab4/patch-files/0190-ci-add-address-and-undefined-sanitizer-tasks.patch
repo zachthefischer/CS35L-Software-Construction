@@ -1,0 +1,57 @@
+From 1c0962c0c42f5fe5039d2dbd538c86b34f617408 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Thu, 20 Oct 2022 09:20:59 -0700
+Subject: [PATCH 0190/2871] ci: add address and undefined sanitizer tasks
+
+The current code is clean with these two sanitizers, and we would
+like to keep it that way by running the checks for any new code.
+
+The signal of "passed with asan, but not ubsan" (or vice versa) is
+not that useful in practice, so it is tempting to run both santizers
+in a single task, but it seems to take forever, so tentatively let's
+try having two separate ones.
+
+Helped-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ .github/workflows/main.yml | 6 ++++++
+ ci/lib.sh                  | 6 ++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 831f4df56c..bd6f75b8e0 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -251,6 +251,12 @@ jobs:
+           - jobname: linux-leaks
+             cc: gcc
+             pool: ubuntu-latest
++          - jobname: linux-asan
++            cc: gcc
++            pool: ubuntu-latest
++          - jobname: linux-ubsan
++            cc: gcc
++            pool: ubuntu-latest
+     env:
+       CC: ${{matrix.vector.cc}}
+       CC_PACKAGE: ${{matrix.vector.cc_package}}
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 1b0cc2b57d..e3d49d3296 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -278,6 +278,12 @@ linux-leaks)
+ 	export GIT_TEST_PASSING_SANITIZE_LEAK=true
+ 	export GIT_TEST_SANITIZE_LEAK_LOG=true
+ 	;;
++linux-asan)
++	export SANITIZE=address
++	;;
++linux-ubsan)
++	export SANITIZE=undefined
++	;;
+ esac
+ 
+ MAKEFLAGS="$MAKEFLAGS CC=${CC:-cc}"
+-- 
+2.39.3 (Apple Git-145)
+

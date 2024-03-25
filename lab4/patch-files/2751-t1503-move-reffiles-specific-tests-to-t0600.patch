@@ -1,0 +1,48 @@
+From dfc9486cb7d0512267d005d1baccf51484fc75ac Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Fri, 19 Jan 2024 20:18:57 +0000
+Subject: [PATCH 2751/2871] t1503: move reffiles specific tests to t0600
+
+Move this test to t0600 with other reffiles specific tests since it
+checks for loose refs and is specific to the reffiles backend.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0600-reffiles-backend.sh | 5 +++++
+ t/t1503-rev-parse-verify.sh | 5 -----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/t/t0600-reffiles-backend.sh b/t/t0600-reffiles-backend.sh
+index 0d6ec020b3..630b8ee11b 100755
+--- a/t/t0600-reffiles-backend.sh
++++ b/t/t0600-reffiles-backend.sh
+@@ -359,4 +359,9 @@ test_expect_success 'empty reflog' '
+ 	test_must_be_empty err
+ '
+ 
++test_expect_success SYMLINKS 'ref resolution not confused by broken symlinks' '
++       ln -s does-not-exist .git/refs/heads/broken &&
++       test_must_fail git rev-parse --verify broken
++'
++
+ test_done
+diff --git a/t/t1503-rev-parse-verify.sh b/t/t1503-rev-parse-verify.sh
+index bc136833c1..79df65ec7f 100755
+--- a/t/t1503-rev-parse-verify.sh
++++ b/t/t1503-rev-parse-verify.sh
+@@ -144,11 +144,6 @@ test_expect_success 'main@{n} for various n' '
+ 	test_must_fail git rev-parse --verify main@{$Np1}
+ '
+ 
+-test_expect_success SYMLINKS,REFFILES 'ref resolution not confused by broken symlinks' '
+-	ln -s does-not-exist .git/refs/heads/broken &&
+-	test_must_fail git rev-parse --verify broken
+-'
+-
+ test_expect_success 'options can appear after --verify' '
+ 	git rev-parse --verify HEAD >expect &&
+ 	git rev-parse --verify -q HEAD >actual &&
+-- 
+2.39.3 (Apple Git-145)
+

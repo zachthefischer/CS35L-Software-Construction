@@ -1,0 +1,244 @@
+From a1fbe26a0c2bb8ba84c3976023e4ded4cf94608e Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 3 Dec 2023 05:57:04 +0000
+Subject: [PATCH 2486/2871] completion: avoid user confusion in non-cone mode
+
+It is tempting to think of "files and directories" of the current
+directory as valid inputs to the add and set subcommands of git
+sparse-checkout.  However, in non-cone mode, they often aren't and using
+them as potential completions leads to *many* forms of confusion:
+
+Issue #1. It provides the *wrong* files and directories.
+
+For
+    git sparse-checkout add
+we always want to add files and directories not currently in our sparse
+checkout, which means we want file and directories not currently present
+in the current working tree.  Providing the files and directories
+currently present is thus always wrong.
+
+For
+    git sparse-checkout set
+we have a similar problem except in the subset of cases where we are
+trying to narrow our checkout to a strict subset of what we already
+have.  That is not a very common scenario, especially since it often
+does not even happen to be true for the first use of the command; for
+years we required users to create a sparse-checkout via
+    git sparse-checkout init
+    git sparse-checkout set <args...>
+(or use a clone option that did the init step for you at clone time).
+The init command creates a minimal sparse-checkout with just the
+top-level directory present, meaning the set command has to be used to
+expand the checkout.  Thus, only in a special and perhaps unusual cases
+would any of the suggestions from normal file and directory completion
+be appropriate.
+
+Issue #2: Suggesting patterns that lead to warnings is unfriendly.
+
+If the user specifies any regular file and omits the leading '/', then
+the sparse-checkout command will warn the user that their command is
+problematic and suggest they use a leading slash instead.
+
+Issue #3: Completion gets confused by leading '/', and provides wrong paths.
+
+Users often want to anchor their patterns to the toplevel of the
+repository, especially when listing individual files.  There are a
+number of reasons for this, but notably even sparse-checkout encourages
+them to do so (as noted above).  However, if users do so (via adding a
+leading '/' to their pattern), then bash completion will interpret the
+leading slash not as a request for a path at the toplevel of the
+repository, but as a request for a path at the root of the filesytem.
+That means at best that completion cannot help with such paths, and if
+it does find any completions, they are almost guaranteed to be wrong.
+
+Issue #4: Suggesting invalid patterns from subdirectories is unfriendly.
+
+There is no per-directory equivalent to .gitignore with
+sparse-checkouts.  There is only a single worktree-global
+$GIT_DIR/info/sparse-checkout file.  As such, paths to files must be
+specified relative to the toplevel of a repository.  Providing
+suggestions of paths that are relative to the current working directory,
+as bash completion defaults to, is wrong when the current working
+directory is not the worktree toplevel directory.
+
+Issue #5: Paths with special characters will be interpreted incorrectly
+
+The entries in the sparse-checkout file are patterns, not paths.  While
+most paths also qualify as patterns (though even in such cases it would
+be better for users to not use them directly but prefix them with a
+leading '/'), there are a variety of special characters that would need
+special escaping beyond the normal shell escaping: '*', '?', '\', '[',
+']', and any leading '#' or '!'.  If completion suggests any such paths,
+users will likely expect them to be treated as an exact path rather than
+as a pattern that might match some number of files other than 1.
+
+However, despite the first four issues, we can note that _if_ users are
+using tab completion, then they are probably trying to specify a path in
+the index.  As such, we transform their argument into a top-level-rooted
+pattern that matches such a file.  For example, if they type:
+   git sparse-checkout add Make<TAB>
+we could "complete" to
+   git sparse-checkout add /Makefile
+or, if they ran from the Documentation/technical/ subdirectory:
+   git sparse-checkout add m<TAB>
+we could "complete" it to:
+   git sparse-checkout add /Documentation/technical/multi-pack-index.txt
+Note in both cases I use "complete" in quotes, because we actually add
+characters both before and after the argument in question, so we are
+kind of abusing "bash completions" to be "bash completions AND
+beginnings".
+
+The fifth issue is a bit stickier, especially when you consider that we
+not only need to deal with escaping issues because of special meanings
+of patterns in sparse-checkout & gitignore files, but also that we need
+to consider escaping issues due to ls-files needing to sometimes quote
+or escape characters, and because the shell needs to escape some
+characters.  The multiple interacting forms of escaping could get ugly;
+this patch makes no attempt to do so and simply documents that we
+decided to not deal with those corner cases for now but at least get the
+common cases right.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 89 ++++++++++++++++++++++++++
+ t/t9902-completion.sh                  |  9 ++-
+ 2 files changed, 96 insertions(+), 2 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index c614e5d4f0..185b47d802 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -3113,6 +3113,93 @@ __gitcomp_directories ()
+ 	fi
+ }
+ 
++# In non-cone mode, the arguments to {set,add} are supposed to be
++# patterns, relative to the toplevel directory.  These can be any kind
++# of general pattern, like 'subdir/*.c' and we can't complete on all
++# of those.  However, if the user presses Tab to get tab completion, we
++# presume that they are trying to provide a pattern that names a specific
++# path.
++__gitcomp_slash_leading_paths ()
++{
++	local dequoted_word pfx="" cur_ toplevel
++
++	# Since we are dealing with a sparse-checkout, subdirectories may not
++	# exist in the local working copy.  Therefore, we want to run all
++	# ls-files commands relative to the repository toplevel.
++	toplevel="$(git rev-parse --show-toplevel)/"
++
++	__git_dequote "$cur"
++
++	# If the paths provided by the user already start with '/', then
++	# they are considered relative to the toplevel of the repository
++	# already.  If they do not start with /, then we need to adjust
++	# them to start with the appropriate prefix.
++	case "$cur" in
++	/*)
++		cur="${cur:1}"
++		;;
++	*)
++		pfx="$(__git rev-parse --show-prefix)"
++	esac
++
++	# Since sparse-index is limited to cone-mode, in non-cone-mode the
++	# list of valid paths is precisely the cached files in the index.
++	#
++	# NEEDSWORK:
++	#   1) We probably need to take care of cases where ls-files
++	#      responds with special quoting.
++	#   2) We probably need to take care of cases where ${cur} has
++	#      some kind of special quoting.
++	#   3) On top of any quoting from 1 & 2, we have to provide an extra
++	#      level of quoting for any paths that contain a '*', '?', '\',
++	#      '[', ']', or leading '#' or '!' since those will be
++	#      interpreted by sparse-checkout as something other than a
++	#      literal path character.
++	# Since there are two types of quoting here, this might get really
++	# complex.  For now, just punt on all of this...
++	completions="$(__git -C "${toplevel}" -c core.quotePath=false \
++			 ls-files --cached -- "${pfx}${cur}*" \
++			 | sed -e s%^%/% -e 's%$% %')"
++	# Note, above, though that we needed all of the completions to be
++	# prefixed with a '/', and we want to add a space so that bash
++	# completion will actually complete an entry and let us move on to
++	# the next one.
++
++	# Return what we've found.
++	if test -n "$completions"; then
++		# We found some completions; return them
++		local IFS=$'\n'
++		COMPREPLY=($completions)
++	else
++		# Do NOT fall back to bash-style all-local-files-and-dirs
++		# when we find no match.  Such options are worse than
++		# useless:
++		#     1. "git sparse-checkout add" needs paths that are NOT
++		#        currently in the working copy.  "git
++		#        sparse-checkout set" does as well, except in the
++		#        special cases when users are only trying to narrow
++		#        their sparse checkout to a subset of what they
++		#        already have.
++		#
++		#     2. A path like '.config' is ambiguous as to whether
++		#        the user wants all '.config' files throughout the
++		#        tree, or just the one under the current directory.
++		#        It would result in a warning from the
++		#        sparse-checkout command due to this.  As such, all
++		#        completions of paths should be prefixed with a
++		#        '/'.
++		#
++		#     3. We don't want paths prefixed with a '/' to
++		#        complete files in the system root directory, we
++		#        want it to complete on files relative to the
++		#        repository root.
++		#
++		# As such, make sure that NO completions are offered rather
++		# than falling back to bash's default completions.
++		COMPREPLY=( "" )
++	fi
++}
++
+ _git_sparse_checkout ()
+ {
+ 	local subcommands="list init set disable add reapply"
+@@ -3138,6 +3225,8 @@ _git_sparse_checkout ()
+ 		fi
+ 		if [[ "$using_cone" == "true" ]]; then
+ 			__gitcomp_directories
++		else
++			 __gitcomp_slash_leading_paths
+ 		fi
+ 	esac
+ }
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index a7c3b4eb63..aa9a614de3 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -1571,7 +1571,7 @@ test_expect_success FUNNYNAMES,!CYGWIN 'cone mode sparse-checkout completes dire
+ 	)
+ '
+ 
+-test_expect_success 'non-cone mode sparse-checkout uses bash completion' '
++test_expect_success 'non-cone mode sparse-checkout gives rooted paths' '
+ 	# reset sparse-checkout repo to non-cone mode
+ 	git -C sparse-checkout sparse-checkout disable &&
+ 	git -C sparse-checkout sparse-checkout set --no-cone &&
+@@ -1581,7 +1581,12 @@ test_expect_success 'non-cone mode sparse-checkout uses bash completion' '
+ 		# expected to be empty since we have not configured
+ 		# custom completion for non-cone mode
+ 		test_completion "git sparse-checkout set f" <<-\EOF
+-
++		/folder1/0/1/t.txt Z
++		/folder1/expected Z
++		/folder1/out Z
++		/folder1/out_sorted Z
++		/folder2/0/t.txt Z
++		/folder3/t.txt Z
+ 		EOF
+ 	)
+ '
+-- 
+2.39.3 (Apple Git-145)
+

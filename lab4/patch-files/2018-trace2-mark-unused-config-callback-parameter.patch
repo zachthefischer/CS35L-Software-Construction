@@ -1,0 +1,31 @@
+From 4b8dd424d8842685edf39fb7b8b173bae23817a4 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Tue, 29 Aug 2023 19:45:23 -0400
+Subject: [PATCH 2018/2871] trace2: mark unused config callback parameter
+
+This should have been part of 783a86c142 (config: mark unused callback
+parameters, 2022-08-19), but was missed in that commit.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ trace2/tr2_sysenv.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/trace2/tr2_sysenv.c b/trace2/tr2_sysenv.c
+index f26ec95ab4..d3ecac2772 100644
+--- a/trace2/tr2_sysenv.c
++++ b/trace2/tr2_sysenv.c
+@@ -58,7 +58,8 @@ static struct tr2_sysenv_entry tr2_sysenv_settings[] = {
+ /* clang-format on */
+ 
+ static int tr2_sysenv_cb(const char *key, const char *value,
+-			 const struct config_context *ctx UNUSED, void *d)
++			 const struct config_context *ctx UNUSED,
++			 void *d UNUSED)
+ {
+ 	int k;
+ 
+-- 
+2.39.3 (Apple Git-145)
+

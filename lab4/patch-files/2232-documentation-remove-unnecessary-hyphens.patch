@@ -1,0 +1,57 @@
+From f22fdf33aff48def873eed9f5d30abf9fc0d8700 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:18 +0000
+Subject: [PATCH 2232/2871] documentation: remove unnecessary hyphens
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/ReviewingGuidelines.txt | 2 +-
+ Documentation/git-check-attr.txt      | 2 +-
+ Documentation/git-merge-base.txt      | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/ReviewingGuidelines.txt b/Documentation/ReviewingGuidelines.txt
+index 3e98c8a6af..515d470d23 100644
+--- a/Documentation/ReviewingGuidelines.txt
++++ b/Documentation/ReviewingGuidelines.txt
+@@ -126,7 +126,7 @@ Terminology
+ -----------
+ nit: ::
+ 	Denotes a small issue that should be fixed, such as a typographical error
+-	or mis-alignment of conditions in an `if()` statement.
++	or misalignment of conditions in an `if()` statement.
+ 
+ aside: ::
+ optional: ::
+diff --git a/Documentation/git-check-attr.txt b/Documentation/git-check-attr.txt
+index 6e4f3aaf34..7fea245ed2 100644
+--- a/Documentation/git-check-attr.txt
++++ b/Documentation/git-check-attr.txt
+@@ -29,7 +29,7 @@ OPTIONS
+ 
+ --stdin::
+ 	Read pathnames from the standard input, one per line,
+-	instead of from the command-line.
++	instead of from the command line.
+ 
+ -z::
+ 	The output format is modified to be machine-parsable.
+diff --git a/Documentation/git-merge-base.txt b/Documentation/git-merge-base.txt
+index 463764b9c1..5cdcb5663c 100644
+--- a/Documentation/git-merge-base.txt
++++ b/Documentation/git-merge-base.txt
+@@ -130,7 +130,7 @@ When the history involves criss-cross merges, there can be more than one
+ ---2---o---o---B
+ ....
+ 
+-both '1' and '2' are merge-bases of A and B.  Neither one is better than
++both '1' and '2' are merge bases of A and B.  Neither one is better than
+ the other (both are 'best' merge bases).  When the `--all` option is not given,
+ it is unspecified which best one is output.
+ 
+-- 
+2.39.3 (Apple Git-145)
+

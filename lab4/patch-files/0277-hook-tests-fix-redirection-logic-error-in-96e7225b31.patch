@@ -1,0 +1,40 @@
+From 035cccf46eff932e7201802561656cfb17df15fb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C3=86var=20Arnfj=C3=B6r=C3=B0=20Bjarmason?=
+ <avarab@gmail.com>
+Date: Sat, 29 Oct 2022 04:59:45 +0200
+Subject: [PATCH 0277/2871] hook tests: fix redirection logic error in
+ 96e7225b310
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The tests added in 96e7225b310 (hook: add 'run' subcommand,
+2021-12-22) were redirecting to "actual" both in the body of the hook
+itself and in the testing code below.
+
+The net result was that the "2>>actual" redirection later in the test
+wasn't doing anything. Let's have those redirection do what it looks
+like they're doing.
+
+Signed-off-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ t/t1800-hook.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t1800-hook.sh b/t/t1800-hook.sh
+index 43fcb7c0bf..2ef3579fa7 100755
+--- a/t/t1800-hook.sh
++++ b/t/t1800-hook.sh
+@@ -95,7 +95,7 @@ test_expect_success 'git hook run -- out-of-repo runs excluded' '
+ test_expect_success 'git -c core.hooksPath=<PATH> hook run' '
+ 	mkdir my-hooks &&
+ 	write_script my-hooks/test-hook <<-\EOF &&
+-	echo Hook ran $1 >>actual
++	echo Hook ran $1
+ 	EOF
+ 
+ 	cat >expect <<-\EOF &&
+-- 
+2.39.3 (Apple Git-145)
+

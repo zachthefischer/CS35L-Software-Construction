@@ -1,0 +1,50 @@
+From 4ed23c3c928bdafb2efb9912d6f9e3039ca1ea03 Mon Sep 17 00:00:00 2001
+From: Mark Levedahl <mlevedahl@gmail.com>
+Date: Mon, 26 Jun 2023 12:53:04 -0400
+Subject: [PATCH 1988/2871] git-gui - use cygstart to browse on Cygwin
+
+git-gui enables the "Repository->Explore Working Copy" menu on Cygwin,
+offering to open a Windows graphical file browser at the root of the
+working directory. This code, shared with Git For Windows support,
+depends upon use of Windows pathnames. However, git gui on Cygwin uses
+unix pathnames, so this shared code will not work on Cygwin.
+
+A base install of Cygwin provides the /bin/cygstart utility that runs
+a registered Windows application based upon the file type, after
+translating unix pathnames to Windows.  Adding the --explore option
+guarantees that the Windows file explorer is opened, regardless of the
+supplied pathname's file type and avoiding possibility of some other
+action being taken.
+
+So, teach git-gui to use cygstart --explore on Cygwin, restoring the
+pre-2012 behavior of opening a Windows file explorer for browsing. This
+separates the Git For Windows and Cygwin code paths. Note that
+is_Windows is never true on Cygwin, and is_Cygwin is never true on Git
+for Windows, though this is not obvious by examining the code for those
+independent functions.
+
+Signed-off-by: Mark Levedahl <mlevedahl@gmail.com>
+Acked-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Pratyush Yadav <me@yadavpratyush.com>
+---
+ git-gui.sh | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/git-gui.sh b/git-gui.sh
+index 3f7c31e4c4..8bc8892c40 100755
+--- a/git-gui.sh
++++ b/git-gui.sh
+@@ -2274,7 +2274,9 @@ proc do_git_gui {} {
+ 
+ # Get the system-specific explorer app/command.
+ proc get_explorer {} {
+-	if {[is_Cygwin] || [is_Windows]} {
++	if {[is_Cygwin]} {
++		set explorer "/bin/cygstart.exe --explore"
++	} elseif {[is_Windows]} {
+ 		set explorer "explorer.exe"
+ 	} elseif {[is_MacOSX]} {
+ 		set explorer "open"
+-- 
+2.39.3 (Apple Git-145)
+

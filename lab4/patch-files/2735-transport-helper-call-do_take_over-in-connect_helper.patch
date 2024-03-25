@@ -1,0 +1,60 @@
+From 35d26e79f8d8c030269a198d07de939bd3f5ea08 Mon Sep 17 00:00:00 2001
+From: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Date: Sun, 21 Jan 2024 21:15:37 +0800
+Subject: [PATCH 2735/2871] transport-helper: call do_take_over() in
+ connect_helper
+
+After successfully connecting to the smart transport by calling
+process_connect_service() in connect_helper(), run do_take_over() to
+replace the old vtable with a new one which has methods ready for the
+smart transport connection. This fixes the exit code of git-archive
+in test case "archive remote http repository" of t5003.
+
+The connect_helper() function is used as the connect method of the
+vtable in "transport-helper.c", and it is called by transport_connect()
+in "transport.c" to setup a connection. The only place that we call
+transport_connect() so far is in "builtin/archive.c". Without running
+do_take_over(), it may fail to call transport_disconnect() in
+run_remote_archiver() of "builtin/archive.c". This is because for a
+stateless connection and a service like "git-upload-archive", the
+remote helper may receive a SIGPIPE signal and exit early. Call
+do_take_over() to have a graceful disconnect method, so that we still
+call transport_disconnect() even if the remote helper exits early.
+
+Helped-by: Linus Arver <linusa@google.com>
+Signed-off-by: Jiang Xin <zhiyou.jx@alibaba-inc.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5003-archive-zip.sh | 2 +-
+ transport-helper.c     | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/t/t5003-archive-zip.sh b/t/t5003-archive-zip.sh
+index 6f85bd3463..961c6aac25 100755
+--- a/t/t5003-archive-zip.sh
++++ b/t/t5003-archive-zip.sh
+@@ -268,7 +268,7 @@ test_expect_success 'remote archive does not work with protocol v1' '
+ '
+ 
+ test_expect_success 'archive remote http repository' '
+-	test_must_fail git archive --remote="$HTTPD_URL/auth/smart/bare.git" \
++	git archive --remote="$HTTPD_URL/auth/smart/bare.git" \
+ 		--output=remote-http.zip HEAD &&
+ 	test_cmp_bin d.zip remote-http.zip
+ '
+diff --git a/transport-helper.c b/transport-helper.c
+index 6fe9f4f208..91381be622 100644
+--- a/transport-helper.c
++++ b/transport-helper.c
+@@ -669,6 +669,8 @@ static int connect_helper(struct transport *transport, const char *name,
+ 
+ 	fd[0] = data->helper->out;
+ 	fd[1] = data->helper->in;
++
++	do_take_over(transport);
+ 	return 0;
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,60 @@
+From 199970e72fbfa9c858fdf2eec63bf53704bc01c6 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 31 Oct 2023 09:16:46 +0100
+Subject: [PATCH 2333/2871] builtin/show-ref: ensure mutual exclusiveness of
+ subcommands
+
+The git-show-ref(1) command has three different modes, of which one is
+implicit and the other two can be chosen explicitly by passing a flag.
+But while these modes are standalone and cause us to execute completely
+separate code paths, we gladly accept the case where a user asks for
+both `--exclude-existing` and `--verify` at the same time even though it
+is not obvious what will happen. Spoiler: we ignore `--verify` and
+execute the `--exclude-existing` mode.
+
+Let's explicitly detect this invalid usage and die in case both modes
+were requested.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/show-ref.c  | 4 ++++
+ t/t1403-show-ref.sh | 9 +++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/builtin/show-ref.c b/builtin/show-ref.c
+index 36ac10551d..6685495dd2 100644
+--- a/builtin/show-ref.c
++++ b/builtin/show-ref.c
+@@ -275,6 +275,10 @@ int cmd_show_ref(int argc, const char **argv, const char *prefix)
+ 	argc = parse_options(argc, argv, prefix, show_ref_options,
+ 			     show_ref_usage, 0);
+ 
++	if ((!!exclude_existing_opts.enabled + !!verify) > 1)
++		die(_("only one of '%s' or '%s' can be given"),
++		    "--exclude-existing", "--verify");
++
+ 	if (exclude_existing_opts.enabled)
+ 		return cmd_show_ref__exclude_existing(&exclude_existing_opts);
+ 	else if (verify)
+diff --git a/t/t1403-show-ref.sh b/t/t1403-show-ref.sh
+index 9252a581ab..f1e0388324 100755
+--- a/t/t1403-show-ref.sh
++++ b/t/t1403-show-ref.sh
+@@ -196,4 +196,13 @@ test_expect_success 'show-ref --verify with dangling ref' '
+ 	)
+ '
+ 
++test_expect_success 'show-ref sub-modes are mutually exclusive' '
++	cat >expect <<-EOF &&
++	fatal: only one of ${SQ}--exclude-existing${SQ} or ${SQ}--verify${SQ} can be given
++	EOF
++
++	test_must_fail git show-ref --verify --exclude-existing 2>err &&
++	test_cmp expect err
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

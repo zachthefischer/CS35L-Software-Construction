@@ -1,0 +1,44 @@
+From 9508dfd9f553019c2e3b2869926a0dcaed7a498f Mon Sep 17 00:00:00 2001
+From: Yoichi Nakayama <yoichi.nakayama@gmail.com>
+Date: Sun, 27 Nov 2022 01:18:53 +0000
+Subject: [PATCH 0452/2871] git-jump: invoke emacs/emacsclient
+
+It works with GIT_EDITOR="emacs", "emacsclient" or "emacsclient -t"
+
+Signed-off-by: Yoichi Nakayama <yoichi.nakayama@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/git-jump/git-jump | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/git-jump/git-jump b/contrib/git-jump/git-jump
+index a5a8a77e20..40c4b0d111 100755
+--- a/contrib/git-jump/git-jump
++++ b/contrib/git-jump/git-jump
+@@ -23,7 +23,22 @@ EOF
+ 
+ open_editor() {
+ 	editor=`git var GIT_EDITOR`
+-	eval "$editor -q \$1"
++	case "$editor" in
++	*emacs*)
++		# Supported editor values are:
++		# - emacs
++		# - emacsclient
++		# - emacsclient -t
++		#
++		# Wait for completion of the asynchronously executed process
++		# to avoid race conditions in case of "emacsclient".
++		eval "$editor --eval \"(let ((buf (grep \\\"cat \$1\\\"))) (pop-to-buffer buf) (select-frame-set-input-focus (selected-frame)) (while (get-buffer-process buf) (sleep-for 0.1)))\""
++		;;
++	*)
++		# assume anything else is vi-compatible
++		eval "$editor -q \$1"
++		;;
++	esac
+ }
+ 
+ mode_diff() {
+-- 
+2.39.3 (Apple Git-145)
+

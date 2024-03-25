@@ -1,0 +1,70 @@
+From 44dbb3bf29a7e27ee2f52b5ab86347618c879811 Mon Sep 17 00:00:00 2001
+From: Stan Hu <stanhu@gmail.com>
+Date: Tue, 19 Dec 2023 14:14:18 -0800
+Subject: [PATCH 2586/2871] completion: support pseudoref existence checks for
+ reftables
+
+In contrib/completion/git-completion.bash, there are a bunch of
+instances where we read pseudorefs, such as HEAD, MERGE_HEAD,
+REVERT_HEAD, and others via the filesystem. However, the upcoming
+reftable refs backend won't use '.git/HEAD' at all but instead will
+write an invalid refname as placeholder for backwards compatibility,
+which will break the git-completion script.
+
+Update the '__git_pseudoref_exists' function to:
+
+1. Recognize the placeholder '.git/HEAD' written by the reftable
+   backend (its content is specified in the reftable specs).
+2. If reftable is in use, use 'git rev-parse' to determine whether the
+    given ref exists.
+3. Otherwise, continue to use 'test -f' to check for the ref's filename.
+
+Signed-off-by: Stan Hu <stanhu@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 8edd002eed..e21a39b406 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -122,12 +122,35 @@ __git ()
+ 		${__git_dir:+--git-dir="$__git_dir"} "$@" 2>/dev/null
+ }
+ 
++# Helper function to read the first line of a file into a variable.
++# __git_eread requires 2 arguments, the file path and the name of the
++# variable, in that order.
++#
++# This is taken from git-prompt.sh.
++__git_eread ()
++{
++	test -r "$1" && IFS=$'\r\n' read -r "$2" <"$1"
++}
++
+ # Runs git in $__git_repo_path to determine whether a pseudoref exists.
+ # 1: The pseudo-ref to search
+ __git_pseudoref_exists ()
+ {
+ 	local ref=$1
+ 
++	# If the reftable is in use, we have to shell out to 'git rev-parse'
++	# to determine whether the ref exists instead of looking directly in
++	# the filesystem to determine whether the ref exists. Otherwise, use
++	# Bash builtins since executing Git commands are expensive on some
++	# platforms.
++	if __git_eread "$__git_repo_path/HEAD" head; then
++		b="${head#ref: }"
++		if [ "$b" == "refs/heads/.invalid" ]; then
++			__git -C "$__git_repo_path" rev-parse --verify --quiet "$ref" 2>/dev/null
++			return $?
++		fi
++	fi
++
+ 	[ -f "$__git_repo_path/$ref" ]
+ }
+ 
+-- 
+2.39.3 (Apple Git-145)
+

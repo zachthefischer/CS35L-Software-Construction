@@ -1,0 +1,156 @@
+From 4723ae1007f94cbb391c4fb5a042adccd038d9ae Mon Sep 17 00:00:00 2001
+From: Shuqi Liang <cheskaqiqi@gmail.com>
+Date: Fri, 11 Aug 2023 10:22:10 -0400
+Subject: [PATCH 1933/2871] attr.c: read attributes in a sparse directory
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Before this patch, git check-attr was unable to read the attributes from
+a .gitattributes file within a sparse directory. The original comment
+was operating under the assumption that users are only interested in
+files or directories inside the cones. Therefore, in the original code,
+in the case of a cone-mode sparse-checkout, we didn't load the
+.gitattributes file.
+
+However, this behavior can lead to missing attributes for files inside
+sparse directories, causing inconsistencies in file handling.
+
+To resolve this, revise 'git check-attr' to allow attribute reading for
+files in sparse directories from the corresponding .gitattributes files:
+
+1.Utilize path_in_cone_mode_sparse_checkout() and index_name_pos_sparse
+to check if a path falls within a sparse directory.
+
+2.If path is inside a sparse directory, employ the value of
+index_name_pos_sparse() to find the sparse directory containing path and
+path relative to sparse directory. Proceed to read attributes from the
+tree OID of the sparse directory using read_attr_from_blob().
+
+3.If path is not inside a sparse directory，ensure that attributes are
+fetched from the index blob with read_blob_data_from_index().
+
+Change the test 'check-attr with pathspec outside sparse definition' to
+'test_expect_success' to reflect that the attributes inside a sparse
+directory can now be read. Ensure that the sparse index case works
+correctly for git check-attr to illustrate the successful handling of
+attributes within sparse directories.
+
+Helped-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Shuqi Liang <cheskaqiqi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ attr.c                                   | 57 ++++++++++++++++--------
+ t/t1092-sparse-checkout-compatibility.sh | 10 ++++-
+ 2 files changed, 48 insertions(+), 19 deletions(-)
+
+diff --git a/attr.c b/attr.c
+index e5785c55db..d85fd6d2ed 100644
+--- a/attr.c
++++ b/attr.c
+@@ -808,35 +808,56 @@ static struct attr_stack *read_attr_from_blob(struct index_state *istate,
+ static struct attr_stack *read_attr_from_index(struct index_state *istate,
+ 					       const char *path, unsigned flags)
+ {
++	struct attr_stack *stack = NULL;
+ 	char *buf;
+ 	unsigned long size;
++	int sparse_dir_pos = -1;
+ 
+ 	if (!istate)
+ 		return NULL;
+ 
+ 	/*
+-	 * The .gitattributes file only applies to files within its
+-	 * parent directory. In the case of cone-mode sparse-checkout,
+-	 * the .gitattributes file is sparse if and only if all paths
+-	 * within that directory are also sparse. Thus, don't load the
+-	 * .gitattributes file since it will not matter.
+-	 *
+-	 * In the case of a sparse index, it is critical that we don't go
+-	 * looking for a .gitattributes file, as doing so would cause the
+-	 * index to expand.
++	 * When handling sparse-checkouts, .gitattributes files
++	 * may reside within a sparse directory. We distinguish
++	 * whether a path exists directly in the index or not by
++	 * evaluating if 'pos' is negative.
++	 * If 'pos' is negative, the path is not directly present
++	 * in the index and is likely within a sparse directory.
++	 * For paths not in the index, The absolute value of 'pos'
++	 * minus 1 gives us the position where the path would be
++	 * inserted in lexicographic order within the index.
++	 * We then subtract another 1 from this value
++	 * (sparse_dir_pos = -pos - 2) to find the position of the
++	 * last index entry which is lexicographically smaller than
++	 * the path. This would be the sparse directory containing
++	 * the path. By identifying the sparse directory containing
++	 * the path, we can correctly read the attributes specified
++	 * in the .gitattributes file from the tree object of the
++	 * sparse directory.
+ 	 */
+-	if (!path_in_cone_mode_sparse_checkout(path, istate))
+-		return NULL;
++	if (!path_in_cone_mode_sparse_checkout(path, istate)) {
++		int pos = index_name_pos_sparse(istate, path, strlen(path));
+ 
+-	buf = read_blob_data_from_index(istate, path, &size);
+-	if (!buf)
+-		return NULL;
+-	if (size >= ATTR_MAX_FILE_SIZE) {
+-		warning(_("ignoring overly large gitattributes blob '%s'"), path);
+-		return NULL;
++		if (pos < 0)
++			sparse_dir_pos = -pos - 2;
+ 	}
+ 
+-	return read_attr_from_buf(buf, path, flags);
++	if (sparse_dir_pos >= 0 &&
++	    S_ISSPARSEDIR(istate->cache[sparse_dir_pos]->ce_mode) &&
++	    !strncmp(istate->cache[sparse_dir_pos]->name, path, ce_namelen(istate->cache[sparse_dir_pos]))) {
++		const char *relative_path = path + ce_namelen(istate->cache[sparse_dir_pos]);
++		stack = read_attr_from_blob(istate, &istate->cache[sparse_dir_pos]->oid, relative_path, flags);
++	} else {
++		buf = read_blob_data_from_index(istate, path, &size);
++		if (!buf)
++			return NULL;
++		if (size >= ATTR_MAX_FILE_SIZE) {
++			warning(_("ignoring overly large gitattributes blob '%s'"), path);
++			return NULL;
++		}
++		stack = read_attr_from_buf(buf, path, flags);
++	}
++	return stack;
+ }
+ 
+ static struct attr_stack *read_attr(struct index_state *istate,
+diff --git a/t/t1092-sparse-checkout-compatibility.sh b/t/t1092-sparse-checkout-compatibility.sh
+index 2d7fa65d81..dc84b3e2e1 100755
+--- a/t/t1092-sparse-checkout-compatibility.sh
++++ b/t/t1092-sparse-checkout-compatibility.sh
+@@ -2271,7 +2271,7 @@ test_expect_success 'check-attr with pathspec inside sparse definition' '
+ 	test_all_match git check-attr -a --cached -- deep/a
+ '
+ 
+-test_expect_failure 'check-attr with pathspec outside sparse definition' '
++test_expect_success 'check-attr with pathspec outside sparse definition' '
+ 	init_repos &&
+ 
+ 	echo "a -crlf myAttr" >>.gitattributes &&
+@@ -2288,6 +2288,14 @@ test_expect_failure 'check-attr with pathspec outside sparse definition' '
+ 	test_all_match git check-attr -a --cached -- folder1/a
+ '
+ 
++# NEEDSWORK: The 'diff --check' test is left as 'test_expect_failure' due
++# to an underlying issue in oneway_diff() within diff-lib.c.
++# 'do_oneway_diff()' is not called as expected for paths that could match
++# inside of a sparse directory. Specifically, the 'ce_path_match()' function
++# fails to recognize files inside a sparse directory (e.g., when 'folder1/'
++# is a sparse directory, 'folder1/a' cannot be recognized). The goal is to
++# proceed with 'do_oneway_diff()' if the pathspec could match inside of a
++# sparse directory.
+ test_expect_failure 'diff --check with pathspec outside sparse definition' '
+ 	init_repos &&
+ 
+-- 
+2.39.3 (Apple Git-145)
+

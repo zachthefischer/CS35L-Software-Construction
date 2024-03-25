@@ -1,0 +1,47 @@
+From 3969e6c5a4accacce6c69083a70710a52a8f2255 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Wed, 12 Apr 2023 18:20:17 -0400
+Subject: [PATCH 1245/2871] pack-write.c: plug a leak in stage_tmp_packfiles()
+
+The function `stage_tmp_packfiles()` generates a filename to use for
+staging the contents of what will become the pack's ".rev" file.
+
+The name is generated in `write_rev_file_order()` (via its caller
+`write_rev_file()`) in a string buffer, and the result is returned back
+to `stage_tmp_packfiles()` which uses it to rename the temporary file
+into place via `rename_tmp_packfiles()`.
+
+That name is not visible outside of `stage_tmp_packfiles()`, so it can
+(and should) be `free()`'d at the end of that function. We can't free it
+in `rename_tmp_packfile()` since not all of its `source` arguments are
+unreachable after calling it.
+
+Instead, simply free() `rev_tmp_name` at the end of
+`stage_tmp_packfiles()`.
+
+(Note that the same leak exists for `mtimes_tmp_name`, but we do not
+address it in this commit).
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Acked-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ pack-write.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/pack-write.c b/pack-write.c
+index f171405495..f27c1f7f28 100644
+--- a/pack-write.c
++++ b/pack-write.c
+@@ -568,6 +568,8 @@ void stage_tmp_packfiles(struct strbuf *name_buffer,
+ 		rename_tmp_packfile(name_buffer, rev_tmp_name, "rev");
+ 	if (mtimes_tmp_name)
+ 		rename_tmp_packfile(name_buffer, mtimes_tmp_name, "mtimes");
++
++	free((char *)rev_tmp_name);
+ }
+ 
+ void write_promisor_file(const char *promisor_name, struct ref **sought, int nr_sought)
+-- 
+2.39.3 (Apple Git-145)
+

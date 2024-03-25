@@ -1,0 +1,266 @@
+From 6ce7afe16384b741f1ee4c5f310fa4a9f66348ba Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Thu, 3 Aug 2023 13:09:35 +0000
+Subject: [PATCH 1884/2871] rebase --skip: fix commit message clean up when
+ skipping squash
+
+During a series of "fixup" and/or "squash" commands, the interactive
+rebase accumulates a commit message from all the commits that are being
+squashed together. If one of the commits has conflicts when it is picked
+and the user chooses to skip that commit then we need to remove that
+commit's message from accumulated messages.  To do this 15ef69314d5
+(rebase --skip: clean up commit message after a failed fixup/squash,
+2018-04-27) updated commit_staged_changes() to reset the accumulated
+message to the commit message of HEAD (which does not contain the
+message from the skipped commit) when the last command was "fixup" or
+"squash" and there are no staged changes. Unfortunately the code to do
+this contains two bugs.
+
+(1) If parse_head() fails we pass an invalid pointer to
+    unuse_commit_buffer().
+
+(2) The reconstructed message uses the entire commit buffer from HEAD
+    including the headers, rather than just the commit message.
+
+The first issue is fixed by splitting up the "if" condition into several
+statements each with its own error handling. The second issue is fixed
+by finding the start of the commit message within the commit buffer
+using find_commit_subject().
+
+The existing test added by 15ef69314d5 is modified to show the effect of
+this bug.  The bug is triggered when skipping the first command in the
+chain (as the test does before this commit) but the effect is hidden
+because opts->current_fixup_count is set to zero which leads
+update_squash_messages() to recreate the squash message file from
+scratch overwriting the bad message created by
+commit_staged_changes(). The test is also updated to explicitly check
+the commit messages rather than relying on grep to ensure they do not
+contain any stray commit headers.
+
+To check the commit message the function test_commit_message() is moved
+from t3437-rebase-fixup-options.sh to test-lib.sh. As the function is
+now publicly available it is updated to provide better error detection
+and avoid overwriting the commonly used files "actual" and "expect".
+Support for reading the expected commit message from stdin is also
+added.
+
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ sequencer.c                     | 26 +++++++++++----
+ t/t3418-rebase-continue.sh      | 58 +++++++++++++++++++++++----------
+ t/t3437-rebase-fixup-options.sh | 15 ---------
+ t/test-lib-functions.sh         | 33 +++++++++++++++++++
+ 4 files changed, 93 insertions(+), 39 deletions(-)
+
+diff --git a/sequencer.c b/sequencer.c
+index bceb6abcb6..af271ab6fb 100644
+--- a/sequencer.c
++++ b/sequencer.c
+@@ -5038,19 +5038,31 @@ static int commit_staged_changes(struct repository *r,
+ 				 * We need to update the squash message to skip
+ 				 * the latest commit message.
+ 				 */
++				int res = 0;
+ 				struct commit *commit;
++				const char *msg;
+ 				const char *path = rebase_path_squash_msg();
+ 				const char *encoding = get_commit_output_encoding();
+ 
+-				if (parse_head(r, &commit) ||
+-				    !(p = repo_logmsg_reencode(r, commit, NULL, encoding)) ||
+-				    write_message(p, strlen(p), path, 0)) {
+-					repo_unuse_commit_buffer(r, commit, p);
+-					return error(_("could not write file: "
++				if (parse_head(r, &commit))
++					return error(_("could not parse HEAD"));
++
++				p = repo_logmsg_reencode(r, commit, NULL, encoding);
++				if (!p)  {
++					res = error(_("could not parse commit %s"),
++						    oid_to_hex(&commit->object.oid));
++					goto unuse_commit_buffer;
++				}
++				find_commit_subject(p, &msg);
++				if (write_message(msg, strlen(msg), path, 0)) {
++					res = error(_("could not write file: "
+ 						       "'%s'"), path);
++					goto unuse_commit_buffer;
+ 				}
+-				repo_unuse_commit_buffer(r,
+-							 commit, p);
++			unuse_commit_buffer:
++				repo_unuse_commit_buffer(r, commit, p);
++				if (res)
++					return res;
+ 			}
+ 		}
+ 
+diff --git a/t/t3418-rebase-continue.sh b/t/t3418-rebase-continue.sh
+index 2d0789e554..fb7b68990c 100755
+--- a/t/t3418-rebase-continue.sh
++++ b/t/t3418-rebase-continue.sh
+@@ -115,15 +115,23 @@ test_expect_success '--skip after failed fixup cleans commit message' '
+ 	test_when_finished "test_might_fail git rebase --abort" &&
+ 	git checkout -b with-conflicting-fixup &&
+ 	test_commit wants-fixup &&
+-	test_commit "fixup! wants-fixup" wants-fixup.t 1 wants-fixup-1 &&
+-	test_commit "fixup! wants-fixup" wants-fixup.t 2 wants-fixup-2 &&
+-	test_commit "fixup! wants-fixup" wants-fixup.t 3 wants-fixup-3 &&
++	test_commit "fixup 1" wants-fixup.t 1 wants-fixup-1 &&
++	test_commit "fixup 2" wants-fixup.t 2 wants-fixup-2 &&
++	test_commit "fixup 3" wants-fixup.t 3 wants-fixup-3 &&
+ 	test_must_fail env FAKE_LINES="1 fixup 2 squash 4" \
+ 		git rebase -i HEAD~4 &&
+ 
+ 	: now there is a conflict, and comments in the commit message &&
+-	git show HEAD >out &&
+-	grep "fixup! wants-fixup" out &&
++	test_commit_message HEAD <<-\EOF &&
++	# This is a combination of 2 commits.
++	# This is the 1st commit message:
++
++	wants-fixup
++
++	# The commit message #2 will be skipped:
++
++	# fixup 1
++	EOF
+ 
+ 	: skip and continue &&
+ 	echo "cp \"\$1\" .git/copy.txt" | write_script copy-editor.sh &&
+@@ -133,33 +141,49 @@ test_expect_success '--skip after failed fixup cleans commit message' '
+ 	test_path_is_missing .git/copy.txt &&
+ 
+ 	: now the comments in the commit message should have been cleaned up &&
+-	git show HEAD >out &&
+-	! grep "fixup! wants-fixup" out &&
++	test_commit_message HEAD -m wants-fixup &&
+ 
+ 	: now, let us ensure that "squash" is handled correctly &&
+ 	git reset --hard wants-fixup-3 &&
+-	test_must_fail env FAKE_LINES="1 squash 4 squash 2 squash 4" \
++	test_must_fail env FAKE_LINES="1 squash 2 squash 1 squash 3 squash 1" \
+ 		git rebase -i HEAD~4 &&
+ 
+-	: the first squash failed, but there are two more in the chain &&
++	: the second squash failed, but there are two more in the chain &&
+ 	(test_set_editor "$PWD/copy-editor.sh" &&
+ 	 test_must_fail git rebase --skip) &&
+ 
+ 	: not the final squash, no need to edit the commit message &&
+ 	test_path_is_missing .git/copy.txt &&
+ 
+-	: The first squash was skipped, therefore: &&
+-	git show HEAD >out &&
+-	test_i18ngrep "# This is a combination of 2 commits" out &&
+-	test_i18ngrep "# This is the commit message #2:" out &&
++	: The first and third squashes succeeded, therefore: &&
++	test_commit_message HEAD <<-\EOF &&
++	# This is a combination of 3 commits.
++	# This is the 1st commit message:
++
++	wants-fixup
++
++	# This is the commit message #2:
++
++	fixup 1
++
++	# This is the commit message #3:
++
++	fixup 2
++	EOF
+ 
+ 	(test_set_editor "$PWD/copy-editor.sh" && git rebase --skip) &&
+-	git show HEAD >out &&
+-	test_i18ngrep ! "# This is a combination" out &&
++	test_commit_message HEAD <<-\EOF &&
++	wants-fixup
++
++	fixup 1
++
++	fixup 2
++	EOF
+ 
+ 	: Final squash failed, but there was still a squash &&
+-	test_i18ngrep "# This is a combination of 2 commits" .git/copy.txt &&
+-	test_i18ngrep "# This is the commit message #2:" .git/copy.txt
++	head -n1 .git/copy.txt >first-line &&
++	test_i18ngrep "# This is a combination of 3 commits" first-line &&
++	test_i18ngrep "# This is the commit message #3:" .git/copy.txt
+ '
+ 
+ test_expect_success 'setup rerere database' '
+diff --git a/t/t3437-rebase-fixup-options.sh b/t/t3437-rebase-fixup-options.sh
+index dd3b301fa7..7929e2e2e3 100755
+--- a/t/t3437-rebase-fixup-options.sh
++++ b/t/t3437-rebase-fixup-options.sh
+@@ -21,21 +21,6 @@ TEST_PASSES_SANITIZE_LEAK=true
+ 
+ EMPTY=""
+ 
+-# test_commit_message <rev> -m <msg>
+-# test_commit_message <rev> <path>
+-# Verify that the commit message of <rev> matches
+-# <msg> or the content of <path>.
+-test_commit_message () {
+-	git show --no-patch --pretty=format:%B "$1" >actual &&
+-	case "$2" in
+-	-m)
+-		echo "$3" >expect &&
+-		test_cmp expect actual ;;
+-	*)
+-		test_cmp "$2" actual ;;
+-	esac
+-}
+-
+ get_author () {
+ 	rev="$1" &&
+ 	git log -1 --pretty=format:"%an %ae %at" "$rev"
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 6e19ebc922..d8a52334ee 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1273,6 +1273,39 @@ test_cmp_rev () {
+ 	fi
+ }
+ 
++# Tests that a commit message matches the expected text
++#
++# Usage: test_commit_message <rev> [-m <msg> | <file>]
++#
++# When using "-m" <msg> will have a line feed appended. If the second
++# argument is omitted then the expected message is read from stdin.
++
++test_commit_message () {
++	local msg_file=expect.msg
++
++	case $# in
++	3)
++		if test "$2" = "-m"
++		then
++			printf "%s\n" "$3" >"$msg_file"
++		else
++			BUG "Usage: test_commit_message <rev> [-m <message> | <file>]"
++		fi
++		;;
++	2)
++		msg_file="$2"
++		;;
++	1)
++		cat >"$msg_file"
++		;;
++	*)
++		BUG "Usage: test_commit_message <rev> [-m <message> | <file>]"
++		;;
++	esac
++	git show --no-patch --pretty=format:%B "$1" -- >actual.msg &&
++	test_cmp "$msg_file" actual.msg
++}
++
+ # Compare paths respecting core.ignoreCase
+ test_cmp_fspath () {
+ 	if test "x$1" = "x$2"
+-- 
+2.39.3 (Apple Git-145)
+

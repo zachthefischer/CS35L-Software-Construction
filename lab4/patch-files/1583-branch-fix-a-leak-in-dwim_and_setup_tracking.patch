@@ -1,0 +1,54 @@
+From 1533bda7700d6aa4374509f9611ae52a4eb2bcda Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Rub=C3=A9n=20Justo?= <rjusto@gmail.com>
+Date: Sun, 11 Jun 2023 20:49:43 +0200
+Subject: [PATCH 1583/2871] branch: fix a leak in dwim_and_setup_tracking
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In e89f151db1 (branch: move --set-upstream-to behavior to
+dwim_and_setup_tracking(), 2022-01-28) the string returned by
+dwim_branch_start() was not freed, resulting in a memory leak.
+
+It can be reviewed with:
+
+   $ git remote add local .
+   $ git update-ref refs/remotes/local/foo HEAD
+   $ git branch --set-upstream-to local/foo foo
+
+   Direct leak of 23 byte(s) in 1 object(s) allocated from:
+       ... in xstrdup wrapper.c
+       ... in expand_ref refs.c
+       ... in repo_dwim_ref refs.c
+       ... in dwim_branch_start branch.c
+       ... in dwim_and_setup_tracking branch.c
+       ... in cmd_branch builtin/branch.c
+       ... in run_builtin git.c
+
+Let's free it now.
+
+Signed-off-by: Rubén Justo <rjusto@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ branch.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/branch.c b/branch.c
+index ba3914adf5..a7333a4c32 100644
+--- a/branch.c
++++ b/branch.c
+@@ -638,9 +638,10 @@ void dwim_and_setup_tracking(struct repository *r, const char *new_ref,
+ 			     const char *orig_ref, enum branch_track track,
+ 			     int quiet)
+ {
+-	char *real_orig_ref;
++	char *real_orig_ref = NULL;
+ 	dwim_branch_start(r, orig_ref, track, &real_orig_ref, NULL);
+ 	setup_tracking(new_ref, real_orig_ref, track, quiet);
++	free(real_orig_ref);
+ }
+ 
+ /**
+-- 
+2.39.3 (Apple Git-145)
+

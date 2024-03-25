@@ -1,0 +1,45 @@
+From 3a3b98be91b11e50294593b3c134948c78f7250e Mon Sep 17 00:00:00 2001
+From: John Cai <johncai86@gmail.com>
+Date: Sat, 20 May 2023 16:13:54 +0000
+Subject: [PATCH 1518/2871] t7700-repack: modernize test format
+
+Some tests still use the old format with four spaces indentation.
+Standardize the tests to the new format with tab indentation.
+
+Signed-off-by: John Cai <johncai86@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7700-repack.sh | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/t/t7700-repack.sh b/t/t7700-repack.sh
+index faa739eeb9..3f930fa476 100755
+--- a/t/t7700-repack.sh
++++ b/t/t7700-repack.sh
+@@ -460,10 +460,10 @@ test_expect_success '--write-midx -b packs non-kept objects' '
+ '
+ 
+ test_expect_success '--write-midx removes stale pack-based bitmaps' '
+-       rm -fr repo &&
+-       git init repo &&
+-       test_when_finished "rm -fr repo" &&
+-       (
++	rm -fr repo &&
++	git init repo &&
++	test_when_finished "rm -fr repo" &&
++	(
+ 		cd repo &&
+ 		test_commit base &&
+ 		GIT_TEST_MULTI_PACK_INDEX=0 git repack -Ab &&
+@@ -477,7 +477,7 @@ test_expect_success '--write-midx removes stale pack-based bitmaps' '
+ 		test_path_is_file $midx &&
+ 		test_path_is_file $midx-$(midx_checksum $objdir).bitmap &&
+ 		test_path_is_missing $pack_bitmap
+-       )
++	)
+ '
+ 
+ test_expect_success '--write-midx with --pack-kept-objects' '
+-- 
+2.39.3 (Apple Git-145)
+

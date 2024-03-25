@@ -1,0 +1,125 @@
+From b64d78ad02ca14ab4d658a1055f43f8edf5e3990 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 1 Nov 2023 13:03:30 +0000
+Subject: [PATCH 2342/2871] max_tree_depth: lower it for MSVC to avoid stack
+ overflows
+
+There seems to be some internal stack overflow detection in MSVC's
+`malloc()` machinery that seems to be independent of the `stack reserve`
+and `heap reserve` sizes specified in the executable (editable via
+`EDITBIN /STACK:<n> <exe>` and `EDITBIN /HEAP:<n> <exe>`).
+
+In the newly test cases added by `jk/tree-name-and-depth-limit`, this
+stack overflow detection is unfortunately triggered before Git can print
+out the error message about too-deep trees and exit gracefully. Instead,
+it exits with `STATUS_STACK_OVERFLOW`. This corresponds to the numeric
+value -1073741571, something the MSYS2 runtime we sadly need to use to
+run Git's test suite cannot handle and which it internally maps to the
+exit code 127. Git's test suite, in turn, mistakes this to mean that the
+command was not found, and fails both test cases.
+
+Here is an example stack trace from an example run:
+
+    [0x0]   ntdll!RtlpAllocateHeap+0x31   0x4212603f50   0x7ff9d6d4cd49
+    [0x1]   ntdll!RtlpAllocateHeapInternal+0x6c9   0x42126041b0   0x7ff9d6e14512
+    [0x2]   ntdll!RtlDebugAllocateHeap+0x102   0x42126042b0   0x7ff9d6dcd8b0
+    [0x3]   ntdll!RtlpAllocateHeap+0x7ec70   0x4212604350   0x7ff9d6d4cd49
+    [0x4]   ntdll!RtlpAllocateHeapInternal+0x6c9   0x42126045b0   0x7ff9596ed480
+    [0x5]   ucrtbased!heap_alloc_dbg_internal+0x210   0x42126046b0   0x7ff9596ed20d
+    [0x6]   ucrtbased!heap_alloc_dbg+0x4d   0x4212604750   0x7ff9596f037f
+    [0x7]   ucrtbased!_malloc_dbg+0x2f   0x42126047a0   0x7ff9596f0dee
+    [0x8]   ucrtbased!malloc+0x1e   0x42126047d0   0x7ff730fcc1ef
+    [0x9]   git!do_xmalloc+0x2f   0x4212604800   0x7ff730fcc2b9
+    [0xa]   git!do_xmallocz+0x59   0x4212604840   0x7ff730fca779
+    [0xb]   git!xmallocz_gently+0x19   0x4212604880   0x7ff7311b0883
+    [0xc]   git!unpack_compressed_entry+0x43   0x42126048b0   0x7ff7311ac9a4
+    [0xd]   git!unpack_entry+0x554   0x42126049a0   0x7ff7311b0628
+    [0xe]   git!cache_or_unpack_entry+0x58   0x4212605250   0x7ff7311ad3a8
+    [0xf]   git!packed_object_info+0x98   0x42126052a0   0x7ff7310a92da
+    [0x10]   git!do_oid_object_info_extended+0x3fa   0x42126053b0   0x7ff7310a44e7
+    [0x11]   git!oid_object_info_extended+0x37   0x4212605460   0x7ff7310a38ba
+    [0x12]   git!repo_read_object_file+0x9a   0x42126054a0   0x7ff7310a6147
+    [0x13]   git!read_object_with_reference+0x97   0x4212605560   0x7ff7310b4656
+    [0x14]   git!fill_tree_descriptor+0x66   0x4212605620   0x7ff7310dc0a5
+    [0x15]   git!traverse_trees_recursive+0x3f5   0x4212605680   0x7ff7310dd831
+    [0x16]   git!unpack_callback+0x441   0x4212605790   0x7ff7310b4c95
+    [0x17]   git!traverse_trees+0x5d5   0x42126058a0   0x7ff7310dc0f2
+    [0x18]   git!traverse_trees_recursive+0x442   0x4212605980   0x7ff7310dd831
+    [0x19]   git!unpack_callback+0x441   0x4212605a90   0x7ff7310b4c95
+    [0x1a]   git!traverse_trees+0x5d5   0x4212605ba0   0x7ff7310dc0f2
+    [0x1b]   git!traverse_trees_recursive+0x442   0x4212605c80   0x7ff7310dd831
+    [0x1c]   git!unpack_callback+0x441   0x4212605d90   0x7ff7310b4c95
+    [0x1d]   git!traverse_trees+0x5d5   0x4212605ea0   0x7ff7310dc0f2
+    [0x1e]   git!traverse_trees_recursive+0x442   0x4212605f80   0x7ff7310dd831
+    [0x1f]   git!unpack_callback+0x441   0x4212606090   0x7ff7310b4c95
+    [0x20]   git!traverse_trees+0x5d5   0x42126061a0   0x7ff7310dc0f2
+    [0x21]   git!traverse_trees_recursive+0x442   0x4212606280   0x7ff7310dd831
+    [...]
+    [0xfad]   git!cmd_main+0x2a2   0x42126ff740   0x7ff730fb6345
+    [0xfae]   git!main+0xe5   0x42126ff7c0   0x7ff730fbff93
+    [0xfaf]   git!wmain+0x2a3   0x42126ff830   0x7ff731318859
+    [0xfb0]   git!invoke_main+0x39   0x42126ff8a0   0x7ff7313186fe
+    [0xfb1]   git!__scrt_common_main_seh+0x12e   0x42126ff8f0   0x7ff7313185be
+    [0xfb2]   git!__scrt_common_main+0xe   0x42126ff960   0x7ff7313188ee
+    [0xfb3]   git!wmainCRTStartup+0xe   0x42126ff990   0x7ff9d5ed257d
+    [0xfb4]   KERNEL32!BaseThreadInitThunk+0x1d   0x42126ff9c0   0x7ff9d6d6aa78
+    [0xfb5]   ntdll!RtlUserThreadStart+0x28   0x42126ff9f0   0x0
+
+I verified manually that `traverse_trees_cur_depth` was 562 when that
+happened, which is far below the 2048 that were already accepted into
+Git as a hard limit.
+
+Despite many attempts to figure out which of the internals trigger this
+`STATUS_STACK_OVERFLOW` and how to maybe increase certain sizes to avoid
+running into this issue and let Git behave the same way as under Linux,
+I failed to find any build-time/runtime knob we could turn to that
+effect.
+
+Note: even switching to using a different allocator (I used mimalloc
+because that's what Git for Windows uses for its GCC builds) does not
+help, as the zlib code used to unpack compressed pack entries _still_
+uses the regular `malloc()`. And runs into the same issue.
+
+Note also: switching to using a different allocator _also_ for zlib code
+seems _also_ not to help. I tried that, and it still exited with
+`STATUS_STACK_OVERFLOW` that seems to have been triggered by a
+`mi_assert_internal()`, i.e. an internal assertion of mimalloc...
+
+So the best bet to work around this for now seems to just lower the
+maximum allowed tree depth _even further_ for MSVC builds.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ environment.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/environment.c b/environment.c
+index bb3c2a96a3..9e37bf58c0 100644
+--- a/environment.c
++++ b/environment.c
+@@ -81,7 +81,20 @@ int merge_log_config = -1;
+ int precomposed_unicode = -1; /* see probe_utf8_pathname_composition() */
+ unsigned long pack_size_limit_cfg;
+ enum log_refs_config log_all_ref_updates = LOG_REFS_UNSET;
+-int max_allowed_tree_depth = 2048;
++int max_allowed_tree_depth =
++#ifdef _MSC_VER
++	/*
++	 * When traversing into too-deep trees, Visual C-compiled Git seems to
++	 * run into some internal stack overflow detection in the
++	 * `RtlpAllocateHeap()` function that is called from within
++	 * `git_inflate_init()`'s call tree. The following value seems to be
++	 * low enough to avoid that by letting Git exit with an error before
++	 * the stack overflow can occur.
++	 */
++	512;
++#else
++	2048;
++#endif
+ 
+ #ifndef PROTECT_HFS_DEFAULT
+ #define PROTECT_HFS_DEFAULT 0
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,86 @@
+From ae2c912c04cf9902653409d686ca6d5017c3906f Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Tue, 18 Jul 2023 14:34:33 -0700
+Subject: [PATCH 1825/2871] parse-options: introduce OPT_IPVERSION()
+
+The command line option parsing for "git clone", "git fetch", and
+"git push" have duplicated implementations of parsing "--ipv4" and
+"--ipv6" options, by having two OPT_SET_INT() for "ipv4" and "ipv6".
+
+Introduce a new OPT_IPVERSION() macro and use it in these three
+commands.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clone.c | 5 +----
+ builtin/fetch.c | 5 +----
+ builtin/push.c  | 5 +----
+ parse-options.h | 6 ++++++
+ 4 files changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/builtin/clone.c b/builtin/clone.c
+index 15f9912b4c..6c9ad9b621 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -161,10 +161,7 @@ static struct option builtin_clone_options[] = {
+ 			N_("set config inside the new repository")),
+ 	OPT_STRING_LIST(0, "server-option", &server_options,
+ 			N_("server-specific"), N_("option to transmit")),
+-	OPT_SET_INT('4', "ipv4", &family, N_("use IPv4 addresses only"),
+-			TRANSPORT_FAMILY_IPV4),
+-	OPT_SET_INT('6', "ipv6", &family, N_("use IPv6 addresses only"),
+-			TRANSPORT_FAMILY_IPV6),
++	OPT_IPVERSION(&family),
+ 	OPT_PARSE_LIST_OBJECTS_FILTER(&filter_options),
+ 	OPT_BOOL(0, "also-filter-submodules", &option_filter_submodules,
+ 		    N_("apply partial clone filters to submodules")),
+diff --git a/builtin/fetch.c b/builtin/fetch.c
+index 849a9be421..0b5cadc12a 100644
+--- a/builtin/fetch.c
++++ b/builtin/fetch.c
+@@ -2193,10 +2193,7 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
+ 		OPT_CALLBACK_F(0, "refmap", NULL, N_("refmap"),
+ 			       N_("specify fetch refmap"), PARSE_OPT_NONEG, parse_refmap_arg),
+ 		OPT_STRING_LIST('o', "server-option", &server_options, N_("server-specific"), N_("option to transmit")),
+-		OPT_SET_INT('4', "ipv4", &family, N_("use IPv4 addresses only"),
+-				TRANSPORT_FAMILY_IPV4),
+-		OPT_SET_INT('6', "ipv6", &family, N_("use IPv6 addresses only"),
+-				TRANSPORT_FAMILY_IPV6),
++		OPT_IPVERSION(&family),
+ 		OPT_STRING_LIST(0, "negotiation-tip", &negotiation_tip, N_("revision"),
+ 				N_("report that we have only objects reachable from this object")),
+ 		OPT_BOOL(0, "negotiate-only", &negotiate_only,
+diff --git a/builtin/push.c b/builtin/push.c
+index dbdf609daf..aa28fdba0e 100644
+--- a/builtin/push.c
++++ b/builtin/push.c
+@@ -627,10 +627,7 @@ int cmd_push(int argc, const char **argv, const char *prefix)
+ 				PARSE_OPT_OPTARG, option_parse_push_signed),
+ 		OPT_BIT(0, "atomic", &flags, N_("request atomic transaction on remote side"), TRANSPORT_PUSH_ATOMIC),
+ 		OPT_STRING_LIST('o', "push-option", &push_options_cmdline, N_("server-specific"), N_("option to transmit")),
+-		OPT_SET_INT('4', "ipv4", &family, N_("use IPv4 addresses only"),
+-				TRANSPORT_FAMILY_IPV4),
+-		OPT_SET_INT('6', "ipv6", &family, N_("use IPv6 addresses only"),
+-				TRANSPORT_FAMILY_IPV6),
++		OPT_IPVERSION(&family),
+ 		OPT_END()
+ 	};
+ 
+diff --git a/parse-options.h b/parse-options.h
+index 8e48efe524..e35710733d 100644
+--- a/parse-options.h
++++ b/parse-options.h
+@@ -581,4 +581,10 @@ int parse_opt_tracking_mode(const struct option *, const char *, int);
+ #define OPT_PATHSPEC_FILE_NUL(v)  OPT_BOOL(0, "pathspec-file-nul", v, N_("with --pathspec-from-file, pathspec elements are separated with NUL character"))
+ #define OPT_AUTOSTASH(v) OPT_BOOL(0, "autostash", v, N_("automatically stash/stash pop before and after"))
+ 
++#define OPT_IPVERSION(v) \
++	OPT_SET_INT('4', "ipv4", (v), N_("use IPv4 addresses only"), \
++		TRANSPORT_FAMILY_IPV4), \
++	OPT_SET_INT('6', "ipv6", (v), N_("use IPv6 addresses only"), \
++		TRANSPORT_FAMILY_IPV6)
++
+ #endif
+-- 
+2.39.3 (Apple Git-145)
+

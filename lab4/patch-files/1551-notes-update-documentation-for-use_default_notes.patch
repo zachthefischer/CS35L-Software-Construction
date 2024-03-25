@@ -1,0 +1,41 @@
+From a2e9dbb8849a29d010dceea2d5d1cab62d4dee6d Mon Sep 17 00:00:00 2001
+From: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Date: Mon, 5 Jun 2023 12:05:22 +0200
+Subject: [PATCH 1551/2871] notes: update documentation for `use_default_notes`
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`suppress_default_notes` was renamed to `use_default_notes` in
+3a03cf6b1d (notes: refactor display notes default handling,
+2011-03-29).
+
+The commit message says that “values less than one [indicates] “not
+set” ”, but what was meant was probably “less than zero” (the author of
+3a03cf6b1d agrees on this point).
+
+Signed-off-by: Kristoffer Haugsbakk <code@khaugsbakk.name>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ notes.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/notes.h b/notes.h
+index c1682c39a9..a823840e49 100644
+--- a/notes.h
++++ b/notes.h
+@@ -286,8 +286,9 @@ void disable_display_notes(struct display_notes_opt *opt, int *show_notes);
+  * If 'opt' is not NULL, then it specifies additional settings for the
+  * displaying:
+  *
+- * - suppress_default_notes indicates that the notes from
+- *   core.notesRef and notes.displayRef should not be loaded.
++ * - use_default_notes: less than `0` is "unset", which means that the
++ *   default notes are shown iff no other notes are given. Otherwise,
++ *   treat it like a boolean.
+  *
+  * - extra_notes_refs may contain a list of globs (in the same style
+  *   as notes.displayRef) where notes should be loaded from.
+-- 
+2.39.3 (Apple Git-145)
+

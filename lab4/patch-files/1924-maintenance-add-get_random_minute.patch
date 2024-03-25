@@ -1,0 +1,105 @@
+From 89024a0ab018bb6e8ad2e4a6500b98b889088c54 Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Thu, 10 Aug 2023 20:39:40 +0000
+Subject: [PATCH 1924/2871] maintenance: add get_random_minute()
+
+When we initially created background maintenance -- with its hourly,
+daily, and weekly schedules -- we considered the effects of all clients
+launching fetches to the server every hour on the hour. The worry of
+DDoSing server hosts was noted, but left as something we would consider
+for a future update.
+
+As background maintenance has gained more adoption over the past three
+years, our worries about DDoSing the big Git hosts has been unfounded.
+Those systems, especially those serving public repositories, are already
+resilient to thundering herds of much smaller scale.
+
+However, sometimes organizations spin up specific custom server
+infrastructure either in addition to or on top of their Git host. Some
+of these technologies are built for a different range of scale, and can
+hit concurrency limits sooner. Organizations with such custom
+infrastructures are more likely to recommend tools like `scalar` which
+furthers their adoption of background maintenance.
+
+To help solve for this, create get_random_minute() as a method to help
+Git select a random minute when creating schedules in the future. The
+integrations with this method do not yet exist, but will follow in
+future changes.
+
+To avoid multiple sources of randomness in the Git codebase, create a
+new helper function, git_rand(), that returns a random uint32_t. This is
+similar to how rand() returns a random nonnegative value, except it is
+based on csprng_bytes() which is cryptographic and will return values
+larger than RAND_MAX.
+
+One thing that is important for testability is that we notice when we
+are under a test scenario and return a predictable result. The schedules
+themselves are not checked for this value, but at least one launchctl
+test checks that we do not unnecessarily reboot the schedule if it has
+not changed from a previous version.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c | 10 ++++++++++
+ wrapper.c    | 10 ++++++++++
+ wrapper.h    |  6 ++++++
+ 3 files changed, 26 insertions(+)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index 19d73067aa..2ebae7bc17 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -1708,6 +1708,16 @@ static int get_schedule_cmd(const char **cmd, int *is_available)
+ 	return 1;
+ }
+ 
++MAYBE_UNUSED
++static int get_random_minute(void)
++{
++	/* Use a static value when under tests. */
++	if (getenv("GIT_TEST_MAINT_SCHEDULER"))
++		return 13;
++
++	return git_rand() % 60;
++}
++
+ static int is_launchctl_available(void)
+ {
+ 	const char *cmd = "launchctl";
+diff --git a/wrapper.c b/wrapper.c
+index 5160c9e28d..48065c4f53 100644
+--- a/wrapper.c
++++ b/wrapper.c
+@@ -819,3 +819,13 @@ int csprng_bytes(void *buf, size_t len)
+ 	return 0;
+ #endif
+ }
++
++uint32_t git_rand(void)
++{
++	uint32_t result;
++
++	if (csprng_bytes(&result, sizeof(result)) < 0)
++		die(_("unable to get random bytes"));
++
++	return result;
++}
+diff --git a/wrapper.h b/wrapper.h
+index 79a9c1b507..79c7321bb3 100644
+--- a/wrapper.h
++++ b/wrapper.h
+@@ -139,4 +139,10 @@ void sleep_millisec(int millisec);
+  */
+ int csprng_bytes(void *buf, size_t len);
+ 
++/*
++ * Returns a random uint32_t, uniformly distributed across all possible
++ * values.
++ */
++uint32_t git_rand(void);
++
+ #endif /* WRAPPER_H */
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,83 @@
+From 5825268db1058516d05be03d6a8d8d55eea5a943 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Sat, 20 Jan 2024 15:39:38 +0100
+Subject: [PATCH 2726/2871] parse-options: fully disable option abbreviation
+ with PARSE_OPT_KEEP_UNKNOWN
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+baa4adc66a (parse-options: disable option abbreviation with
+PARSE_OPT_KEEP_UNKNOWN, 2019-01-27) turned off support for abbreviated
+options when the flag PARSE_OPT_KEEP_UNKNOWN is given, as any shortened
+option could also be an abbreviation for one of the unknown options.
+
+The code for handling abbreviated options is guarded by an if, but it
+can also be reached via goto.  baa4adc66a only blocked the first way.
+Add the condition to the other ones as well.
+
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ parse-options.c         | 8 +++++---
+ t/t4013-diff-various.sh | 6 ++++++
+ 2 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/parse-options.c b/parse-options.c
+index e0c94b0546..0dd07eec82 100644
+--- a/parse-options.c
++++ b/parse-options.c
+@@ -358,6 +358,7 @@ static enum parse_opt_result parse_long_opt(
+ 	const char *arg_end = strchrnul(arg, '=');
+ 	const struct option *abbrev_option = NULL, *ambiguous_option = NULL;
+ 	enum opt_parsed abbrev_flags = OPT_LONG, ambiguous_flags = OPT_LONG;
++	int allow_abbrev = !(p->flags & PARSE_OPT_KEEP_UNKNOWN_OPT);
+ 
+ 	for (; options->type != OPTION_END; options++) {
+ 		const char *rest, *long_name = options->long_name;
+@@ -373,7 +374,7 @@ static enum parse_opt_result parse_long_opt(
+ 			rest = NULL;
+ 		if (!rest) {
+ 			/* abbreviated? */
+-			if (!(p->flags & PARSE_OPT_KEEP_UNKNOWN_OPT) &&
++			if (allow_abbrev &&
+ 			    !strncmp(long_name, arg, arg_end - arg)) {
+ is_abbreviated:
+ 				if (abbrev_option &&
+@@ -397,7 +398,7 @@ static enum parse_opt_result parse_long_opt(
+ 			if (options->flags & PARSE_OPT_NONEG)
+ 				continue;
+ 			/* negated and abbreviated very much? */
+-			if (starts_with("no-", arg)) {
++			if (allow_abbrev && starts_with("no-", arg)) {
+ 				flags |= OPT_UNSET;
+ 				goto is_abbreviated;
+ 			}
+@@ -412,7 +413,8 @@ static enum parse_opt_result parse_long_opt(
+ 			flags |= OPT_UNSET;
+ 			if (!skip_prefix(arg + 3, long_name, &rest)) {
+ 				/* abbreviated and negated? */
+-				if (starts_with(long_name, arg + 3))
++				if (allow_abbrev &&
++				    starts_with(long_name, arg + 3))
+ 					goto is_abbreviated;
+ 				else
+ 					continue;
+diff --git a/t/t4013-diff-various.sh b/t/t4013-diff-various.sh
+index 5cc17c2e0d..663368d411 100755
+--- a/t/t4013-diff-various.sh
++++ b/t/t4013-diff-various.sh
+@@ -666,4 +666,10 @@ test_expect_success 'diff --default-prefix overrides diff.mnemonicprefix' '
+ 	check_prefix actual a/file0 b/file0
+ '
+ 
++test_expect_success 'diff --no-renames cannot be abbreviated' '
++	test_expect_code 129 git diff --no-rename >actual 2>error &&
++	test_must_be_empty actual &&
++	grep "invalid option: --no-rename" error
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

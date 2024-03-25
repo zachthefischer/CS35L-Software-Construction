@@ -1,0 +1,52 @@
+From f024913164ae6ec53bd97c0fb8481abb0fecd86d Mon Sep 17 00:00:00 2001
+From: Alex Henrie <alexhenrie24@gmail.com>
+Date: Sun, 2 Apr 2023 22:07:24 -0600
+Subject: [PATCH 1193/2871] format-patch: correct documentation of --thread
+ without an argument
+
+In Git, almost all command line flags unconditionally override the
+corresponding config option.[1] Add a test to confirm that this is the
+case for `git format-patch --thread`.
+
+[1] https://lore.kernel.org/git/CAMMLpeS3+NUQa2oqpHKVo3yWQNVMgkEXrs4U5_ggvk31yQbezQ@mail.gmail.com/
+
+Signed-off-by: Alex Henrie <alexhenrie24@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-format-patch.txt | 3 +--
+ t/t4014-format-patch.sh            | 5 +++++
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-format-patch.txt b/Documentation/git-format-patch.txt
+index dfcc7da4c2..ed299e077d 100644
+--- a/Documentation/git-format-patch.txt
++++ b/Documentation/git-format-patch.txt
+@@ -173,8 +173,7 @@ series, where the head is chosen from the cover letter, the
+ threading makes every mail a reply to the previous one.
+ +
+ The default is `--no-thread`, unless the `format.thread` configuration
+-is set.  If `--thread` is specified without a style, it defaults to the
+-style specified by `format.thread` if any, or else `shallow`.
++is set.  `--thread` without an argument is equivalent to `--thread=shallow`.
+ +
+ Beware that the default for 'git send-email' is to thread emails
+ itself.  If you want `git format-patch` to take care of threading, you
+diff --git a/t/t4014-format-patch.sh b/t/t4014-format-patch.sh
+index 8c3d06622a..b27a72f78a 100755
+--- a/t/t4014-format-patch.sh
++++ b/t/t4014-format-patch.sh
+@@ -470,6 +470,11 @@ test_expect_success 'thread' '
+ 	check_threading expect.thread --thread main
+ '
+ 
++test_expect_success '--thread overrides format.thread=deep' '
++	test_config format.thread deep &&
++	check_threading expect.thread --thread main
++'
++
+ cat >expect.in-reply-to <<EOF
+ ---
+ Message-Id: <0>
+-- 
+2.39.3 (Apple Git-145)
+

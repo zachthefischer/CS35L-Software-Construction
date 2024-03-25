@@ -1,0 +1,43 @@
+From 0b1a95ef793716e7e51caf929b971ee2cbf4116d Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Sat, 22 Apr 2023 09:56:46 -0400
+Subject: [PATCH 1320/2871] fetch_bundle_uri(): drop pointless NULL check
+
+We check if "uri" is NULL, but it cannot be since we'd have segfaulted
+earlier in the function when we unconditionally called xstrdup() on it.
+
+In theory we might want to soften that xstrdup() to handle this case,
+but even before the code which added it via c23f592117 (bundle-uri:
+fetch a list of bundles, 2022-10-12), we'd have fed NULL to
+fetch_bundle_uri_internal(), which would also segfault.
+
+The extra check isn't hurting anything, but it does cause Coverity to
+complain, and it may mislead somebody reading the code into thinking
+that a NULL uri is something we're prepared to handle.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index e2b267cc02..f22490a2ca 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -795,10 +795,10 @@ int fetch_bundle_uri(struct repository *r, const char *uri,
+ 	init_bundle_list(&list);
+ 
+ 	/*
+-	 * Do not fetch a NULL or empty bundle URI. An empty bundle URI
++	 * Do not fetch an empty bundle URI. An empty bundle URI
+ 	 * could signal that a configured bundle URI has been disabled.
+ 	 */
+-	if (!uri || !*uri) {
++	if (!*uri) {
+ 		result = 0;
+ 		goto cleanup;
+ 	}
+-- 
+2.39.3 (Apple Git-145)
+

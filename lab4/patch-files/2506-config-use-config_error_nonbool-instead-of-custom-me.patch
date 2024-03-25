@@ -1,0 +1,65 @@
+From 92cecce0de87aa8cc54c3a9671554cb64a7c72fa Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 7 Dec 2023 02:25:16 -0500
+Subject: [PATCH 2506/2871] config: use config_error_nonbool() instead of
+ custom messages
+
+A few config callbacks use their own custom messages to report an
+unexpected implicit bool like:
+
+  [merge "foo"]
+  driver
+
+These should just use config_error_nonbool(), so the user sees
+consistent messages.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ imap-send.c       | 2 +-
+ merge-ll.c        | 2 +-
+ xdiff-interface.c | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/imap-send.c b/imap-send.c
+index 5b0fe4f95a..9c4df7bbc8 100644
+--- a/imap-send.c
++++ b/imap-send.c
+@@ -1346,7 +1346,7 @@ static int git_imap_config(const char *var, const char *val,
+ 		server.port = git_config_int(var, val, ctx->kvi);
+ 	else if (!strcmp("imap.host", var)) {
+ 		if (!val) {
+-			return error("Missing value for 'imap.host'");
++			return config_error_nonbool(var);
+ 		} else {
+ 			if (starts_with(val, "imap:"))
+ 				val += 5;
+diff --git a/merge-ll.c b/merge-ll.c
+index 8fcf2d3710..1df58ebaac 100644
+--- a/merge-ll.c
++++ b/merge-ll.c
+@@ -301,7 +301,7 @@ static int read_merge_config(const char *var, const char *value,
+ 
+ 	if (!strcmp("driver", key)) {
+ 		if (!value)
+-			return error("%s: lacks value", var);
++			return config_error_nonbool(var);
+ 		/*
+ 		 * merge.<name>.driver specifies the command line:
+ 		 *
+diff --git a/xdiff-interface.c b/xdiff-interface.c
+index 05d6475a09..d788689d01 100644
+--- a/xdiff-interface.c
++++ b/xdiff-interface.c
+@@ -314,7 +314,7 @@ int git_xmerge_config(const char *var, const char *value,
+ {
+ 	if (!strcmp(var, "merge.conflictstyle")) {
+ 		if (!value)
+-			return error(_("'%s' is not a boolean"), var);
++			return config_error_nonbool(var);
+ 		if (!strcmp(value, "diff3"))
+ 			git_xmerge_style = XDL_MERGE_DIFF3;
+ 		else if (!strcmp(value, "zdiff3"))
+-- 
+2.39.3 (Apple Git-145)
+

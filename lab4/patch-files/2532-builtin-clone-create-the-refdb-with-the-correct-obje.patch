@@ -1,0 +1,129 @@
+From 18c9cb7524c13ca88ee334a707f281c2e80d5fdf Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Tue, 12 Dec 2023 08:01:07 +0100
+Subject: [PATCH 2532/2871] builtin/clone: create the refdb with the correct
+ object format
+
+We're currently creating the reference database with a potentially
+incorrect object format when the remote repository's object format is
+different from the local default object format. This works just fine for
+now because the files backend never records the object format anywhere.
+But this logic will fail with any new reference backend that encodes
+this information in some form either on-disk or in-memory.
+
+The preceding commits have reshuffled code in git-clone(1) so that there
+is no code path that will access the reference database before we have
+detected the remote's object format. With these refactorings we can now
+defer initialization of the reference database until after we have
+learned the remote's object format and thus initialize it with the
+correct format from the get-go.
+
+These refactorings are required to make git-clone(1) work with the
+upcoming reftable backend when cloning repositories with the SHA256
+object format.
+
+This change breaks a test in "t5550-http-fetch-dumb.sh" when cloning an
+empty repository with `GIT_TEST_DEFAULT_HASH=sha256`. The test expects
+the resulting hash format of the empty cloned repository to match the
+default hash, but now we always end up with a sha1 repository. The
+problem is that for dumb HTTP fetches, we have no easy way to figure out
+the remote's hash function except for deriving it based on the hash
+length of refs in `info/refs`. But as the remote repository is empty we
+cannot rely on this detection mechanism.
+
+Before the change in this commit we already initialized the repository
+with the default hash function and then left it as-is. With this patch
+we always use the hash function detected via the remote, where we fall
+back to "sha1" in case we cannot detect it.
+
+Neither the old nor the new behaviour are correct as we second-guess the
+remote hash function in both cases. But given that this is a rather
+unlikely edge case (we use the dumb HTTP protocol, the remote repository
+uses SHA256 and the remote repository is empty), let's simply adapt the
+test to assert the new behaviour. If we want to properly address this
+edge case in the future we will have to extend the dumb HTTP protocol so
+that we can properly detect the hash function for empty repositories.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/clone.c            | 9 ++++++++-
+ setup.c                    | 2 +-
+ setup.h                    | 1 +
+ t/t5550-http-fetch-dumb.sh | 4 ++--
+ 4 files changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/builtin/clone.c b/builtin/clone.c
+index 06966c5d4c..fd052b8b54 100644
+--- a/builtin/clone.c
++++ b/builtin/clone.c
+@@ -1097,8 +1097,14 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 		}
+ 	}
+ 
++	/*
++	 * Initialize the repository, but skip initializing the reference
++	 * database. We do not yet know about the object format of the
++	 * repository, and reference backends may persist that information into
++	 * their on-disk data structures.
++	 */
+ 	init_db(git_dir, real_git_dir, option_template, GIT_HASH_UNKNOWN, NULL,
+-		do_not_override_repo_unix_permissions, INIT_DB_QUIET);
++		do_not_override_repo_unix_permissions, INIT_DB_QUIET | INIT_DB_SKIP_REFDB);
+ 
+ 	if (real_git_dir) {
+ 		free((char *)git_dir);
+@@ -1282,6 +1288,7 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
+ 	hash_algo = hash_algo_by_ptr(transport_get_hash_algo(transport));
+ 	initialize_repository_version(hash_algo, 1);
+ 	repo_set_hash_algo(the_repository, hash_algo);
++	create_reference_database(NULL, 1);
+ 
+ 	/*
+ 	 * Before fetching from the remote, download and install bundle
+diff --git a/setup.c b/setup.c
+index d6a1c59b7b..155fe13f70 100644
+--- a/setup.c
++++ b/setup.c
+@@ -1897,7 +1897,7 @@ static int is_reinit(void)
+ 	return ret;
+ }
+ 
+-static void create_reference_database(const char *initial_branch, int quiet)
++void create_reference_database(const char *initial_branch, int quiet)
+ {
+ 	struct strbuf err = STRBUF_INIT;
+ 	int reinit = is_reinit();
+diff --git a/setup.h b/setup.h
+index cbf538286b..3f0f17c351 100644
+--- a/setup.h
++++ b/setup.h
+@@ -178,6 +178,7 @@ int init_db(const char *git_dir, const char *real_git_dir,
+ 	    const char *initial_branch, int init_shared_repository,
+ 	    unsigned int flags);
+ void initialize_repository_version(int hash_algo, int reinit);
++void create_reference_database(const char *initial_branch, int quiet);
+ 
+ /*
+  * NOTE NOTE NOTE!!
+diff --git a/t/t5550-http-fetch-dumb.sh b/t/t5550-http-fetch-dumb.sh
+index e444b30bf6..4c3b32785d 100755
+--- a/t/t5550-http-fetch-dumb.sh
++++ b/t/t5550-http-fetch-dumb.sh
+@@ -66,11 +66,11 @@ test_expect_success 'create empty remote repository' '
+ 	setup_post_update_server_info_hook "$HTTPD_DOCUMENT_ROOT_PATH/empty.git"
+ '
+ 
+-test_expect_success 'empty dumb HTTP repository has default hash algorithm' '
++test_expect_success 'empty dumb HTTP repository falls back to SHA1' '
+ 	test_when_finished "rm -fr clone-empty" &&
+ 	git clone $HTTPD_URL/dumb/empty.git clone-empty &&
+ 	git -C clone-empty rev-parse --show-object-format >empty-format &&
+-	test "$(cat empty-format)" = "$(test_oid algo)"
++	test "$(cat empty-format)" = sha1
+ '
+ 
+ setup_askpass_helper
+-- 
+2.39.3 (Apple Git-145)
+

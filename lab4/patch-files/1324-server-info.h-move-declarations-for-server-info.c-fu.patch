@@ -1,0 +1,102 @@
+From 623b80bef2431f2f0dc550dda9da5cb633c606fd Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sat, 22 Apr 2023 20:17:11 +0000
+Subject: [PATCH 1324/2871] server-info.h: move declarations for server-info.c
+ functions from cache.h
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/receive-pack.c       | 1 +
+ builtin/repack.c             | 1 +
+ builtin/update-server-info.c | 1 +
+ cache.h                      | 3 ---
+ server-info.c                | 3 ++-
+ server-info.h                | 7 +++++++
+ 6 files changed, 12 insertions(+), 4 deletions(-)
+ create mode 100644 server-info.h
+
+diff --git a/builtin/receive-pack.c b/builtin/receive-pack.c
+index 7d921170f1..dae99e4554 100644
+--- a/builtin/receive-pack.c
++++ b/builtin/receive-pack.c
+@@ -33,6 +33,7 @@
+ #include "object-store.h"
+ #include "protocol.h"
+ #include "commit-reach.h"
++#include "server-info.h"
+ #include "trace.h"
+ #include "trace2.h"
+ #include "worktree.h"
+diff --git a/builtin/repack.c b/builtin/repack.c
+index df4d8e0f0b..bed2c2aaaf 100644
+--- a/builtin/repack.c
++++ b/builtin/repack.c
+@@ -7,6 +7,7 @@
+ #include "hex.h"
+ #include "parse-options.h"
+ #include "run-command.h"
++#include "server-info.h"
+ #include "sigchain.h"
+ #include "strbuf.h"
+ #include "string-list.h"
+diff --git a/builtin/update-server-info.c b/builtin/update-server-info.c
+index e7bff27ae4..19dce3c065 100644
+--- a/builtin/update-server-info.c
++++ b/builtin/update-server-info.c
+@@ -3,6 +3,7 @@
+ #include "builtin.h"
+ #include "gettext.h"
+ #include "parse-options.h"
++#include "server-info.h"
+ 
+ static const char * const update_server_info_usage[] = {
+ 	"git update-server-info [-f | --force]",
+diff --git a/cache.h b/cache.h
+index ffb9028f01..2eb4546473 100644
+--- a/cache.h
++++ b/cache.h
+@@ -593,9 +593,6 @@ int df_name_compare(const char *name1, size_t len1, int mode1,
+ int name_compare(const char *name1, size_t len1, const char *name2, size_t len2);
+ int cache_name_stage_compare(const char *name1, int len1, int stage1, const char *name2, int len2, int stage2);
+ 
+-/* Dumb servers support */
+-int update_server_info(int);
+-
+ #define COPY_READ_ERROR (-2)
+ #define COPY_WRITE_ERROR (-3)
+ int copy_fd(int ifd, int ofd);
+diff --git a/server-info.c b/server-info.c
+index 68098ddd1a..55aa04f00a 100644
+--- a/server-info.c
++++ b/server-info.c
+@@ -1,4 +1,4 @@
+-#include "cache.h"
++#include "git-compat-util.h"
+ #include "alloc.h"
+ #include "dir.h"
+ #include "environment.h"
+@@ -11,6 +11,7 @@
+ #include "packfile.h"
+ #include "object-file.h"
+ #include "object-store.h"
++#include "server-info.h"
+ #include "strbuf.h"
+ #include "wrapper.h"
+ 
+diff --git a/server-info.h b/server-info.h
+new file mode 100644
+index 0000000000..13bbde2c55
+--- /dev/null
++++ b/server-info.h
+@@ -0,0 +1,7 @@
++#ifndef SERVER_INFO_H
++#define SERVER_INFO_H
++
++/* Dumb servers support */
++int update_server_info(int);
++
++#endif /* SERVER_INFO_H */
+-- 
+2.39.3 (Apple Git-145)
+

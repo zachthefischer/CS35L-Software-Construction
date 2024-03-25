@@ -1,0 +1,48 @@
+From c97ec0378b97036c62492678931a297a4498d12c Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Thu, 10 Aug 2023 20:39:46 +0000
+Subject: [PATCH 1930/2871] maintenance: fix systemd schedule overlaps
+
+The 'git maintenance run' command prevents concurrent runs in the same
+repository using a 'maintenance.lock' file. However, when using systemd
+the hourly maintenance runs the same time as the daily and weekly runs.
+(Similarly, daily maintenance runs at the same time as weekly
+maintenance.) These competing commands result in some maintenance not
+actually being run.
+
+This overlap was something we could not fix until we made the recent
+change to not use the builting 'hourly', 'daily', and 'weekly' schedules
+in systemd. We can adjust the schedules such that:
+
+ 1. Hourly runs avoid the 0th hour.
+ 2. Daily runs avoid Monday.
+
+This will keep maintenance runs from colliding when using systemd.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/gc.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/builtin/gc.c b/builtin/gc.c
+index e52129e485..6f8df366fb 100644
+--- a/builtin/gc.c
++++ b/builtin/gc.c
+@@ -2350,11 +2350,11 @@ static int systemd_timer_write_timer_file(enum schedule_priority schedule,
+ 
+ 	switch (schedule) {
+ 	case SCHEDULE_HOURLY:
+-		schedule_pattern = xstrfmt("*-*-* *:%02d:00", minute);
++		schedule_pattern = xstrfmt("*-*-* 1..23:%02d:00", minute);
+ 		break;
+ 
+ 	case SCHEDULE_DAILY:
+-		schedule_pattern = xstrfmt("*-*-* 0:%02d:00", minute);
++		schedule_pattern = xstrfmt("Tue..Sun *-*-* 0:%02d:00", minute);
+ 		break;
+ 
+ 	case SCHEDULE_WEEKLY:
+-- 
+2.39.3 (Apple Git-145)
+

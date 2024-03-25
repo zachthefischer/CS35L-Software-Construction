@@ -1,0 +1,58 @@
+From 58be32fff9d191ef8312a2c2c2f9deaf5d221c69 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 29 Dec 2023 08:26:43 +0100
+Subject: [PATCH 2630/2871] setup: set repository's formats on init
+
+The proper hash algorithm and ref storage format that will be used for a
+newly initialized repository will be figured out in `init_db()` via
+`validate_hash_algorithm()` and `validate_ref_storage_format()`. Until
+now though, we never set up the hash algorithm or ref storage format of
+`the_repository` accordingly.
+
+There are only two callsites of `init_db()`, one in git-init(1) and one
+in git-clone(1). The former function doesn't care for the formats to be
+set up properly because it never access the repository after calling the
+function in the first place.
+
+For git-clone(1) it's a different story though, as we call `init_db()`
+before listing remote refs. While we do indeed have the wrong hash
+function in `the_repository` when `init_db()` sets up a non-default
+object format for the repository, it never mattered because we adjust
+the hash after learning about the remote's hash function via the listed
+refs.
+
+So the current state is correct for the hash algo, but it's not for the
+ref storage format because git-clone(1) wouldn't know to set it up
+properly. But instead of adjusting only the `ref_storage_format`, set
+both the hash algo and the ref storage format so that `the_repository`
+is in the correct state when `init_db()` exits. This is fine as we will
+adjust the hash later on anyway and makes it easier to reason about the
+end state of `the_repository`.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ setup.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/setup.c b/setup.c
+index 9c9a167f52..49570e6b3a 100644
+--- a/setup.c
++++ b/setup.c
+@@ -2207,6 +2207,13 @@ int init_db(const char *git_dir, const char *real_git_dir,
+ 				      &repo_fmt, prev_bare_repository,
+ 				      init_shared_repository);
+ 
++	/*
++	 * Now that we have set up both the hash algorithm and the ref storage
++	 * format we can update the repository's settings accordingly.
++	 */
++	repo_set_hash_algo(the_repository, repo_fmt.hash_algo);
++	repo_set_ref_storage_format(the_repository, repo_fmt.ref_storage_format);
++
+ 	if (!(flags & INIT_DB_SKIP_REFDB))
+ 		create_reference_database(repo_fmt.ref_storage_format,
+ 					  initial_branch, flags & INIT_DB_QUIET);
+-- 
+2.39.3 (Apple Git-145)
+

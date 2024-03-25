@@ -1,0 +1,35 @@
+From bbb6acd998387a31794bca834529362d289f3807 Mon Sep 17 00:00:00 2001
+From: "D. Ben Knoble" <ben.knoble+github@gmail.com>
+Date: Thu, 13 Jul 2023 22:01:22 +0000
+Subject: [PATCH 1771/2871] i18n: mark more bundle.c strings for translation
+
+These two messages were introduced in 8ba221e245 (bundle: output hash
+information in 'verify', 2022-03-22) and 105c6f14ad (bundle: parse
+filter capability, 2022-03-09) but never for translation.
+
+Signed-off-by: D. Ben Knoble <ben.knoble+github@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/bundle.c b/bundle.c
+index d50cfb5aa7..be7c0dd77b 100644
+--- a/bundle.c
++++ b/bundle.c
+@@ -278,10 +278,10 @@ int verify_bundle(struct repository *r,
+ 			list_refs(r, 0, NULL);
+ 		}
+ 
+-		printf_ln("The bundle uses this hash algorithm: %s",
++		printf_ln(_("The bundle uses this hash algorithm: %s"),
+ 			  header->hash_algo->name);
+ 		if (header->filter.choice)
+-			printf_ln("The bundle uses this filter: %s",
++			printf_ln(_("The bundle uses this filter: %s"),
+ 				  list_objects_filter_spec(&header->filter));
+ 	}
+ 	return ret;
+-- 
+2.39.3 (Apple Git-145)
+

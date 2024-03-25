@@ -1,0 +1,52 @@
+From 42be681b33ef73be056fb99e3c63c6e9b9c2e7ef Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Thu, 13 Jul 2023 20:54:54 -0400
+Subject: [PATCH 1786/2871] packfile.c: prevent overflow in `load_idx()`
+
+Prevent an overflow when locating a pack's CRC offset when the number
+of packed items is greater than 2^32-1/hashsz by guarding the
+computation with an `st_mult()`.
+
+Note that to avoid truncating the result, the `crc_offset` member must
+itself become a `size_t`. The only usage of this variable (besides the
+assignment in `load_idx()`) is in `read_v2_anomalous_offsets()` in the
+index-pack code. There we use the `crc_offset` as a pointer offset, so
+we are already equipped to handle the type change.
+
+Helped-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ object-store.h | 2 +-
+ packfile.c     | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/object-store.h b/object-store.h
+index 12415e5ea7..cfe47c9c07 100644
+--- a/object-store.h
++++ b/object-store.h
+@@ -110,7 +110,7 @@ struct packed_git {
+ 	const void *index_data;
+ 	size_t index_size;
+ 	uint32_t num_objects;
+-	uint32_t crc_offset;
++	size_t crc_offset;
+ 	struct oidset bad_objects;
+ 	int index_version;
+ 	time_t mtime;
+diff --git a/packfile.c b/packfile.c
+index 5ee67de569..efe4a22c63 100644
+--- a/packfile.c
++++ b/packfile.c
+@@ -186,7 +186,7 @@ int load_idx(const char *path, const unsigned int hashsz, void *idx_map,
+ 		     */
+ 		    (sizeof(off_t) <= 4))
+ 			return error("pack too large for current definition of off_t in %s", path);
+-		p->crc_offset = 8 + 4 * 256 + nr * hashsz;
++		p->crc_offset = st_add(8 + 4 * 256, st_mult(nr, hashsz));
+ 	}
+ 
+ 	p->index_version = version;
+-- 
+2.39.3 (Apple Git-145)
+

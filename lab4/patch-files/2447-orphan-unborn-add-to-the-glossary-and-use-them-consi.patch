@@ -1,0 +1,122 @@
+From 49dc156376e33ae62f84141f4425b2bf2978ad68 Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 24 Nov 2023 12:09:18 +0900
+Subject: [PATCH 2447/2871] orphan/unborn: add to the glossary and use them
+ consistently
+
+To orphan is a verb that denotes the act of getting on an unborn
+branch, and a few references to "orphan branch" in our documentation
+are misuses of the word.  They caused end-user confusion, which was
+made even worse because we did not have the term defined in the
+glossary document.  Add entries for "unborn" branch and "orphan"
+operation to the glossary, and adjust existing documentation
+accordingly.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/advice.txt    |  2 +-
+ Documentation/git-checkout.txt     |  2 +-
+ Documentation/git-switch.txt       |  2 +-
+ Documentation/git-worktree.txt     |  4 ++--
+ Documentation/glossary-content.txt | 18 ++++++++++++++++++
+ 5 files changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/config/advice.txt b/Documentation/config/advice.txt
+index 2737381a11..4d7e5d8759 100644
+--- a/Documentation/config/advice.txt
++++ b/Documentation/config/advice.txt
+@@ -140,6 +140,6 @@ advice.*::
+ 		Advice shown when a fast-forward is not possible.
+ 	worktreeAddOrphan::
+ 		Advice shown when a user tries to create a worktree from an
+-		invalid reference, to instruct how to create a new orphan
++		invalid reference, to instruct how to create a new unborn
+ 		branch instead.
+ --
+diff --git a/Documentation/git-checkout.txt b/Documentation/git-checkout.txt
+index 240c54639e..26ad1a5e27 100644
+--- a/Documentation/git-checkout.txt
++++ b/Documentation/git-checkout.txt
+@@ -215,7 +215,7 @@ variable.
+ 	below for details.
+ 
+ --orphan <new-branch>::
+-	Create a new 'orphan' branch, named `<new-branch>`, started from
++	Create a new unborn branch, named `<new-branch>`, started from
+ 	`<start-point>` and switch to it.  The first commit made on this
+ 	new branch will have no parents and it will be the root of a new
+ 	history totally disconnected from all the other branches and
+diff --git a/Documentation/git-switch.txt b/Documentation/git-switch.txt
+index c60fc9c138..3e23a82cf2 100644
+--- a/Documentation/git-switch.txt
++++ b/Documentation/git-switch.txt
+@@ -171,7 +171,7 @@ name, the guessing is aborted.  You can explicitly give a name with
+ 	`branch.autoSetupMerge` configuration variable is true.
+ 
+ --orphan <new-branch>::
+-	Create a new 'orphan' branch, named `<new-branch>`. All
++	Create a new unborn branch, named `<new-branch>`. All
+ 	tracked files are removed.
+ 
+ --ignore-other-worktrees::
+diff --git a/Documentation/git-worktree.txt b/Documentation/git-worktree.txt
+index 93d76f5d66..2a240f53ba 100644
+--- a/Documentation/git-worktree.txt
++++ b/Documentation/git-worktree.txt
+@@ -99,7 +99,7 @@ command will refuse to create the worktree (unless `--force` is used).
+ If `<commit-ish>` is omitted, neither `--detach`, or `--orphan` is
+ used, and there are no valid local branches (or remote branches if
+ `--guess-remote` is specified) then, as a convenience, the new worktree is
+-associated with a new orphan branch named `<branch>` (after
++associated with a new unborn branch named `<branch>` (after
+ `$(basename <path>)` if neither `-b` or `-B` is used) as if `--orphan` was
+ passed to the command. In the event the repository has a remote and
+ `--guess-remote` is used, but no remote or local branches exist, then the
+@@ -234,7 +234,7 @@ This can also be set up as the default behaviour by using the
+ 
+ --orphan::
+ 	With `add`, make the new worktree and index empty, associating
+-	the worktree with a new orphan/unborn branch named `<new-branch>`.
++	the worktree with a new unborn branch named `<new-branch>`.
+ 
+ --porcelain::
+ 	With `list`, output in an easy-to-parse format for scripts.
+diff --git a/Documentation/glossary-content.txt b/Documentation/glossary-content.txt
+index 59d8ab8572..e71dd03f0c 100644
+--- a/Documentation/glossary-content.txt
++++ b/Documentation/glossary-content.txt
+@@ -312,6 +312,12 @@ This commit is referred to as a "merge commit", or sometimes just a
+ [[def_octopus]]octopus::
+ 	To <<def_merge,merge>> more than two <<def_branch,branches>>.
+ 
++[[def_orphan]]orphan::
++	The act of getting on a <<def_branch,branch>> that does not
++	exist yet (i.e., an <<def_unborn,unborn>> branch).  After
++	such an operation, the commit first created becomes a commit
++	without a parent, starting a new history.
++
+ [[def_origin]]origin::
+ 	The default upstream <<def_repository,repository>>. Most projects have
+ 	at least one upstream project which they track. By default
+@@ -695,6 +701,18 @@ The most notable example is `HEAD`.
+ 	object,
+ 	etc.
+ 
++[[def_unborn]]unborn::
++	The <<def_HEAD,HEAD>> can point at a <<def_branch,branch>>
++	that does not yet exist and that does not have any commit on
++	it yet, and such a branch is called an unborn branch.  The
++	most typical way users encounter an unborn branch is by
++	creating a repository anew without cloning from elsewhere.
++	The HEAD would point at the 'main' (or 'master', depending
++	on your configuration) branch that is yet to be born.  Also
++	some operations can get you on an unborn branch with their
++	<<def_orphan,orphan>> option.
++
++
+ [[def_unmerged_index]]unmerged index::
+ 	An <<def_index,index>> which contains unmerged
+ 	<<def_index_entry,index entries>>.
+-- 
+2.39.3 (Apple Git-145)
+

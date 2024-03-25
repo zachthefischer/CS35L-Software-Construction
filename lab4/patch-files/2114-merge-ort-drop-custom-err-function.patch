@@ -1,0 +1,117 @@
+From 808e83f2667e4b442a8f58f0c7ef55feb6864f65 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Thu, 14 Sep 2023 05:39:48 -0400
+Subject: [PATCH 2114/2871] merge-ort: drop custom err() function
+
+The merge-ort code has an err() function, but it's really just error()
+in disguise. It differs in two ways:
+
+  1. It takes a "struct merge_options" argument. But the function
+     completely ignores it! We can simply remove it.
+
+  2. It formats the error string into a strbuf, prepending "error: ",
+     and then feeds the result into error(). But this is wrong! The
+     error() function already adds the prefix, so we end up with:
+
+        error: error: Failed to execute internal merge
+
+So let's just drop this function entirely and call error() directly, as
+the functions are otherwise identical (note that they both always return
+-1).
+
+Presumably nobody noticed the bogus messages because they are quite hard
+to trigger (they are mostly internal errors reading and writing
+objects). However, one easy trigger is a custom merge driver which dies
+by signal; we have a test already here, but we were not checking the
+contents of stderr.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ merge-ort.c           | 28 +++++-----------------------
+ t/t6406-merge-attr.sh |  3 ++-
+ 2 files changed, 7 insertions(+), 24 deletions(-)
+
+diff --git a/merge-ort.c b/merge-ort.c
+index 8631c99700..027ecc7f78 100644
+--- a/merge-ort.c
++++ b/merge-ort.c
+@@ -721,23 +721,6 @@ static void clear_or_reinit_internal_opts(struct merge_options_internal *opti,
+ 	renames->callback_data_nr = renames->callback_data_alloc = 0;
+ }
+ 
+-__attribute__((format (printf, 2, 3)))
+-static int err(struct merge_options *opt, const char *err, ...)
+-{
+-	va_list params;
+-	struct strbuf sb = STRBUF_INIT;
+-
+-	strbuf_addstr(&sb, "error: ");
+-	va_start(params, err);
+-	strbuf_vaddf(&sb, err, params);
+-	va_end(params);
+-
+-	error("%s", sb.buf);
+-	strbuf_release(&sb);
+-
+-	return -1;
+-}
+-
+ static void format_commit(struct strbuf *sb,
+ 			  int indent,
+ 			  struct repository *repo,
+@@ -2122,13 +2105,12 @@ static int handle_content_merge(struct merge_options *opt,
+ 					  &result_buf);
+ 
+ 		if ((merge_status < 0) || !result_buf.ptr)
+-			ret = err(opt, _("Failed to execute internal merge"));
++			ret = error(_("Failed to execute internal merge"));
+ 
+ 		if (!ret &&
+ 		    write_object_file(result_buf.ptr, result_buf.size,
+ 				      OBJ_BLOB, &result->oid))
+-			ret = err(opt, _("Unable to add %s to database"),
+-				  path);
++			ret = error(_("Unable to add %s to database"), path);
+ 
+ 		free(result_buf.ptr);
+ 		if (ret)
+@@ -3518,10 +3500,10 @@ static int read_oid_strbuf(struct merge_options *opt,
+ 	unsigned long size;
+ 	buf = repo_read_object_file(the_repository, oid, &type, &size);
+ 	if (!buf)
+-		return err(opt, _("cannot read object %s"), oid_to_hex(oid));
++		return error(_("cannot read object %s"), oid_to_hex(oid));
+ 	if (type != OBJ_BLOB) {
+ 		free(buf);
+-		return err(opt, _("object %s is not a blob"), oid_to_hex(oid));
++		return error(_("object %s is not a blob"), oid_to_hex(oid));
+ 	}
+ 	strbuf_attach(dst, buf, size, size + 1);
+ 	return 0;
+@@ -4973,7 +4955,7 @@ static void merge_ort_nonrecursive_internal(struct merge_options *opt,
+ 		 * TRANSLATORS: The %s arguments are: 1) tree hash of a merge
+ 		 * base, and 2-3) the trees for the two trees we're merging.
+ 		 */
+-		err(opt, _("collecting merge info failed for trees %s, %s, %s"),
++		error(_("collecting merge info failed for trees %s, %s, %s"),
+ 		    oid_to_hex(&merge_base->object.oid),
+ 		    oid_to_hex(&side1->object.oid),
+ 		    oid_to_hex(&side2->object.oid));
+diff --git a/t/t6406-merge-attr.sh b/t/t6406-merge-attr.sh
+index 9677180a5b..05ad13b23e 100755
+--- a/t/t6406-merge-attr.sh
++++ b/t/t6406-merge-attr.sh
+@@ -179,7 +179,8 @@ test_expect_success !WINDOWS 'custom merge driver that is killed with a signal'
+ 
+ 	>./please-abort &&
+ 	echo "* merge=custom" >.gitattributes &&
+-	test_must_fail git merge main &&
++	test_must_fail git merge main 2>err &&
++	grep "^error: Failed to execute internal merge" err &&
+ 	git ls-files -u >output &&
+ 	git diff --name-only HEAD >>output &&
+ 	test_must_be_empty output
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,294 @@
+From 1e3f26542a6ecd3006c2c0d5ccc0bae4a700f7e5 Mon Sep 17 00:00:00 2001
+From: Phillip Wood <phillip.wood@dunelm.org.uk>
+Date: Wed, 5 Jul 2023 20:49:30 +0100
+Subject: [PATCH 1731/2871] diff --no-index: support reading from named pipes
+
+In some shells, such as bash and zsh, it's possible to use a command
+substitution to provide the output of a command as a file argument to
+another process, like so:
+
+  diff -u <(printf "a\nb\n") <(printf "a\nc\n")
+
+However, this syntax does not produce useful results with "git diff
+--no-index". On macOS, the arguments to the command are named pipes
+under /dev/fd, and git diff doesn't know how to handle a named pipe. On
+Linux, the arguments are symlinks to pipes, so git diff "helpfully"
+diffs these symlinks, comparing their targets like "pipe:[1234]" and
+"pipe:[5678]".
+
+To address this "diff --no-index" is changed so that if a path given on
+the commandline is a named pipe or a symbolic link that resolves to a
+named pipe then we read the data to diff from that pipe. This is
+implemented by generalizing the code that already exists to handle
+reading from stdin when the user passes the path "-".
+
+If the user tries to compare a named pipe to a directory then we die as
+we do when trying to compare stdin to a directory.
+
+As process substitution is not support by POSIX this change is tested by
+using a pipe and a symbolic link to a pipe.
+
+Helped-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff-no-index.c          | 111 +++++++++++++++++++++++++++++----------
+ t/t4053-diff-no-index.sh |  40 ++++++++++++++
+ 2 files changed, 124 insertions(+), 27 deletions(-)
+
+diff --git a/diff-no-index.c b/diff-no-index.c
+index 4470e0271d..4771cf02aa 100644
+--- a/diff-no-index.c
++++ b/diff-no-index.c
+@@ -41,41 +41,81 @@ static int read_directory_contents(const char *path, struct string_list *list)
+  */
+ static const char file_from_standard_input[] = "-";
+ 
+-static int get_mode(const char *path, int *mode)
++/*
++ * For paths given on the command-line we treat "-" as stdin and named
++ * pipes and symbolic links to named pipes specially.
++ */
++enum special {
++	SPECIAL_NONE,
++	SPECIAL_STDIN,
++	SPECIAL_PIPE,
++};
++
++static int get_mode(const char *path, int *mode, enum special *special)
+ {
+ 	struct stat st;
+ 
+-	if (!path || !strcmp(path, "/dev/null"))
++	if (!path || !strcmp(path, "/dev/null")) {
+ 		*mode = 0;
+ #ifdef GIT_WINDOWS_NATIVE
+-	else if (!strcasecmp(path, "nul"))
++	} else if (!strcasecmp(path, "nul")) {
+ 		*mode = 0;
+ #endif
+-	else if (path == file_from_standard_input)
++	} else if (path == file_from_standard_input) {
+ 		*mode = create_ce_mode(0666);
+-	else if (lstat(path, &st))
++		*special = SPECIAL_STDIN;
++	} else if (lstat(path, &st)) {
+ 		return error("Could not access '%s'", path);
+-	else
++	} else {
+ 		*mode = st.st_mode;
++	}
++	/*
++	 * For paths on the command-line treat named pipes and symbolic
++	 * links that resolve to a named pipe specially.
++	 */
++	if (special &&
++	    (S_ISFIFO(*mode) ||
++	     (S_ISLNK(*mode) && !stat(path, &st) && S_ISFIFO(st.st_mode)))) {
++		*mode = create_ce_mode(0666);
++		*special = SPECIAL_PIPE;
++	}
++
+ 	return 0;
+ }
+ 
+-static void populate_from_stdin(struct diff_filespec *s)
++static void populate_common(struct diff_filespec *s, struct strbuf *buf)
+ {
+-	struct strbuf buf = STRBUF_INIT;
+ 	size_t size = 0;
+ 
+-	if (strbuf_read(&buf, 0, 0) < 0)
+-		die_errno("error while reading from stdin");
+-
+ 	s->should_munmap = 0;
+-	s->data = strbuf_detach(&buf, &size);
++	s->data = strbuf_detach(buf, &size);
+ 	s->size = size;
+ 	s->should_free = 1;
+ 	s->is_stdin = 1;
+ }
+ 
+-static struct diff_filespec *noindex_filespec(const char *name, int mode)
++static void populate_from_pipe(struct diff_filespec *s)
++{
++	struct strbuf buf = STRBUF_INIT;
++	int fd = xopen(s->path, O_RDONLY);
++
++	if (strbuf_read(&buf, fd, 0) < 0)
++		die_errno("error while reading from '%s'", s->path);
++	close(fd);
++	populate_common(s, &buf);
++}
++
++static void populate_from_stdin(struct diff_filespec *s)
++{
++	struct strbuf buf = STRBUF_INIT;
++
++	if (strbuf_read(&buf, 0, 0) < 0)
++		die_errno("error while reading from stdin");
++	populate_common(s, &buf);
++}
++
++static struct diff_filespec *noindex_filespec(const char *name, int mode,
++					      enum special special)
+ {
+ 	struct diff_filespec *s;
+ 
+@@ -83,17 +123,22 @@ static struct diff_filespec *noindex_filespec(const char *name, int mode)
+ 		name = "/dev/null";
+ 	s = alloc_filespec(name);
+ 	fill_filespec(s, null_oid(), 0, mode);
+-	if (name == file_from_standard_input)
++	if (special == SPECIAL_STDIN)
+ 		populate_from_stdin(s);
++	else if (special == SPECIAL_PIPE)
++		populate_from_pipe(s);
+ 	return s;
+ }
+ 
+ static int queue_diff(struct diff_options *o,
+-		      const char *name1, const char *name2)
++		      const char *name1, const char *name2, int recursing)
+ {
+ 	int mode1 = 0, mode2 = 0;
++	enum special special1 = SPECIAL_NONE, special2 = SPECIAL_NONE;
+ 
+-	if (get_mode(name1, &mode1) || get_mode(name2, &mode2))
++	/* Paths can only be special if we're not recursing. */
++	if (get_mode(name1, &mode1, recursing ? NULL : &special1) ||
++	    get_mode(name2, &mode2, recursing ? NULL : &special2))
+ 		return -1;
+ 
+ 	if (mode1 && mode2 && S_ISDIR(mode1) != S_ISDIR(mode2)) {
+@@ -101,14 +146,14 @@ static int queue_diff(struct diff_options *o,
+ 
+ 		if (S_ISDIR(mode1)) {
+ 			/* 2 is file that is created */
+-			d1 = noindex_filespec(NULL, 0);
+-			d2 = noindex_filespec(name2, mode2);
++			d1 = noindex_filespec(NULL, 0, SPECIAL_NONE);
++			d2 = noindex_filespec(name2, mode2, special2);
+ 			name2 = NULL;
+ 			mode2 = 0;
+ 		} else {
+ 			/* 1 is file that is deleted */
+-			d1 = noindex_filespec(name1, mode1);
+-			d2 = noindex_filespec(NULL, 0);
++			d1 = noindex_filespec(name1, mode1, special1);
++			d2 = noindex_filespec(NULL, 0, SPECIAL_NONE);
+ 			name1 = NULL;
+ 			mode1 = 0;
+ 		}
+@@ -173,7 +218,7 @@ static int queue_diff(struct diff_options *o,
+ 				n2 = buffer2.buf;
+ 			}
+ 
+-			ret = queue_diff(o, n1, n2);
++			ret = queue_diff(o, n1, n2, 1);
+ 		}
+ 		string_list_clear(&p1, 0);
+ 		string_list_clear(&p2, 0);
+@@ -189,8 +234,8 @@ static int queue_diff(struct diff_options *o,
+ 			SWAP(name1, name2);
+ 		}
+ 
+-		d1 = noindex_filespec(name1, mode1);
+-		d2 = noindex_filespec(name2, mode2);
++		d1 = noindex_filespec(name1, mode1, special1);
++		d2 = noindex_filespec(name2, mode2, special2);
+ 		diff_queue(&diff_queued_diff, d1, d2);
+ 		return 0;
+ 	}
+@@ -215,15 +260,27 @@ static void append_basename(struct strbuf *path, const char *dir, const char *fi
+  */
+ static void fixup_paths(const char **path, struct strbuf *replacement)
+ {
+-	unsigned int isdir0, isdir1;
++	struct stat st;
++	unsigned int isdir0 = 0, isdir1 = 0;
++	unsigned int ispipe0 = 0, ispipe1 = 0;
+ 
+-	isdir0 = path[0] != file_from_standard_input && is_directory(path[0]);
+-	isdir1 = path[1] != file_from_standard_input && is_directory(path[1]);
++	if (path[0] != file_from_standard_input && !stat(path[0], &st)) {
++		isdir0 = S_ISDIR(st.st_mode);
++		ispipe0 = S_ISFIFO(st.st_mode);
++	}
++
++	if (path[1] != file_from_standard_input && !stat(path[1], &st)) {
++		isdir1 = S_ISDIR(st.st_mode);
++		ispipe1 = S_ISFIFO(st.st_mode);
++	}
+ 
+ 	if ((path[0] == file_from_standard_input && isdir1) ||
+ 	    (isdir0 && path[1] == file_from_standard_input))
+ 		die(_("cannot compare stdin to a directory"));
+ 
++	if ((isdir0 && ispipe1) || (ispipe0 && isdir1))
++		die(_("cannot compare a named pipe to a directory"));
++
+ 	if (isdir0 == isdir1)
+ 		return;
+ 	if (isdir0) {
+@@ -297,7 +354,7 @@ int diff_no_index(struct rev_info *revs,
+ 	setup_diff_pager(&revs->diffopt);
+ 	revs->diffopt.flags.exit_with_status = 1;
+ 
+-	if (queue_diff(&revs->diffopt, paths[0], paths[1]))
++	if (queue_diff(&revs->diffopt, paths[0], paths[1], 0))
+ 		goto out;
+ 	diff_set_mnemonic_prefix(&revs->diffopt, "1/", "2/");
+ 	diffcore_std(&revs->diffopt);
+diff --git a/t/t4053-diff-no-index.sh b/t/t4053-diff-no-index.sh
+index 4870443609..a28b9ff243 100755
+--- a/t/t4053-diff-no-index.sh
++++ b/t/t4053-diff-no-index.sh
+@@ -229,4 +229,44 @@ test_expect_success 'diff --no-index refuses to diff stdin and a directory' '
+ 	grep "fatal: cannot compare stdin to a directory" err
+ '
+ 
++test_expect_success PIPE 'diff --no-index refuses to diff a named pipe and a directory' '
++	test_when_finished "rm -f pipe" &&
++	mkfifo pipe &&
++	{
++		(>pipe) &
++	} &&
++	test_when_finished "kill $!" &&
++	test_must_fail git diff --no-index -- pipe a 2>err &&
++	grep "fatal: cannot compare a named pipe to a directory" err
++'
++
++test_expect_success PIPE,SYMLINKS 'diff --no-index reads from pipes' '
++	test_when_finished "rm -f old new new-link" &&
++	mkfifo old &&
++	mkfifo new &&
++	ln -s new new-link &&
++	{
++		(test_write_lines a b c >old) &
++	} &&
++	test_when_finished "! kill $!" &&
++	{
++		(test_write_lines a x c >new) &
++	} &&
++	test_when_finished "! kill $!" &&
++
++	cat >expect <<-EOF &&
++	diff --git a/old b/new-link
++	--- a/old
++	+++ b/new-link
++	@@ -1,3 +1,3 @@
++	 a
++	-b
++	+x
++	 c
++	EOF
++
++	test_expect_code 1 git diff --no-index old new-link >actual &&
++	test_cmp expect actual
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

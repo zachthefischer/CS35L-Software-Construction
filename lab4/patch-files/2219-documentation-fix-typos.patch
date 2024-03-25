@@ -1,0 +1,152 @@
+From 384f7d17d2f0d0ca689d8dda16f752c75a8ac634 Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Sun, 8 Oct 2023 06:45:05 +0000
+Subject: [PATCH 2219/2871] documentation: fix typos
+
+Diff best viewed with --color-diff.
+
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/fsck-msgids.txt                 | 2 +-
+ Documentation/git-get-tar-commit-id.txt       | 2 +-
+ Documentation/git-grep.txt                    | 2 +-
+ Documentation/git-upload-pack.txt             | 2 +-
+ Documentation/gitformat-chunk.txt             | 2 +-
+ Documentation/gitformat-pack.txt              | 4 ++--
+ Documentation/gitprotocol-capabilities.txt    | 2 +-
+ Documentation/technical/commit-graph.txt      | 2 +-
+ Documentation/technical/parallel-checkout.txt | 4 ++--
+ 9 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/Documentation/fsck-msgids.txt b/Documentation/fsck-msgids.txt
+index 09b0aecbf8..8505c244bc 100644
+--- a/Documentation/fsck-msgids.txt
++++ b/Documentation/fsck-msgids.txt
+@@ -174,7 +174,7 @@
+ 	(FATAL) Missing end-of-line in the object header.
+ 
+ `zeroPaddedDate`::
+-	(ERROR) Found a zero padded date in an author/commiter line.
++	(ERROR) Found a zero padded date in an author/committer line.
+ 
+ `zeroPaddedFilemode`::
+ 	(WARN) Found a zero padded filemode in a tree.
+diff --git a/Documentation/git-get-tar-commit-id.txt b/Documentation/git-get-tar-commit-id.txt
+index ac44d85b0b..b537bb45b1 100644
+--- a/Documentation/git-get-tar-commit-id.txt
++++ b/Documentation/git-get-tar-commit-id.txt
+@@ -20,7 +20,7 @@ and extract the commit ID stored in it.  It reads only the first
+ 1024 bytes of input, thus its runtime is not influenced by the size
+ of the tar archive very much.
+ 
+-If no commit ID is found, 'git get-tar-commit-id' quietly exists with a
++If no commit ID is found, 'git get-tar-commit-id' quietly exits with a
+ return code of 1.  This can happen if the archive had not been created
+ using 'git archive' or if the first parameter of 'git archive' had been
+ a tree ID instead of a commit ID or tag.
+diff --git a/Documentation/git-grep.txt b/Documentation/git-grep.txt
+index dabdbe8471..0d0103c780 100644
+--- a/Documentation/git-grep.txt
++++ b/Documentation/git-grep.txt
+@@ -337,7 +337,7 @@ The `--threads` option (and the grep.threads configuration) will be ignored when
+ 
+ When grepping the object store (with `--cached` or giving tree objects), running
+ with multiple threads might perform slower than single threaded if `--textconv`
+-is given and there're too many text conversions. So if you experience low
++is given and there are too many text conversions. So if you experience low
+ performance in this case, it might be desirable to use `--threads=1`.
+ 
+ CONFIGURATION
+diff --git a/Documentation/git-upload-pack.txt b/Documentation/git-upload-pack.txt
+index b656b47567..7ad60bc348 100644
+--- a/Documentation/git-upload-pack.txt
++++ b/Documentation/git-upload-pack.txt
+@@ -26,7 +26,7 @@ OPTIONS
+ -------
+ 
+ --[no-]strict::
+-	Do not try <directory>/.git/ if <directory> is no Git directory.
++	Do not try <directory>/.git/ if <directory> is not a Git directory.
+ 
+ --timeout=<n>::
+ 	Interrupt transfer after <n> seconds of inactivity.
+diff --git a/Documentation/gitformat-chunk.txt b/Documentation/gitformat-chunk.txt
+index 57202ede27..76ea678398 100644
+--- a/Documentation/gitformat-chunk.txt
++++ b/Documentation/gitformat-chunk.txt
+@@ -42,7 +42,7 @@ Each row consists of a 4-byte chunk identifier (ID) and an 8-byte offset.
+ Each integer is stored in network-byte order.
+ 
+ The chunk identifier `ID[i]` is a label for the data stored within this
+-fill from `OFFSET[i]` (inclusive) to `OFFSET[i+1]` (exclusive). Thus, the
++file from `OFFSET[i]` (inclusive) to `OFFSET[i+1]` (exclusive). Thus, the
+ size of the `i`th chunk is equal to the difference between `OFFSET[i+1]`
+ and `OFFSET[i]`. This requires that the chunk data appears contiguously
+ in the same order as the table of contents.
+diff --git a/Documentation/gitformat-pack.txt b/Documentation/gitformat-pack.txt
+index 870e00f298..fb3f8fcf56 100644
+--- a/Documentation/gitformat-pack.txt
++++ b/Documentation/gitformat-pack.txt
+@@ -17,8 +17,8 @@ $GIT_DIR/objects/pack/multi-pack-index
+ DESCRIPTION
+ -----------
+ 
+-The Git pack format is now Git stores most of its primary repository
+-data. Over the lietime af a repository loose objects (if any) and
++The Git pack format is how Git stores most of its primary repository
++data. Over the lifetime of a repository loose objects (if any) and
+ smaller packs are consolidated into larger pack(s). See
+ linkgit:git-gc[1] and linkgit:git-pack-objects[1].
+ 
+diff --git a/Documentation/gitprotocol-capabilities.txt b/Documentation/gitprotocol-capabilities.txt
+index 5d5e39a703..9adda577e5 100644
+--- a/Documentation/gitprotocol-capabilities.txt
++++ b/Documentation/gitprotocol-capabilities.txt
+@@ -273,7 +273,7 @@ request include-tag only has to do with the client's desires for tag
+ data, whether or not a server had advertised objects in the
+ refs/tags/* namespace.
+ 
+-Servers MUST pack the tags if their referrant is packed and the client
++Servers MUST pack the tags if their referent is packed and the client
+ has requested include-tags.
+ 
+ Clients MUST be prepared for the case where a server has ignored
+diff --git a/Documentation/technical/commit-graph.txt b/Documentation/technical/commit-graph.txt
+index 86fed0de0f..2c26e95e51 100644
+--- a/Documentation/technical/commit-graph.txt
++++ b/Documentation/technical/commit-graph.txt
+@@ -136,7 +136,7 @@ Design Details
+ 
+ - Commit grafts and replace objects can change the shape of the commit
+   history. The latter can also be enabled/disabled on the fly using
+-  `--no-replace-objects`. This leads to difficultly storing both possible
++  `--no-replace-objects`. This leads to difficulty storing both possible
+   interpretations of a commit id, especially when computing generation
+   numbers. The commit-graph will not be read or written when
+   replace-objects or grafts are present.
+diff --git a/Documentation/technical/parallel-checkout.txt b/Documentation/technical/parallel-checkout.txt
+index 91a5eb26ef..1a5fe09b51 100644
+--- a/Documentation/technical/parallel-checkout.txt
++++ b/Documentation/technical/parallel-checkout.txt
+@@ -148,7 +148,7 @@ information, the main process handles the results in two steps:
+ 
+ - First, it updates the in-memory index with the `lstat()` information
+   sent by the workers. (This must be done first as this information
+-  might me required in the following step.)
++  might be required in the following step.)
+ 
+ - Then it writes the items which collided on disk (i.e. items marked
+   with `PC_ITEM_COLLIDED`). More on this below.
+@@ -232,7 +232,7 @@ conversion and re-encoding, are eligible for parallel checkout.
+ Ineligible entries are checked out by the classic sequential codepath
+ *before* spawning workers.
+ 
+-Note: submodules's files are also eligible for parallel checkout (as
++Note: submodules' files are also eligible for parallel checkout (as
+ long as they don't fall into any of the excluding categories mentioned
+ above). But since each submodule is checked out in its own child
+ process, we don't mix the superproject's and the submodules' files in
+-- 
+2.39.3 (Apple Git-145)
+

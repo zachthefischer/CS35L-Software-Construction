@@ -1,0 +1,41 @@
+From 8df4c5d205263c98378f0eea2b4ebab5e5c174aa Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 19 Jan 2024 11:40:29 +0100
+Subject: [PATCH 2720/2871] Documentation: add "special refs" to the glossary
+
+Add the "special refs" term to our glossary.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/glossary-content.txt | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Documentation/glossary-content.txt b/Documentation/glossary-content.txt
+index f7d98c11e3..d71b199955 100644
+--- a/Documentation/glossary-content.txt
++++ b/Documentation/glossary-content.txt
+@@ -638,6 +638,20 @@ The most notable example is `HEAD`.
+ 	An <<def_object,object>> used to temporarily store the contents of a
+ 	<<def_dirty,dirty>> working directory and the index for future reuse.
+ 
++[[def_special_ref]]special ref::
++	A ref that has different semantics than normal refs. These refs can be
++	accessed via normal Git commands but may not behave the same as a
++	normal ref in some cases.
+++
++The following special refs are known to Git:
++
++ - "`FETCH_HEAD`" is written by linkgit:git-fetch[1] or linkgit:git-pull[1]. It
++   may refer to multiple object IDs. Each object ID is annotated with metadata
++   indicating where it was fetched from and its fetch status.
++
++ - "`MERGE_HEAD`" is written by linkgit:git-merge[1] when resolving merge
++   conflicts. It contains all commit IDs which are being merged.
++
+ [[def_submodule]]submodule::
+ 	A <<def_repository,repository>> that holds the history of a
+ 	separate project inside another repository (the latter of
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,51 @@
+From ce8529b2bbabcb5240bdcc73bccaafa1116c5d7a Mon Sep 17 00:00:00 2001
+From: Junio C Hamano <gitster@pobox.com>
+Date: Fri, 21 Oct 2022 14:53:25 -0700
+Subject: [PATCH 0203/2871] diff: leave NEEDWORK notes in show_stats() function
+
+The previous step made an attempt to correctly compute display
+columns allocated and padded different parts of diffstat output.
+There are at least two known codepaths in the function that still
+mixes up display widths and byte length that need to be fixed.
+
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ diff.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/diff.c b/diff.c
+index 2751cae131..1d222d87b2 100644
+--- a/diff.c
++++ b/diff.c
+@@ -2675,6 +2675,11 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 	 * making the line longer than the maximum width.
+ 	 */
+ 
++	/*
++	 * NEEDSWORK: line_prefix is often used for "log --graph" output
++	 * and contains ANSI-colored string.  utf8_strnwidth() should be
++	 * used to correctly count the display width instead of strlen().
++	 */
+ 	if (options->stat_width == -1)
+ 		width = term_columns() - strlen(line_prefix);
+ 	else
+@@ -2750,6 +2755,16 @@ static void show_stats(struct diffstat_t *data, struct diff_options *options)
+ 			char *slash;
+ 			prefix = "...";
+ 			len -= 3;
++			/*
++			 * NEEDSWORK: (name_len - len) counts the display
++			 * width, which would be shorter than the byte
++			 * length of the corresponding substring.
++			 * Advancing "name" by that number of bytes does
++			 * *NOT* skip over that many columns, so it is
++			 * very likely that chomping the pathname at the
++			 * slash we will find starting from "name" will
++			 * leave the resulting string still too long.
++			 */
+ 			name += name_len - len;
+ 			slash = strchr(name, '/');
+ 			if (slash)
+-- 
+2.39.3 (Apple Git-145)
+

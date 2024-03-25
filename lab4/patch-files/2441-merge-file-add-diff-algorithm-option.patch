@@ -1,0 +1,232 @@
+From 4f7fd79e57f483282bc21bf5b0669f9c8229d32a Mon Sep 17 00:00:00 2001
+From: Antonin Delpeuch <antonin@delpeuch.eu>
+Date: Mon, 20 Nov 2023 19:18:52 +0000
+Subject: [PATCH 2441/2871] merge-file: add --diff-algorithm option
+
+Make it possible to use other diff algorithms than the 'myers'
+default algorithm, when using the 'git merge-file' command, to help
+avoid spurious conflicts by selecting a more recent algorithm such
+as 'histogram', for instance when using 'git merge-file' as part of
+a custom merge driver.
+
+Signed-off-by: Antonin Delpeuch <antonin@delpeuch.eu>
+Reviewed-by: Phillip Wood <phillip.wood@dunelm.org.uk>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-merge-file.txt |   6 ++
+ builtin/merge-file.c             |  28 +++++++
+ t/t6403-merge-file.sh            | 124 ++++++++++++++++++++++++++++++-
+ 3 files changed, 157 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/git-merge-file.txt b/Documentation/git-merge-file.txt
+index 6a081eacb7..71915a00fa 100644
+--- a/Documentation/git-merge-file.txt
++++ b/Documentation/git-merge-file.txt
+@@ -92,6 +92,12 @@ object store and the object ID of its blob is written to standard output.
+ 	Instead of leaving conflicts in the file, resolve conflicts
+ 	favouring our (or their or both) side of the lines.
+ 
++--diff-algorithm={patience|minimal|histogram|myers}::
++	Use a different diff algorithm while merging. The current default is "myers",
++	but selecting more recent algorithm such as "histogram" can help
++	avoid mismerges that occur due to unimportant matching lines
++	(such as braces from distinct functions). See also
++	linkgit:git-diff[1] `--diff-algorithm`.
+ 
+ EXAMPLES
+ --------
+diff --git a/builtin/merge-file.c b/builtin/merge-file.c
+index 832c93d8d5..1f987334a3 100644
+--- a/builtin/merge-file.c
++++ b/builtin/merge-file.c
+@@ -1,5 +1,6 @@
+ #include "builtin.h"
+ #include "abspath.h"
++#include "diff.h"
+ #include "hex.h"
+ #include "object-name.h"
+ #include "object-store.h"
+@@ -28,6 +29,30 @@ static int label_cb(const struct option *opt, const char *arg, int unset)
+ 	return 0;
+ }
+ 
++static int set_diff_algorithm(xpparam_t *xpp,
++			      const char *alg)
++{
++	long diff_algorithm = parse_algorithm_value(alg);
++	if (diff_algorithm < 0)
++		return -1;
++	xpp->flags = (xpp->flags & ~XDF_DIFF_ALGORITHM_MASK) | diff_algorithm;
++	return 0;
++}
++
++static int diff_algorithm_cb(const struct option *opt,
++				const char *arg, int unset)
++{
++	xpparam_t *xpp = opt->value;
++
++	BUG_ON_OPT_NEG(unset);
++
++	if (set_diff_algorithm(xpp, arg))
++		return error(_("option diff-algorithm accepts \"myers\", "
++			       "\"minimal\", \"patience\" and \"histogram\""));
++
++	return 0;
++}
++
+ int cmd_merge_file(int argc, const char **argv, const char *prefix)
+ {
+ 	const char *names[3] = { 0 };
+@@ -48,6 +73,9 @@ int cmd_merge_file(int argc, const char **argv, const char *prefix)
+ 			    XDL_MERGE_FAVOR_THEIRS),
+ 		OPT_SET_INT(0, "union", &xmp.favor, N_("for conflicts, use a union version"),
+ 			    XDL_MERGE_FAVOR_UNION),
++		OPT_CALLBACK_F(0, "diff-algorithm", &xmp.xpp, N_("<algorithm>"),
++			     N_("choose a diff algorithm"),
++			     PARSE_OPT_NONEG, diff_algorithm_cb),
+ 		OPT_INTEGER(0, "marker-size", &xmp.marker_size,
+ 			    N_("for conflicts, use this marker size")),
+ 		OPT__QUIET(&quiet, N_("do not warn about conflicts")),
+diff --git a/t/t6403-merge-file.sh b/t/t6403-merge-file.sh
+index 2c92209eca..fb872c5a11 100755
+--- a/t/t6403-merge-file.sh
++++ b/t/t6403-merge-file.sh
+@@ -56,7 +56,67 @@ test_expect_success 'setup' '
+ 	deduxit me super semitas jusitiae,
+ 	EOF
+ 
+-	printf "propter nomen suum." >>new4.txt
++	printf "propter nomen suum." >>new4.txt &&
++
++	cat >base.c <<-\EOF &&
++	int f(int x, int y)
++	{
++		if (x == 0)
++		{
++			return y;
++		}
++		return x;
++	}
++
++	int g(size_t u)
++	{
++		while (u < 30)
++		{
++			u++;
++		}
++		return u;
++	}
++	EOF
++
++	cat >ours.c <<-\EOF &&
++	int g(size_t u)
++	{
++		while (u < 30)
++		{
++			u++;
++		}
++		return u;
++	}
++
++	int h(int x, int y, int z)
++	{
++		if (z == 0)
++		{
++			return x;
++		}
++		return y;
++	}
++	EOF
++
++	cat >theirs.c <<-\EOF
++	int f(int x, int y)
++	{
++		if (x == 0)
++		{
++			return y;
++		}
++		return x;
++	}
++
++	int g(size_t u)
++	{
++		while (u > 34)
++		{
++			u--;
++		}
++		return u;
++	}
++	EOF
+ '
+ 
+ test_expect_success 'merge with no changes' '
+@@ -447,4 +507,66 @@ test_expect_success '--object-id fails without repository' '
+ 	grep "not a git repository" err
+ '
+ 
++test_expect_success 'merging C files with "myers" diff algorithm creates some spurious conflicts' '
++	cat >expect.c <<-\EOF &&
++	int g(size_t u)
++	{
++		while (u < 30)
++		{
++			u++;
++		}
++		return u;
++	}
++
++	int h(int x, int y, int z)
++	{
++	<<<<<<< ours.c
++		if (z == 0)
++	||||||| base.c
++		while (u < 30)
++	=======
++		while (u > 34)
++	>>>>>>> theirs.c
++		{
++	<<<<<<< ours.c
++			return x;
++	||||||| base.c
++			u++;
++	=======
++			u--;
++	>>>>>>> theirs.c
++		}
++		return y;
++	}
++	EOF
++
++	test_must_fail git merge-file -p --diff3 --diff-algorithm myers ours.c base.c theirs.c >myers_output.c &&
++	test_cmp expect.c myers_output.c
++'
++
++test_expect_success 'merging C files with "histogram" diff algorithm avoids some spurious conflicts' '
++	cat >expect.c <<-\EOF &&
++	int g(size_t u)
++	{
++		while (u > 34)
++		{
++			u--;
++		}
++		return u;
++	}
++
++	int h(int x, int y, int z)
++	{
++		if (z == 0)
++		{
++			return x;
++		}
++		return y;
++	}
++	EOF
++
++	git merge-file -p --diff3 --diff-algorithm histogram ours.c base.c theirs.c >histogram_output.c &&
++	test_cmp expect.c histogram_output.c
++'
++
+ test_done
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,91 @@
+From 12b0a14b9e5f140a9a4d5a3e3c47fae00a53c6fc Mon Sep 17 00:00:00 2001
+From: Derrick Stolee <derrickstolee@github.com>
+Date: Thu, 22 Dec 2022 15:14:16 +0000
+Subject: [PATCH 0601/2871] bundle-uri: download bundles from an advertised
+ list
+
+The logic in fetch_bundle_uri() is useful for the --bundle-uri option of
+'git clone', but is not helpful when the clone operation discovers a
+list of URIs from the bundle-uri protocol v2 command. To actually
+download and unbundle the advertised bundles, we need a different
+mechanism.
+
+Create the new fetch_bundle_list() method which is very similar to
+fetch_bundle_uri() except that it relies on download_bundle_list()
+instead of fetch_bundle_uri_internal(). The download_bundle_list()
+method will recursively call fetch_bundle_uri_internal() if any of the
+advertised URIs serve a bundle list instead of a bundle. This will also
+follow the bundle.list.mode setting from the input list: "any" will
+download only one such URI while "all" will download data from all of
+the URIs.
+
+In an identical way to fetch_bundle_uri(), the bundles are unbundled
+after all of the bundle lists have been expanded and all necessary URIs.
+
+Signed-off-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ bundle-uri.c | 21 +++++++++++++++++++++
+ bundle-uri.h | 14 ++++++++++++++
+ 2 files changed, 35 insertions(+)
+
+diff --git a/bundle-uri.c b/bundle-uri.c
+index 69929d363c..36268dda17 100644
+--- a/bundle-uri.c
++++ b/bundle-uri.c
+@@ -577,6 +577,27 @@ int fetch_bundle_uri(struct repository *r, const char *uri)
+ 	return result;
+ }
+ 
++int fetch_bundle_list(struct repository *r, struct bundle_list *list)
++{
++	int result;
++	struct bundle_list global_list;
++
++	init_bundle_list(&global_list);
++
++	/* If a bundle is added to this global list, then it is required. */
++	global_list.mode = BUNDLE_MODE_ALL;
++
++	if ((result = download_bundle_list(r, list, &global_list, 0)))
++		goto cleanup;
++
++	result = unbundle_all_bundles(r, &global_list);
++
++cleanup:
++	for_all_bundles_in_list(&global_list, unlink_bundle, NULL);
++	clear_bundle_list(&global_list);
++	return result;
++}
++
+ /**
+  * API for serve.c.
+  */
+diff --git a/bundle-uri.h b/bundle-uri.h
+index c505444bc7..d5e89f1671 100644
+--- a/bundle-uri.h
++++ b/bundle-uri.h
+@@ -107,6 +107,20 @@ int bundle_uri_parse_config_format(const char *uri,
+  */
+ int fetch_bundle_uri(struct repository *r, const char *uri);
+ 
++/**
++ * Given a bundle list that was already advertised (likely by the
++ * bundle-uri protocol v2 verb) at the given uri, fetch and unbundle the
++ * bundles according to the bundle strategy of that list.
++ *
++ * It is expected that the given 'list' is initialized, including its
++ * 'baseURI' value.
++ *
++ * Returns non-zero if there was an error trying to download the list
++ * or any of its advertised bundles.
++ */
++int fetch_bundle_list(struct repository *r,
++		      struct bundle_list *list);
++
+ /**
+  * API for serve.c.
+  */
+-- 
+2.39.3 (Apple Git-145)
+

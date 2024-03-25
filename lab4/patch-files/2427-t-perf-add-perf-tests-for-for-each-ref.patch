@@ -1,0 +1,125 @@
+From 294bfc24418e81dfb204d14a3c3c24af9b195179 Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Tue, 14 Nov 2023 19:53:58 +0000
+Subject: [PATCH 2427/2871] t/perf: add perf tests for for-each-ref
+
+Add performance tests for 'for-each-ref'. The tests exercise different
+combinations of filters/formats/options, as well as the overall performance
+of 'git for-each-ref | git cat-file --batch-check' to demonstrate the
+performance difference vs. 'git for-each-ref' with "%(*fieldname)" format
+specifiers.
+
+All tests are run against a repository with 40k loose refs - 10k commits,
+each having a unique:
+
+- branch
+- custom ref (refs/custom/special_*)
+- annotated tag pointing at the commit
+- annotated tag pointing at the other annotated tag (i.e., a nested tag)
+
+After those tests are finished, the refs are packed with 'pack-refs --all'
+and the same tests are rerun.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/perf/p6300-for-each-ref.sh | 87 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 87 insertions(+)
+ create mode 100755 t/perf/p6300-for-each-ref.sh
+
+diff --git a/t/perf/p6300-for-each-ref.sh b/t/perf/p6300-for-each-ref.sh
+new file mode 100755
+index 0000000000..fa7289c752
+--- /dev/null
++++ b/t/perf/p6300-for-each-ref.sh
+@@ -0,0 +1,87 @@
++#!/bin/sh
++
++test_description='performance of for-each-ref'
++. ./perf-lib.sh
++
++test_perf_fresh_repo
++
++ref_count_per_type=10000
++test_iteration_count=10
++
++test_expect_success "setup" '
++	test_commit_bulk $(( 1 + $ref_count_per_type )) &&
++
++	# Create refs
++	test_seq $ref_count_per_type |
++		sed "s,.*,update refs/heads/branch_& HEAD~&\nupdate refs/custom/special_& HEAD~&," |
++		git update-ref --stdin &&
++
++	# Create annotated tags
++	for i in $(test_seq $ref_count_per_type)
++	do
++		# Base tags
++		echo "tag tag_$i" &&
++		echo "mark :$i" &&
++		echo "from HEAD~$i" &&
++		printf "tagger %s <%s> %s\n" \
++			"$GIT_COMMITTER_NAME" \
++			"$GIT_COMMITTER_EMAIL" \
++			"$GIT_COMMITTER_DATE" &&
++		echo "data <<EOF" &&
++		echo "tag $i" &&
++		echo "EOF" &&
++
++		# Nested tags
++		echo "tag nested_$i" &&
++		echo "from :$i" &&
++		printf "tagger %s <%s> %s\n" \
++			"$GIT_COMMITTER_NAME" \
++			"$GIT_COMMITTER_EMAIL" \
++			"$GIT_COMMITTER_DATE" &&
++		echo "data <<EOF" &&
++		echo "nested tag $i" &&
++		echo "EOF" || return 1
++	done | git fast-import
++'
++
++test_for_each_ref () {
++	title="for-each-ref"
++	if test $# -gt 0; then
++		title="$title ($1)"
++		shift
++	fi
++	args="$@"
++
++	test_perf "$title" "
++		for i in \$(test_seq $test_iteration_count); do
++			git for-each-ref $args >/dev/null
++		done
++	"
++}
++
++run_tests () {
++	test_for_each_ref "$1"
++	test_for_each_ref "$1, no sort" --no-sort
++	test_for_each_ref "$1, --count=1" --count=1
++	test_for_each_ref "$1, --count=1, no sort" --no-sort --count=1
++	test_for_each_ref "$1, tags" refs/tags/
++	test_for_each_ref "$1, tags, no sort" --no-sort refs/tags/
++	test_for_each_ref "$1, tags, dereferenced" '--format="%(refname) %(objectname) %(*objectname)"' refs/tags/
++	test_for_each_ref "$1, tags, dereferenced, no sort" --no-sort '--format="%(refname) %(objectname) %(*objectname)"' refs/tags/
++
++	test_perf "for-each-ref ($1, tags) + cat-file --batch-check (dereferenced)" "
++		for i in \$(test_seq $test_iteration_count); do
++			git for-each-ref --format='%(objectname)^{} %(refname) %(objectname)' refs/tags/ | \
++				git cat-file --batch-check='%(objectname) %(rest)' >/dev/null
++		done
++	"
++}
++
++run_tests "loose"
++
++test_expect_success 'pack refs' '
++	git pack-refs --all
++'
++run_tests "packed"
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

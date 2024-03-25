@@ -1,0 +1,98 @@
+From acabd2048ee0ee53728100408970ab45a6dab65e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Carlo=20Marcelo=20Arenas=20Bel=C3=B3n?= <carenas@gmail.com>
+Date: Sun, 8 Jan 2023 07:52:17 -0800
+Subject: [PATCH 0714/2871] grep: correctly identify utf-8 characters with
+ \{b,w} in -P
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When UTF is enabled for a PCRE match, the corresponding flags are
+added to the pcre2_compile() call, but PCRE2_UCP wasn't included.
+
+This prevents extending the meaning of the character classes to
+include those new valid characters and therefore result in failed
+matches for expressions that rely on that extention, for ex:
+
+  $ git grep -P '\bÆvar'
+
+Add PCRE2_UCP so that \w will include Æ and therefore \b could
+correctly match the beginning of that word.
+
+This has an impact on performance that has been estimated to be
+between 20% to 40% and that is shown through the added performance
+test.
+
+Signed-off-by: Carlo Marcelo Arenas Belón <carenas@gmail.com>
+Acked-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ grep.c                              |  2 +-
+ t/perf/p7822-grep-perl-character.sh | 42 +++++++++++++++++++++++++++++
+ 2 files changed, 43 insertions(+), 1 deletion(-)
+ create mode 100755 t/perf/p7822-grep-perl-character.sh
+
+diff --git a/grep.c b/grep.c
+index 06eed69493..1687f65b64 100644
+--- a/grep.c
++++ b/grep.c
+@@ -293,7 +293,7 @@ static void compile_pcre2_pattern(struct grep_pat *p, const struct grep_opt *opt
+ 		options |= PCRE2_CASELESS;
+ 	}
+ 	if (!opt->ignore_locale && is_utf8_locale() && !literal)
+-		options |= (PCRE2_UTF | PCRE2_MATCH_INVALID_UTF);
++		options |= (PCRE2_UTF | PCRE2_UCP | PCRE2_MATCH_INVALID_UTF);
+ 
+ #ifndef GIT_PCRE2_VERSION_10_36_OR_HIGHER
+ 	/* Work around https://bugs.exim.org/show_bug.cgi?id=2642 fixed in 10.36 */
+diff --git a/t/perf/p7822-grep-perl-character.sh b/t/perf/p7822-grep-perl-character.sh
+new file mode 100755
+index 0000000000..87009c60df
+--- /dev/null
++++ b/t/perf/p7822-grep-perl-character.sh
+@@ -0,0 +1,42 @@
++#!/bin/sh
++
++test_description="git-grep's perl regex
++
++If GIT_PERF_GREP_THREADS is set to a list of threads (e.g. '1 4 8'
++etc.) we will test the patterns under those numbers of threads.
++"
++
++. ./perf-lib.sh
++
++test_perf_large_repo
++test_checkout_worktree
++
++if test -n "$GIT_PERF_GREP_THREADS"
++then
++	test_set_prereq PERF_GREP_ENGINES_THREADS
++fi
++
++for pattern in \
++	'\\bhow' \
++	'\\bÆvar' \
++	'\\d+ \\bÆvar' \
++	'\\bBelón\\b' \
++	'\\w{12}\\b'
++do
++	echo '$pattern' >pat
++	if ! test_have_prereq PERF_GREP_ENGINES_THREADS
++	then
++		test_perf "grep -P '$pattern'" --prereq PCRE "
++			git -P grep -f pat || :
++		"
++	else
++		for threads in $GIT_PERF_GREP_THREADS
++		do
++			test_perf "grep -P '$pattern' with $threads threads" --prereq PTHREADS,PCRE "
++				git -c grep.threads=$threads -P grep -f pat || :
++			"
++		done
++	fi
++done
++
++test_done
+-- 
+2.39.3 (Apple Git-145)
+

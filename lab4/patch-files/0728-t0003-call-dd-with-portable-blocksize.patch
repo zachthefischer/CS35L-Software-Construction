@@ -1,0 +1,44 @@
+From 5458ba0a4d2c65ddf7c844fd976906e04f61569a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Torsten=20B=C3=B6gershausen?= <tboegi@web.de>
+Date: Sun, 22 Jan 2023 07:28:39 +0100
+Subject: [PATCH 0728/2871] t0003: call dd with portable blocksize
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The command `dd bs=101M count=1` is not portable,
+e.g. dd shipped with MacOs does not understand the 'M'.
+
+Use `dd bs=1048576 count=101`, which achives the same, instead.
+
+Signed-off-by: Torsten Bögershausen <tboegi@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t0003-attributes.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/t/t0003-attributes.sh b/t/t0003-attributes.sh
+index 9d9aa2855d..07dc8c938e 100755
+--- a/t/t0003-attributes.sh
++++ b/t/t0003-attributes.sh
+@@ -363,7 +363,7 @@ test_expect_success 'large attributes line ignores trailing content in tree' '
+ 
+ test_expect_success EXPENSIVE 'large attributes file ignored in tree' '
+ 	test_when_finished "rm .gitattributes" &&
+-	dd if=/dev/zero of=.gitattributes bs=101M count=1 2>/dev/null &&
++	dd if=/dev/zero of=.gitattributes bs=1048576 count=101 2>/dev/null &&
+ 	git check-attr --all path >/dev/null 2>err &&
+ 	echo "warning: ignoring overly large gitattributes file ${SQ}.gitattributes${SQ}" >expect &&
+ 	test_cmp expect err
+@@ -391,7 +391,7 @@ test_expect_success 'large attributes line ignores trailing content in index' '
+ 
+ test_expect_success EXPENSIVE 'large attributes file ignored in index' '
+ 	test_when_finished "git update-index --remove .gitattributes" &&
+-	blob=$(dd if=/dev/zero bs=101M count=1 2>/dev/null | git hash-object -w --stdin) &&
++	blob=$(dd if=/dev/zero bs=1048576 count=101 2>/dev/null | git hash-object -w --stdin) &&
+ 	git update-index --add --cacheinfo 100644,$blob,.gitattributes &&
+ 	git check-attr --cached --all path >/dev/null 2>err &&
+ 	echo "warning: ignoring overly large gitattributes blob ${SQ}.gitattributes${SQ}" >expect &&
+-- 
+2.39.3 (Apple Git-145)
+

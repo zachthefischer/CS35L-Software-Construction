@@ -1,0 +1,196 @@
+From 548afb0d9a5a15e538fbf7e01fafbc27691365f1 Mon Sep 17 00:00:00 2001
+From: Linus Arver <linusa@google.com>
+Date: Wed, 7 Jun 2023 19:26:47 +0000
+Subject: [PATCH 1576/2871] docs: typofixes
+
+These were found with an automated CLI tool [1]. Only the
+"Documentation" subfolder (and not source code files) was considered
+because the docs are user-facing.
+
+[1]: https://crates.io/crates/typos-cli
+
+Signed-off-by: Linus Arver <linusa@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/CodingGuidelines                  | 2 +-
+ Documentation/config.txt                        | 2 +-
+ Documentation/git-cvsserver.txt                 | 2 +-
+ Documentation/git-describe.txt                  | 4 ++--
+ Documentation/git-format-patch.txt              | 2 +-
+ Documentation/git-ls-tree.txt                   | 2 +-
+ Documentation/git-mktag.txt                     | 2 +-
+ Documentation/git-sparse-checkout.txt           | 2 +-
+ Documentation/git-stash.txt                     | 2 +-
+ Documentation/gitweb.txt                        | 2 +-
+ Documentation/technical/remembering-renames.txt | 2 +-
+ Documentation/urls-remotes.txt                  | 2 +-
+ 12 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/CodingGuidelines b/Documentation/CodingGuidelines
+index 003393ed16..1f3290f173 100644
+--- a/Documentation/CodingGuidelines
++++ b/Documentation/CodingGuidelines
+@@ -687,7 +687,7 @@ Writing Documentation:
+    Do: [-q | --quiet]
+    Don't: [-q|--quiet]
+ 
+- Don't use spacing around "|" tokens when they're used to seperate the
++ Don't use spacing around "|" tokens when they're used to separate the
+  alternate arguments of an option:
+     Do: --track[=(direct|inherit)]
+     Don't: --track[=(direct | inherit)]
+diff --git a/Documentation/config.txt b/Documentation/config.txt
+index 0e93aef862..229b63a454 100644
+--- a/Documentation/config.txt
++++ b/Documentation/config.txt
+@@ -182,7 +182,7 @@ included, Git breaks the cycle by prohibiting these files from affecting
+ the resolution of these conditions (thus, prohibiting them from
+ declaring remote URLs).
+ +
+-As for the naming of this keyword, it is for forwards compatibiliy with
++As for the naming of this keyword, it is for forwards compatibility with
+ a naming scheme that supports more variable-based include conditions,
+ but currently Git only supports the exact keyword described above.
+ 
+diff --git a/Documentation/git-cvsserver.txt b/Documentation/git-cvsserver.txt
+index 53f111bc0a..cf4a5a283e 100644
+--- a/Documentation/git-cvsserver.txt
++++ b/Documentation/git-cvsserver.txt
+@@ -118,7 +118,7 @@ for example:
+    myuser:$5$.NqmNH1vwfzGpV8B$znZIcumu1tNLATgV2l6e1/mY8RzhUDHMOaVOeL1cxV3
+ ------
+ You can use the 'htpasswd' facility that comes with Apache to make these
+-files, but only with the -d option (or -B if your system suports it).
++files, but only with the -d option (or -B if your system supports it).
+ 
+ Preferably use the system specific utility that manages password hash
+ creation in your platform (e.g. mkpasswd in Linux, encrypt in OpenBSD or
+diff --git a/Documentation/git-describe.txt b/Documentation/git-describe.txt
+index c6a79c2a0f..08ff715709 100644
+--- a/Documentation/git-describe.txt
++++ b/Documentation/git-describe.txt
+@@ -140,7 +140,7 @@ at the end.
+ 
+ The number of additional commits is the number
+ of commits which would be displayed by "git log v1.0.4..parent".
+-The hash suffix is "-g" + an unambigous abbreviation for the tip commit
++The hash suffix is "-g" + an unambiguous abbreviation for the tip commit
+ of parent (which was `2414721b194453f058079d897d13c4e377f92dc6`). The
+ length of the abbreviation scales as the repository grows, using the
+ approximate number of objects in the repository and a bit of math
+@@ -203,7 +203,7 @@ BUGS
+ 
+ Tree objects as well as tag objects not pointing at commits, cannot be described.
+ When describing blobs, the lightweight tags pointing at blobs are ignored,
+-but the blob is still described as <committ-ish>:<path> despite the lightweight
++but the blob is still described as <commit-ish>:<path> despite the lightweight
+ tag being favorable.
+ 
+ GIT
+diff --git a/Documentation/git-format-patch.txt b/Documentation/git-format-patch.txt
+index b1c13fb39a..373b46fc0d 100644
+--- a/Documentation/git-format-patch.txt
++++ b/Documentation/git-format-patch.txt
+@@ -245,7 +245,7 @@ populated with placeholder text.
+ 	or "--reroll-count=4rev2" are allowed), but the downside of
+ 	using such a reroll-count is that the range-diff/interdiff
+ 	with the previous version does not state exactly which
+-	version the new interation is compared against.
++	version the new iteration is compared against.
+ 
+ --to=<email>::
+ 	Add a `To:` header to the email headers. This is in addition
+diff --git a/Documentation/git-ls-tree.txt b/Documentation/git-ls-tree.txt
+index 0240adb8ee..fa9a6b9f2c 100644
+--- a/Documentation/git-ls-tree.txt
++++ b/Documentation/git-ls-tree.txt
+@@ -145,7 +145,7 @@ FIELD NAMES
+ -----------
+ 
+ Various values from structured fields can be used to interpolate
+-into the resulting output. For each outputing line, the following
++into the resulting output. For each outputting line, the following
+ names can be used:
+ 
+ objectmode::
+diff --git a/Documentation/git-mktag.txt b/Documentation/git-mktag.txt
+index 466a697519..b2a2e80d42 100644
+--- a/Documentation/git-mktag.txt
++++ b/Documentation/git-mktag.txt
+@@ -33,7 +33,7 @@ from warnings to errors (so e.g. a missing "tagger" line is an error).
+ 
+ Extra headers in the object are also an error under mktag, but ignored
+ by linkgit:git-fsck[1]. This extra check can be turned off by setting
+-the appropriate `fsck.<msg-id>` varible:
++the appropriate `fsck.<msg-id>` variable:
+ 
+     git -c fsck.extraHeaderEntry=ignore mktag <my-tag-with-headers
+ 
+diff --git a/Documentation/git-sparse-checkout.txt b/Documentation/git-sparse-checkout.txt
+index 53dc17aa77..529a8edd9c 100644
+--- a/Documentation/git-sparse-checkout.txt
++++ b/Documentation/git-sparse-checkout.txt
+@@ -286,7 +286,7 @@ patterns in non-cone mode has a number of shortcomings:
+     problem above?  Also, if it suggests paths, what if the user has a
+     file or directory that begins with either a '!' or '#' or has a '*',
+     '\', '?', '[', or ']' in its name?  And if it suggests paths, will
+-    it complete "/pro" to "/proc" (in the root filesytem) rather than to
++    it complete "/pro" to "/proc" (in the root filesystem) rather than to
+     "/progress.txt" in the current directory?  (Note that users are
+     likely to want to start paths with a leading '/' in non-cone mode,
+     for the same reason that .gitignore files often have one.)
+diff --git a/Documentation/git-stash.txt b/Documentation/git-stash.txt
+index f4bb6114d9..06fb7f1d18 100644
+--- a/Documentation/git-stash.txt
++++ b/Documentation/git-stash.txt
+@@ -366,7 +366,7 @@ only the commit ends-up being in the stash and not on the current branch.
+ # ... hack hack hack ...
+ $ git add --patch foo           # add unrelated changes to the index
+ $ git stash push --staged       # save these changes to the stash
+-# ... hack hack hack, finish curent changes ...
++# ... hack hack hack, finish current changes ...
+ $ git commit -m 'Massive'       # commit fully tested changes
+ $ git switch fixup-branch       # switch to another branch
+ $ git stash pop                 # to finish work on the saved changes
+diff --git a/Documentation/gitweb.txt b/Documentation/gitweb.txt
+index 7cee9d3689..af6bf3c45e 100644
+--- a/Documentation/gitweb.txt
++++ b/Documentation/gitweb.txt
+@@ -503,7 +503,7 @@ repositories, you can configure Apache like this:
+ 
+ The above configuration expects your public repositories to live under
+ `/pub/git` and will serve them as `http://git.domain.org/dir-under-pub-git`,
+-both as clonable Git URL and as browseable gitweb interface.  If you then
++both as clonable Git URL and as browsable gitweb interface.  If you then
+ start your linkgit:git-daemon[1] with `--base-path=/pub/git --export-all`
+ then you can even use the `git://` URL with exactly the same path.
+ 
+diff --git a/Documentation/technical/remembering-renames.txt b/Documentation/technical/remembering-renames.txt
+index 1e34d91390..73f41761e2 100644
+--- a/Documentation/technical/remembering-renames.txt
++++ b/Documentation/technical/remembering-renames.txt
+@@ -664,7 +664,7 @@ skip-irrelevant-renames optimization means we sometimes don't detect
+ renames for any files within a directory that was renamed, in which
+ case we will not have been able to detect any rename for the directory
+ itself.  In such a case, we do not know whether the directory was
+-renamed; we want to be careful to avoid cacheing some kind of "this
++renamed; we want to be careful to avoid caching some kind of "this
+ directory was not renamed" statement.  If we did, then a subsequent
+ commit being rebased could add a file to the old directory, and the
+ user would expect it to end up in the correct directory -- something
+diff --git a/Documentation/urls-remotes.txt b/Documentation/urls-remotes.txt
+index e410912fe5..ae8c2db427 100644
+--- a/Documentation/urls-remotes.txt
++++ b/Documentation/urls-remotes.txt
+@@ -35,7 +35,7 @@ config file would appear like this:
+ The `<pushurl>` is used for pushes only. It is optional and defaults
+ to `<URL>`. Pushing to a remote affects all defined pushurls or to all
+ defined urls if no pushurls are defined. Fetch, however, will only
+-fetch from the first defined url if muliple urls are defined.
++fetch from the first defined url if multiple urls are defined.
+ 
+ Named file in `$GIT_DIR/remotes`
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- 
+2.39.3 (Apple Git-145)
+

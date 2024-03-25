@@ -1,0 +1,33 @@
+From f17a1542b28941b2f849a0185c15cd9131f46c54 Mon Sep 17 00:00:00 2001
+From: Fangyi Zhou <me@fangyi.io>
+Date: Sun, 26 Feb 2023 18:00:29 +0000
+Subject: [PATCH 0976/2871] rebase: fix capitalisation autoSquash in i18n
+ string
+
+The config option (as documented) for rebase.autoSquash has a capital S,
+whereas the command line option has a small case s.
+
+Cf. <20220617100309.3224-1-worldhello.net@gmail.com>
+
+Signed-off-by: Fangyi Zhou <me@fangyi.io>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/rebase.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/rebase.c b/builtin/rebase.c
+index 6635f10d52..9a18f9b4b8 100644
+--- a/builtin/rebase.c
++++ b/builtin/rebase.c
+@@ -1513,7 +1513,7 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
+ 				die(_("apply options and merge options "
+ 					  "cannot be used together"));
+ 			else if (options.autosquash == -1 && options.config_autosquash == 1)
+-				die(_("apply options are incompatible with rebase.autosquash.  Consider adding --no-autosquash"));
++				die(_("apply options are incompatible with rebase.autoSquash.  Consider adding --no-autosquash"));
+ 			else if (options.update_refs == -1 && options.config_update_refs == 1)
+ 				die(_("apply options are incompatible with rebase.updateRefs.  Consider adding --no-update-refs"));
+ 			else
+-- 
+2.39.3 (Apple Git-145)
+

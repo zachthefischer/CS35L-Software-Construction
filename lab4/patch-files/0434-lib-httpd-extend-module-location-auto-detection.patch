@@ -1,0 +1,38 @@
+From 1c7dc23d4110f7585db27ad0dc7ee66ce4779480 Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Mon, 21 Nov 2022 03:01:35 +0000
+Subject: [PATCH 0434/2871] lib-httpd: extend module location auto-detection
+
+Although it is possible to manually set LIB_HTTPD_PATH and
+LIB_HTTPD_MODULE_PATH to point at the location of `httpd` and its
+modules, doing so is cumbersome and easily forgotten. To address this,
+0d344738dc (t/lib-http.sh: Restructure finding of default httpd
+location, 2010-01-02) enhanced lib-httpd.sh to automatically detect the
+location of `httpd` and its modules in order to facilitate out-of-the-
+box testing on a wider range of platforms. Follow that lead by further
+enhancing it to automatically detect the `httpd` modules on Void Linux,
+as well.
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-httpd.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/t/lib-httpd.sh b/t/lib-httpd.sh
+index 1f6b9b08d1..5be3ee44c2 100644
+--- a/t/lib-httpd.sh
++++ b/t/lib-httpd.sh
+@@ -65,7 +65,8 @@ done
+ for DEFAULT_HTTPD_MODULE_PATH in '/usr/libexec/apache2' \
+ 				 '/usr/lib/apache2/modules' \
+ 				 '/usr/lib64/httpd/modules' \
+-				 '/usr/lib/httpd/modules'
++				 '/usr/lib/httpd/modules' \
++				 '/usr/libexec/httpd'
+ do
+ 	if test -d "$DEFAULT_HTTPD_MODULE_PATH"
+ 	then
+-- 
+2.39.3 (Apple Git-145)
+

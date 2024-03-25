@@ -1,0 +1,37 @@
+From c4f94907902f18d80a78ee19983d0d02932154d7 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 10 Oct 2022 20:42:38 -0400
+Subject: [PATCH 0077/2871] fsmonitor: fix leak of warning message
+
+The fsm_settings__get_incompatible_msg() function returns an allocated
+string.  So we can't pass its result directly to warning(); we must hold
+on to the pointer and free it to avoid a leak.
+
+The leak here is small and fixed size, but Coverity complained, and
+presumably SANITIZE=leaks would eventually.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ fsmonitor.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/fsmonitor.c b/fsmonitor.c
+index 540736b39f..08af00c738 100644
+--- a/fsmonitor.c
++++ b/fsmonitor.c
+@@ -309,8 +309,10 @@ void refresh_fsmonitor(struct index_state *istate)
+ 	enum fsmonitor_reason reason = fsm_settings__get_reason(r);
+ 
+ 	if (!warn_once && reason > FSMONITOR_REASON_OK) {
++		char *msg = fsm_settings__get_incompatible_msg(r, reason);
+ 		warn_once = 1;
+-		warning("%s", fsm_settings__get_incompatible_msg(r, reason));
++		warning("%s", msg);
++		free(msg);
+ 	}
+ 
+ 	if (fsm_mode <= FSMONITOR_MODE_DISABLED ||
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,47 @@
+From 93ea118bedf3f6d300520718250bf64d0e09a4ec Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ren=C3=A9=20Scharfe?= <l.s.r@web.de>
+Date: Fri, 10 Feb 2023 21:20:30 +0100
+Subject: [PATCH 0857/2871] cache-tree: fix strbuf growth in
+ prime_cache_tree_rec()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use size_t to store the original length of the strbuf tree_len, as
+that's the correct type.
+
+Don't double the allocated size of the strbuf when adding a subdirectory
+name.  And the chance of the trailing slash fitting in the slack left by
+strbuf_add() is very high, so stop pre-growing the strbuf at all.
+
+Suggested-by: Ævar Arnfjörð Bjarmason <avarab@gmail.com>
+Signed-off-by: René Scharfe <l.s.r@web.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ cache-tree.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/cache-tree.c b/cache-tree.c
+index c97111cccf..ab90cb3127 100644
+--- a/cache-tree.c
++++ b/cache-tree.c
+@@ -760,7 +760,7 @@ static void prime_cache_tree_rec(struct repository *r,
+ 	struct tree_desc desc;
+ 	struct name_entry entry;
+ 	int cnt;
+-	int base_path_len = tree_path->len;
++	size_t base_path_len = tree_path->len;
+ 
+ 	oidcpy(&it->oid, &tree->object.oid);
+ 
+@@ -785,7 +785,6 @@ static void prime_cache_tree_rec(struct repository *r,
+ 			 */
+ 			if (r->index->sparse_index) {
+ 				strbuf_setlen(tree_path, base_path_len);
+-				strbuf_grow(tree_path, base_path_len + entry.pathlen + 1);
+ 				strbuf_add(tree_path, entry.path, entry.pathlen);
+ 				strbuf_addch(tree_path, '/');
+ 			}
+-- 
+2.39.3 (Apple Git-145)
+

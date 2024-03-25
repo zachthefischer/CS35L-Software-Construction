@@ -1,0 +1,205 @@
+From 5d1344b4973c8ea4904005f3bb51a47334ebb370 Mon Sep 17 00:00:00 2001
+From: Calvin Wan <calvinwan@google.com>
+Date: Tue, 6 Jun 2023 19:48:39 +0000
+Subject: [PATCH 1570/2871] abspath: move related functions to abspath
+
+Move abspath-related functions from strbuf.[ch] to abspath.[ch] so that
+strbuf is focused on string manipulation routines with minimal
+dependencies.
+
+Signed-off-by: Calvin Wan <calvinwan@google.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ abspath.c  | 36 ++++++++++++++++++++++++++++++++++++
+ abspath.h  | 21 +++++++++++++++++++++
+ hook.c     |  1 +
+ strbuf.c   | 37 -------------------------------------
+ strbuf.h   | 22 ----------------------
+ tempfile.c |  1 +
+ 6 files changed, 59 insertions(+), 59 deletions(-)
+
+diff --git a/abspath.c b/abspath.c
+index d032f5dce5..1202cde23d 100644
+--- a/abspath.c
++++ b/abspath.c
+@@ -289,3 +289,39 @@ char *prefix_filename_except_for_dash(const char *pfx, const char *arg)
+ 		return xstrdup(arg);
+ 	return prefix_filename(pfx, arg);
+ }
++
++void strbuf_add_absolute_path(struct strbuf *sb, const char *path)
++{
++	if (!*path)
++		die("The empty string is not a valid path");
++	if (!is_absolute_path(path)) {
++		struct stat cwd_stat, pwd_stat;
++		size_t orig_len = sb->len;
++		char *cwd = xgetcwd();
++		char *pwd = getenv("PWD");
++		if (pwd && strcmp(pwd, cwd) &&
++		    !stat(cwd, &cwd_stat) &&
++		    (cwd_stat.st_dev || cwd_stat.st_ino) &&
++		    !stat(pwd, &pwd_stat) &&
++		    pwd_stat.st_dev == cwd_stat.st_dev &&
++		    pwd_stat.st_ino == cwd_stat.st_ino)
++			strbuf_addstr(sb, pwd);
++		else
++			strbuf_addstr(sb, cwd);
++		if (sb->len > orig_len && !is_dir_sep(sb->buf[sb->len - 1]))
++			strbuf_addch(sb, '/');
++		free(cwd);
++	}
++	strbuf_addstr(sb, path);
++}
++
++void strbuf_add_real_path(struct strbuf *sb, const char *path)
++{
++	if (sb->len) {
++		struct strbuf resolved = STRBUF_INIT;
++		strbuf_realpath(&resolved, path, 1);
++		strbuf_addbuf(sb, &resolved);
++		strbuf_release(&resolved);
++	} else
++		strbuf_realpath(sb, path, 1);
++}
+diff --git a/abspath.h b/abspath.h
+index 7cd3de5e9d..4653080d5e 100644
+--- a/abspath.h
++++ b/abspath.h
+@@ -30,4 +30,25 @@ static inline int is_absolute_path(const char *path)
+ 	return is_dir_sep(path[0]) || has_dos_drive_prefix(path);
+ }
+ 
++/**
++ * Add a path to a buffer, converting a relative path to an
++ * absolute one in the process.  Symbolic links are not
++ * resolved.
++ */
++void strbuf_add_absolute_path(struct strbuf *sb, const char *path);
++
++/**
++ * Canonize `path` (make it absolute, resolve symlinks, remove extra
++ * slashes) and append it to `sb`.  Die with an informative error
++ * message if there is a problem.
++ *
++ * The directory part of `path` (i.e., everything up to the last
++ * dir_sep) must denote a valid, existing directory, but the last
++ * component need not exist.
++ *
++ * Callers that don't mind links should use the more lightweight
++ * strbuf_add_absolute_path() instead.
++ */
++void strbuf_add_real_path(struct strbuf *sb, const char *path);
++
+ #endif /* ABSPATH_H */
+diff --git a/hook.c b/hook.c
+index 3ca5e60895..f6306d72b3 100644
+--- a/hook.c
++++ b/hook.c
+@@ -1,4 +1,5 @@
+ #include "git-compat-util.h"
++#include "abspath.h"
+ #include "advice.h"
+ #include "gettext.h"
+ #include "hook.h"
+diff --git a/strbuf.c b/strbuf.c
+index f5dfd093a0..a2249ae7ed 100644
+--- a/strbuf.c
++++ b/strbuf.c
+@@ -1,5 +1,4 @@
+ #include "git-compat-util.h"
+-#include "abspath.h"
+ #include "alloc.h"
+ #include "environment.h"
+ #include "gettext.h"
+@@ -900,42 +899,6 @@ void strbuf_humanise_rate(struct strbuf *buf, off_t bytes)
+ 	strbuf_humanise(buf, bytes, 1);
+ }
+ 
+-void strbuf_add_absolute_path(struct strbuf *sb, const char *path)
+-{
+-	if (!*path)
+-		die("The empty string is not a valid path");
+-	if (!is_absolute_path(path)) {
+-		struct stat cwd_stat, pwd_stat;
+-		size_t orig_len = sb->len;
+-		char *cwd = xgetcwd();
+-		char *pwd = getenv("PWD");
+-		if (pwd && strcmp(pwd, cwd) &&
+-		    !stat(cwd, &cwd_stat) &&
+-		    (cwd_stat.st_dev || cwd_stat.st_ino) &&
+-		    !stat(pwd, &pwd_stat) &&
+-		    pwd_stat.st_dev == cwd_stat.st_dev &&
+-		    pwd_stat.st_ino == cwd_stat.st_ino)
+-			strbuf_addstr(sb, pwd);
+-		else
+-			strbuf_addstr(sb, cwd);
+-		if (sb->len > orig_len && !is_dir_sep(sb->buf[sb->len - 1]))
+-			strbuf_addch(sb, '/');
+-		free(cwd);
+-	}
+-	strbuf_addstr(sb, path);
+-}
+-
+-void strbuf_add_real_path(struct strbuf *sb, const char *path)
+-{
+-	if (sb->len) {
+-		struct strbuf resolved = STRBUF_INIT;
+-		strbuf_realpath(&resolved, path, 1);
+-		strbuf_addbuf(sb, &resolved);
+-		strbuf_release(&resolved);
+-	} else
+-		strbuf_realpath(sb, path, 1);
+-}
+-
+ int printf_ln(const char *fmt, ...)
+ {
+ 	int ret;
+diff --git a/strbuf.h b/strbuf.h
+index 70778c6e10..207efb4f98 100644
+--- a/strbuf.h
++++ b/strbuf.h
+@@ -535,28 +535,6 @@ int strbuf_getwholeline_fd(struct strbuf *sb, int fd, int term);
+  */
+ int strbuf_getcwd(struct strbuf *sb);
+ 
+-/**
+- * Add a path to a buffer, converting a relative path to an
+- * absolute one in the process.  Symbolic links are not
+- * resolved.
+- */
+-void strbuf_add_absolute_path(struct strbuf *sb, const char *path);
+-
+-/**
+- * Canonize `path` (make it absolute, resolve symlinks, remove extra
+- * slashes) and append it to `sb`.  Die with an informative error
+- * message if there is a problem.
+- *
+- * The directory part of `path` (i.e., everything up to the last
+- * dir_sep) must denote a valid, existing directory, but the last
+- * component need not exist.
+- *
+- * Callers that don't mind links should use the more lightweight
+- * strbuf_add_absolute_path() instead.
+- */
+-void strbuf_add_real_path(struct strbuf *sb, const char *path);
+-
+-
+ /**
+  * Normalize in-place the path contained in the strbuf. See
+  * normalize_path_copy() for details. If an error occurs, the contents of "sb"
+diff --git a/tempfile.c b/tempfile.c
+index 50c377134c..6c88a63b42 100644
+--- a/tempfile.c
++++ b/tempfile.c
+@@ -43,6 +43,7 @@
+  */
+ 
+ #include "git-compat-util.h"
++#include "abspath.h"
+ #include "path.h"
+ #include "tempfile.h"
+ #include "sigchain.h"
+-- 
+2.39.3 (Apple Git-145)
+

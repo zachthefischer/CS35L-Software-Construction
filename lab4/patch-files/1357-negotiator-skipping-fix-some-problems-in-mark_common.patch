@@ -1,0 +1,81 @@
+From 10e8a52ef11bbf260f0cb672d9b02b3cd9c780ca Mon Sep 17 00:00:00 2001
+From: Han Xin <hanxin.hx@bytedance.com>
+Date: Wed, 26 Apr 2023 21:15:04 +0800
+Subject: [PATCH 1357/2871] negotiator/skipping: fix some problems in
+ mark_common()
+
+The mark_common() method in negotiator/skipping.c was converted
+from recursive to iterative in 4654134976f (negotiator/skipping:
+avoid stack overflow, 2022-10-25), but there is some more work
+to do:
+
+1. prio_queue() should be used with clear_prio_queue(), otherwise there
+   will be a memory leak.
+2. It does not do duplicate protection before prio_queue_put().
+   (The COMMON bit would work here, too.)
+3. When it translated from recursive to iterative it kept "return"
+   statements that should probably be "continue" statements.
+4. It does not attempt to parse commits, and instead returns
+   immediately when finding an unparsed commit. This is something
+   that it did in its original version, so maybe it is by design,
+   but it doesn't match the doc comment for the method.
+
+Helped-by: Derrick Stolee <derrickstolee@github.com>
+Signed-off-by: Han Xin <hanxin.hx@bytedance.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ negotiator/skipping.c | 22 +++++++++++++++-------
+ 1 file changed, 15 insertions(+), 7 deletions(-)
+
+diff --git a/negotiator/skipping.c b/negotiator/skipping.c
+index c7d6ab39bc..6a5450b460 100644
+--- a/negotiator/skipping.c
++++ b/negotiator/skipping.c
+@@ -85,29 +85,37 @@ static int clear_marks(const char *refname, const struct object_id *oid,
+ }
+ 
+ /*
+- * Mark this SEEN commit and all its SEEN ancestors as COMMON.
++ * Mark this SEEN commit and all its parsed SEEN ancestors as COMMON.
+  */
+ static void mark_common(struct data *data, struct commit *seen_commit)
+ {
+ 	struct prio_queue queue = { NULL };
+ 	struct commit *c;
+ 
++	if (seen_commit->object.flags & COMMON)
++		return;
++
+ 	prio_queue_put(&queue, seen_commit);
++	seen_commit->object.flags |= COMMON;
+ 	while ((c = prio_queue_get(&queue))) {
+ 		struct commit_list *p;
+-		if (c->object.flags & COMMON)
+-			return;
+-		c->object.flags |= COMMON;
++
+ 		if (!(c->object.flags & POPPED))
+ 			data->non_common_revs--;
+ 
+ 		if (!c->object.parsed)
+-			return;
++			continue;
+ 		for (p = c->parents; p; p = p->next) {
+-			if (p->item->object.flags & SEEN)
+-				prio_queue_put(&queue, p->item);
++			if (!(p->item->object.flags & SEEN) ||
++			    (p->item->object.flags & COMMON))
++				continue;
++
++			p->item->object.flags |= COMMON;
++			prio_queue_put(&queue, p->item);
+ 		}
+ 	}
++
++	clear_prio_queue(&queue);
+ }
+ 
+ /*
+-- 
+2.39.3 (Apple Git-145)
+

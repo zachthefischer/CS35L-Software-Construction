@@ -1,0 +1,53 @@
+From 7667f4f0a3c2002940c0b03930597fddc8599277 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 29 Jun 2023 13:23:09 +0000
+Subject: [PATCH 1710/2871] split-index: accept that a base index can be empty
+
+We are about to fix an ancient bug where `do_read_index()` pretended
+that the index was not initialized when there are no index entries.
+
+Before the `index_state` structure gained the `initialized` flag in
+913e0e99b6a (unpack_trees(): protect the handcrafted in-core index from
+read_cache(), 2008-08-23), that was the best we could do (even if it was
+incorrect: it is totally possible to read a Git index file that contains
+no index entries).
+
+This pattern was repeated also in 998330ac2e7 (read-cache: look for
+shared index files next to the index, too, 2021-08-26), which we fix
+here by _not_ mistaking an empty base index for a missing
+`sharedindex.*` file.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ read-cache.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/read-cache.c b/read-cache.c
+index 1ac4defff3..d0a3c9082b 100644
+--- a/read-cache.c
++++ b/read-cache.c
+@@ -2500,12 +2500,14 @@ int read_index_from(struct index_state *istate, const char *path,
+ 
+ 	base_oid_hex = oid_to_hex(&split_index->base_oid);
+ 	base_path = xstrfmt("%s/sharedindex.%s", gitdir, base_oid_hex);
+-	trace2_region_enter_printf("index", "shared/do_read_index",
+-				   the_repository, "%s", base_path);
+-	ret = do_read_index(split_index->base, base_path, 0);
+-	trace2_region_leave_printf("index", "shared/do_read_index",
+-				   the_repository, "%s", base_path);
+-	if (!ret) {
++	if (file_exists(base_path)) {
++		trace2_region_enter_printf("index", "shared/do_read_index",
++					the_repository, "%s", base_path);
++
++		ret = do_read_index(split_index->base, base_path, 0);
++		trace2_region_leave_printf("index", "shared/do_read_index",
++					the_repository, "%s", base_path);
++	} else {
+ 		char *path_copy = xstrdup(path);
+ 		char *base_path2 = xstrfmt("%s/sharedindex.%s",
+ 					   dirname(path_copy), base_oid_hex);
+-- 
+2.39.3 (Apple Git-145)
+

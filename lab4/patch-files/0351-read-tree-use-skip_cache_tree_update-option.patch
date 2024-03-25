@@ -1,0 +1,84 @@
+From dc5d40f5bc4d93dcc57ee82c5ca8d1369055d8cb Mon Sep 17 00:00:00 2001
+From: Victoria Dye <vdye@github.com>
+Date: Thu, 10 Nov 2022 19:06:04 +0000
+Subject: [PATCH 0351/2871] read-tree: use 'skip_cache_tree_update' option
+
+When running 'read-tree' with a single tree and no prefix,
+'prime_cache_tree()' is called after the tree is unpacked. In that
+situation, skip a redundant call to 'cache_tree_update()' in
+'unpack_trees()' by enabling the 'skip_cache_tree_update' unpack option.
+
+Removing the redundant cache tree update provides a substantial performance
+improvement to 'git read-tree <tree-ish>', as shown by a test added to
+'p0006-read-tree-checkout.sh':
+
+Test                          before            after
+----------------------------------------------------------------------
+read-tree br_ballast_plus_1   3.94(1.80+1.57)   3.00(1.14+1.28) -23.9%
+
+Note that the 'read-tree' in 't1022-read-tree-partial-clone.sh' is updated
+to read two trees, rather than one. The test was first introduced in
+d3da223f221 (cache-tree: prefetch in partial clone read-tree, 2021-07-23) to
+exercise the 'cache_tree_update()' code path, as used in 'git merge'. Since
+this patch drops the call to 'cache_tree_update()' in single-tree 'git
+read-tree', change the test to use the two-tree variant so that
+'cache_tree_update()' is called as intended.
+
+Signed-off-by: Victoria Dye <vdye@github.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ builtin/read-tree.c                | 4 ++++
+ t/perf/p0006-read-tree-checkout.sh | 8 ++++++++
+ t/t1022-read-tree-partial-clone.sh | 2 +-
+ 3 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/builtin/read-tree.c b/builtin/read-tree.c
+index f4cbe460b9..45c6652444 100644
+--- a/builtin/read-tree.c
++++ b/builtin/read-tree.c
+@@ -249,6 +249,10 @@ int cmd_read_tree(int argc, const char **argv, const char *cmd_prefix)
+ 	if (opts.debug_unpack)
+ 		opts.fn = debug_merge;
+ 
++	/* If we're going to prime_cache_tree later, skip cache tree update */
++	if (nr_trees == 1 && !opts.prefix)
++		opts.skip_cache_tree_update = 1;
++
+ 	cache_tree_free(&active_cache_tree);
+ 	for (i = 0; i < nr_trees; i++) {
+ 		struct tree *tree = trees[i];
+diff --git a/t/perf/p0006-read-tree-checkout.sh b/t/perf/p0006-read-tree-checkout.sh
+index c481c012d2..325566e18e 100755
+--- a/t/perf/p0006-read-tree-checkout.sh
++++ b/t/perf/p0006-read-tree-checkout.sh
+@@ -49,6 +49,14 @@ test_perf "read-tree br_base br_ballast ($nr_files)" '
+ 	git read-tree -n -m br_base br_ballast
+ '
+ 
++test_perf "read-tree br_ballast_plus_1 ($nr_files)" '
++	# Run read-tree 100 times for clearer performance results & comparisons
++	for i in  $(test_seq 100)
++	do
++		git read-tree -n -m br_ballast_plus_1 || return 1
++	done
++'
++
+ test_perf "switch between br_base br_ballast ($nr_files)" '
+ 	git checkout -q br_base &&
+ 	git checkout -q br_ballast
+diff --git a/t/t1022-read-tree-partial-clone.sh b/t/t1022-read-tree-partial-clone.sh
+index a9953b6a71..da53971635 100755
+--- a/t/t1022-read-tree-partial-clone.sh
++++ b/t/t1022-read-tree-partial-clone.sh
+@@ -19,7 +19,7 @@ test_expect_success 'read-tree in partial clone prefetches in one batch' '
+ 	git -C server config uploadpack.allowfilter 1 &&
+ 	git -C server config uploadpack.allowanysha1inwant 1 &&
+ 	git clone --bare --filter=blob:none "file://$(pwd)/server" client &&
+-	GIT_TRACE_PACKET="$(pwd)/trace" git -C client read-tree $TREE &&
++	GIT_TRACE_PACKET="$(pwd)/trace" git -C client read-tree $TREE $TREE &&
+ 
+ 	# "done" marks the end of negotiation (once per fetch). Expect that
+ 	# only one fetch occurs.
+-- 
+2.39.3 (Apple Git-145)
+

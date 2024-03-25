@@ -1,0 +1,29 @@
+From 4cc9eb338d8773b4c3909368445404745f94ce69 Mon Sep 17 00:00:00 2001
+From: Kyle Zhao <kylezhao@tencent.com>
+Date: Thu, 24 Nov 2022 03:37:06 +0000
+Subject: [PATCH 0440/2871] docs: fix description of the `--merge-base` option
+
+Signed-off-by: Kyle Zhao <kylezhao@tencent.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-merge-tree.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/git-merge-tree.txt b/Documentation/git-merge-tree.txt
+index 298c133fdb..88ee942101 100644
+--- a/Documentation/git-merge-tree.txt
++++ b/Documentation/git-merge-tree.txt
+@@ -66,8 +66,8 @@ OPTIONS
+ 
+ --merge-base=<commit>::
+ 	Instead of finding the merge-bases for <branch1> and <branch2>,
+-	specify a merge-base for the merge. This option is incompatible
+-	with `--stdin`.
++	specify a merge-base for the merge, and specifying multiple bases is
++	currently not supported. This option is incompatible with `--stdin`.
+ 
+ [[OUTPUT]]
+ OUTPUT
+-- 
+2.39.3 (Apple Git-145)
+

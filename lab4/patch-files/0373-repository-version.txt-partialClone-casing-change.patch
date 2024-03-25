@@ -1,0 +1,35 @@
+From 29c550f0af6181c424a7c0080edb79c2a2ad32d6 Mon Sep 17 00:00:00 2001
+From: Kousik Sanagavarapu <five231003@gmail.com>
+Date: Thu, 10 Nov 2022 21:35:56 +0530
+Subject: [PATCH 0373/2871] repository-version.txt: partialClone casing change
+
+Remotes are considered "promisor" if extensions.partialClone and some
+other configuration variables are set. The casing for this in
+Documentation/technical/repository-version.txt is not proper and may
+cause confusion. This change corrects this casing.
+
+Signed-off-by: Kousik Sanagavarapu <five231003@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/technical/repository-version.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/technical/repository-version.txt b/Documentation/technical/repository-version.txt
+index 7844ef30ff..8ef664b0b9 100644
+--- a/Documentation/technical/repository-version.txt
++++ b/Documentation/technical/repository-version.txt
+@@ -82,9 +82,9 @@ When the config key `extensions.preciousObjects` is set to `true`,
+ objects in the repository MUST NOT be deleted (e.g., by `git-prune` or
+ `git repack -d`).
+ 
+-==== `partialclone`
++==== `partialClone`
+ 
+-When the config key `extensions.partialclone` is set, it indicates
++When the config key `extensions.partialClone` is set, it indicates
+ that the repo was created with a partial clone (or later performed
+ a partial fetch) and that the remote may have omitted sending
+ certain unwanted objects.  Such a remote is called a "promisor remote"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,111 @@
+From 9bab766fb28fae57a229bd90558ec4453ca71be9 Mon Sep 17 00:00:00 2001
+From: Alison Winters <alisonatwork@outlook.com>
+Date: Mon, 21 Nov 2022 00:26:58 +0000
+Subject: [PATCH 0459/2871] completion: add optional ignore-case when matching
+ refs
+
+If GIT_COMPLETION_IGNORE_CASE is set, --ignore-case will be added to
+git for-each-ref calls so that refs can be matched case insensitively,
+even when running on case sensitive filesystems.
+
+Signed-off-by: Alison Winters <alisonatwork@outlook.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 12 ++++++++++++
+ t/t9902-completion.sh                  | 15 +++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index ba5c395d2d..7dcf4b6356 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -58,6 +58,12 @@
+ #
+ #     When set to "1" suggest all options, including options which are
+ #     typically hidden (e.g. '--allow-empty' for 'git commit').
++#
++#   GIT_COMPLETION_IGNORE_CASE
++#
++#     When set, uses for-each-ref '--ignore-case' to find refs that match
++#     case insensitively, even on systems with case sensitive file systems
++#     (e.g., completing tag name "FOO" on "git checkout f<TAB>").
+ 
+ case "$COMP_WORDBREAKS" in
+ *:*) : great ;;
+@@ -646,6 +652,7 @@ __git_heads ()
+ 	local pfx="${1-}" cur_="${2-}" sfx="${3-}"
+ 
+ 	__git for-each-ref --format="${pfx//\%/%%}%(refname:strip=2)$sfx" \
++			${GIT_COMPLETION_IGNORE_CASE+--ignore-case} \
+ 			"refs/heads/$cur_*" "refs/heads/$cur_*/**"
+ }
+ 
+@@ -659,6 +666,7 @@ __git_remote_heads ()
+ 	local pfx="${1-}" cur_="${2-}" sfx="${3-}"
+ 
+ 	__git for-each-ref --format="${pfx//\%/%%}%(refname:strip=2)$sfx" \
++			${GIT_COMPLETION_IGNORE_CASE+--ignore-case} \
+ 			"refs/remotes/$cur_*" "refs/remotes/$cur_*/**"
+ }
+ 
+@@ -669,6 +677,7 @@ __git_tags ()
+ 	local pfx="${1-}" cur_="${2-}" sfx="${3-}"
+ 
+ 	__git for-each-ref --format="${pfx//\%/%%}%(refname:strip=2)$sfx" \
++			${GIT_COMPLETION_IGNORE_CASE+--ignore-case} \
+ 			"refs/tags/$cur_*" "refs/tags/$cur_*/**"
+ }
+ 
+@@ -688,6 +697,7 @@ __git_dwim_remote_heads ()
+ 	# but only output if the branch name is unique
+ 	__git for-each-ref --format="$fer_pfx%(refname:strip=3)$sfx" \
+ 		--sort="refname:strip=3" \
++		${GIT_COMPLETION_IGNORE_CASE+--ignore-case} \
+ 		"refs/remotes/*/$cur_*" "refs/remotes/*/$cur_*/**" | \
+ 	uniq -u
+ }
+@@ -765,6 +775,7 @@ __git_refs ()
+ 			;;
+ 		esac
+ 		__git_dir="$dir" __git for-each-ref --format="$fer_pfx%($format)$sfx" \
++			${GIT_COMPLETION_IGNORE_CASE+--ignore-case} \
+ 			"${refs[@]}"
+ 		if [ -n "$track" ]; then
+ 			__git_dwim_remote_heads "$pfx" "$match" "$sfx"
+@@ -787,6 +798,7 @@ __git_refs ()
+ 			$match*)	echo "${pfx}HEAD$sfx" ;;
+ 			esac
+ 			__git for-each-ref --format="$fer_pfx%(refname:strip=3)$sfx" \
++				${GIT_COMPLETION_IGNORE_CASE+--ignore-case} \
+ 				"refs/remotes/$remote/$match*" \
+ 				"refs/remotes/$remote/$match*/**"
+ 		else
+diff --git a/t/t9902-completion.sh b/t/t9902-completion.sh
+index 43de868b80..d89d0a93a2 100755
+--- a/t/t9902-completion.sh
++++ b/t/t9902-completion.sh
+@@ -2255,6 +2255,21 @@ test_expect_success 'checkout completes ref names' '
+ 	EOF
+ '
+ 
++test_expect_success 'checkout does not match ref names of a different case' '
++	test_completion "git checkout M" ""
++'
++
++test_expect_success 'checkout matches case insensitively with GIT_COMPLETION_IGNORE_CASE' '
++	(
++		GIT_COMPLETION_IGNORE_CASE=1 &&
++		test_completion "git checkout M" <<-\EOF
++		main Z
++		mybranch Z
++		mytag Z
++		EOF
++	)
++'
++
+ test_expect_success 'git -C <path> checkout uses the right repo' '
+ 	test_completion "git -C subdir -C subsubdir -C .. -C ../otherrepo checkout b" <<-\EOF
+ 	branch-in-other Z
+-- 
+2.39.3 (Apple Git-145)
+

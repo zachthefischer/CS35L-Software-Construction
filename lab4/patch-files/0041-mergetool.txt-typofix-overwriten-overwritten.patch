@@ -1,0 +1,28 @@
+From edbf9a2e20f659539a3be062c455624a6e7cd77b Mon Sep 17 00:00:00 2001
+From: Noah Betzen <noah@nezteb.net>
+Date: Tue, 4 Oct 2022 00:55:24 +0000
+Subject: [PATCH 0041/2871] mergetool.txt: typofix 'overwriten' ->
+ 'overwritten'
+
+Signed-off-by: Noah Betzen <noah@nezteb.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/config/mergetool.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/config/mergetool.txt b/Documentation/config/mergetool.txt
+index cafbbef46a..f691afa93d 100644
+--- a/Documentation/config/mergetool.txt
++++ b/Documentation/config/mergetool.txt
+@@ -50,7 +50,7 @@ mergetool.hideResolved::
+ 	possible and write the 'MERGED' file containing conflict markers around
+ 	any conflicts that it cannot resolve; 'LOCAL' and 'REMOTE' normally
+ 	represent the versions of the file from before Git's conflict
+-	resolution. This flag causes 'LOCAL' and 'REMOTE' to be overwriten so
++	resolution. This flag causes 'LOCAL' and 'REMOTE' to be overwritten so
+ 	that only the unresolved conflicts are presented to the merge tool. Can
+ 	be configured per-tool via the `mergetool.<tool>.hideResolved`
+ 	configuration variable. Defaults to `false`.
+-- 
+2.39.3 (Apple Git-145)
+

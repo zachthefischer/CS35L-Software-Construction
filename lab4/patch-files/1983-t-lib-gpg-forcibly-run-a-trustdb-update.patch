@@ -1,0 +1,29 @@
+From 031fff289a52d7a0f8ead7390b67468122f49bec Mon Sep 17 00:00:00 2001
+From: Christian Hesse <mail@eworm.de>
+Date: Tue, 22 Aug 2023 15:03:14 +0200
+Subject: [PATCH 1983/2871] t/lib-gpg: forcibly run a trustdb update
+
+We want to compare output later, so randomly popping up 'gpg: checking
+the trustdb' breaks the tests. Run the trustdb update forcibly.
+
+Signed-off-by: Christian Hesse <mail@eworm.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/lib-gpg.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/t/lib-gpg.sh b/t/lib-gpg.sh
+index 4eebd9c2b5..83b83c9abb 100644
+--- a/t/lib-gpg.sh
++++ b/t/lib-gpg.sh
+@@ -45,6 +45,7 @@ test_lazy_prereq GPG '
+ 			"$TEST_DIRECTORY"/lib-gpg/keyring.gpg &&
+ 		gpg --homedir "${GNUPGHOME}" --import-ownertrust \
+ 			"$TEST_DIRECTORY"/lib-gpg/ownertrust &&
++		gpg --homedir "${GNUPGHOME}" --update-trustdb &&
+ 		gpg --homedir "${GNUPGHOME}" </dev/null >/dev/null \
+ 			--sign -u committer@example.com
+ 		;;
+-- 
+2.39.3 (Apple Git-145)
+

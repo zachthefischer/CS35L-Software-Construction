@@ -1,0 +1,49 @@
+From fcdaa211e6127eeba69a121844e08aec67da2131 Mon Sep 17 00:00:00 2001
+From: Taylor Blau <me@ttaylorr.com>
+Date: Fri, 30 Sep 2022 17:37:57 -0400
+Subject: [PATCH 0058/2871] Git 2.36.3
+
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/RelNotes/2.36.3.txt | 5 +++++
+ GIT-VERSION-GEN                   | 2 +-
+ RelNotes                          | 2 +-
+ 3 files changed, 7 insertions(+), 2 deletions(-)
+ create mode 100644 Documentation/RelNotes/2.36.3.txt
+
+diff --git a/Documentation/RelNotes/2.36.3.txt b/Documentation/RelNotes/2.36.3.txt
+new file mode 100644
+index 0000000000..56db77b5bd
+--- /dev/null
++++ b/Documentation/RelNotes/2.36.3.txt
+@@ -0,0 +1,5 @@
++Git v2.36.3 Release Notes
++=========================
++
++This release merges the security fix that appears in v2.30.6; see
++the release notes for that version for details.
+diff --git a/GIT-VERSION-GEN b/GIT-VERSION-GEN
+index 12f26c83d6..bb8cba6f16 100755
+--- a/GIT-VERSION-GEN
++++ b/GIT-VERSION-GEN
+@@ -1,7 +1,7 @@
+ #!/bin/sh
+ 
+ GVF=GIT-VERSION-FILE
+-DEF_VER=v2.36.2
++DEF_VER=v2.36.3
+ 
+ LF='
+ '
+diff --git a/RelNotes b/RelNotes
+index f4c4f698c1..1c3d9f780f 120000
+--- a/RelNotes
++++ b/RelNotes
+@@ -1 +1 @@
+-Documentation/RelNotes/2.36.2.txt
+\ No newline at end of file
++Documentation/RelNotes/2.36.3.txt
+\ No newline at end of file
+-- 
+2.39.3 (Apple Git-145)
+

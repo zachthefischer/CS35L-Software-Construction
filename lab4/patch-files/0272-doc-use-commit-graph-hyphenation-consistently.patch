@@ -1,0 +1,90 @@
+From 776ba91a5e3349479139e9a51a135d4bc838b613 Mon Sep 17 00:00:00 2001
+From: Philip Oakley <philipoakley@iee.email>
+Date: Sat, 29 Oct 2022 17:41:12 +0100
+Subject: [PATCH 0272/2871] doc: use "commit-graph" hyphenation consistently
+
+Note, historical release notes have not been updated.
+
+Signed-off-by: Philip Oakley <philipoakley@iee.email>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Documentation/config/core.txt            | 2 +-
+ Documentation/gitformat-commit-graph.txt | 6 +++---
+ Documentation/technical/commit-graph.txt | 6 +++---
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/config/core.txt b/Documentation/config/core.txt
+index 37afbaf5a4..dfbdaf00b8 100644
+--- a/Documentation/config/core.txt
++++ b/Documentation/config/core.txt
+@@ -618,7 +618,7 @@ but risks losing recent work in the event of an unclean system shutdown.
+ * `loose-object` hardens objects added to the repo in loose-object form.
+ * `pack` hardens objects added to the repo in packfile form.
+ * `pack-metadata` hardens packfile bitmaps and indexes.
+-* `commit-graph` hardens the commit graph file.
++* `commit-graph` hardens the commit-graph file.
+ * `index` hardens the index when it is modified.
+ * `objects` is an aggregate option that is equivalent to
+   `loose-object,pack`.
+diff --git a/Documentation/gitformat-commit-graph.txt b/Documentation/gitformat-commit-graph.txt
+index 7324665716..31cad585e2 100644
+--- a/Documentation/gitformat-commit-graph.txt
++++ b/Documentation/gitformat-commit-graph.txt
+@@ -3,7 +3,7 @@ gitformat-commit-graph(5)
+ 
+ NAME
+ ----
+-gitformat-commit-graph - Git commit graph format
++gitformat-commit-graph - Git commit-graph format
+ 
+ SYNOPSIS
+ --------
+@@ -14,7 +14,7 @@ $GIT_DIR/objects/info/commit-graphs/*
+ DESCRIPTION
+ -----------
+ 
+-The Git commit graph stores a list of commit OIDs and some associated
++The Git commit-graph stores a list of commit OIDs and some associated
+ metadata, including:
+ 
+ - The generation number of the commit.
+@@ -34,7 +34,7 @@ corresponding to the array position within the list of commit OIDs. Due
+ to some special constants we use to track parents, we can store at most
+ (1 << 30) + (1 << 29) + (1 << 28) - 1 (around 1.8 billion) commits.
+ 
+-== Commit graph files have the following format:
++== Commit-graph files have the following format:
+ 
+ In order to allow extensions that add extra data to the graph, we organize
+ the body into "chunks" and provide a binary lookup table at the beginning
+diff --git a/Documentation/technical/commit-graph.txt b/Documentation/technical/commit-graph.txt
+index 90c9760c23..d821365b18 100644
+--- a/Documentation/technical/commit-graph.txt
++++ b/Documentation/technical/commit-graph.txt
+@@ -1,4 +1,4 @@
+-Git Commit Graph Design Notes
++Git Commit-Graph Design Notes
+ =============================
+ 
+ Git walks the commit graph for many reasons, including:
+@@ -95,7 +95,7 @@ with default order), but is not used when the topological order is
+ required (such as merge base calculations, "git log --graph").
+ 
+ In practice, we expect some commits to be created recently and not stored
+-in the commit graph. We can treat these commits as having "infinite"
++in the commit-graph. We can treat these commits as having "infinite"
+ generation number and walk until reaching commits with known generation
+ number.
+ 
+@@ -149,7 +149,7 @@ Design Details
+   helpful for these clones, anyway. The commit-graph will not be read or
+   written when shallow commits are present.
+ 
+-Commit Graphs Chains
++Commit-Graphs Chains
+ --------------------
+ 
+ Typically, repos grow with near-constant velocity (commits per day). Over time,
+-- 
+2.39.3 (Apple Git-145)
+

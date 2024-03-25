@@ -1,0 +1,76 @@
+From 311bfe18ce8563d0b1b571e9dc9eb35b97de3790 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Mon, 10 Jul 2023 17:12:10 -0400
+Subject: [PATCH 1751/2871] ref-filter: clear reachable list pointers after
+ freeing
+
+In `reach_filter()`, we pop all commits from the reachable lists,
+leaving them empty. But because we're operating on a list pointer that
+was passed by value, the original `filter.reachable_from` and
+`filter.unreachable_from` pointers are left dangling.
+
+As is the case with the previous commit, nobody touches either of these
+fields after calling `reach_filter()`, so leaving them dangling is OK.
+But this future proofs against dangerous situations.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ref-filter.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/ref-filter.c b/ref-filter.c
+index 4991cd4f7a..048d277cbf 100644
+--- a/ref-filter.c
++++ b/ref-filter.c
+@@ -2418,13 +2418,13 @@ void ref_array_clear(struct ref_array *array)
+ #define EXCLUDE_REACHED 0
+ #define INCLUDE_REACHED 1
+ static void reach_filter(struct ref_array *array,
+-			 struct commit_list *check_reachable,
++			 struct commit_list **check_reachable,
+ 			 int include_reached)
+ {
+ 	int i, old_nr;
+ 	struct commit **to_clear;
+ 
+-	if (!check_reachable)
++	if (!*check_reachable)
+ 		return;
+ 
+ 	CALLOC_ARRAY(to_clear, array->nr);
+@@ -2434,7 +2434,7 @@ static void reach_filter(struct ref_array *array,
+ 	}
+ 
+ 	tips_reachable_from_bases(the_repository,
+-				  check_reachable,
++				  *check_reachable,
+ 				  to_clear, array->nr,
+ 				  UNINTERESTING);
+ 
+@@ -2455,8 +2455,8 @@ static void reach_filter(struct ref_array *array,
+ 
+ 	clear_commit_marks_many(old_nr, to_clear, ALL_REV_FLAGS);
+ 
+-	while (check_reachable) {
+-		struct commit *merge_commit = pop_commit(&check_reachable);
++	while (*check_reachable) {
++		struct commit *merge_commit = pop_commit(check_reachable);
+ 		clear_commit_marks(merge_commit, ALL_REV_FLAGS);
+ 	}
+ 
+@@ -2553,8 +2553,8 @@ int filter_refs(struct ref_array *array, struct ref_filter *filter, unsigned int
+ 	clear_contains_cache(&ref_cbdata.no_contains_cache);
+ 
+ 	/*  Filters that need revision walking */
+-	reach_filter(array, filter->reachable_from, INCLUDE_REACHED);
+-	reach_filter(array, filter->unreachable_from, EXCLUDE_REACHED);
++	reach_filter(array, &filter->reachable_from, INCLUDE_REACHED);
++	reach_filter(array, &filter->unreachable_from, EXCLUDE_REACHED);
+ 
+ 	save_commit_buffer = save_commit_buffer_orig;
+ 	return ret;
+-- 
+2.39.3 (Apple Git-145)
+

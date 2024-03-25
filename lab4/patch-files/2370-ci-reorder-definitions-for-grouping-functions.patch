@@ -1,0 +1,62 @@
+From a4761b605c527f12a9647d94a30ca04ccdea36ec Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Thu, 9 Nov 2023 09:05:25 +0100
+Subject: [PATCH 2370/2871] ci: reorder definitions for grouping functions
+
+We define a set of grouping functions that are used to group together
+output in our CI, where these groups then end up as collapsible sections
+in the respective pipeline platform. The way these functions are defined
+is not easily extensible though as we have an up front check for the CI
+_not_ being GitHub Actions, where we define the non-stub logic in the
+else branch.
+
+Reorder the conditional branches such that we explicitly handle GitHub
+Actions.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ ci/lib.sh | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/ci/lib.sh b/ci/lib.sh
+index 369d462f13..26895ddbcc 100755
+--- a/ci/lib.sh
++++ b/ci/lib.sh
+@@ -1,16 +1,7 @@
+ # Library of functions shared by all CI scripts
+ 
+-if test true != "$GITHUB_ACTIONS"
++if test true = "$GITHUB_ACTIONS"
+ then
+-	begin_group () { :; }
+-	end_group () { :; }
+-
+-	group () {
+-		shift
+-		"$@"
+-	}
+-	set -x
+-else
+ 	begin_group () {
+ 		need_to_end_group=t
+ 		echo "::group::$1" >&2
+@@ -42,6 +33,15 @@ else
+ 	}
+ 
+ 	begin_group "CI setup"
++else
++	begin_group () { :; }
++	end_group () { :; }
++
++	group () {
++		shift
++		"$@"
++	}
++	set -x
+ fi
+ 
+ # Set 'exit on error' for all CI scripts to let the caller know that
+-- 
+2.39.3 (Apple Git-145)
+

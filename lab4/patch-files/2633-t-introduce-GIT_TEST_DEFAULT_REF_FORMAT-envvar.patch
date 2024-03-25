@@ -1,0 +1,84 @@
+From 58aaf59133b4167aefaab6083e80deb369894f79 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 29 Dec 2023 08:26:56 +0100
+Subject: [PATCH 2633/2871] t: introduce GIT_TEST_DEFAULT_REF_FORMAT envvar
+
+Introduce a new GIT_TEST_DEFAULT_REF_FORMAT environment variable that
+lets developers run the test suite with a different default ref format
+without impacting the ref format used by non-test Git invocations. This
+is modeled after GIT_TEST_DEFAULT_OBJECT_FORMAT, which does the same
+thing for the repository's object format.
+
+Adapt the setup of the `REFFILES` test prerequisite to be conditionally
+set based on the default ref format.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/README                |  3 +++
+ t/test-lib-functions.sh |  5 +++++
+ t/test-lib.sh           | 11 ++++++++++-
+ 3 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/t/README b/t/README
+index 36463d0742..621d3b8c09 100644
+--- a/t/README
++++ b/t/README
+@@ -479,6 +479,9 @@ GIT_TEST_DEFAULT_HASH=<hash-algo> specifies which hash algorithm to
+ use in the test scripts. Recognized values for <hash-algo> are "sha1"
+ and "sha256".
+ 
++GIT_TEST_DEFAULT_REF_FORMAT=<format> specifies which ref storage format
++to use in the test scripts. Recognized values for <format> are "files".
++
+ GIT_TEST_NO_WRITE_REV_INDEX=<boolean>, when true disables the
+ 'pack.writeReverseIndex' setting.
+ 
+diff --git a/t/test-lib-functions.sh b/t/test-lib-functions.sh
+index 03292602fb..61871b2a3b 100644
+--- a/t/test-lib-functions.sh
++++ b/t/test-lib-functions.sh
+@@ -1659,6 +1659,11 @@ test_detect_hash () {
+ 	test_hash_algo="${GIT_TEST_DEFAULT_HASH:-sha1}"
+ }
+ 
++# Detect the hash algorithm in use.
++test_detect_ref_format () {
++	echo "${GIT_TEST_DEFAULT_REF_FORMAT:-files}"
++}
++
+ # Load common hash metadata and common placeholder object IDs for use with
+ # test_oid.
+ test_oid_init () {
+diff --git a/t/test-lib.sh b/t/test-lib.sh
+index 4685cc3d48..fc93aa57e6 100644
+--- a/t/test-lib.sh
++++ b/t/test-lib.sh
+@@ -542,6 +542,8 @@ export EDITOR
+ 
+ GIT_DEFAULT_HASH="${GIT_TEST_DEFAULT_HASH:-sha1}"
+ export GIT_DEFAULT_HASH
++GIT_DEFAULT_REF_FORMAT="${GIT_TEST_DEFAULT_REF_FORMAT:-files}"
++export GIT_DEFAULT_REF_FORMAT
+ GIT_TEST_MERGE_ALGORITHM="${GIT_TEST_MERGE_ALGORITHM:-ort}"
+ export GIT_TEST_MERGE_ALGORITHM
+ 
+@@ -1745,7 +1747,14 @@ parisc* | hppa*)
+ 	;;
+ esac
+ 
+-test_set_prereq REFFILES
++case "$GIT_DEFAULT_REF_FORMAT" in
++files)
++	test_set_prereq REFFILES;;
++*)
++	echo 2>&1 "error: unknown ref format $GIT_DEFAULT_REF_FORMAT"
++	exit 1
++	;;
++esac
+ 
+ ( COLUMNS=1 && test $COLUMNS = 1 ) && test_set_prereq COLUMNS_CAN_BE_1
+ test -z "$NO_CURL" && test_set_prereq LIBCURL
+-- 
+2.39.3 (Apple Git-145)
+

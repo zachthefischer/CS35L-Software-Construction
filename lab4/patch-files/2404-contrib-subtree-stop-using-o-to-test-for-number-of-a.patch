@@ -1,0 +1,81 @@
+From 88983946fa00ebea8b346acab46e19bceeed427d Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Fri, 10 Nov 2023 11:01:19 +0100
+Subject: [PATCH 2404/2871] contrib/subtree: stop using `-o` to test for number
+ of args
+
+Functions in git-subtree.sh all assert that they are being passed the
+correct number of arguments. In cases where we accept a variable number
+of arguments we assert this via a single call to `test` with `-o`, which
+is discouraged by our coding guidelines.
+
+Convert these cases to stop doing so. This requires us to decompose
+assertions of the style `assert test $# = 2 -o $# = 3` into two calls
+because we have no easy way to logically chain statements passed to the
+assert function.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/subtree/git-subtree.sh | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/contrib/subtree/git-subtree.sh b/contrib/subtree/git-subtree.sh
+index 43b5fec732..8af0a81ba3 100755
+--- a/contrib/subtree/git-subtree.sh
++++ b/contrib/subtree/git-subtree.sh
+@@ -373,7 +373,8 @@ try_remove_previous () {
+ 
+ # Usage: process_subtree_split_trailer SPLIT_HASH MAIN_HASH [REPOSITORY]
+ process_subtree_split_trailer () {
+-	assert test $# = 2 -o $# = 3
++	assert test $# -ge 2
++	assert test $# -le 3
+ 	b="$1"
+ 	sq="$2"
+ 	repository=""
+@@ -402,7 +403,8 @@ process_subtree_split_trailer () {
+ 
+ # Usage: find_latest_squash DIR [REPOSITORY]
+ find_latest_squash () {
+-	assert test $# = 1 -o $# = 2
++	assert test $# -ge 1
++	assert test $# -le 2
+ 	dir="$1"
+ 	repository=""
+ 	if test "$#" = 2
+@@ -455,7 +457,8 @@ find_latest_squash () {
+ 
+ # Usage: find_existing_splits DIR REV [REPOSITORY]
+ find_existing_splits () {
+-	assert test $# = 2 -o $# = 3
++	assert test $# -ge 2
++	assert test $# -le 3
+ 	debug "Looking for prior splits..."
+ 	local indent=$(($indent + 1))
+ 
+@@ -916,7 +919,7 @@ cmd_split () {
+ 	if test $# -eq 0
+ 	then
+ 		rev=$(git rev-parse HEAD)
+-	elif test $# -eq 1 -o $# -eq 2
++	elif test $# -eq 1 || test $# -eq 2
+ 	then
+ 		rev=$(git rev-parse -q --verify "$1^{commit}") ||
+ 			die "fatal: '$1' does not refer to a commit"
+@@ -1006,8 +1009,11 @@ cmd_split () {
+ 
+ # Usage: cmd_merge REV [REPOSITORY]
+ cmd_merge () {
+-	test $# -eq 1 -o $# -eq 2 ||
++	if test $# -lt 1 || test $# -gt 2
++	then
+ 		die "fatal: you must provide exactly one revision, and optionally a repository. Got: '$*'"
++	fi
++
+ 	rev=$(git rev-parse -q --verify "$1^{commit}") ||
+ 		die "fatal: '$1' does not refer to a commit"
+ 	repository=""
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,40 @@
+From 38283bced8bc75f12af7bc0d0a9b135d7f42beea Mon Sep 17 00:00:00 2001
+From: Elijah Newren <newren@gmail.com>
+Date: Fri, 24 Nov 2023 12:10:36 +0100
+Subject: [PATCH 2461/2871] replay: add an important FIXME comment about gpg
+ signing
+
+We want to be able to handle signed commits in some way in the future,
+but we are not ready to do it now. So for the time being let's just add
+a FIXME comment to remind us about it.
+
+These are different ways we could handle them:
+
+  - in case of a cli user and if there was an interactive mode, we could
+    perhaps ask if the user wants to sign again
+  - we could add an option to just fail if there are signed commits
+
+Co-authored-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Elijah Newren <newren@gmail.com>
+Signed-off-by: Christian Couder <chriscool@tuxfamily.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ builtin/replay.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builtin/replay.c b/builtin/replay.c
+index 2f664218be..384bb4ddd3 100644
+--- a/builtin/replay.c
++++ b/builtin/replay.c
+@@ -62,7 +62,7 @@ static struct commit *create_commit(struct tree *tree,
+ 	struct object *obj;
+ 	struct commit_list *parents = NULL;
+ 	char *author;
+-	char *sign_commit = NULL;
++	char *sign_commit = NULL; /* FIXME: cli users might want to sign again */
+ 	struct commit_extra_header *extra;
+ 	struct strbuf msg = STRBUF_INIT;
+ 	const char *out_enc = get_commit_output_encoding();
+-- 
+2.39.3 (Apple Git-145)
+

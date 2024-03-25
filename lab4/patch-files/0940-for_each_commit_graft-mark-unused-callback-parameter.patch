@@ -1,0 +1,33 @@
+From 43090008e365a5dfec5a167b5ab64b1f0c1345a6 Mon Sep 17 00:00:00 2001
+From: Jeff King <peff@peff.net>
+Date: Fri, 24 Feb 2023 01:39:40 -0500
+Subject: [PATCH 0940/2871] for_each_commit_graft(): mark unused callback
+ parameter
+
+The for_each_commit_graft() functions takes a callback, but not every
+callback uses the void data parameter. Mark the unused one to appease
+the -Wunused-parameter warning.
+
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ log-tree.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/log-tree.c b/log-tree.c
+index 1dd5fcbf7b..0f08864ae8 100644
+--- a/log-tree.c
++++ b/log-tree.c
+@@ -196,7 +196,8 @@ static int add_ref_decoration(const char *refname, const struct object_id *oid,
+ 	return 0;
+ }
+ 
+-static int add_graft_decoration(const struct commit_graft *graft, void *cb_data)
++static int add_graft_decoration(const struct commit_graft *graft,
++				void *cb_data UNUSED)
+ {
+ 	struct commit *commit = lookup_commit(the_repository, &graft->oid);
+ 	if (!commit)
+-- 
+2.39.3 (Apple Git-145)
+

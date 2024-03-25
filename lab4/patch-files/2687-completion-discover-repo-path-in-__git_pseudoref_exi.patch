@@ -1,0 +1,58 @@
+From 3bf5ccf429561a1fbd64cc55b771e31aae15065c Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 15 Jan 2024 11:35:57 +0100
+Subject: [PATCH 2687/2871] completion: discover repo path in
+ `__git_pseudoref_exists ()`
+
+The helper function `__git_pseudoref_exists ()` expects that the repo
+path has already been discovered by its callers, which makes for a
+rather fragile calling convention. Refactor the function to discover the
+repo path itself to make it more self-contained, which also removes the
+need to discover the path in some of its callers.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ contrib/completion/git-completion.bash | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/completion/git-completion.bash b/contrib/completion/git-completion.bash
+index 8c40ade494..06a9107449 100644
+--- a/contrib/completion/git-completion.bash
++++ b/contrib/completion/git-completion.bash
+@@ -138,6 +138,8 @@ __git_pseudoref_exists ()
+ {
+ 	local ref=$1
+ 
++	__git_find_repo_path
++
+ 	# If the reftable is in use, we have to shell out to 'git rev-parse'
+ 	# to determine whether the ref exists instead of looking directly in
+ 	# the filesystem to determine whether the ref exists. Otherwise, use
+@@ -1656,7 +1658,6 @@ __git_cherry_pick_inprogress_options=$__git_sequencer_inprogress_options
+ 
+ _git_cherry_pick ()
+ {
+-	__git_find_repo_path
+ 	if __git_pseudoref_exists CHERRY_PICK_HEAD; then
+ 		__gitcomp "$__git_cherry_pick_inprogress_options"
+ 		return
+@@ -2966,7 +2967,6 @@ _git_reset ()
+ 
+ _git_restore ()
+ {
+-	__git_find_repo_path
+ 	case "$prev" in
+ 	-s)
+ 		__git_complete_refs
+@@ -2995,7 +2995,6 @@ __git_revert_inprogress_options=$__git_sequencer_inprogress_options
+ 
+ _git_revert ()
+ {
+-	__git_find_repo_path
+ 	if __git_pseudoref_exists REVERT_HEAD; then
+ 		__gitcomp "$__git_revert_inprogress_options"
+ 		return
+-- 
+2.39.3 (Apple Git-145)
+

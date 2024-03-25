@@ -1,0 +1,120 @@
+From a096a889f43a40223bae89efa7d1896e0d4c37cb Mon Sep 17 00:00:00 2001
+From: Jacob Keller <jacob.keller@gmail.com>
+Date: Tue, 27 Jun 2023 15:41:50 -0700
+Subject: [PATCH 1696/2871] fix cherry-pick/revert status when doing multiple
+ commits
+
+The status report for an in-progress cherry-pick does not show the
+current commit if the cherry-pick happens as part of a series of
+multiple commits:
+
+ $ git cherry-pick <commit1> <commit2>
+ < one of the cherry-picks fails to merge clean >
+ Cherry-pick currently in progress.
+  (run "git cherry-pick --continue" to continue)
+  (use "git cherry-pick --skip" to skip this patch)
+  (use "git cherry-pick --abort" to cancel the cherry-pick operation)
+
+ $ git status
+ On branch <branch>
+ Your branch is ahead of '<upstream>' by 1 commit.
+   (use "git push" to publish your local commits)
+
+ Cherry-pick currently in progress.
+   (run "git cherry-pick --continue" to continue)
+   (use "git cherry-pick --skip" to skip this patch)
+   (use "git cherry-pick --abort" to cancel the cherry-pick operation)
+
+The show_cherry_pick_in_progress() function prints "Cherry-pick
+currently in progress". That function does have a more verbose print
+based on whether the cherry_pick_head_oid is null or not. If it is not
+null, then a more helpful message including which commit is actually
+being picked is displayed.
+
+The introduction of the "Cherry-pick currently in progress" message
+comes from 4a72486de97b ("fix cherry-pick/revert status after commit",
+2019-04-17). This commit modified wt_status_get_state() in order to
+detect that a cherry-pick was in progress even if the user has used `git
+commit` in the middle of the sequence.
+
+The check used to detect this is the call to sequencer_get_last_command.
+If the sequencer indicates that the lass command was a REPLAY_PICK, then
+the state->cherry_pick_in_progress is set to 1 and the
+cherry_pick_head_oid is initialized to the null_oid. Similar behavior is
+done for the case of REPLAY_REVERT.
+
+It happens that this call of sequencer_get_last_command will always
+report the action even if the user hasn't interrupted anything. Thus,
+during a range of cherry-picks or reverts, the cherry_pick_head_oid and
+revert_head_oid will always be overwritten and initialized to the null
+oid.
+
+This results in status always displaying the terse message which does
+not include commit information.
+
+Fix this by adding an additional check so that we do not re-initialize
+the cherry_pick_head_oid or revert_head_oid if we have already set the
+cherry_pick_in_progress or revert_in_progress bits. This ensures that
+git status will display the more helpful information when its available.
+Add a test case covering this behavior.
+
+Signed-off-by: Jacob Keller <jacob.keller@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t7512-status-help.sh | 22 ++++++++++++++++++++++
+ wt-status.c            |  4 ++--
+ 2 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/t/t7512-status-help.sh b/t/t7512-status-help.sh
+index 2f16d5787e..c2ab8a444a 100755
+--- a/t/t7512-status-help.sh
++++ b/t/t7512-status-help.sh
+@@ -774,6 +774,28 @@ EOF
+ 	test_cmp expected actual
+ '
+ 
++test_expect_success 'status when cherry-picking multiple commits' '
++	git reset --hard cherry_branch &&
++	test_when_finished "git cherry-pick --abort" &&
++	test_must_fail git cherry-pick cherry_branch_second one_cherry &&
++	TO_CHERRY_PICK=$(git rev-parse --short CHERRY_PICK_HEAD) &&
++	cat >expected <<EOF &&
++On branch cherry_branch
++You are currently cherry-picking commit $TO_CHERRY_PICK.
++  (fix conflicts and run "git cherry-pick --continue")
++  (use "git cherry-pick --skip" to skip this patch)
++  (use "git cherry-pick --abort" to cancel the cherry-pick operation)
++
++Unmerged paths:
++  (use "git add <file>..." to mark resolution)
++	both modified:   main.txt
++
++no changes added to commit (use "git add" and/or "git commit -a")
++EOF
++	git status --untracked-files=no >actual &&
++	test_cmp expected actual
++'
++
+ test_expect_success 'status when cherry-picking after committing conflict resolution' '
+ 	git reset --hard cherry_branch &&
+ 	test_when_finished "git cherry-pick --abort" &&
+diff --git a/wt-status.c b/wt-status.c
+index 3162241a57..f685de06d1 100644
+--- a/wt-status.c
++++ b/wt-status.c
+@@ -1780,10 +1780,10 @@ void wt_status_get_state(struct repository *r,
+ 		oidcpy(&state->revert_head_oid, &oid);
+ 	}
+ 	if (!sequencer_get_last_command(r, &action)) {
+-		if (action == REPLAY_PICK) {
++		if (action == REPLAY_PICK && !state->cherry_pick_in_progress) {
+ 			state->cherry_pick_in_progress = 1;
+ 			oidcpy(&state->cherry_pick_head_oid, null_oid());
+-		} else {
++		} else if (action == REPLAY_REVERT && !state->revert_in_progress) {
+ 			state->revert_in_progress = 1;
+ 			oidcpy(&state->revert_head_oid, null_oid());
+ 		}
+-- 
+2.39.3 (Apple Git-145)
+

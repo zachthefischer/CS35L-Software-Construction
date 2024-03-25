@@ -1,0 +1,43 @@
+From ca554bf36ca198fdc908c225acf838c58c4663d7 Mon Sep 17 00:00:00 2001
+From: Yukai Chou <muzimuzhi@gmail.com>
+Date: Sat, 14 Jan 2023 09:12:12 +0800
+Subject: [PATCH 0688/2871] doc: fix non-existent config name
+
+Replace non-existent `branch.<name>.fetch` to `remote.<repository>.fetch`, in
+the first example in `git-fetch` doc, which was introduced in
+d504f6975d (modernize fetch/merge/pull examples, 2009-10-21).
+
+Rename placeholder `<name>` to `<repository>`, to be consistent with all other
+uses in git docs, except that `git-config.txt` uses `remote.<name>.fetch` in
+its "Variables" section.
+
+Also add missing monospace markups.
+
+Signed-off-by: Yukai Chou <muzimuzhi@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-fetch.txt | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-fetch.txt b/Documentation/git-fetch.txt
+index 63d9569e16..fba66f1460 100644
+--- a/Documentation/git-fetch.txt
++++ b/Documentation/git-fetch.txt
+@@ -251,10 +251,10 @@ EXAMPLES
+ $ git fetch origin
+ ------------------------------------------------
+ +
+-The above command copies all branches from the remote refs/heads/
+-namespace and stores them to the local refs/remotes/origin/ namespace,
+-unless the branch.<name>.fetch option is used to specify a non-default
+-refspec.
++The above command copies all branches from the remote `refs/heads/`
++namespace and stores them to the local `refs/remotes/origin/` namespace,
++unless the `remote.<repository>.fetch` option is used to specify a
++non-default refspec.
+ 
+ * Using refspecs explicitly:
+ +
+-- 
+2.39.3 (Apple Git-145)
+

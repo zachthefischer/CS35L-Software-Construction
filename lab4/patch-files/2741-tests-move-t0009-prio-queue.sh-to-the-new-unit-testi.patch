@@ -1,0 +1,307 @@
+From 808b77e5d47094ac8178b08d4c20e4893485bfca Mon Sep 17 00:00:00 2001
+From: Chandra Pratap <chandrapratap3519@gmail.com>
+Date: Sun, 21 Jan 2024 19:28:45 +0000
+Subject: [PATCH 2741/2871] tests: move t0009-prio-queue.sh to the new unit
+ testing framework
+
+t/t0009-prio-queue.sh along with t/helper/test-prio-queue.c unit
+tests Git's implementation of a priority queue. Migrate the
+test over to the new unit testing framework to simplify debugging
+and reduce test run-time. Refactor the required logic and add
+a new test case in addition to porting over the original ones in
+shell.
+
+Signed-off-by: Chandra Pratap <chandrapratap3519@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Makefile                    |  2 +-
+ t/helper/test-prio-queue.c  | 51 -------------------
+ t/helper/test-tool.c        |  1 -
+ t/helper/test-tool.h        |  1 -
+ t/t0009-prio-queue.sh       | 66 -------------------------
+ t/unit-tests/t-prio-queue.c | 98 +++++++++++++++++++++++++++++++++++++
+ 6 files changed, 99 insertions(+), 120 deletions(-)
+ delete mode 100644 t/helper/test-prio-queue.c
+ delete mode 100755 t/t0009-prio-queue.sh
+ create mode 100644 t/unit-tests/t-prio-queue.c
+
+diff --git a/Makefile b/Makefile
+index 15990ff312..2d649ec186 100644
+--- a/Makefile
++++ b/Makefile
+@@ -828,7 +828,6 @@ TEST_BUILTINS_OBJS += test-partial-clone.o
+ TEST_BUILTINS_OBJS += test-path-utils.o
+ TEST_BUILTINS_OBJS += test-pcre2-config.o
+ TEST_BUILTINS_OBJS += test-pkt-line.o
+-TEST_BUILTINS_OBJS += test-prio-queue.o
+ TEST_BUILTINS_OBJS += test-proc-receive.o
+ TEST_BUILTINS_OBJS += test-progress.o
+ TEST_BUILTINS_OBJS += test-reach.o
+@@ -1342,6 +1341,7 @@ THIRD_PARTY_SOURCES += sha1dc/%
+ UNIT_TEST_PROGRAMS += t-basic
+ UNIT_TEST_PROGRAMS += t-mem-pool
+ UNIT_TEST_PROGRAMS += t-strbuf
++UNIT_TEST_PROGRAMS += t-prio-queue
+ UNIT_TEST_PROGS = $(patsubst %,$(UNIT_TEST_BIN)/%$X,$(UNIT_TEST_PROGRAMS))
+ UNIT_TEST_OBJS = $(patsubst %,$(UNIT_TEST_DIR)/%.o,$(UNIT_TEST_PROGRAMS))
+ UNIT_TEST_OBJS += $(UNIT_TEST_DIR)/test-lib.o
+diff --git a/t/helper/test-prio-queue.c b/t/helper/test-prio-queue.c
+deleted file mode 100644
+index f0bf255f5f..0000000000
+--- a/t/helper/test-prio-queue.c
++++ /dev/null
+@@ -1,51 +0,0 @@
+-#include "test-tool.h"
+-#include "prio-queue.h"
+-
+-static int intcmp(const void *va, const void *vb, void *data UNUSED)
+-{
+-	const int *a = va, *b = vb;
+-	return *a - *b;
+-}
+-
+-static void show(int *v)
+-{
+-	if (!v)
+-		printf("NULL\n");
+-	else
+-		printf("%d\n", *v);
+-	free(v);
+-}
+-
+-int cmd__prio_queue(int argc UNUSED, const char **argv)
+-{
+-	struct prio_queue pq = { intcmp };
+-
+-	while (*++argv) {
+-		if (!strcmp(*argv, "get")) {
+-			void *peek = prio_queue_peek(&pq);
+-			void *get = prio_queue_get(&pq);
+-			if (peek != get)
+-				BUG("peek and get results do not match");
+-			show(get);
+-		} else if (!strcmp(*argv, "dump")) {
+-			void *peek;
+-			void *get;
+-			while ((peek = prio_queue_peek(&pq))) {
+-				get = prio_queue_get(&pq);
+-				if (peek != get)
+-					BUG("peek and get results do not match");
+-				show(get);
+-			}
+-		} else if (!strcmp(*argv, "stack")) {
+-			pq.compare = NULL;
+-		} else {
+-			int *v = xmalloc(sizeof(*v));
+-			*v = atoi(*argv);
+-			prio_queue_put(&pq, v);
+-		}
+-	}
+-
+-	clear_prio_queue(&pq);
+-
+-	return 0;
+-}
+diff --git a/t/helper/test-tool.c b/t/helper/test-tool.c
+index 37ba996539..ccc1d3674f 100644
+--- a/t/helper/test-tool.c
++++ b/t/helper/test-tool.c
+@@ -56,7 +56,6 @@ static struct test_cmd cmds[] = {
+ 	{ "path-utils", cmd__path_utils },
+ 	{ "pcre2-config", cmd__pcre2_config },
+ 	{ "pkt-line", cmd__pkt_line },
+-	{ "prio-queue", cmd__prio_queue },
+ 	{ "proc-receive", cmd__proc_receive },
+ 	{ "progress", cmd__progress },
+ 	{ "reach", cmd__reach },
+diff --git a/t/helper/test-tool.h b/t/helper/test-tool.h
+index 8a1a7c63da..8a8926f8bc 100644
+--- a/t/helper/test-tool.h
++++ b/t/helper/test-tool.h
+@@ -49,7 +49,6 @@ int cmd__partial_clone(int argc, const char **argv);
+ int cmd__path_utils(int argc, const char **argv);
+ int cmd__pcre2_config(int argc, const char **argv);
+ int cmd__pkt_line(int argc, const char **argv);
+-int cmd__prio_queue(int argc, const char **argv);
+ int cmd__proc_receive(int argc, const char **argv);
+ int cmd__progress(int argc, const char **argv);
+ int cmd__reach(int argc, const char **argv);
+diff --git a/t/t0009-prio-queue.sh b/t/t0009-prio-queue.sh
+deleted file mode 100755
+index eea99107a4..0000000000
+--- a/t/t0009-prio-queue.sh
++++ /dev/null
+@@ -1,66 +0,0 @@
+-#!/bin/sh
+-
+-test_description='basic tests for priority queue implementation'
+-
+-TEST_PASSES_SANITIZE_LEAK=true
+-. ./test-lib.sh
+-
+-cat >expect <<'EOF'
+-1
+-2
+-3
+-4
+-5
+-5
+-6
+-7
+-8
+-9
+-10
+-EOF
+-test_expect_success 'basic ordering' '
+-	test-tool prio-queue 2 6 3 10 9 5 7 4 5 8 1 dump >actual &&
+-	test_cmp expect actual
+-'
+-
+-cat >expect <<'EOF'
+-2
+-3
+-4
+-1
+-5
+-6
+-EOF
+-test_expect_success 'mixed put and get' '
+-	test-tool prio-queue 6 2 4 get 5 3 get get 1 dump >actual &&
+-	test_cmp expect actual
+-'
+-
+-cat >expect <<'EOF'
+-1
+-2
+-NULL
+-1
+-2
+-NULL
+-EOF
+-test_expect_success 'notice empty queue' '
+-	test-tool prio-queue 1 2 get get get 1 2 get get get >actual &&
+-	test_cmp expect actual
+-'
+-
+-cat >expect <<'EOF'
+-3
+-2
+-6
+-4
+-5
+-1
+-8
+-EOF
+-test_expect_success 'stack order' '
+-	test-tool prio-queue stack 8 1 5 4 6 2 3 dump >actual &&
+-	test_cmp expect actual
+-'
+-
+-test_done
+diff --git a/t/unit-tests/t-prio-queue.c b/t/unit-tests/t-prio-queue.c
+new file mode 100644
+index 0000000000..d78b002f9e
+--- /dev/null
++++ b/t/unit-tests/t-prio-queue.c
+@@ -0,0 +1,98 @@
++#include "test-lib.h"
++#include "prio-queue.h"
++
++static int intcmp(const void *va, const void *vb, void *data UNUSED)
++{
++	const int *a = va, *b = vb;
++	return *a - *b;
++}
++
++
++#define MISSING  -1
++#define DUMP	 -2
++#define STACK	 -3
++#define GET	 -4
++#define REVERSE  -5
++
++static int show(int *v)
++{
++	return v ? *v : MISSING;
++}
++
++static void test_prio_queue(int *input, int *result, size_t input_size)
++{
++	struct prio_queue pq = { intcmp };
++
++	for (int i = 0, j = 0; i < input_size; i++) {
++		void *peek, *get;
++		switch(input[i]) {
++		case GET:
++			peek = prio_queue_peek(&pq);
++			get = prio_queue_get(&pq);
++			if (!check(peek == get))
++				return;
++			if(!check_int(result[j++], ==, show(get)))
++				test_msg("failed at result[] index %d", j-1);
++			break;
++		case DUMP:
++			while ((peek = prio_queue_peek(&pq))) {
++				get = prio_queue_get(&pq);
++				if (!check(peek == get))
++					return;
++				if(!check_int(result[j++], ==, show(get)))
++					test_msg("failed at result[] index %d", j-1);
++			}
++			break;
++		case STACK:
++			pq.compare = NULL;
++			break;
++		case REVERSE:
++			prio_queue_reverse(&pq);
++			break;
++		default:
++			prio_queue_put(&pq, &input[i]);
++			break;
++		}
++	}
++	clear_prio_queue(&pq);
++}
++
++#define BASIC_INPUT 2, 6, 3, 10, 9, 5, 7, 4, 5, 8, 1, DUMP
++#define BASIC_RESULT 1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 10
++
++#define MIXED_PUT_GET_INPUT 6, 2, 4, GET, 5, 3, GET, GET, 1, DUMP
++#define MIXED_PUT_GET_RESULT 2, 3, 4, 1, 5, 6
++
++#define EMPTY_QUEUE_INPUT 1, 2, GET, GET, GET, 1, 2, GET, GET, GET
++#define EMPTY_QUEUE_RESULT 1, 2, MISSING, 1, 2, MISSING
++
++#define STACK_INPUT STACK, 8, 1, 5, 4, 6, 2, 3, DUMP
++#define STACK_RESULT 3, 2, 6, 4, 5, 1, 8
++
++#define REVERSE_STACK_INPUT STACK, 1, 2, 3, 4, 5, 6, REVERSE, DUMP
++#define REVERSE_STACK_RESULT 1, 2, 3, 4, 5, 6
++
++#define TEST_INPUT(INPUT, RESULT, name)			\
++  static void test_##name(void)				\
++{								\
++	int input[] = {INPUT};					\
++	int result[] = {RESULT};				\
++	test_prio_queue(input, result, ARRAY_SIZE(input));	\
++}
++
++TEST_INPUT(BASIC_INPUT, BASIC_RESULT, basic)
++TEST_INPUT(MIXED_PUT_GET_INPUT, MIXED_PUT_GET_RESULT, mixed)
++TEST_INPUT(EMPTY_QUEUE_INPUT, EMPTY_QUEUE_RESULT, empty)
++TEST_INPUT(STACK_INPUT, STACK_RESULT, stack)
++TEST_INPUT(REVERSE_STACK_INPUT, REVERSE_STACK_RESULT, reverse)
++
++int cmd_main(int argc, const char **argv)
++{
++	TEST(test_basic(), "prio-queue works for basic input");
++	TEST(test_mixed(), "prio-queue works for mixed put & get commands");
++	TEST(test_empty(), "prio-queue works when queue is empty");
++	TEST(test_stack(), "prio-queue works when used as a LIFO stack");
++	TEST(test_reverse(), "prio-queue works when LIFO stack is reversed");
++
++	return test_done();
++}
+-- 
+2.39.3 (Apple Git-145)
+

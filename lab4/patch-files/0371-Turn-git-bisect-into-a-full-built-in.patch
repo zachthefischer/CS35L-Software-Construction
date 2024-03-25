@@ -1,0 +1,94 @@
+From 73fce29427071e53d2650d7f201cf44d3c941e3b Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 10 Nov 2022 23:36:46 +0700
+Subject: [PATCH 0371/2871] Turn `git bisect` into a full built-in
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Now that the shell script hands off to the `bisect--helper` to do
+_anything_ (except to show the help), it is but a tiny step to let the
+helper implement the actual `git bisect` command instead.
+
+This retires `git-bisect.sh`, concluding a multi-year journey that many
+hands helped with, in particular Pranit Bauna, Tanushree Tumane and
+Miriam Rubio.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+Signed-off-by: Đoàn Trần Công Danh <congdanhqx@gmail.com>
+Signed-off-by: Taylor Blau <me@ttaylorr.com>
+---
+ Makefile                               | 3 +--
+ builtin.h                              | 2 +-
+ builtin/{bisect--helper.c => bisect.c} | 2 +-
+ git.c                                  | 2 +-
+ 4 files changed, 4 insertions(+), 5 deletions(-)
+ rename builtin/{bisect--helper.c => bisect.c} (99%)
+
+diff --git a/Makefile b/Makefile
+index 4927379184..78785c6b84 100644
+--- a/Makefile
++++ b/Makefile
+@@ -627,7 +627,6 @@ THIRD_PARTY_SOURCES =
+ # interactive shell sessions without exporting it.
+ unexport CDPATH
+ 
+-SCRIPT_SH += git-bisect.sh
+ SCRIPT_SH += git-difftool--helper.sh
+ SCRIPT_SH += git-filter-branch.sh
+ SCRIPT_SH += git-merge-octopus.sh
+@@ -1137,7 +1136,7 @@ BUILTIN_OBJS += builtin/am.o
+ BUILTIN_OBJS += builtin/annotate.o
+ BUILTIN_OBJS += builtin/apply.o
+ BUILTIN_OBJS += builtin/archive.o
+-BUILTIN_OBJS += builtin/bisect--helper.o
++BUILTIN_OBJS += builtin/bisect.o
+ BUILTIN_OBJS += builtin/blame.o
+ BUILTIN_OBJS += builtin/branch.o
+ BUILTIN_OBJS += builtin/bugreport.o
+diff --git a/builtin.h b/builtin.h
+index 8901a34d6b..aa955466b4 100644
+--- a/builtin.h
++++ b/builtin.h
+@@ -116,7 +116,7 @@ int cmd_am(int argc, const char **argv, const char *prefix);
+ int cmd_annotate(int argc, const char **argv, const char *prefix);
+ int cmd_apply(int argc, const char **argv, const char *prefix);
+ int cmd_archive(int argc, const char **argv, const char *prefix);
+-int cmd_bisect__helper(int argc, const char **argv, const char *prefix);
++int cmd_bisect(int argc, const char **argv, const char *prefix);
+ int cmd_blame(int argc, const char **argv, const char *prefix);
+ int cmd_branch(int argc, const char **argv, const char *prefix);
+ int cmd_bugreport(int argc, const char **argv, const char *prefix);
+diff --git a/builtin/bisect--helper.c b/builtin/bisect.c
+similarity index 99%
+rename from builtin/bisect--helper.c
+rename to builtin/bisect.c
+index 6066f553fd..cc9483e851 100644
+--- a/builtin/bisect--helper.c
++++ b/builtin/bisect.c
+@@ -1401,7 +1401,7 @@ static int cmd_bisect__run(int argc, const char **argv, const char *prefix UNUSE
+ 	return res;
+ }
+ 
+-int cmd_bisect__helper(int argc, const char **argv, const char *prefix)
++int cmd_bisect(int argc, const char **argv, const char *prefix)
+ {
+ 	int res = 0;
+ 	parse_opt_subcommand_fn *fn = NULL;
+diff --git a/git.c b/git.c
+index 6662548986..a2deb15e46 100644
+--- a/git.c
++++ b/git.c
+@@ -492,7 +492,7 @@ static struct cmd_struct commands[] = {
+ 	{ "annotate", cmd_annotate, RUN_SETUP },
+ 	{ "apply", cmd_apply, RUN_SETUP_GENTLY },
+ 	{ "archive", cmd_archive, RUN_SETUP_GENTLY },
+-	{ "bisect--helper", cmd_bisect__helper, RUN_SETUP },
++	{ "bisect", cmd_bisect, RUN_SETUP },
+ 	{ "blame", cmd_blame, RUN_SETUP },
+ 	{ "branch", cmd_branch, RUN_SETUP | DELAY_PAGER_CONFIG },
+ 	{ "bugreport", cmd_bugreport, RUN_SETUP_GENTLY },
+-- 
+2.39.3 (Apple Git-145)
+

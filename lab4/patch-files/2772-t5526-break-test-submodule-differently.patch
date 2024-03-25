@@ -1,0 +1,48 @@
+From 7a746904a98c62cf23b47e8e0450f0e03bd159e9 Mon Sep 17 00:00:00 2001
+From: Patrick Steinhardt <ps@pks.im>
+Date: Mon, 29 Jan 2024 12:07:34 +0100
+Subject: [PATCH 2772/2871] t5526: break test submodule differently
+
+In 10f5c52656 (submodule: avoid auto-discovery in
+prepare_submodule_repo_env(), 2016-09-01) we fixed a bug when doing a
+recursive fetch with submodule in the case where the submodule is broken
+due to whatever reason. The test to exercise that the fix works breaks
+the submodule by deleting its `HEAD` reference, which will cause us to
+not detect the directory as a Git repository.
+
+While this is perfectly fine in theory, this way of breaking the repo
+becomes problematic with the current efforts to introduce another refdb
+backend into Git. The new reftable backend has a stub HEAD file that
+always contains "ref: refs/heads/.invalid" so that tools continue to be
+able to detect such a repository. But as the reftable backend will never
+delete this file even when asked to delete `HEAD` the current way to
+delete the `HEAD` reference will stop working.
+
+Adapt the code to instead delete the objects database. Going back with
+this new way to cause breakage confirms that it triggers the infinite
+recursion just the same, and there are no equivalent ongoing efforts to
+replace the object database with an alternate backend.
+
+Signed-off-by: Patrick Steinhardt <ps@pks.im>
+Reviewed-by: Christian Couder <christian.couder@gmail.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/t5526-fetch-submodules.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/t/t5526-fetch-submodules.sh b/t/t5526-fetch-submodules.sh
+index 7ab220fa31..5e566205ba 100755
+--- a/t/t5526-fetch-submodules.sh
++++ b/t/t5526-fetch-submodules.sh
+@@ -771,7 +771,7 @@ test_expect_success 'fetching submodule into a broken repository' '
+ 	git -C dst fetch --recurse-submodules &&
+ 
+ 	# Break the receiving submodule
+-	test-tool -C dst/sub ref-store main delete-refs REF_NO_DEREF msg HEAD &&
++	rm -r dst/sub/.git/objects &&
+ 
+ 	# NOTE: without the fix the following tests will recurse forever!
+ 	# They should terminate with an error.
+-- 
+2.39.3 (Apple Git-145)
+

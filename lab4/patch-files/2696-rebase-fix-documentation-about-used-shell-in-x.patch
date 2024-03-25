@@ -1,0 +1,37 @@
+From f10031fadd92e1937c7fae0e9a44801d9f832e9e Mon Sep 17 00:00:00 2001
+From: Nikolay Borisov <nik.borisov@suse.com>
+Date: Wed, 17 Jan 2024 10:53:47 +0200
+Subject: [PATCH 2696/2871] rebase: fix documentation about used shell in -x
+
+The shell used when using the -x option is erroneously documented to be
+the one pointed to by the $SHELL environmental variable. This was true
+when rebase was implemented as a shell script but this is no longer
+true.
+
+Signed-off-by: Nikolay Borisov <nik.borisov@suse.com>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-rebase.txt | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/git-rebase.txt b/Documentation/git-rebase.txt
+index b4526ca246..8a95b5d7ab 100644
+--- a/Documentation/git-rebase.txt
++++ b/Documentation/git-rebase.txt
+@@ -957,10 +957,9 @@ The interactive rebase will stop when a command fails (i.e. exits with
+ non-0 status) to give you an opportunity to fix the problem. You can
+ continue with `git rebase --continue`.
+ 
+-The "exec" command launches the command in a shell (the one specified
+-in `$SHELL`, or the default shell if `$SHELL` is not set), so you can
+-use shell features (like "cd", ">", ";" ...). The command is run from
+-the root of the working tree.
++The "exec" command launches the command in a shell (the default one, usually
++/bin/sh), so you can use shell features (like "cd", ">", ";" ...). The command
++is run from the root of the working tree.
+ 
+ ----------------------------------
+ $ git rebase -i --exec "make test"
+-- 
+2.39.3 (Apple Git-145)
+

@@ -1,0 +1,38 @@
+From 18ecb23c4b3e84fdd438af2966ae6dabeb4c2be0 Mon Sep 17 00:00:00 2001
+From: Andrei Rybak <rybak.a.v@gmail.com>
+Date: Tue, 10 Jan 2023 10:32:50 +0100
+Subject: [PATCH 0669/2871] git-bisect-lk2009: update java code conventions
+ link
+
+A reference to Java Code Conventions in git-bisect-lk2009.txt uses an
+outdated URL that redirects to table of contents for the conventions.
+The actual claim about "80%" that this reference backs up is on the
+first page of the conventions:
+
+  https://www.oracle.com/java/technologies/javase/codeconventions-introduction.html
+
+Use this newer URL and its title in the reference.
+
+Signed-off-by: Andrei Rybak <rybak.a.v@gmail.com>
+Acked-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/git-bisect-lk2009.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/git-bisect-lk2009.txt b/Documentation/git-bisect-lk2009.txt
+index f3d9566c89..36168792ee 100644
+--- a/Documentation/git-bisect-lk2009.txt
++++ b/Documentation/git-bisect-lk2009.txt
+@@ -1348,7 +1348,7 @@ References
+ ----------
+ 
+ - [[[1]]] https://www.nist.gov/sites/default/files/documents/director/planning/report02-3.pdf['The Economic Impacts of Inadequate Infratructure for Software Testing'.  Nist Planning Report 02-3], see Executive Summary and Chapter 8.
+-- [[[2]]] http://www.oracle.com/technetwork/java/codeconvtoc-136057.html['Code Conventions for the Java Programming Language'. Sun Microsystems.]
++- [[[2]]] https://www.oracle.com/java/technologies/javase/codeconventions-introduction.html['Code Conventions for the Java Programming Language: 1. Introduction'. Sun Microsystems.]
+ - [[[3]]] https://en.wikipedia.org/wiki/Software_maintenance['Software maintenance'. Wikipedia.]
+ - [[[4]]] https://lore.kernel.org/git/7vps5xsbwp.fsf_-_@assigned-by-dhcp.cox.net/[Junio C Hamano. 'Automated bisect success story'.]
+ - [[[5]]] https://lwn.net/Articles/317154/[Christian Couder. 'Fully automated bisecting with "git bisect run"'. LWN.net.]
+-- 
+2.39.3 (Apple Git-145)
+

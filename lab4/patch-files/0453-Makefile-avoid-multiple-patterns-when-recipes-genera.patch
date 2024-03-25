@@ -1,0 +1,52 @@
+From 9f95c7aefa8419b697972abd9d25ce9062fac2bf Mon Sep 17 00:00:00 2001
+From: Paul Smith <psmith@gnu.org>
+Date: Sun, 27 Nov 2022 17:42:51 -0500
+Subject: [PATCH 0453/2871] Makefile: avoid multiple patterns when recipes
+ generate one file
+
+A GNU make pattern rule with multiple targets has always meant that
+a single invocation of the recipe will build all the targets.
+However in older versions of GNU make a recipe that did not really
+build all the targets would be tolerated.
+
+Starting with GNU make 4.4 this behavior is deprecated and pattern
+rules are expected to generate files to match all the patterns.
+If not all targets are created then GNU make will not consider any
+target up to date and will re-run the recipe when it is run again.
+
+Modify Documentation/Makefile to split the man page-creating pattern
+rule into a separate pattern rule for each pattern.
+
+Reported-by: Alexander Kanavin <alex.kanavin@gmail.com>
+Signed-off-by: Paul Smith <psmith@gnu.org>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ Documentation/Makefile | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/Makefile b/Documentation/Makefile
+index d47acb2e25..21375cd3f2 100644
+--- a/Documentation/Makefile
++++ b/Documentation/Makefile
+@@ -351,8 +351,16 @@ $(OBSOLETE_HTML): %.html : %.txto $(ASCIIDOC_DEPS)
+ manpage-base-url.xsl: manpage-base-url.xsl.in
+ 	$(QUIET_GEN)sed "s|@@MAN_BASE_URL@@|$(MAN_BASE_URL)|" $< > $@
+ 
+-%.1 %.5 %.7 : %.xml manpage-base-url.xsl $(wildcard manpage*.xsl)
+-	$(QUIET_XMLTO)$(XMLTO) -m $(MANPAGE_XSL) $(XMLTO_EXTRA) man $<
++
++manpage-prereqs := manpage-base-url.xsl $(wildcard manpage*.xsl)
++manpage-cmd = $(QUIET_XMLTO)$(XMLTO) -m $(MANPAGE_XSL) $(XMLTO_EXTRA) man $<
++
++%.1 : %.xml $(manpage-prereqs)
++	$(manpage-cmd)
++%.5 : %.xml $(manpage-prereqs)
++	$(manpage-cmd)
++%.7 : %.xml $(manpage-prereqs)
++	$(manpage-cmd)
+ 
+ %.xml : %.txt $(ASCIIDOC_DEPS)
+ 	$(QUIET_ASCIIDOC)$(TXT_TO_XML) -d manpage -o $@ $<
+-- 
+2.39.3 (Apple Git-145)
+

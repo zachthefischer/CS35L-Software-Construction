@@ -1,0 +1,131 @@
+From 2b61c8dc8843319d09f1485fbcb3b1dc4aecb36d Mon Sep 17 00:00:00 2001
+From: Eric Sunshine <sunshine@sunshineco.com>
+Date: Thu, 30 Mar 2023 15:30:31 -0400
+Subject: [PATCH 1181/2871] tests: diagnose unclosed here-doc in chainlint.pl
+
+An unclosed here-doc in a test is a problem, because it silently gobbles
+up any remaining commands. Since 99a64e4b73c (tests: lint for run-away
+here-doc, 2017-03-22) we detect this by piggy-backing on the internal
+chainlint checker in test-lib.sh.
+
+However, it would be nice to detect it in chainlint.pl, for a few
+reasons:
+
+  - the output from chainlint.pl is much nicer; it can show the exact
+    spot of the error, rather than a vague "somewhere in this test you
+    broke the &&-chain or had a bad here-doc" message.
+
+  - the implementation in test-lib.sh runs for each test snippet. And
+    since it requires a subshell, the extra cost is small but not zero.
+    If chainlint.pl can reliably find the problem, we can optimize the
+    test-lib.sh code.
+
+The chainlint.pl code never intended to find here-doc problems. But
+since it has to parse them anyway (to avoid reporting problems inside
+here-docs), most of what we need is already there. We can detect the
+problem when we fail to find the missing end-tag in swallow_heredocs().
+The extra change in scan_heredoc_tag() stores the location of the start
+of the here-doc, which lets us mark it as the source of the error in the
+output (see the new tests for examples).
+
+[jk: added commit message and tests]
+
+Signed-off-by: Eric Sunshine <sunshine@sunshineco.com>
+Signed-off-by: Jeff King <peff@peff.net>
+Signed-off-by: Junio C Hamano <gitster@pobox.com>
+---
+ t/chainlint.pl                              | 15 ++++++++++++---
+ t/chainlint/unclosed-here-doc-indent.expect |  4 ++++
+ t/chainlint/unclosed-here-doc-indent.test   |  4 ++++
+ t/chainlint/unclosed-here-doc.expect        |  7 +++++++
+ t/chainlint/unclosed-here-doc.test          |  7 +++++++
+ 5 files changed, 34 insertions(+), 3 deletions(-)
+ create mode 100644 t/chainlint/unclosed-here-doc-indent.expect
+ create mode 100644 t/chainlint/unclosed-here-doc-indent.test
+ create mode 100644 t/chainlint/unclosed-here-doc.expect
+ create mode 100644 t/chainlint/unclosed-here-doc.test
+
+diff --git a/t/chainlint.pl b/t/chainlint.pl
+index e966412999..556ee91a15 100755
+--- a/t/chainlint.pl
++++ b/t/chainlint.pl
+@@ -80,7 +80,8 @@ sub scan_heredoc_tag {
+ 	return "<<$indented" unless $token;
+ 	my $tag = $token->[0];
+ 	$tag =~ s/['"\\]//g;
+-	push(@{$self->{heretags}}, $indented ? "\t$tag" : "$tag");
++	$$token[0] = $indented ? "\t$tag" : "$tag";
++	push(@{$self->{heretags}}, $token);
+ 	return "<<$indented$tag";
+ }
+ 
+@@ -169,10 +170,18 @@ sub swallow_heredocs {
+ 	my $tags = $self->{heretags};
+ 	while (my $tag = shift @$tags) {
+ 		my $start = pos($$b);
+-		my $indent = $tag =~ s/^\t// ? '\\s*' : '';
+-		$$b =~ /(?:\G|\n)$indent\Q$tag\E(?:\n|\z)/gc;
++		my $indent = $$tag[0] =~ s/^\t// ? '\\s*' : '';
++		$$b =~ /(?:\G|\n)$indent\Q$$tag[0]\E(?:\n|\z)/gc;
++		if (pos($$b) > $start) {
++			my $body = substr($$b, $start, pos($$b) - $start);
++			$self->{lineno} += () = $body =~ /\n/sg;
++			next;
++		}
++		push(@{$self->{parser}->{problems}}, ['UNCLOSED-HEREDOC', $tag]);
++		$$b =~ /(?:\G|\n).*\z/gc; # consume rest of input
+ 		my $body = substr($$b, $start, pos($$b) - $start);
+ 		$self->{lineno} += () = $body =~ /\n/sg;
++		last;
+ 	}
+ }
+ 
+diff --git a/t/chainlint/unclosed-here-doc-indent.expect b/t/chainlint/unclosed-here-doc-indent.expect
+new file mode 100644
+index 0000000000..7c30a1a024
+--- /dev/null
++++ b/t/chainlint/unclosed-here-doc-indent.expect
+@@ -0,0 +1,4 @@
++command_which_is_run &&
++cat >expect <<-\EOF ?!UNCLOSED-HEREDOC?! &&
++we forget to end the here-doc
++command_which_is_gobbled
+diff --git a/t/chainlint/unclosed-here-doc-indent.test b/t/chainlint/unclosed-here-doc-indent.test
+new file mode 100644
+index 0000000000..5c841a9dfd
+--- /dev/null
++++ b/t/chainlint/unclosed-here-doc-indent.test
+@@ -0,0 +1,4 @@
++command_which_is_run &&
++cat >expect <<-\EOF &&
++we forget to end the here-doc
++command_which_is_gobbled
+diff --git a/t/chainlint/unclosed-here-doc.expect b/t/chainlint/unclosed-here-doc.expect
+new file mode 100644
+index 0000000000..d65e50f78d
+--- /dev/null
++++ b/t/chainlint/unclosed-here-doc.expect
+@@ -0,0 +1,7 @@
++command_which_is_run &&
++cat >expect <<\EOF ?!UNCLOSED-HEREDOC?! &&
++	we try to end the here-doc below,
++	but the indentation throws us off
++	since the operator is not "<<-".
++	EOF
++command_which_is_gobbled
+diff --git a/t/chainlint/unclosed-here-doc.test b/t/chainlint/unclosed-here-doc.test
+new file mode 100644
+index 0000000000..69d3786c34
+--- /dev/null
++++ b/t/chainlint/unclosed-here-doc.test
+@@ -0,0 +1,7 @@
++command_which_is_run &&
++cat >expect <<\EOF &&
++	we try to end the here-doc below,
++	but the indentation throws us off
++	since the operator is not "<<-".
++	EOF
++command_which_is_gobbled
+-- 
+2.39.3 (Apple Git-145)
+
