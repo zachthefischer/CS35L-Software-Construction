@@ -1,0 +1,147 @@
+Zach Fischer
+
+Step 1: Copy the repository for the Randall source code
+ $ mkdir lab6
+ $ wget https://web.cs.ucla.edu/classes/winter24/cs35L/assign/randall-git.tgz
+ $ tar -xzcvg randall-tar-git
+ $ git clone ./randall lab6
+  - Make the lab6 directory
+  - Wget the link to randall-git.tgz
+  - Open the tarball 
+  - Clone the repository into lab6 directory
+  - Also created this notes.txt file with emacs, and committed it to the repository
+
+2. Inspect the files
+ $ cd lab6
+ $ ls
+ $ emacs randall.c
+ $ emacs Makefile
+ $ make
+ $ ls
+  : COPYING ...  randall   randall.c
+ $ ./randall 5
+  : ~6???
+  - Randall.c prints out n number of random bytes, where n is the argument passed in from the user
+  - The Makefile defines how to build randall.c, so you don't have to do $ gcc randall.c -o randall
+    every single time
+  - The Makefile "default" target is run automatically, and calls the "randall" target, which
+    automatically compiles randall. It essentially pieces together the gcc command above using
+    makefile variables
+ 
+3. Modify Makefile so that 'make check' tests your program
+  - Implement a length check as suggested
+  - Add a "check:" target to the makefile
+  - Run the randall target to create a compiled file
+  - Use the wc -c command on the compiled file (passing in a TEST_VAL variable as an argument
+  to find the length of the output 
+  - Pipe that output into grep -q $(TEST_VAL) to compare it to the expected length
+  (the output length should be equal to the argument value)
+  - If it succeeds, echo that it passed, if it fails, echo that it fails
+
+4. Split up randall implementaion into different modules
+  - Modified the Makefile first, rather than compiling just randall.c
+    the new command compiles every file that ends in .c
+      $(CC) $(CFLAGS) $@.c -o $@
+      $(CC) $(CFLAGS) $*.c -o $@
+  - Created all the necessary module files
+      touch options.c options.h output.c output.h rand64-hw.c rand64-hw.c rand64-sw.c rand64-sw.h 
+  - Copied and pasted each section into the different files 
+  - This took way too long, I got stuck on Static functions
+  - ***** STATIC MEAN YOU CANNOT ACCESS FROM OTHER FILES *****
+
+5. Modified options.c and .h to record the new options for input output
+  - used getopt to record :i:o: (-i flag, -o flag, and default arguments)
+  - This didn't work the first time so I had to come back
+  - Add exit functions for incorrect options and arguments
+
+6. Added new mrand function to calculate randomness (lrand is 2^31)
+  - rand64() requires a 64 bit random number 
+  - mrand generates a 32 bit random number
+  - Generate mrand twice, then shift the second set to the right 32 bits
+    using a bitwise operator
+
+7. Added logic to randall.c
+  - Use switch statements to determine action based on structure properties
+  - Change how the random bytes are calculated based on input
+  - Change how the bytes are outputted based on the output option
+
+
+8. Check for memory leaks
+  - Use valgrind to check for any unfreed memory
+ $ valgrind --leak-check=full ./randall
+ $ valgrind --leak-check=full ./randall -i mrand -o 20 400
+ : ==1305462== All heap blocks were freed -- no leaks are possible
+  - Looks good
+
+
+9. Fleshed out make check tests in the makefile (throughout)
+ - Piped all of the outputs through wc -c, which counts characters
+ - For -o, had to check number of times write was called, so I ran 
+  strace first, grepped through "write(", and then counted the number of lines
+
+
+******* TIME TESTS *******
+Sanity Check
+  $ time dd if=/dev/urandom ibs=8192 obs=8192 count=16384 >/dev/null
+    real    0m0.924s
+    user    0m0.024s
+    sys     0m0.894s
+
+Commands from the spec
+  $ time ./randall 133562368 >/dev/null
+    real    0m4.000s
+    user    0m3.966s
+    sys     0m0.015s
+  $ time ./randall 133562368 | cat >/dev/null
+    real    0m4.208s
+    user    0m4.089s
+    sys     0m0.250s
+  $ time ./randall 133562368 >rand.data
+    real    0m4.132s
+    user    0m3.966s
+    sys     0m0.110s
+
+Actual time testing
+  $ time ./randall -i /dev/urandom 133562368 >rand.data
+    real    0m2.866s
+    user    0m1.800s
+    sys     0m1.031s
+  $ time ./randall -i rdrand 133562368 >rand.data
+    real    0m4.212s
+    user    0m4.031s
+    sys     0m0.135s
+  $ time ./randall -i lrand48_r 133562368 >rand.data
+    real    0m1.880s
+    user    0m1.646s
+    sys     0m0.110s
+
+  $ time ./randall -i /dev/urandom -o 6823 133562368 >rand.data
+    real    0m13.206s
+    user    0m3.122s
+    sys     0m7.540s
+  $ time ./randall -i rdrand -o 6823 133562368 >rand.data
+    real    0m23.017s
+    user    0m22.234s
+    sys     0m0.235s
+  $ time ./randall -i lrand48_r -o 6823 133562368 >rand.data
+    real    0m13.289s
+    user    0m3.784s
+    sys     0m0.289s
+
+Notes
+  - lrand48 was the fastest by far with the default output option
+  - rdrand always took the longest
+    - System run time is pretty short, but user time took 22+ seconds
+  - /dev/urandom was consistently second fastest
+    - However, always took the longest system time
+
+  
+10. Check style/text guidelines 
+  - Line length < 100 columns
+  - No carriage returns
+  - ASCII text files 
+$ expand Makefile notes.txt *.c *.h | awk '/\r/ || 100 < length'
+  - Output nothing
+
+11. Updated submission tarball recipe in the makefile
+  to include all project files
