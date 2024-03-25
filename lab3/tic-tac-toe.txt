@@ -1,0 +1,553 @@
+tic-tac-toe.txt
+************************************************************************
+Setup for the tutorial
+1. Open the example sandbox here:
+https://codesandbox.io/p/sandbox/react-dev-j67kkz?file=%2Fsrc%2FApp.js&utm_medium=sandpack
+Start with the js file App.js and 
+export default function Square() {
+  return <button className="square">X</button>;
+}
+And prints out just a square onto the example webpage.
+
+
+2. Install Node.js to use the local development environment
+- Install node.js for Mac from the web.
+- Download the sandbox from codesandbox.io (top left corner)
+- Unzip the file and cd into the directory by copying the pathname into terminal
+- (Copy the file name and write it down somewhere for the future: /Users/zachfischer/Desktop/2375616d-2dd8-44b0-b615-4bbdbbaddeae)
+npm install //to install the dependencies within the folder
+npm start //to start a local server (automatically opens a chrome window with address)
+- Signed in to the sandbox with GitHub (step for only the first time
+- Copy and paste the local server address into the sandbox webpage tab
+ http://localhost:3000
+- This doesn’t always work – Run into the issue where the sandbox doesn’t update the server. Also when I download the sandbox, it’s different each time. Going to work on it locally and come back to this. 
+
+
+3. Making the damn thing (Boilerplate)
+- Pull the vertical bar on the far left to reveal the files 
+- The code in App.js creates a React component
+export default function Square() {
+  return <button className="square">X</button>;
+}
+- Creates a file component called “Square”
+- “Export” makes the function accessible outside the file
+- “Default” makes this function the main function in the file
+- className=“square” gives you a style property that can be changed in CSS
+styles.css
+- .square changes the properties of the Square
+index.js
+- Incorporates App.js into Index.html
+
+import React, { StrictMode } from "react"; 	//Imports React
+import { createRoot } from "react-dom/client";		//Imports reacts library to talk to web browsers 
+import "./styles.css";	//The styles from your components
+
+import App from "./App";	//imports the components created in App.js
+
+const root = createRoot(document.getElementById("root"));
+root.render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+
+4. Building the Board
+- Can’t copy and paste a bunch of buttons in the return statement —> calls error
+- Fragments: Wrap everything in <> </> inside the return (       ) statement
+- Multiple rows: Wrap sets of 3 into divs with className=“board-row”
+    - board-row is defined in the css file
+.board-row:after {
+  clear: both;
+  content: "";
+  display: table;
+}
+- Change component name from Board to Square to represent its functionality
+export default function Board() {
+  return (
+    <>
+      <div className="board-row">
+        <button className="square">1</button>
+        <button className="square">2</button>
+        <button className="square">3</button>
+      </div>
+      <div className="board-row">
+        <button className="square">4</button>
+        <button className="square">5</button>
+        <button className="square">6</button>
+      </div>
+      <div className="board-row">
+        <button className="square">7</button>
+        <button className="square">8</button>
+        <button className="square">9</button>
+      </div>
+    </>
+  );
+}
+
+
+
+5. Passing data through properties
+- Create a new Square component to represent one square
+- Like Board, but the return statement is just 
+return <button className="square">1</button>;
+- Replace all the individual buttons with </square> components
+… 
+<div className="board-row">
+        <Square />
+        <Square />
+        <Square />
+</div>
+… etc
+- Now every Square has the same value
+- Pass in an argument into the Square component
+function Square( {value} ) {
+  return <button className="square”>{value}</button>;
+}
+- NOTE – arguments called and defined with brackets like: { value } 
+- Update the react
+<Square value="1" /> 	//do this for all the squares
+
+export default function Board() {
+  return (
+    <>
+      <div className="board-row">
+        <Square value="1" />
+        <Square value="2" />
+        <Square value="3" />
+      </div>
+      <div className="board-row">
+        <Square value="4" />
+        <Square value="5" />
+        <Square value="6" />
+      </div>
+      <div className="board-row">
+        <Square value="7" />
+        <Square value="8" />
+        <Square value="9" />
+      </div>
+    </>
+  );
+}
+
+function Square({ value }) {
+  return <button className="square">{value}</button>;
+}
+- Or don’t add the value – they get changed back in the next step
+
+6. Make it Interative
+- Want the square component to be filled with an X when clicked
+- Declare a function within Square called handleClick
+- Add an onClick property to the return value
+
+function Square({ value }) {
+  function handleClick() {
+    console.log('clicked');
+  }
+ 
+  return (
+  <button
+    	className="square"
+	onClick = {handleClick}
+  >	
+
+	{value}
+     
+    </button>
+  );
+}
+
+- NOTE: Cmd-Opt-J shows console on Chrome browser
+- Get button to “Remember” it got clicked
+    - Use state
+import { useState } from 'react';
+- At the beginning of Square, create a state value called value
+const [value, setValue] = useState(null);
+- setValue can be called any function
+- Change all the Square components within the Board to 
+<Square />
+- Change the handleClick function to change the value of “value”
+function handleClick() {
+    setValue("X");
+}
+
+
+
+
+7. React Developer Tools
+- Use inspect in browser, or use the Dev Tools in the bottom right of codesandbox.io
+- Or, React DevTools is available as a Chrome extension
+
+
+
+8. Lifting State Up
+- Board needs to know the state of all its child Squares 
+- Pass state information up to parent component
+export default function Board() {
+  const [squares, setSquares] = useState(Array(9).fill(null));
+  … 
+- Creates an array of 9 elements, sets them to null 
+- Set the Square “values” to values within the new “squares” array
+<Square />        —>         <Square value={squares[6]} />
+- Replace the Square function to take in a value
+function Square( { value } ) {
+  return <button className="square">{value}</button>;
+}
+- We need to add the click functionality back into square so it the board can know when each square is clicked
+- Add a function to onClick, then pass that function in through the Square component props
+function Square({ value, onSquareClick }) {
+  return (
+    <button className="square" onClick={onSquareClick}>
+      {value}
+    </button>
+  );
+}
+- Now we need to connect the onSquareClick function present in the squares to a function within Board. Update each Square component in the Board: 
+<Square value={squares[0]} onSquareClick={handleClick} />
+- Now we need to define handleClick within the Board component
+
+function handleClick(i) {
+    const nextSquares = squares.slice();
+    nextSquares[I] = "X";
+    setSquares(nextSquares);
+}
+- creates a copy of the squares array using slice()
+- Changes the passed in index value of next squares 
+- Change the Square components within the Board to call handleClick() with their value 
+<Square value={squares[0]} onSquareClick={() => handleClick(0)} />
+<Square value={squares[1]} onSquareClick={() => handleClick(1)} />
+…etc
+- Passed in as an arrow function so that the onSquareClick value is still a function, not the calling of a function (which just {handleClick(1)} ) would be
+
+
+
+
+9. Add “Os” to the mix
+- Add another piece of state  to the Board component
+const [xIsNext, setXIsNext] = useState(true);
+- Flip the value every time a square is clicked
+function handleClick(i) {
+    const nextSquares = squares.slice();
+    if (xIsNext) {
+      nextSquares[i] = "X";
+    } else {
+      nextSquares[i] = "O";
+    }
+
+    setSquares(nextSquares);
+    setXIsNext(!xIsNext);
+  }
+- This is better, but you can still overwrite a square once it’s been clicked on 
+- Fix this: use an early return, which stops the rest of the function from running if the user is trying to click on a square that’s already pressed on (not null)
+function handleClick(i) {
+   if (squares[i]) {
+       return;
+   }
+   …
+
+10. Add a win condition!
+- Create a new function called calculateWinner that checks an array squares and sees if there is a winner
+- Returns the value of whichever square won (X or O)
+function calculateWinner(squares) {
+  const lines = [
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6]
+  ];
+  for (let i = 0; i < lines.length; i++) {
+    const [a, b, c] = lines[i];
+    if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
+      return squares[a];
+    }
+  }
+  return null;
+}
+- Add this function into the handleClick early return condition
+if (squares[i] || calculateWinner(squares)) {
+    return;
+}
+- Update the main board component to display whether there is a winner, or whether the game needs to keep going
+export default function Board() {
+   const winner = calculateWinner(squares);
+   let status;
+   if(winner){
+      status = "Winner: " + winner;
+   } else {
+      status = "Next player: " + (xIsNext ? "X" : "O");
+   }
+…
+- Add it to the return function, so that the information is displayed at the top of the page
+return (
+    <>
+      <div className="status">{status}</div>
+
+
+11. Add Time Travel
+- Store all the states of the board into an array, so you can keep track of what happened sequentially
+- Pass the Board component into a parent component called Game
+
+export default function Game(){
+  return ( 
+    <div className="game">
+      <div className="game-board">
+        <Board />
+      </div>
+      <div>
+        <ol> {/* MOVELIST */} </ol>
+      </div>
+    </div>
+  )
+}
+export default function Board() —> function Board(){ …} …
+- Add states to the Game component
+const [xIsNext, setXIsNext] = useState(true);
+const [history, setHistory] = useState([Array(9).fill(null)]);
+- creates an array, where the first element is an array of nil
+const currentSquares = history[history.length - 1];
+
+- Change the board component within the Game return statement
+ <Board xIsNext={xIsNext} squares={currentSquares} onPlay={handlePlay} />
+- xIsNext is the value of xIsNext
+- onPlay is another event handler
+- Update Board to include all these props
+function Board({ xIsNext, squares, onPlay }) {
+	…
+- Add onPlay(nextSquares) to the handleClick function
+function handleClick(i) {
+    if (calculateWinner(squares) || squares[i]) {
+      return;
+    }
+    const nextSquares = squares.slice();
+    if (xIsNext) {
+      nextSquares[i] = "X";
+    } else {
+      nextSquares[i] = "O";
+    }
+    onPlay(nextSquares);
+  }
+
+- handlePlay needs to update Game’s state. It is run when Board recieves onClick, and passed the array of squares. The handlePlay function updates the history of the board, and changes the value of the next move (isNext):
+function handlePlay(nextSquares) {
+    setHistory([...history, nextSquares]);
+    setXIsNext(!xIsNext);
+  }
+- The spread operator adds nextSquares (which is passed up from Board), to the history array 
+- Now we have a working history 
+
+12. Showing the past moves
+- We have an array “history”, and we need to transform it into an array of React elements 
+- Display all the states as a list element on the DOM
+- USE THE MAP FUNCTION:
+    - Example: [1, 2, 3].map((x) => x * 2) // [2, 4, 6]
+
+function jumpTo(move) {
+    //todo
+  }
+
+const moves = history.map((squares,move) => {
+    let description;
+    if (move > 0) {
+      description = 'Go to move #' + move
+    } else {
+      description = 'Go to game start'
+    }
+  
+    return (
+      <li key={move}>
+        <button onClick={() => jumpTo(move)}>{description}</button>
+      </li>
+    )
+  });
+- Creates a list that displays “Go to move#” or “go to game start”, for each move (and depending on whether it was the first move or not)
+- Also creates a button that allows you to go to that move
+- Update the overall return stamens for the Game component by adding the {moves} const into the ordered list
+return (
+    <div className="game">
+      <div className="game-board">
+        <Board xIsNext={xIsNext} squares={currentSquares} onPlay={handlePlay} />
+      </div>
+      <div>
+        <ol> {moves} </ol>
+      </div>
+    </div>
+  );
+
+- KEYS ARE IMPORTANT FOR DYNAMIC LISTS
+return (
+      <li key={move}>
+        <button onClick={() => jumpTo(move)}>{description}</button>
+      </li>
+    );
+- Each list item needs a key so React can tell which list item you are actually referring to when you want to change something
+
+- Keep trac of which step the user is currently viewing
+- Define a new state variable 
+const [currentMove, setCurrentMove] = useState(0);
+- Update jumpTo() to update the currentMove 
+  function jumpTo(nextMove) {
+    setCurrentMove(nextMove);
+    setXIsNext(nextMove % 2 === 0); //set x is next if nextMove is even (0, 2, 4, etc)
+  }
+- This makes the current move up to date with whatever version of the history you select, but it doesn’t actually change the board
+- Update handlePlay() to change the board/history
+function handlePlay(nextSquares) {
+    const nextHistory = [...history.slice(0, currentMove + 1), nextSquares];
+    setHistory(nextHistory);
+    setCurrentMove(nextHistory.length - 1)
+    setXIsNext(!xIsNext);
+    console.log(history);
+  }
+- …and the Game component to render the currently selected move instead of the final move
+  const currentSquares = history[currentMove];
+
+13. Clean up!
+- Change xIsNext to be based on currentMove, not it’s own independent value
+  const [xIsNext, setXIsNext] = useState(true);
+  —> const xIsNext = currentMove % 2 === 0;
+
+function jumpTo(nextMove) {
+    setCurrentMove(nextMove);
+  }
+- Update jumpTo to no longer set a value of xIsNext
+- Delete setXIsNext from handlePlay as well
+
+
+LETS GOOOOO Here is the final code:
+
+
+
+
+
+
+import { useState } from "react";
+
+export default function Game() {
+  const [history, setHistory] = useState([Array(9).fill(null)]);
+  //creates an array, where the first element is an array of nil
+  const [currentMove, setCurrentMove] = useState(0);
+  const currentSquares = history[currentMove];
+  const xIsNext = currentMove % 2 === 0;
+
+  function handlePlay(nextSquares) {
+    const nextHistory = [...history.slice(0, currentMove + 1), nextSquares];
+    setHistory(nextHistory);
+    setCurrentMove(nextHistory.length - 1);
+    console.log(history);
+  }
+
+  function jumpTo(nextMove) {
+    setCurrentMove(nextMove);
+  }
+  const moves = history.map((squares, move) => {
+    let description;
+    if (move > 0) {
+      description = "Go to move #" + move;
+    } else {
+      description = "Go to game start";
+    }
+
+    return (
+      <li key={move}>
+        <button onClick={() => jumpTo(move)}>{description}</button>
+      </li>
+    );
+  });
+
+  return (
+    <div className="game">
+      <div className="game-board">
+        <Board xIsNext={xIsNext} squares={currentSquares} onPlay={handlePlay} />
+      </div>
+      <div>
+        <ol> {moves} </ol>
+      </div>
+    </div>
+  );
+}
+
+function Board({ xIsNext, squares, onPlay }) {
+  function handleClick(i) {
+    if (squares[i] || calculateWinner(squares)) {
+      return;
+    }
+    const nextSquares = squares.slice();
+    if (xIsNext) {
+      nextSquares[i] = "X";
+    } else {
+      nextSquares[i] = "O";
+    }
+
+    onPlay(nextSquares);
+  }
+
+  const winner = calculateWinner(squares);
+  let status;
+  if (winner) {
+    status = "Winner: " + winner;
+  } else {
+    status = "Next player: " + (xIsNext ? "X" : "O");
+  }
+
+  return (
+    <>
+      <div className="status">{status}</div>
+      <div className="board-row">
+        <Square value={squares[0]} onSquareClick={() => handleClick(0)} />
+        <Square value={squares[1]} onSquareClick={() => handleClick(1)} />
+        <Square value={squares[2]} onSquareClick={() => handleClick(2)} />
+      </div>
+      <div className="board-row">
+        <Square value={squares[3]} onSquareClick={() => handleClick(3)} />
+        <Square value={squares[4]} onSquareClick={() => handleClick(4)} />
+        <Square value={squares[5]} onSquareClick={() => handleClick(5)} />
+      </div>
+      <div className="board-row">
+        <Square value={squares[6]} onSquareClick={() => handleClick(6)} />
+        <Square value={squares[7]} onSquareClick={() => handleClick(7)} />
+        <Square value={squares[8]} onSquareClick={() => handleClick(8)} />
+      </div>
+    </>
+  );
+}
+
+function Square({ value, onSquareClick }) {
+  return (
+    <button className="square" onClick={onSquareClick}>
+      {value}
+    </button>
+  );
+}
+
+function calculateWinner(squares) {
+  const lines = [
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6],
+  ];
+  for (let i = 0; i < lines.length; i++) {
+    const [a, b, c] = lines[i];
+    if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
+      return squares[a];
+    }
+  }
+  return null;
+}
+
+
+
+
+
+
+
+
+
+

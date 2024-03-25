@@ -1,0 +1,263 @@
+Chorus-lapilli.txt
+
+Outline to make the game
+1. Get server up
+2. Get basic files and functionality up 
+3. Make the game
+4. Run the Selenium test harness
+5. Add 3 more test cases
+
+1: Get server up
+- npx create-react-app chorus-lapilli
+- Installed the dependencies, 
+- npm start to run it in the browser
+
+2: Basic file setup
+- Opened the project folder in vscode 
+- Copy pasted the css and tic tac toe app implementation
+- Kept calculate winner function, board, basic clicking functionality
+- Got rid of history logging
+
+3: Getting cracking
+- Wrote down some basic states for the game (not component states) – the main functionality is moving pieces after the first three moves 
+- Passed down the currentMove counter from Game into the Board component
+- During the handleClick operation 
+return ( … 
+<Board xIsNext={xIsNext} squares={currentSquares} onPlay={handlePlay} currentMove={currentMove} />
+…)
+
+function Board({ xIsNext, squares, onPlay, currentMove }) {…}
+
+State 0 - THERE IS A WINNER, GAME IS OVER 
+    if (calculateWinner(squares)) {return;}
+
+State 1 - FIRST 3 MOVES
+- Checked if currentMove < 6
+- If It is, clicking on an existing square returns out of the function
+- Otherwise, just like tic-tac-toe, it checks whose turn it is and places down a piece
+if(currentMove < 6){
+      if(squares[i]) {
+        return; //First three turns – ONLY PLACING DOWN
+      }
+
+      if (xIsNext) {
+        nextSquares[i] = "X";
+      } else {
+        nextSquares[i] = "O";
+      }
+      onPlay(nextSquares);
+    } 
+
+
+State 2 - EVERY OTHER MOVE
+- This needs to be broken into 2 substates
+- 2.1 SELECTING which piece to move
+    - Must be a piece corresponding to that player 
+- 2.2 MOVING that piece
+    - Checking if where they want to go is allowed
+    - Updating the board
+
+Selecting
+- Made a component state of selectMode, so I can check when clicking corresponds to selecting a piece or moving it
+const [selectMode, setSelectMode] = useState(true);
+
+…
+else { // (6 pieces have been placed
+      //STATE 2.1 - SELECTING a piece to move
+      if(selectMode){
+        if((((squares[i] === "X") && (xIsNext))) || ((squares[i] === 'O') && (!xIsNext))) {
+          setSelectPiece(i);
+          setSelectMode(false); //Now it's time to move that piece baby
+        } else {
+          //selected the wrong piece, get outta here
+          return;
+        }
+      }
+- Once there are 6 pieces, every time someone moves, they must first select a piece
+- This checks if it’s X’s turn and they selected an X box, or if it’s O’s turn and they selected an O box
+- If they select incorrectly, they get returned out of the function
+
+
+STATE 2.2 – Moving
+- Once they’ve picked a piece to move, the next square they select must be empty
+if(squares[i]){
+    return;
+}
+- Make a new piece at the selected box, then get rid of the piece at the old square
+if (xIsNext) {
+     nextSquares[i] = "X";
+} else {
+      nextSquares[i] = "O";
+}
+nextSquares[selectPiece] = null;
+- This is good but it doesn’t account for the up/down/left/right/diagonal move
+- Wrote an isValid function that takes in a currentPosition and a requestedPosition, to check if the requested move is valid
+0 1 2
+3 4 5
+6 7 8
+function isValid(currPos, r) {
+  let validPos = false;
+  //r is short for requestedPosition
+  //there could be some logic here but i'm just brute forcing it, there are only 9 spots
+  switch (currPos){
+    case 0:
+      validPos = (r === 1 || r === 3 || r === 4);
+      break;
+    case 1:
+      validPos = (r === 0 || r === 2 || r === 3 || r === 4 || r === 5);
+      break;
+    case 2:
+      validPos = (r === 1 || r === 4 || r === 5);
+      break;
+    case 3:
+      validPos = (r === 0 || r === 1 || r === 4 || r === 6 || r === 7);
+      break;
+    case 4:
+      validPos = true;
+      break;
+    case 5:
+      validPos = (r === 1 || r === 2 || r === 4 || r === 7 || r === 8);
+      break;
+    case 6:
+      validPos = (r === 3 || r === 4 || r === 7);
+      break;
+    case 7:
+      validPos = (r === 3 || r === 5 || r === 4 || r === 6 || r === 8);
+      break;
+    case 8:
+      validPos = (r === 7 || r === 4 || r === 5);
+      break;
+    default:
+      validPos = false;
+  }
+  return validPos;
+}
+
+- Checking for all the conditions, we get
+//STATE 2.2 - MOVING that piece
+      else {
+        if(squares[i]){
+          return;
+        }
+
+        if(isValid(selectPiece, i)){
+          if (xIsNext) {
+            nextSquares[i] = "X";
+          } else {
+            nextSquares[i] = "O";
+          }
+          nextSquares[selectPiece] = null;
+        } else {
+          return;
+        }
+       
+        setSelectMode(true);
+        onPlay(nextSquares);
+      }
+- This achieves the first new rule, but we need to implement the center piece rule. 
+
+if((((squares[4] === "X") && (xIsNext))) || ((squares[4] === 'O') && (!xIsNext))){
+
+            console.log("MUST MOVE")
+            //Check if the position would win
+            let tempSquares = nextSquares;
+            if (xIsNext) {
+              tempSquares[i] = "X";
+            } else {
+              tempSquares[i] = "O";
+            }
+
+            console.log("Select piece: ", selectPiece);
+            console.log("Select piece === 4: ", selectPiece === 4);
+            console.log("calculate winner: ", calculateWinner(tempSquares));
+            console.log("Required piece: ", i);
+
+            if(selectPiece === 4 || calculateWinner(tempSquares) != null) {
+              console.log("TURE??")
+              if (xIsNext) {
+                nextSquares[i] = "X";
+              } else {
+                nextSquares[i] = "O";
+              }
+              nextSquares[selectPiece] = null;
+            } else {
+              console.log("Center piece is occupied. Must win or vacate center");
+              return;
+            }
+          } else {
+            //If you don't have a piece in the center, you can do whateva
+            if (xIsNext) {
+              nextSquares[i] = "X";
+            } else {
+              nextSquares[i] = "O";
+            }
+            nextSquares[selectPiece] = null;
+          }
+          
+        } else {
+          return;
+        }
+       
+        onPlay(nextSquares);
+
+- This checks if 
+    - the player has a piece in the middle square
+    - If they have a piece in the middle square, are they moving it
+    - If they’re not moving it, are they making a winning move
+
+SELENIUM TESTS
+- Downloaded selenium in the project folder
+pip3 install selenium
+- Downloaded the test file as test_chorus_lapilli.py
+- Ran tests with 
+chmod +x test_chorus_lapilli.py
+./test_chorus_lapilli.py
+
+Simulated different games using tags like 
+tiles[x].click()
+    and
+self.assertTileIs(tiles[x], self.SYMBOL_BLANK) 
+- Added a test to see if you can write over a piece 
+- Added a test to see if you can move once a player wins
+- Add a test to see if you can move a piece more than two spaces away
+- Added a test to see if you can move a piece down
+
+
+
+PACK INTO TARBALL
+zachfischer@Zachs-MacBook-Air chorus-lapilli % npm pack --dry-run
+npm notice 
+npm notice 📦  chorus-lapilli@0.1.0
+npm notice === Tarball Contents === 
+npm notice 3.4kB  README.md              
+npm notice 6.8kB  chorus-lapilli.txt     
+npm notice 817B   package.json           
+npm notice 3.9kB  public/favicon.ico     
+npm notice 1.7kB  public/index.html      
+npm notice 5.3kB  public/logo192.png     
+npm notice 9.7kB  public/logo512.png     
+npm notice 492B   public/manifest.json   
+npm notice 67B    public/robots.txt      
+npm notice 564B   src/App.css            
+npm notice 6.7kB  src/App.js             
+npm notice 246B   src/App.test.js        
+npm notice 971B   src/index.css          
+npm notice 535B   src/index.js           
+npm notice 2.6kB  src/logo.svg           
+npm notice 362B   src/reportWebVitals.js 
+npm notice 241B   src/setupTests.js      
+npm notice 9.5kB  test_chorus_lapilli.py 
+npm notice 0B     test_chorus_lapilli.py~
+npm notice 17.0kB tic-tac-toe.txt        
+npm notice === Tarball Details === 
+npm notice name:          chorus-lapilli                          
+npm notice version:       0.1.0                                   
+npm notice filename:      chorus-lapilli-0.1.0.tgz                
+npm notice package size:  37.2 kB                                 
+npm notice unpacked size: 71.0 kB                                 
+npm notice shasum:        9ba6edb73176580f5d2494dc8e9a0b00a2c08578
+npm notice integrity:     sha512-92PH4hLrGc3yf[...]V7wdN+c3VUe9Q==
+npm notice total files:   20                                      
+npm notice 
+chorus-lapilli-0.1.0.tgz
+
